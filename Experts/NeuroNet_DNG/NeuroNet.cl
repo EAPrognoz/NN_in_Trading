@@ -13130,8 +13130,8 @@ __kernel void MHFATGrad(__global const float *q,
          float grad_s = 0;
          const int shift_s = RCtoFlat(h_id, local_id, total_heads, total_k, q_id);
          int shift_q = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
-         float score=0;
-         float sc=0;
+         float score = 0;
+         float sc = 0;
          if(local_id < total_k)
            {
             if(mask_future == 0 || q_id <= local_id)
@@ -13142,8 +13142,8 @@ __kernel void MHFATGrad(__global const float *q,
                      continue;
                   grad_s += IsNaNOrInf(val * gradients[shift_q + d], 0);
                  }
-                 score=scores[shift_s];
-                 sc=IsNaNOrInf(scale[shift_s], 0.0f);
+            score = scores[shift_s];
+            sc = IsNaNOrInf(scale[shift_s], 0.0f);
            }
          //--- 2. SoftMax grad
          grad_s = LocalSoftMaxGrad(scores[shift_s], grad_s, 1, temp);
@@ -13294,15 +13294,21 @@ __kernel void MHFlashAttention(__global const float *query,
       float score = 0;
       if(k_id < total_kv && (mask_future == 0 || q_id <= k_id))
         {
-         for(int d = 0; d < dimension; d++)
+         for(int d = 0; d < dimension; d+=4)
            {
-            float q = IsNaNOrInf(query[shift_q + d], 0.0f);
-            if(q == 0.0f)
-               continue;
-            float k = IsNaNOrInf(key_value[shift_k + d], 0.0f);
-            if(k == 0)
-               continue;
-            score += q * k;
+            float4 q = IsNaNOrInf4((float4)(
+                                      (d < dimension ? query[shift_q + d] : 0.0f),
+                                      ((d + 1) < dimension ? query[shift_q + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
+                                   ), 0.0f);
+            float k = IsNaNOrInf4((float4)(
+                                     (d < dimension ? key_value[shift_k + d] : 0.0f),
+                                     ((d + 1) < dimension ? key_value[shift_k + d + 1] : 0.0f),
+                                     ((d + 2) < dimension ? key_value[shift_k + d + 2] : 0.0f),
+                                     ((d + 3) < dimension ? key_value[shift_k + d + 3] : 0.0f)
+                                  ), 0.0f);
+            score += IsNaNOrInf(dot(q * k), 0.0f);
            }
         }
       else
