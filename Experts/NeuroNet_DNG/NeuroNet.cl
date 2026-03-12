@@ -13294,7 +13294,7 @@ __kernel void MHFlashAttention(__global const float *query,
       float score = 0;
       if(k_id < total_kv && (mask_future == 0 || q_id <= k_id))
         {
-         for(int d = 0; d < dimension; d+=4)
+         for(int d = 0; d < dimension; d += 4)
            {
             float4 q = IsNaNOrInf4((float4)(
                                       (d < dimension ? query[shift_q + d] : 0.0f),
@@ -13302,13 +13302,13 @@ __kernel void MHFlashAttention(__global const float *query,
                                       ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
                                       ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
                                    ), 0.0f);
-            float k = IsNaNOrInf4((float4)(
-                                     (d < dimension ? key_value[shift_k + d] : 0.0f),
-                                     ((d + 1) < dimension ? key_value[shift_k + d + 1] : 0.0f),
-                                     ((d + 2) < dimension ? key_value[shift_k + d + 2] : 0.0f),
-                                     ((d + 3) < dimension ? key_value[shift_k + d + 3] : 0.0f)
-                                  ), 0.0f);
-            score += IsNaNOrInf(dot(q * k), 0.0f);
+            float4 k = IsNaNOrInf4((float4)(
+                                      (d < dimension ? key_value[shift_k + d] : 0.0f),
+                                      ((d + 1) < dimension ? key_value[shift_k + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? key_value[shift_k + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? key_value[shift_k + d + 3] : 0.0f)
+                                   ), 0.0f);
+            score += IsNaNOrInf(dot(q, k), 0.0f);
            }
         }
       else
