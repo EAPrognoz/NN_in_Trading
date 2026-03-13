@@ -13469,3 +13469,126 @@ __kernel void MHFlashAttentionGrad(__global const float *query,
      }
   }
 //+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void MHFlashSTCA(__global const float *query,
+                          __global const float *X,
+                          __global float *logsumexp,
+                          __global float *output,
+                          const int dimension,
+                          const int total_X,
+                          const int mask_future
+                         )
+  {
+//--- init
+   const int q_id = get_global_id(0);
+   const int local_id = get_local_id(1);
+   const int h_id = get_global_id(2);
+   const int total_q = get_global_size(0);
+   const int total_loc = get_local_size(1);
+   const int total_heads = get_global_size(2);
+//---
+   __local float temp[LOCAL_ARRAY_SIZE];
+   __local float4 temp4[LOCAL_ARRAY_SIZE];
+//---
+   const int shift_q = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
+   float prev_max = MIN_VALUE;
+   float sumexp = 0;
+   float out = 0;
+   for(int x_id = local_id; x_id < max(total_X, dimension); x_id += total_loc)
+     {
+      const int shift_x = RCtoFlat(x_id, 0, total_X, dimension, 0);
+      //--- Score
+      float score = 0;
+      if(x_id < total_X && (mask_future == 0 || q_id <= x_id))
+        {
+         for(int d = 0; d < dimension; d += 4)
+           {
+            float4 q = IsNaNOrInf4((float4)(
+                                      (d < dimension ? query[shift_q + d] : 0.0f),
+                                      ((d + 1) < dimension ? query[shift_q + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
+                                   ), 0.0f);
+            float4 k = IsNaNOrInf4((float4)(
+                                      (d < dimension ? X[shift_x + d] : 0.0f),
+                                      ((d + 1) < dimension ? X[shift_x + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? X[shift_x + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? X[shift_x + d + 3] : 0.0f)
+                                   ), 0.0f);
+            score += IsNaNOrInf(dot(q, k), 0.0f);
+           }
+        }
+      else
+         score = MIN_VALUE;
+      //--- norm score
+      float max = fmax(prev_max, LocalMax(score, 1, temp));
+      if(score > MIN_VALUE)
+         score = exp(score - max);
+      else
+         score = 0.0f;
+      if(sumexp == 0.0f)
+         sumexp = LocalSum(score, 1, temp);
+      else
+         sumexp = IsNaNOrInf(exp(prev_max - max) * sumexp, 0.0f) + LocalSum(score, 1, temp);
+      for(int d = 0; d < dimension; d += 4)
+        {
+         float4 val = (float4)0.0f;
+         if(score > 0.0f && x_id < total_X)
+           {
+            float4 v = (float4)(
+                          (d < dimension ? X[shift_x + d] : 0.0f),
+                          ((d + 1) < dimension ? X[shift_x + d + 1] : 0.0f),
+                          ((d + 2) < dimension ? X[shift_x + d + 2] : 0.0f),
+                          ((d + 3) < dimension ? X[shift_x + d + 3] : 0.0f)
+                       );
+            val = IsNaNOrInf4(v * score, 0.0f);
+           }
+         val = LocalSum4(val, 1, temp4);
+         float add = 0.0f;
+         bool update_out = true;
+         switch(local_id - d)
+           {
+            case 0:
+               add = val.s0;
+               break;
+            case 1:
+               add = val.s1;
+               break;
+            case 2:
+               add = val.s2;
+               break;
+            case 3:
+               add = val.s3;
+               break;
+            default:
+               update_out = false;
+               break;
+           }
+         if(update_out)
+           {
+            if(out != 0.0f)
+               out = IsNaNOrInf(exp(prev_max - max) * out + add, 0.0f);
+            else
+               out = add;
+           }
+        }
+      prev_max = max;
+     }
+   if(local_id < dimension)
+     {
+      if(sumexp > 0.0f)
+         output[shift_q + local_id] = IsNaNOrInf(out / sumexp, 0.0f);
+      else
+         output[shift_q + local_id] = 0.0f;
+     }
+   if(local_id == 0)
+     {
+      int shift_logse = RCtoFlat(q_id, h_id, total_q, total_heads, 0);
+      if(sumexp > 0.0f)
+         logsumexp[shift_logse] = IsNaNOrInf(prev_max + log(sumexp), 0.0f);
+      else
+         logsumexp[shift_logse] = 0.0f;
+     }
+  }
+//+------------------------------------------------------------------+
