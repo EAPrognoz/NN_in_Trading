@@ -13678,50 +13678,48 @@ __kernel void MHFlashSTCAGrad(__global const float *query,
          int q_id = loc % total_q;
          float ds = 0;
          float p = 0;
-         if(h < total_heads && q_id < total_q)
+         if(h < total_heads && q_id < total_q &&
+            (mask_future == 0 || q_id <= x_id))
            {
-            if(mask_future == 0 || q_id <= x_id)
+            const int shift_lse = RCtoFlat(q_id, h, total_q, total_heads, 0);
+            const float lse = IsNaNOrInf(logsumexp[shift_lse], 0.0f);
+            const int shift_q = RCtoFlat(h, 0, total_heads, dimension, q_id);
+            float score = 0;
+            float D = 0;
+            float dp = 0;
+            for(int d = 0; d < dimension; d += 4)
               {
-               const int shift_lse = RCtoFlat(q_id, h, total_q, total_heads, 0);
-               const float lse = IsNaNOrInf(logsumexp[shift_lse], 0.0f);
-               const int shift_q = RCtoFlat(h, 0, total_heads, dimension, q_id);
-               float score = 0;
-               float D = 0;
-               float dp = 0;
-               for(int d = 0; d < dimension; d += 4)
-                 {
-                  float4 q_d = IsNaNOrInf4((float4)(
-                                              (d < dimension ? query[shift_q + d] : 0.0f),
-                                              ((d + 1) < dimension ? query[shift_q + d + 1] : 0.0f),
-                                              ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
-                                              ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
-                                           ), 0.0f);
-                  float4 x_d = IsNaNOrInf4((float4)(
-                                              (d < dimension ? X[shift_x + d] : 0.0f),
-                                              ((d + 1) < dimension ? X[shift_x + d + 1] : 0.0f),
-                                              ((d + 2) < dimension ? X[shift_x + d + 2] : 0.0f),
-                                              ((d + 3) < dimension ? X[shift_x + d + 3] : 0.0f)
-                                           ), 0.0f);
-                  score += IsNaNOrInf(dot(q_d, x_d), 0.0f);
-                  float4 g_d = IsNaNOrInf4((float4)(
-                                              (d < dimension ? output_gr[shift_q + d] : 0.0f),
-                                              ((d + 1) < dimension ? output_gr[shift_q + d + 1] : 0.0f),
-                                              ((d + 2) < dimension ? output_gr[shift_q + d + 2] : 0.0f),
-                                              ((d + 3) < dimension ? output_gr[shift_q + d + 3] : 0.0f)
-                                           ), 0.0f);
-                  dp += IsNaNOrInf(dot(g_d, x_d), 0.0f);
-                  float4 o_d = IsNaNOrInf4((float4)(
-                                              (d < dimension ? output[shift_q + d] : 0.0f),
-                                              ((d + 1) < dimension ? output[shift_q + d + 1] : 0.0f),
-                                              ((d + 2) < dimension ? output[shift_q + d + 2] : 0.0f),
-                                              ((d + 3) < dimension ? output[shift_q + d + 3] : 0.0f)
-                                           ), 0.0f);
-                  D += IsNaNOrInf(dot(g_d, o_d), 0.0f);
-                 }
-               const float p = IsNaNOrInf(exp(clamp(score - lse, -120.0f, 0.0f)), 0.0f);
-               if(p != 0.0f)
-                  ds = IsNaNOrInf(p * (dp - D), 0.0f);
+               float4 q_d = IsNaNOrInf4((float4)(
+                                           (d < dimension ? query[shift_q + d] : 0.0f),
+                                           ((d + 1) < dimension ? query[shift_q + d + 1] : 0.0f),
+                                           ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
+                                           ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
+                                        ), 0.0f);
+               float4 x_d = IsNaNOrInf4((float4)(
+                                           (d < dimension ? X[shift_x + d] : 0.0f),
+                                           ((d + 1) < dimension ? X[shift_x + d + 1] : 0.0f),
+                                           ((d + 2) < dimension ? X[shift_x + d + 2] : 0.0f),
+                                           ((d + 3) < dimension ? X[shift_x + d + 3] : 0.0f)
+                                        ), 0.0f);
+               score += IsNaNOrInf(dot(q_d, x_d), 0.0f);
+               float4 g_d = IsNaNOrInf4((float4)(
+                                           (d < dimension ? output_gr[shift_q + d] : 0.0f),
+                                           ((d + 1) < dimension ? output_gr[shift_q + d + 1] : 0.0f),
+                                           ((d + 2) < dimension ? output_gr[shift_q + d + 2] : 0.0f),
+                                           ((d + 3) < dimension ? output_gr[shift_q + d + 3] : 0.0f)
+                                        ), 0.0f);
+               dp += IsNaNOrInf(dot(g_d, x_d), 0.0f);
+               float4 o_d = IsNaNOrInf4((float4)(
+                                           (d < dimension ? output[shift_q + d] : 0.0f),
+                                           ((d + 1) < dimension ? output[shift_q + d + 1] : 0.0f),
+                                           ((d + 2) < dimension ? output[shift_q + d + 2] : 0.0f),
+                                           ((d + 3) < dimension ? output[shift_q + d + 3] : 0.0f)
+                                        ), 0.0f);
+               D += IsNaNOrInf(dot(g_d, o_d), 0.0f);
               }
+            const float p = IsNaNOrInf(exp(clamp(score - lse, -120.0f, 0.0f)), 0.0f);
+            if(p != 0.0f)
+               ds = IsNaNOrInf(p * (dp - D), 0.0f);
            }
          //---
          for(int d = 0; d < dimension; d += 4)
@@ -13739,11 +13737,11 @@ __kernel void MHFlashSTCAGrad(__global const float *query,
                                     ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
                                  ), 0.0f);
                g_d = IsNaNOrInf4((float4)(
-                                           (d < dimension ? output_gr[shift_q + d] : 0.0f),
-                                           ((d + 1) < dimension ? output_gr[shift_q + d + 1] : 0.0f),
-                                           ((d + 2) < dimension ? output_gr[shift_q + d + 2] : 0.0f),
-                                           ((d + 3) < dimension ? output_gr[shift_q + d + 3] : 0.0f)
-                                        ), 0.0f);
+                                    (d < dimension ? output_gr[shift_q + d] : 0.0f),
+                                    ((d + 1) < dimension ? output_gr[shift_q + d + 1] : 0.0f),
+                                    ((d + 2) < dimension ? output_gr[shift_q + d + 2] : 0.0f),
+                                    ((d + 3) < dimension ? output_gr[shift_q + d + 3] : 0.0f)
+                                 ), 0.0f);
               }
             float4 x_dg = LocalSum4(q_d * ds + g_d * p, 1, temp4);
             int idx = local_id - d;
