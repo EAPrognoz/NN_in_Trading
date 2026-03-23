@@ -150,6 +150,29 @@ inline int RCtoFlat(const int row,
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+inline float vget4(float4 v, int idx)
+  {
+   float val = 0.0f;
+   switch(idx)
+     {
+      case 0:
+         val = v.s0;
+         break;
+      case 1:
+         val = v.s1;
+         break;
+      case 2:
+         val = v.s2;
+         break;
+      case 3:
+         val = v.s3;
+         break;
+     }
+   return val;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 float LocalMax(const float value, const int loc, __local float* Temp)
   {
    const size_t id = get_local_id(loc);
@@ -7270,9 +7293,9 @@ __kernel void FeatureSmoothing(__global const float *feature,
 //---
    for(int s = 1; s <= smoothing; s++)
      {
-      if((pos - s) >= 0)
+      if(((int)pos - s) >= 0)
          value += IsNaNOrInf(feature[shift_input - s * dimension], 0);
-      if((pos + s) < total)
+      if(((int)pos + s) < total)
          value += IsNaNOrInf(feature[shift_input + s * dimension], 0);
       float factor = IsNaNOrInf(1.0f / (min((int)total, (int)(pos + s)) - max((int)(pos - s), 0) + 1), 0);
       float out = IsNaNOrInf(value * factor, 0);
@@ -7305,10 +7328,10 @@ __kernel void FeatureSmoothingGradient(__global float *feature_gr,
       //---
       float value = IsNaNOrInf(outputs_gr[shift] * factor, 0);
       //---
-      if((pos - s) >= 0)
+      if(((int)pos - s) >= 0)
          grad += IsNaNOrInf(outputs_gr[shift - s * step_output] * factor, 0);
       //---
-      if((pos + s) < total)
+      if(((int)pos + s) < total)
          grad += IsNaNOrInf(outputs_gr[shift + s * step_output] * factor, 0);
      }
 //---
@@ -8659,7 +8682,7 @@ __kernel void DiagMatMult(__global const float *diag,
       local_diag[0] = diag[row + var * rows];
    BarrierLoc
 //---
-   int shift = (row  + var * rows) * cols + col;
+   int shift = RCtoFlat(row, col, rows, cols, var);
 //---
    float res = local_diag[0] * matr[shift];
 //---
@@ -13343,9 +13366,9 @@ __kernel void MHFlashAttention(__global const float *query,
          if(idx >= 0 && idx < 4)
            {
             if(out != 0.0f)
-               out = IsNaNOrInf(exp(prev_max - max) * out + val[idx], 0.0f);
+               out = IsNaNOrInf(exp(prev_max - max) * out + vget4(val, idx), 0.0f);
             else
-               out = val[idx];
+               out = vget4(val, idx);
            }
         }
       prev_max = max;
@@ -13535,9 +13558,9 @@ __kernel void MHFlashSTCA(__global const float *query,
          if(idx >= 0 && idx < 4)
            {
             if(out != 0.0f)
-               out = IsNaNOrInf(exp(prev_max - max) * out + val[idx], 0.0f);
+               out = IsNaNOrInf(exp(prev_max - max) * out + vget4(val, idx), 0.0f);
             else
-               out = val[idx];
+               out = vget4(val, idx);
            }
         }
       prev_max = max;
@@ -13659,7 +13682,7 @@ __kernel void MHFlashSTCAGrad(__global const float *query,
             float4 q_dg = LocalSum4(x_d * ds, 1, temp4);
             int idx = local_id - d;
             if(idx >= 0 && idx < 4)
-               grad_q += q_dg[idx];
+               grad_q += vget4(q_dg, idx);
            }
         }
       if(local_id < dimension)
@@ -13746,11 +13769,111 @@ __kernel void MHFlashSTCAGrad(__global const float *query,
             float4 x_dg = LocalSum4(q_d * ds + g_d * p, 1, temp4);
             int idx = local_id - d;
             if(idx >= 0 && idx < 4)
-               grad_X += x_dg[idx];
+               grad_X += vget4(x_dg, idx);
            }
         }
       if(local_id < dimension)
          X_gr[shift_x + local_id] = IsNaNOrInf(grad_X, 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void ConcatVecMatrix(__global const float *vector_in,
+                              __global const float *matrix_in,
+                              __global float *matrix_out,
+                              const int dimension_v,
+                              const int colums_m,
+                              const int multvarsecond
+                             )
+  {
+   const int r = get_global_id(0);
+   const int c = get_global_id(1);
+   const int v = get_global_id(2);
+   const int rows = get_global_size(0);
+   const int cols = get_global_size(1);
+   const int variables = get_global_size(2);
+//---
+   if(c < dimension_v)
+     {
+      int flat_v = RCtoFlat(0, c, 1, dimension_v, v);
+      int flat_out = RCtoFlat(r, c, rows, dimension_v + colums_m, v);
+      matrix_out[flat_out] = IsNaNOrInf(vector_in[flat_v], 0.0f);
+     }
+   if(c < colums_m)
+     {
+      int flat_m = RCtoFlat(r, c, rows, colums_m, multvarsecond * v);
+      int flat_out = RCtoFlat(r, c + dimension_v, rows, dimension_v + colums_m, v);
+      matrix_out[flat_out] = IsNaNOrInf(matrix_in[flat_m], 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void ConcatVecMatrixGrad(__global float *vector_in_gr,
+                                  __global float *matrix_in_gr,
+                                  __global const float *matrix_out_gr,
+                                  const int dimension_v,
+                                  const int colums_m,
+                                  const int rows,
+                                  const int variables,
+                                  const int multvarsecond
+                                 )
+  {
+   const int loc_id = get_local_id(0);
+   const int c = get_global_id(1);
+   const int v = get_local_id(2);
+   const int total_loc = get_local_size(0);
+   const int cols = get_global_size(1);
+   const int glob_id = get_global_size(2);
+//---
+   __local float temp[LOCAL_ARRAY_SIZE];
+//---
+   float vec_grad = 0;
+   for(int i = 0; (i < rows && glob_id < variables); i += total_loc)
+     {
+      int r = i + loc_id;
+      if(r >= rows)
+         continue;
+      if(c < dimension_v)
+        {
+         int flat_out = RCtoFlat(r, c, rows, dimension_v + colums_m, glob_id);
+         vec_grad += IsNaNOrInf(matrix_out_gr[flat_out], 0.0f);
+        }
+      if(c < colums_m)
+        {
+         int flat_m = RCtoFlat(r, c, rows, colums_m, glob_id);
+         int flat_out = RCtoFlat(r, c + dimension_v, rows, dimension_v + colums_m, glob_id);
+         if((bool)multvarsecond)
+            matrix_in_gr[flat_m] = IsNaNOrInf(matrix_out_gr[flat_out], 0.0f);
+        }
+     }
+   if(c < dimension_v)
+     {
+      vec_grad = LocalSum(vec_grad, 0, temp);
+      if(loc_id == 0)
+        {
+         int flat_v = RCtoFlat(0, c, 1, dimension_v, v);
+         vector_in_gr[flat_v] = vec_grad;
+        }
+     }
+   if(!((bool)multvarsecond) && c < colums_m && glob_id < rows)
+     {
+      float mat_grad = 0;
+      for(int i = 0; i < variables; i += total_loc)
+        {
+         int v = i + loc_id;
+         if(v >= variables)
+            continue;
+         int flat_out = RCtoFlat(glob_id, c + dimension_v, rows, dimension_v + colums_m, v);
+         mat_grad += IsNaNOrInf(matrix_out_gr[flat_out], 0.0f);
+        }
+      mat_grad = LocalSum(mat_grad, 0, temp);
+      if(loc_id == 0)
+        {
+         int flat_m = RCtoFlat(glob_id, c, rows, colums_m, 0);
+         matrix_in_gr[flat_m] = mat_grad;
+        }
      }
   }
 //+------------------------------------------------------------------+
