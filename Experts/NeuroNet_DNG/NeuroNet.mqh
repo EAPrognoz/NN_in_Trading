@@ -109115,9 +109115,9 @@ public:
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronUniMixer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
-                            uint window, uint units, uint blocks,
-                            uint embed_size, uint candidates, uint topK,
-                            ENUM_OPTIMIZATION optimization_type, uint batch)
+                           uint window, uint units, uint blocks,
+                           uint embed_size, uint candidates, uint topK,
+                           ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(units <= blocks || units % blocks != 0)
       ReturnFalse;
@@ -109129,7 +109129,7 @@ bool CNeuronUniMixer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
    uint block_size = units / iBlocks;
 //---
    uint index = 0;
-   if(!cWb.Init(0, index, OpenCL, block_size * block_size, blocks, block_size, candidates, topK, optimization, iBatch))
+   if(!cWb.Init(0, index, OpenCL, block_size * block_size, iBlocks, block_size, candidates, topK, optimization, iBatch))
       ReturnFalse;
    cWb.SetActivationFunction(None);
    index++;
@@ -109161,6 +109161,7 @@ bool CNeuronUniMixer::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
       ReturnFalse;
+//---
    if(bTrain)
      {
       if(!cWb.FeedForward())
@@ -109169,9 +109170,11 @@ bool CNeuronUniMixer::feedForward(CNeuronBaseOCL *NeuronOCL)
          if(!cG[i].FeedForward())
             ReturnFalse;
      }
+//---
    uint dimension = GetWindow();
    uint units = GetFields();
    uint block_size = units / iBlocks;
+//---
    if(!MatMul(cWb.getOutput(), NeuronOCL.getOutput(), cLocalMixing.getOutput(),
               block_size, block_size, dimension, iBlocks, true))
       ReturnFalse;
@@ -109194,5 +109197,139 @@ bool CNeuronUniMixer::feedForward(CNeuronBaseOCL *NeuronOCL)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool CNeuronUniMixer
+bool CNeuronUniMixer::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   if(!CNeuronPerTokenSwiGLU::calcInputGradients(cGlobalMixing[1].AsObject()))
+      ReturnFalse;
+//---
+   uint dimension = GetWindow();
+   uint units = GetFields();
+   uint block_size = units / iBlocks;
+//---
+   if(!MatMulGrad(cG[1].getOutput(), cG[1].getGradient(), cGlobalMixing[0].getOutput(),
+                  cGlobalMixing[0].getGradient(), cGlobalMixing[1].getGradient(),
+                  iBlocks, cG[1].Neurons() / iBlocks, dimension * block_size, 1, true))
+      ReturnFalse;
+   if(!MatMulGrad(cG[0].getOutput(), cG[0].getGradient(), cLocalMixing.getOutput(),
+                  cLocalMixing.getGradient(), cGlobalMixing[0].getGradient(),
+                  cG[0].Neurons() / iBlocks, iBlocks, dimension * block_size, 1, true))
+      ReturnFalse;
+   if(!MatMulGrad(cWb.getOutput(), cWb.getGradient(), NeuronOCL.getOutput(),
+                  NeuronOCL.getGradient(), cLocalMixing.getGradient(),
+                  block_size, block_size, dimension, iBlocks, true))
+      ReturnFalse;
+   if(!SumAndNormalize(NeuronOCL.getGradient(), cGlobalMixing[1].getGradient(),
+                       NeuronOCL.getGradient(), dimension, false, 0, 0, 0, 1))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixer::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!cWb.UpdateInputWeights())
+      ReturnFalse;
+   for(uint i = 0; i < cG.Size(); i++)
+      if(!cG[i].UpdateInputWeights())
+         ReturnFalse;
+   if(!CNeuronPerTokenSwiGLU::updateInputWeights(cGlobalMixing[1].AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!CNeuronPerTokenSwiGLU::WeightsUpdate(source, tau))
+      ReturnFalse;
+//---
+   CNeuronUniMixer* Source = source;
+   dWeightsUpdate(cWb, Source, tau);
+   for(uint i = 0; cG.Size(); i++)
+      dWeightsUpdate(cG[i], Source, tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixer::Save(const int file_handle)
+  {
+   if(!CNeuronPerTokenSwiGLU::Save(file_handle))
+      ReturnFalse;
+   if(!cWb.Save(file_handle))
+      ReturnFalse;
+   for(uint i = 0; cG.Size(); i++)
+      if(!cG[i].Save(file_handle))
+         ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixer::Load(const int file_handle)
+  {
+   if(!CNeuronPerTokenSwiGLU::Load(file_handle))
+      ReturnFalse;
+//---
+   if(!LoadInsideLayer(file_handle, cWb.AsObject()))
+      ReturnFalse;
+   for(uint i = 0; cG.Size(); i++)
+      if(!LoadInsideLayer(file_handle, cG[i].AsObject()))
+         ReturnFalse;
+//---
+   iBlocks = cWb.GetFields();
+   uint dimension = GetWindow();
+   uint units = GetFields();
+   uint block_size = units / iBlocks;
+//---
+   uint index = 1;
+   if(!cLocalMixing.Init(0, index, OpenCL, Neurons(), optimization, iBatch))
+      ReturnFalse;
+   cLocalMixing.SetActivationFunction(None);
+   index += cG.Size() + 1;
+   if(!cGlobalMixing[0].Init(0, index, OpenCL, block_size * dimension * (iBlocks + 3) / 4, optimization, iBatch))
+      ReturnFalse;
+   cGlobalMixing[0].SetActivationFunction(None);
+   index++;
+   if(!cGlobalMixing[1].Init(0, index, OpenCL, dimension * units, optimization, iBatch))
+      ReturnFalse;
+   cGlobalMixing[1].SetActivationFunction(None);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronUniMixer::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronPerTokenSwiGLU::SetOpenCL(obj);
+//---
+   cWb.SetOpenCL(OpenCL);
+   for(uint i = 0; cG.Size(); i++)
+     {
+      cG[i].SetOpenCL(OpenCL);
+      cGlobalMixing[i].SetOpenCL(OpenCL);
+     }
+   cLocalMixing.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronUniMixer::TrainMode(bool flag)
+  {
+   CNeuronPerTokenSwiGLU::TrainMode(flag);
+//---
+   cWb.TrainMode(bTrain);
+   for(uint i = 0; cG.Size(); i++)
+      cG[i].TrainMode(bTrain);
+  }
 //+------------------------------------------------------------------+
