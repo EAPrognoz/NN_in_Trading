@@ -448,7 +448,7 @@ union uaLongChar
 #define  defNeuronMDL                  0x80FB
 #define  defNeuronUniMixerTokenizer    0x80FC
 #define  defNeuronPerTokenSwiGLU       0x80FD
-#define  defNeuronUniMixing            0x80FE
+#define  defNeuronUniMixer             0x80FE
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -109080,7 +109080,7 @@ void CNeuronPerTokenSwiGLU::TrainMode(bool flag)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-class CNeuronUniMixing  :  public CNeuronPerTokenSwiGLU
+class CNeuronUniMixer  :  public CNeuronPerTokenSwiGLU
   {
 protected:
    uint              iBlocks;
@@ -109095,8 +109095,8 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
-                     CNeuronUniMixing(void) {};
-                    ~CNeuronUniMixing(void) {};
+                     CNeuronUniMixer(void) {};
+                    ~CNeuronUniMixer(void) {};
    //---
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint window, uint units, uint blocks,
@@ -109107,14 +109107,14 @@ public:
    virtual bool      Load(const int file_handle) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronUniMixing; }
+   virtual int       Type(void) override const  {  return defNeuronUniMixer; }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool CNeuronUniMixing::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+bool CNeuronUniMixer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                             uint window, uint units, uint blocks,
                             uint embed_size, uint candidates, uint topK,
                             ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -109157,7 +109157,7 @@ bool CNeuronUniMixing::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool CNeuronUniMixing::feedForward(CNeuronBaseOCL *NeuronOCL)
+bool CNeuronUniMixer::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
       ReturnFalse;
@@ -109191,4 +109191,8 @@ bool CNeuronUniMixing::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixer
 //+------------------------------------------------------------------+
