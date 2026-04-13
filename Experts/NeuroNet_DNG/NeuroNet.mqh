@@ -109333,3 +109333,222 @@ void CNeuronUniMixer::TrainMode(bool flag)
       cG[i].TrainMode(bTrain);
   }
 //+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronSiameseNorm   : public CNeuronBaseOCL
+  {
+protected:
+   CNeuronBaseOCL       cNormYIn;
+   CNeuronBaseOCL       cSumXYIn;
+   CNeuronUniMixer      cMixer;
+   CNeuronBaseOCL       cYOut;
+   //---
+   virtual bool         feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool         feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
+   virtual bool         calcInputGradients(CNeuronBaseOCL *prevLayer, CBufferFloat *SecondInput,
+                                           CBufferFloat *SecondGradient,
+                                           ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool         calcInputGradients(CNeuronBaseOCL *prevLayer) override { ReturnFalse; }
+   virtual bool         updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool         updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
+
+public:
+                     CNeuronSiameseNorm(void) {};
+                    ~CNeuronSiameseNorm(void) {};
+   //---
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint window, uint units, uint blocks,
+                          uint embed_size, uint candidates, uint topK,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   //---
+   virtual int       Type(void) override const  {  return defNeuronUniMixer; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
+   //---
+   virtual CNeuronBaseOCL*  GetYOut(void) { return cYOut.AsObject(); }
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                              uint window, uint units, uint blocks,
+                              uint embed_size, uint candidates, uint topK,
+                              ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, window * units, optimization_type, batch))
+      ReturnFalse;
+   activation = None;
+//---
+   uint index = 0;
+   if(!cNormYIn.Init(0, index, OpenCL, Neurons(), optimization, iBatch))
+      ReturnFalse;
+   cNormYIn.SetActivationFunction(None);
+   index++;
+   if(!cSumXYIn.Init(0, index, OpenCL, Neurons(), optimization, iBatch))
+      ReturnFalse;
+   cSumXYIn.SetActivationFunction(None);
+   index++;
+   if(!cMixer.Init(0, index, OpenCL, window, units, blocks, embed_size,
+                   candidates, topK, optimization, iBatch))
+      ReturnFalse;
+   index++;
+   if(!cYOut.Init(0, index, OpenCL, Neurons(), optimization, iBatch))
+      ReturnFalse;
+   cYOut.SetActivationFunction(None);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context)
+  {
+   if(!NeuronOCL || !Context ||
+      NeuronOCL.Neurons() < Neurons() ||
+      Context.Total() < Neurons())
+      ReturnFalse;
+//---
+   uint dimension = cMixer.GetWindow();
+   uint units = cMixer.GetFields();
+//--- Norm(Y)
+   if(!Concat(Context, cNormYIn.getOutput(), cNormYIn.getOutput(), dimension, 0, units))
+      ReturnFalse;
+   if(!Normalize(cNormYIn.getOutput(), dimension))
+      ReturnFalse;
+//--- X + Norm(Y)
+   if(!SumAndNormalize(NeuronOCL.getOutput(), cNormYIn.getOutput(), cSumXYIn.getOutput(),
+                       dimension, false, 0, 0, 0, 1))
+      ReturnFalse;
+//--- Mixing
+   if(!cMixer.FeedForward(cSumXYIn.AsObject()))
+      ReturnFalse;
+//--- X
+   if(!SumAndNormalize(NeuronOCL.getOutput(), cMixer.getOutput(), Output, dimension, true, 0, 0, 0, 1))
+      ReturnFalse;
+//--- Y
+   if(!SumAndNormalize(Context, cMixer.getOutput(), cYOut.getOutput(), dimension, false, 0, 0, 0, 1))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::calcInputGradients(CNeuronBaseOCL *prevLayer,
+      CBufferFloat *SecondInput,
+      CBufferFloat *SecondGradient,
+      ENUM_ACTIVATION SecondActivation = None)
+  {
+   if(!prevLayer || !SecondGradient ||
+      prevLayer.Neurons() < Neurons() ||
+      SecondGradient.Total() < Neurons())
+      ReturnFalse;
+//---
+   uint dimension = cMixer.GetWindow();
+   uint units = cMixer.GetFields();
+//--- Mixing
+   if(!SumAndNormalize(Gradient, cYOut.getGradient(), cMixer.getGradient(), dimension, false, 0, 0, 0, 1))
+      ReturnFalse;
+   Deactivation(cMixer);
+   if(!cSumXYIn.CalcHiddenGradients(cMixer.AsObject()))
+      ReturnFalse;
+   if(!SumAndNormalize(cSumXYIn.getGradient(), Gradient, cSumXYIn.getGradient(), dimension, false, 0, 0, 0, 1))
+      ReturnFalse;
+//--- X
+   if(!DeActivation(prevLayer.getOutput(), prevLayer.getGradient(), cSumXYIn.getGradient(), prevLayer.Activation()))
+      ReturnFalse;
+//--- Y
+   if(!DeActivation(SecondInput, SecondGradient, cSumXYIn.getGradient(), SecondActivation))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context)
+  {
+   if(cMixer.UpdateInputWeights(cSumXYIn.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
+      ReturnFalse;
+//---
+   CNeuronSiameseNorm* Source = source;
+   dWeightsUpdate(cMixer, Source, tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::Save(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Save(file_handle))
+      ReturnFalse;
+//---
+   if(!cMixer.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::Load(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Load(file_handle))
+      ReturnFalse;
+//---
+   if(!LoadInsideLayer(file_handle, cMixer.AsObject()))
+      ReturnFalse;
+//---
+   uint index = 0;
+   if(!cNormYIn.Init(0, index, OpenCL, Neurons(), optimization, iBatch))
+      ReturnFalse;
+   cNormYIn.SetActivationFunction(None);
+   index++;
+   if(!cSumXYIn.Init(0, index, OpenCL, Neurons(), optimization, iBatch))
+      ReturnFalse;
+   cSumXYIn.SetActivationFunction(None);
+   index += 2;
+   if(!cYOut.Init(0, index, OpenCL, Neurons(), optimization, iBatch))
+      ReturnFalse;
+   cYOut.SetActivationFunction(None);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronSiameseNorm::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronBaseOCL::SetOpenCL(obj);
+//---
+   cMixer.SetOpenCL(OpenCL);
+   cNormYIn.SetOpenCL(OpenCL);
+   cSumXYIn.SetOpenCL(OpenCL);
+   cYOut.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronSiameseNorm::TrainMode(bool flag)
+  {
+   CNeuronBaseOCL::TrainMode(flag);
+   cMixer.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
