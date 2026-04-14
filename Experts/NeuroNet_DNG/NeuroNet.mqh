@@ -109852,6 +109852,7 @@ bool CNeuronUniMixerBlock::Init(uint numOutputs, uint myIndex, COpenCLMy *open_c
    uint index = 0;
    if(!cPrepare.Init(0, index, OpenCL, dimensions, units_s + units_ns, embed_size, blocks, candidates, topK, optimization, iBatch))
       ReturnFalse;
+   index++;
    if(!cLastNonSequence.Init(0, index, OpenCL, embed_size * units_ns, optimization, iBatch))
       ReturnFalse;
    cLastNonSequence.SetActivationFunction(None);
