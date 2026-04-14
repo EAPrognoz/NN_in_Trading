@@ -449,6 +449,8 @@ union uaLongChar
 #define  defNeuronUniMixerTokenizer    0x80FC
 #define  defNeuronPerTokenSwiGLU       0x80FD
 #define  defNeuronUniMixer             0x80FE
+#define  defNeuronSiameseNorm          0x80FF
+#define  defNeuronUniMixerBlock        0x8100
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -3150,6 +3152,11 @@ bool CLayer::CreateElement(int index)
    CNeuronFeatureSelfIteration* featureinter = NULL;
    CNeuronDomainFused* domainfused = NULL;
    CNeuronMDL* mdl = NULL;
+   CNeuronUniMixerTokenizer* umtoken = NULL;
+   CNeuronPerTokenSwiGLU* ptswiglu = NULL;
+   CNeuronUniMixer* unimix = NULL;
+   CNeuronSiameseNorm* siamnorm = NULL;
+   CNeuronUniMixerBlock* umblock = NULL;
 //---
    uint windows[] = {1, 1, 1};
    uint mfe_windows[] = {3, 3};
@@ -6252,6 +6259,61 @@ bool CLayer::CreateElement(int index)
               }
             DeleteObj(mdl);
             break;
+         case defNeuronUniMixerTokenizer:
+            umtoken = new CNeuronUniMixerTokenizer;
+            if(!umtoken)
+               ReturnFalse;
+            if(umtoken.Init(iOutputs, index, OpenCL, windows, 1, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = umtoken;
+               return true;
+              }
+            DeleteObj(umtoken);
+            break;
+         case defNeuronPerTokenSwiGLU:
+            ptswiglu = new CNeuronPerTokenSwiGLU;
+            if(!ptswiglu)
+               ReturnFalse;
+            if(ptswiglu.Init(iOutputs, index, OpenCL, 2, 2, 5, 3, 2, ADAM, 1))
+              {
+               m_data[index] = ptswiglu;
+               return true;
+              }
+            DeleteObj(ptswiglu);
+            break;
+         case defNeuronUniMixer:
+            unimix = new CNeuronUniMixer;
+            if(!unimix)
+               ReturnFalse;
+            if(unimix.Init(iOutputs, index, OpenCL, 2, 2, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = unimix;
+               return true;
+              }
+            DeleteObj(unimix);
+            break;
+         case defNeuronSiameseNorm:
+            siamnorm = new CNeuronSiameseNorm;
+            if(!siamnorm)
+               ReturnFalse;
+            if(siamnorm.Init(iOutputs, index, OpenCL, 2, 4, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = siamnorm;
+               return true;
+              }
+            DeleteObj(siamnorm);
+            break;
+         case defNeuronUniMixerBlock:
+            umblock = new CNeuronUniMixerBlock;
+            if(!umblock)
+               ReturnFalse;
+            if(umblock.Init(iOutputs, index, OpenCL, windows, 2, 2, 3, 10, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = umblock;
+               return true;
+              }
+            DeleteObj(umblock);
+            break;
          default:
             result = false;
             break;
@@ -7266,6 +7328,11 @@ bool CNet::Create(CArrayObj *Description)
          CNeuronFeatureSelfIteration* featureinter = NULL;
          CNeuronDomainFused* domainfused = NULL;
          CNeuronMDL* mdl = NULL;
+         CNeuronUniMixerTokenizer* umtoken = NULL;
+         CNeuronPerTokenSwiGLU* ptswiglu = NULL;
+         CNeuronUniMixer* unimix = NULL;
+         CNeuronSiameseNorm* siamnorm = NULL;
+         CNeuronUniMixerBlock* umblock = NULL;
          //---
          switch(desc.type)
            {
@@ -12233,6 +12300,87 @@ bool CNet::Create(CArrayObj *Description)
                  {
                   DeleteObj(temp);
                   DeleteObjAndFalse(mdl);
+                 }
+               break;
+            case defNeuronUniMixerTokenizer:
+               umtoken = new CNeuronUniMixerTokenizer();
+               if(!umtoken)
+                  DeleteObjAndFalse(temp);
+               if(!umtoken.Init(outputs, 0, opencl, desc.windows, desc.count, desc.window_out, desc.step,
+                                desc.variables, uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(umtoken);
+                 }
+               if(!temp.Add(umtoken))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(umtoken);
+                 }
+               break;
+            case defNeuronPerTokenSwiGLU:
+               ptswiglu = new CNeuronPerTokenSwiGLU();
+               if(!ptswiglu)
+                  DeleteObjAndFalse(temp);
+               if(!ptswiglu.Init(outputs, 0, opencl, desc.window, desc.count, desc.window_out, desc.variables,
+                                 uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(ptswiglu);
+                 }
+               if(!temp.Add(ptswiglu))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(ptswiglu);
+                 }
+               break;
+            case defNeuronUniMixer:
+               unimix = new CNeuronUniMixer();
+               if(!unimix)
+                  DeleteObjAndFalse(temp);
+               if(!unimix.Init(outputs, 0, opencl, desc.window, desc.count, desc.step, desc.window_out, desc.variables,
+                               uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(unimix);
+                 }
+               if(!temp.Add(unimix))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(unimix);
+                 }
+               break;
+            case defNeuronSiameseNorm:
+               siamnorm = new CNeuronSiameseNorm();
+               if(!siamnorm)
+                  DeleteObjAndFalse(temp);
+               if(!siamnorm.Init(outputs, 0, opencl, desc.window, desc.count, desc.step, desc.window_out, desc.variables,
+                                 uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(siamnorm);
+                 }
+               if(!temp.Add(siamnorm))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(siamnorm);
+                 }
+               break;
+            case defNeuronUniMixerBlock:
+               umblock = new CNeuronUniMixerBlock();
+               if(!umblock)
+                  DeleteObjAndFalse(temp);
+               if(!umblock.Init(outputs, 0, opencl, desc.windows, desc.units[0], desc.step, desc.units[1],
+                                desc.count, desc.layers, desc.window_out, desc.variables,
+                                uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(umblock);
+                 }
+               if(!temp.Add(umblock))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(umblock);
                  }
                break;
             //---
@@ -107076,7 +107224,7 @@ public:
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    //---
-   virtual uint      GetWindow(void) const { return cProj.GetWindow(); }
+   virtual uint      GetWindow(void) const override { return cProj.GetWindow(); }
   };
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -108815,7 +108963,7 @@ bool CNeuronUniMixerTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *op
       ReturnFalse;
    uint block_size = (embed_size * units) / blocks;
    if(!CNeuronFieldAwareConv::Init(numOutputs, myIndex, open_cl, block_size, block_size,
-                                   units * blocks, (block_size + 3) / 4, candidates, topK, optimization_type, batch))
+                                   blocks, (block_size + 3) / 4, candidates, topK, optimization_type, batch))
       ReturnFalse;
    if(!cTokenizer.Init(0, 0, OpenCL, dimensions, units, embed_size, candidates, topK,
                        optimization, iBatch))
@@ -109178,17 +109326,37 @@ bool CNeuronUniMixer::feedForward(CNeuronBaseOCL *NeuronOCL)
    if(!MatMul(cWb.getOutput(), NeuronOCL.getOutput(), cLocalMixing.getOutput(),
               block_size, block_size, dimension, iBlocks, true))
       ReturnFalse;
+#ifdef _DEBUG
+   if(!cLocalMixing.getOutput().BufferRead())
+      ReturnFalse;
+#endif
    if(!MatMul(cG[0].getOutput(), cLocalMixing.getOutput(), cGlobalMixing[0].getOutput(),
-              cG[0].Neurons() / iBlocks, iBlocks, dimension * block_size, 1, true))
+              cG[0].Neurons() / iBlocks, iBlocks, block_size * dimension, 1, true))
       ReturnFalse;
+#ifdef _DEBUG
+   if(!cGlobalMixing[0].getOutput().BufferRead())
+      ReturnFalse;
+#endif
    if(!MatMul(cG[1].getOutput(), cGlobalMixing[0].getOutput(), cGlobalMixing[1].getOutput(),
-              iBlocks, cG[1].Neurons() / iBlocks, dimension * block_size, 1, true))
+              iBlocks, cG[1].Neurons() / iBlocks, block_size * dimension, 1, true))
       ReturnFalse;
+#ifdef _DEBUG
+   if(!cGlobalMixing[1].getOutput().BufferRead())
+      ReturnFalse;
+#endif
    if(!Normalize(cGlobalMixing[1].getOutput(), dimension))
       ReturnFalse;
+#ifdef _DEBUG
+   if(!cGlobalMixing[1].getOutput().BufferRead())
+      ReturnFalse;
+#endif
    if(!SumAndNormalize(cGlobalMixing[1].getOutput(), NeuronOCL.getOutput(),
                        cGlobalMixing[1].getOutput(), dimension, false, 0, 0, 0, 1))
       ReturnFalse;
+#ifdef _DEBUG
+   if(!cGlobalMixing[1].getOutput().BufferRead())
+      ReturnFalse;
+#endif
    if(!CNeuronPerTokenSwiGLU::feedForward(cGlobalMixing[1].AsObject()))
       ReturnFalse;
 //---
@@ -109211,11 +109379,11 @@ bool CNeuronUniMixer::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    if(!MatMulGrad(cG[1].getOutput(), cG[1].getGradient(), cGlobalMixing[0].getOutput(),
                   cGlobalMixing[0].getGradient(), cGlobalMixing[1].getGradient(),
-                  iBlocks, cG[1].Neurons() / iBlocks, dimension * block_size, 1, true))
+                  iBlocks, cG[1].Neurons() / iBlocks, block_size * dimension, 1, true))
       ReturnFalse;
    if(!MatMulGrad(cG[0].getOutput(), cG[0].getGradient(), cLocalMixing.getOutput(),
                   cLocalMixing.getGradient(), cGlobalMixing[0].getGradient(),
-                  cG[0].Neurons() / iBlocks, iBlocks, dimension * block_size, 1, true))
+                  cG[0].Neurons() / iBlocks, iBlocks, block_size * dimension, 1, true))
       ReturnFalse;
    if(!MatMulGrad(cWb.getOutput(), cWb.getGradient(), NeuronOCL.getOutput(),
                   NeuronOCL.getGradient(), cLocalMixing.getGradient(),
@@ -109252,7 +109420,7 @@ bool CNeuronUniMixer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    CNeuronUniMixer* Source = source;
    dWeightsUpdate(cWb, Source, tau);
-   for(uint i = 0; cG.Size(); i++)
+   for(uint i = 0; i < cG.Size(); i++)
       dWeightsUpdate(cG[i], Source, tau);
 //---
    return true;
@@ -109266,7 +109434,7 @@ bool CNeuronUniMixer::Save(const int file_handle)
       ReturnFalse;
    if(!cWb.Save(file_handle))
       ReturnFalse;
-   for(uint i = 0; cG.Size(); i++)
+   for(uint i = 0; i < cG.Size(); i++)
       if(!cG[i].Save(file_handle))
          ReturnFalse;
 //---
@@ -109282,7 +109450,7 @@ bool CNeuronUniMixer::Load(const int file_handle)
 //---
    if(!LoadInsideLayer(file_handle, cWb.AsObject()))
       ReturnFalse;
-   for(uint i = 0; cG.Size(); i++)
+   for(uint i = 0; i < cG.Size(); i++)
       if(!LoadInsideLayer(file_handle, cG[i].AsObject()))
          ReturnFalse;
 //---
@@ -109314,7 +109482,7 @@ void CNeuronUniMixer::SetOpenCL(COpenCLMy *obj)
    CNeuronPerTokenSwiGLU::SetOpenCL(obj);
 //---
    cWb.SetOpenCL(OpenCL);
-   for(uint i = 0; cG.Size(); i++)
+   for(uint i = 0; i < cG.Size(); i++)
      {
       cG[i].SetOpenCL(OpenCL);
       cGlobalMixing[i].SetOpenCL(OpenCL);
@@ -109329,7 +109497,7 @@ void CNeuronUniMixer::TrainMode(bool flag)
    CNeuronPerTokenSwiGLU::TrainMode(flag);
 //---
    cWb.TrainMode(bTrain);
-   for(uint i = 0; cG.Size(); i++)
+   for(uint i = 0; i < cG.Size(); i++)
       cG[i].TrainMode(bTrain);
   }
 //+------------------------------------------------------------------+
@@ -109343,13 +109511,13 @@ protected:
    CNeuronUniMixer      cMixer;
    CNeuronBaseOCL       cYOut;
    //---
-   virtual bool         feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool         feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool         feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
    virtual bool         calcInputGradients(CNeuronBaseOCL *prevLayer, CBufferFloat *SecondInput,
                                            CBufferFloat *SecondGradient,
                                            ENUM_ACTIVATION SecondActivation = None) override;
-   virtual bool         calcInputGradients(CNeuronBaseOCL *prevLayer) override { ReturnFalse; }
-   virtual bool         updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool         calcInputGradients(CNeuronBaseOCL *prevLayer) override;
+   virtual bool         updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool         updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
 
 public:
@@ -109366,12 +109534,15 @@ public:
    virtual bool      Load(const int file_handle) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronUniMixer; }
+   virtual int       Type(void) override const  {  return defNeuronSiameseNorm; }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    //---
    virtual CNeuronBaseOCL*  GetYOut(void) { return cYOut.AsObject(); }
+   //---
+   virtual uint      GetWindow(void) const { return cMixer.GetWindow(); }
+   virtual uint      GetFields(void) const { return cMixer.GetFields(); }
   };
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -109407,11 +109578,35 @@ bool CNeuronSiameseNorm::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+   if(NeuronOCL.Type() != Type())
+     {
+      if(!NeuronOCL.getOutput() ||
+         !feedForward(NeuronOCL, NeuronOCL.getOutput()))
+         ReturnFalse;
+     }
+   else
+     {
+      CNeuronSiameseNorm* second = NeuronOCL;
+      if(!second.GetYOut() || !second.GetYOut().getOutput() ||
+         !feedForward(NeuronOCL, second.GetYOut().getOutput()))
+         ReturnFalse;
+     }
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool CNeuronSiameseNorm::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context)
   {
-   if(!NeuronOCL || !Context ||
-      NeuronOCL.Neurons() < Neurons() ||
-      Context.Total() < Neurons())
+   if(!NeuronOCL || NeuronOCL.Neurons() < Neurons())
+      ReturnFalse;
+   if(!Context)
+      return feedForward(NeuronOCL);
+   if(Context.Total() < Neurons())
       ReturnFalse;
 //---
    uint dimension = cMixer.GetWindow();
@@ -109440,13 +109635,41 @@ bool CNeuronSiameseNorm::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Co
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::calcInputGradients(CNeuronBaseOCL *prevLayer)
+  {
+   if(!prevLayer)
+      ReturnFalse;
+   if(prevLayer.Type() == Type())
+     {
+      CNeuronSiameseNorm* obj = prevLayer;
+      CNeuronBaseOCL* second = obj.GetYOut();
+      if(!second.getOutput() || !second.getGradient() ||
+         !calcInputGradients(prevLayer, second.getOutput(), second.getGradient(), (ENUM_ACTIVATION)second.Activation()))
+         ReturnFalse;
+     }
+   else
+     {
+      if(!prevLayer.getOutput() ||
+         !calcInputGradients(prevLayer, prevLayer.getOutput(), PrevOutput, (ENUM_ACTIVATION)prevLayer.Activation()))
+         ReturnFalse;
+      if(!SumAndNormalize(prevLayer.getOutput(), PrevOutput, prevLayer.getOutput(), cMixer.GetWindow(), false, 0, 0, 0, 1))
+         ReturnFalse;
+     }
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool CNeuronSiameseNorm::calcInputGradients(CNeuronBaseOCL *prevLayer,
       CBufferFloat *SecondInput,
       CBufferFloat *SecondGradient,
       ENUM_ACTIVATION SecondActivation = None)
   {
-   if(!prevLayer || !SecondGradient ||
-      prevLayer.Neurons() < Neurons() ||
+   if(!SecondGradient)
+      return calcInputGradients(prevLayer);
+//---
+   if(!prevLayer || prevLayer.Neurons() < Neurons() ||
       SecondGradient.Total() < Neurons())
       ReturnFalse;
 //---
@@ -109472,9 +109695,30 @@ bool CNeuronSiameseNorm::calcInputGradients(CNeuronBaseOCL *prevLayer,
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+bool CNeuronSiameseNorm::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+   if(NeuronOCL.Type() != Type())
+     {
+      if(updateInputWeights(NeuronOCL, NeuronOCL.getOutput()))
+         ReturnFalse;
+     }
+   else
+     {
+      CNeuronSiameseNorm* second = NeuronOCL;
+      if(!updateInputWeights(NeuronOCL, second.GetYOut().getOutput()))
+         ReturnFalse;
+     }
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool CNeuronSiameseNorm::updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context)
   {
-   if(cMixer.UpdateInputWeights(cSumXYIn.AsObject()))
+   if(!cMixer.UpdateInputWeights(cSumXYIn.AsObject()))
       ReturnFalse;
 //---
    return true;
@@ -109550,5 +109794,553 @@ void CNeuronSiameseNorm::TrainMode(bool flag)
   {
    CNeuronBaseOCL::TrainMode(flag);
    cMixer.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronUniMixerBlock :  public CNeuronPerTokenSwiGLU
+  {
+protected:
+   CNeuronUniMixerTokenizer   cPrepare;
+   CNeuronBaseOCL             cLastNonSequence;
+   CLayer                     cFeatures;
+   CNeuronScenariosToken      cScenarios;
+   CLayer                     cFlow;
+   CLayer                     cOutputProj;
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronUniMixerBlock(void) {};
+                    ~CNeuronUniMixerBlock(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint &dimensions[], uint units_s, uint blocks,
+                          uint scenarios, uint stack_size, uint layers,
+                          uint embed_size, uint candidates, uint topK,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   //---
+   virtual int       Type(void) override const  {  return defNeuronUniMixerBlock; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   //---
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixerBlock::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                uint &dimensions[], uint units_s, uint blocks, uint scenarios,
+                                uint stack_size, uint layers, uint embed_size, uint candidates,
+                                uint topK, ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(dimensions.Size() <= units_s || layers < 1)
+      ReturnFalse;
+   uint units_ns = dimensions.Size() - units_s;
+   uint inside_embed_size = (embed_size + 1) / 2;
+//---
+   if(!CNeuronPerTokenSwiGLU::Init(numOutputs, myIndex, open_cl, embed_size, blocks,
+                                   inside_embed_size, candidates, topK, optimization_type, batch))
+      ReturnFalse;
+//--- Prepare
+   uint index = 0;
+   if(!cPrepare.Init(0, index, OpenCL, dimensions, units_s + units_ns, embed_size, blocks, candidates, topK, optimization, iBatch))
+      ReturnFalse;
+   if(!cLastNonSequence.Init(0, index, OpenCL, embed_size * units_ns, optimization, iBatch))
+      ReturnFalse;
+   cLastNonSequence.SetActivationFunction(None);
+   index++;
+   if(!cScenarios.Init(0, index, OpenCL, embed_size, units_s, embed_size,
+                       scenarios, inside_embed_size, candidates, topK, optimization, iBatch))
+      ReturnFalse;
+   cScenarios.SetActivationFunction(None);
+//---
+   cFeatures.Clear();
+   cFlow.Clear();
+   cOutputProj.Clear();
+   cFeatures.SetOpenCL(OpenCL);
+   cFlow.SetOpenCL(OpenCL);
+   cOutputProj.SetOpenCL(OpenCL);
+//--- Features
+   index++;
+   CNeuronBaseOCL* neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, embed_size * units_s, optimization, iBatch) ||
+      !cFeatures.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   index++;
+   CNeuronAddToStack* stack = new CNeuronAddToStack();
+   if(!stack ||
+      !stack.Init(0, index, OpenCL, stack_size, embed_size, units_s, optimization, iBatch) ||
+      !cFeatures.Add(stack))
+      DeleteObjAndFalse(stack);
+   index++;
+   CNeuronSiameseNorm* mixing = new CNeuronSiameseNorm();
+   if(!mixing ||
+      !mixing.Init(0, index, OpenCL, embed_size, units_s * stack_size, blocks, inside_embed_size, candidates, topK, optimization, iBatch) ||
+      !cFeatures.Add(mixing))
+      DeleteObjAndFalse(mixing);
+   index++;
+   neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, mixing.Neurons(), optimization, iBatch) ||
+      !cFeatures.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+//--- Flow
+   index++;
+   neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, mixing.Neurons() + cScenarios.Neurons() + cLastNonSequence.Neurons(), optimization, iBatch) ||
+      !cFlow.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   for(uint i = 0; i < layers; i++)
+     {
+      index++;
+      mixing = new CNeuronSiameseNorm();
+      if(!mixing ||
+         !mixing.Init(0, index, OpenCL, embed_size, units_s * stack_size + units_ns + scenarios, blocks, inside_embed_size,
+                      candidates, topK, optimization, iBatch) ||
+         !cFlow.Add(mixing))
+         DeleteObjAndFalse(mixing);
+     }
+//--- Ouptput Projection
+   index++;
+   neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, mixing.Neurons(), optimization, iBatch) ||
+      !cOutputProj.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   index++;
+   uint window_in = neuron.Neurons() / blocks;
+   CNeuronFieldAwareConv* proj = new CNeuronFieldAwareConv();
+   if(!proj ||
+      !proj.Init(0, index, OpenCL, window_in, embed_size, blocks, inside_embed_size, candidates, topK, optimization, iBatch) ||
+      !cOutputProj.Add(proj))
+      DeleteObjAndFalse(proj);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixerBlock::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!cPrepare.FeedForward(NeuronOCL))
+      ReturnFalse;
+//--- Features
+   CNeuronBaseOCL* feature = cFeatures[0];
+   if(!feature ||
+      !DeConcat(feature.getOutput(), cLastNonSequence.getOutput(), cPrepare.getOutput(),
+                feature.Neurons(), cLastNonSequence.Neurons(), 1))
+      ReturnFalse;
+#ifdef _DEBUG
+   feature.getOutput().BufferRead();
+   cLastNonSequence.getOutput().BufferRead();
+#endif
+   for(int i = 1; i < cFeatures.Total() - 1; i++)
+     {
+      feature = cFeatures[i];
+      if(!feature ||
+         !feature.FeedForward(cFeatures[i - 1]))
+         ReturnFalse;
+#ifdef _DEBUG
+      feature.getOutput().BufferRead();
+#endif
+     }
+   if(feature.Type() == defNeuronSiameseNorm)
+     {
+      CNeuronSiameseNorm* mixing = feature;
+      CNeuronBaseOCL*     Y = mixing.GetYOut();
+      uint dimension = mixing.GetWindow();
+      uint units = mixing.GetFields();
+      feature = cFeatures[-1];
+      if(!feature)
+         ReturnFalse;
+      if(!Concat(Y.getOutput(), Y.getOutput(), feature.getOutput(), dimension, 0, units))
+         ReturnFalse;
+#ifdef _DEBUG
+      feature.getOutput().BufferRead();
+#endif
+      if(!Normalize(feature.getOutput(), dimension))
+         ReturnFalse;
+#ifdef _DEBUG
+      feature.getOutput().BufferRead();
+#endif
+      if(!SumAndNormalize(mixing.getOutput(), feature.getOutput(), feature.getOutput(), dimension, false, 0, 0, 0, 1))
+         ReturnFalse;
+#ifdef _DEBUG
+      feature.getOutput().BufferRead();
+#endif
+     }
+   else
+     {
+      feature = cFeatures[-1];
+      if(!feature ||
+         !feature.FeedForward(cFeatures[-2]))
+         ReturnFalse;
+#ifdef _DEBUG
+      feature.getOutput().BufferRead();
+#endif
+     }
+//--- Scenarios
+   if(!cScenarios.FeedForward(cFeatures[0]))
+      ReturnFalse;
+#ifdef _DEBUG
+   cScenarios.getOutput().BufferRead();
+#endif
+//--- Flow
+   uint blocks = CNeuronPerTokenSwiGLU::GetFields();
+   CNeuronBaseOCL* flow = cFlow[0];
+   if(!flow ||
+      !Concat(cLastNonSequence.getOutput(), cScenarios.getOutput(), feature.getOutput(), flow.getOutput(),
+              cLastNonSequence.Neurons() / blocks, cScenarios.Neurons() / blocks, feature.Neurons() / blocks, blocks))
+      ReturnFalse;
+#ifdef _DEBUG
+   flow.getOutput().BufferRead();
+#endif
+   flow = cFlow[1];
+   if(!flow ||
+      !flow.FeedForward(cFlow[0], cFlow[0].getOutput()))
+      ReturnFalse;
+#ifdef _DEBUG
+   flow.getOutput().BufferRead();
+#endif
+   for(int i = 2; i < cFlow.Total(); i++)
+     {
+      flow = cFlow[i];
+      if(!flow ||
+         !flow.FeedForward(cFlow[i - 1]))
+         ReturnFalse;
+#ifdef _DEBUG
+      flow.getOutput().BufferRead();
+#endif
+     }
+//--- Output Projection
+   if(flow.Type() != defNeuronSiameseNorm)
+      ReturnFalse;
+   CNeuronSiameseNorm* mixing = flow;
+   CNeuronBaseOCL*     Y = mixing.GetYOut();
+   uint dimension = mixing.GetWindow();
+   uint units = mixing.GetFields();
+   CNeuronBaseOCL* proj = cOutputProj[0];
+   if(!proj)
+      ReturnFalse;
+   if(!Concat(Y.getOutput(), Y.getOutput(), proj.getOutput(), dimension, 0, units))
+      ReturnFalse;
+#ifdef _DEBUG
+   proj.getOutput().BufferRead();
+#endif
+   if(!Normalize(proj.getOutput(), dimension))
+      ReturnFalse;
+#ifdef _DEBUG
+   proj.getOutput().BufferRead();
+#endif
+   if(!SumAndNormalize(mixing.getOutput(), proj.getOutput(), proj.getOutput(), dimension, false, 0, 0, 0, 1))
+      ReturnFalse;
+#ifdef _DEBUG
+   proj.getOutput().BufferRead();
+#endif
+   for(int i = 1; i < cOutputProj.Total(); i++)
+     {
+      proj = cOutputProj[i];
+      if(!proj ||
+         !proj.FeedForward(cOutputProj[i - 1]))
+         ReturnFalse;
+#ifdef _DEBUG
+      proj.getOutput().BufferRead();
+#endif
+     }
+   if(!CNeuronPerTokenSwiGLU::feedForward(proj))
+      ReturnFalse;
+#ifdef _DEBUG
+   Output.BufferRead();
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixerBlock::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   if(!CNeuronPerTokenSwiGLU::calcInputGradients(cOutputProj[-1]))
+      ReturnFalse;
+#ifdef _DEBUG
+   cOutputProj[-1].getGradient().BufferRead();
+#endif
+//--- Output Projection
+   CNeuronBaseOCL* proj = NULL;
+   for(int i = cOutputProj.Total() - 2; i >= 0; i--)
+     {
+      proj = cOutputProj[i];
+      if(!proj ||
+         !proj.CalcHiddenGradients(cOutputProj[i + 1]))
+         ReturnFalse;
+#ifdef _DEBUG
+      proj.getGradient().BufferRead();
+#endif
+     }
+//--- Flow
+   CNeuronBaseOCL* flow = cFlow[-1];
+   if(flow.Type() != defNeuronSiameseNorm)
+      ReturnFalse;
+   CNeuronSiameseNorm* mixing = flow;
+   CNeuronBaseOCL* Y = mixing.GetYOut();
+   if(!DeActivation(mixing.getOutput(), mixing.getGradient(), proj.getGradient(), mixing.Activation()))
+      ReturnFalse;
+#ifdef _DEBUG
+   mixing.getGradient().BufferRead();
+#endif
+   if(!DeActivation(Y.getOutput(), Y.getGradient(), proj.getGradient(), Y.Activation()))
+      ReturnFalse;
+#ifdef _DEBUG
+   Y.getGradient().BufferRead();
+#endif
+   for(int i = cFlow.Total() - 2; i >= 0; i--)
+     {
+      flow = cFlow[i];
+      if(!flow ||
+         !flow.CalcHiddenGradients(cFlow[i + 1]))
+         ReturnFalse;
+#ifdef _DEBUG
+      flow.getGradient().BufferRead();
+#endif
+     }
+//--- Features
+   CNeuronBaseOCL* feature = cFeatures[-1];
+   uint blocks = CNeuronPerTokenSwiGLU::GetFields();
+   if(!feature ||
+      !DeConcat(cLastNonSequence.getGradient(), cScenarios.getGradient(), feature.getGradient(), flow.getGradient(),
+                cLastNonSequence.Neurons() / blocks, cScenarios.Neurons() / blocks, feature.Neurons() / blocks, blocks))
+      ReturnFalse;
+#ifdef _DEBUG
+   feature.getGradient().BufferRead();
+#endif
+   Deactivation(feature);
+   feature = cFeatures[-2];
+   if(!feature)
+      ReturnFalse;
+   if(feature.Type() == defNeuronSiameseNorm)
+     {
+      mixing = feature;
+      Y = mixing.GetYOut();
+      if(!DeActivation(feature.getOutput(), feature.getGradient(), cFeatures[-1].getGradient(), feature.Activation()))
+         ReturnFalse;
+      if(!DeActivation(Y.getOutput(), Y.getGradient(), cFeatures[-1].getGradient(), Y.Activation()))
+         ReturnFalse;
+#ifdef _DEBUG
+      feature.getGradient().BufferRead();
+      Y.getGradient().BufferRead();
+#endif
+     }
+   else
+      if(!feature.CalcHiddenGradients(cFeatures[-1]))
+         ReturnFalse;
+   for(int i = cFeatures.Total() - 3; i >= 0; i--)
+     {
+      feature = cFeatures[i];
+      if(!feature ||
+         !feature.CalcHiddenGradients(cFeatures[i + 1]))
+         ReturnFalse;
+     }
+//--- Scenarios
+   Deactivation(cScenarios);
+   CBufferFloat *temp = feature.getGradient();
+   if(!feature.SetGradient(feature.getPrevOutput(), false) ||
+      !feature.CalcHiddenGradients(cScenarios.AsObject()) ||
+      !SumAndNormalize(temp, feature.getGradient(), temp, 1, false, 0, 0, 0, 1) ||
+      !feature.SetGradient(temp, false))
+      ReturnFalse;
+#ifdef _DEBUG
+   feature.getGradient().BufferRead();
+#endif
+//---
+   if(!Concat(feature.getGradient(), cLastNonSequence.getGradient(), cPrepare.getGradient(),
+              feature.Neurons(), cLastNonSequence.Neurons(), 1))
+      ReturnFalse;
+   if(!NeuronOCL.CalcHiddenGradients(cPrepare.AsObject()))
+      ReturnFalse;
+#ifdef _DEBUG
+   NeuronOCL.getGradient().BufferRead();
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixerBlock::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!cPrepare.UpdateInputWeights(NeuronOCL))
+      ReturnFalse;
+//--- Features
+   CNeuronBaseOCL* feature = NULL;
+   for(int i = 1; i < cFeatures.Total() - 1; i++)
+     {
+      feature = cFeatures[i];
+      if(!feature ||
+         !feature.UpdateInputWeights(cFeatures[i - 1]))
+         ReturnFalse;
+     }
+   if(feature.Type() != defNeuronSiameseNorm)
+     {
+      feature = cFeatures[-1];
+      if(!feature ||
+         !feature.UpdateInputWeights(cFeatures[-2]))
+         ReturnFalse;
+     }
+//--- Scenarios
+   if(!cScenarios.UpdateInputWeights(cFeatures[0]))
+      ReturnFalse;
+//--- Flow
+   CNeuronBaseOCL* flow = NULL;
+   for(int i = 1; i < cFlow.Total(); i++)
+     {
+      flow = cFlow[i];
+      if(!flow ||
+         !flow.UpdateInputWeights(cFlow[i - 1]))
+         ReturnFalse;
+     }
+//--- Output Projection
+   CNeuronBaseOCL* proj = NULL;
+   for(int i = 1; i < cOutputProj.Total(); i++)
+     {
+      proj = cOutputProj[i];
+      if(!proj ||
+         !proj.UpdateInputWeights(cOutputProj[i - 1]))
+         ReturnFalse;
+     }
+   if(!CNeuronPerTokenSwiGLU::updateInputWeights(proj))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixerBlock::Save(const int file_handle)
+  {
+   if(!CNeuronPerTokenSwiGLU::Save(file_handle))
+      ReturnFalse;
+//---
+   if(!cPrepare.Save(file_handle))
+      ReturnFalse;
+   if(!cLastNonSequence.Save(file_handle))
+      ReturnFalse;
+   if(!cScenarios.Save(file_handle))
+      ReturnFalse;
+   if(!cFeatures.Save(file_handle))
+      ReturnFalse;
+   if(!cFlow.Save(file_handle))
+      ReturnFalse;
+   if(!cOutputProj.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixerBlock::Load(const int file_handle)
+  {
+   if(!CNeuronPerTokenSwiGLU::Load(file_handle))
+      ReturnFalse;
+//---
+   if(!LoadInsideLayer(file_handle, cPrepare.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cLastNonSequence.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cScenarios.AsObject()))
+      ReturnFalse;
+   if(!cFeatures.Load(file_handle))
+      ReturnFalse;
+   if(!cFlow.Load(file_handle))
+      ReturnFalse;
+   if(!cOutputProj.Load(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixerBlock::Clear(void)
+  {
+   if(!CNeuronPerTokenSwiGLU::Clear())
+      ReturnFalse;
+//---
+   if(!cPrepare.Clear())
+      ReturnFalse;
+   if(!cLastNonSequence.Clear())
+      ReturnFalse;
+   if(!cScenarios.Clear())
+      ReturnFalse;
+   if(!cFeatures.ClearStates())
+      ReturnFalse;
+   if(!cFlow.ClearStates())
+      ReturnFalse;
+   if(!cOutputProj.ClearStates())
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronUniMixerBlock::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!CNeuronPerTokenSwiGLU::WeightsUpdate(source, tau))
+      ReturnFalse;
+//---
+   CNeuronUniMixerBlock* Source = source;
+   dWeightsUpdate(cPrepare, Source, tau);
+   dWeightsUpdate(cLastNonSequence, Source, tau);
+   dWeightsUpdate(cScenarios, Source, tau);
+   dWeightsUpdate(cFeatures, Source, tau);
+   dWeightsUpdate(cFlow, Source, tau);
+   dWeightsUpdate(cOutputProj, Source, tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronUniMixerBlock::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronPerTokenSwiGLU::SetOpenCL(obj);
+//---
+   cPrepare.SetOpenCL(OpenCL);
+   cLastNonSequence.SetOpenCL(OpenCL);
+   cScenarios.SetOpenCL(OpenCL);
+   cFeatures.SetOpenCL(OpenCL);
+   cFlow.SetOpenCL(OpenCL);
+   cOutputProj.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronUniMixerBlock::TrainMode(bool flag)
+  {
+   CNeuronPerTokenSwiGLU::TrainMode(flag);
+//---
+   cPrepare.TrainMode(bTrain);
+   cLastNonSequence.TrainMode(bTrain);
+   cScenarios.TrainMode(bTrain);
+   cFeatures.TrainMode(bTrain);
+   cFlow.TrainMode(bTrain);
+   cOutputProj.TrainMode(bTrain);
   }
 //+------------------------------------------------------------------+

@@ -12462,12 +12462,12 @@ __kernel void AddToStack(__global const float* inputs,
    const size_t total_loc = get_local_size(1);
    const size_t variables = get_global_size(2);
 //---
-   const int total = (stack_size - 1) / total_loc;
+   const int total = (stack_size + total_loc - 1) / total_loc;
    for(int i = total; i >= 0; i--)
      {
-      int inp = 0;
+      float inp = 0;
       if(i == 0 && loc_id == 0)
-         inp = IsNaNOrInf(inputs[RCtoFlat(var, id, variables, dimension, 1)], 0);
+         inp = IsNaNOrInf(inputs[RCtoFlat(var, id, variables, dimension, 0)], 0);
       else
          if((i * total_loc + loc_id) < stack_size)
            {
