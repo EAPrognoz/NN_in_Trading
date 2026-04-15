@@ -48,7 +48,7 @@ int            iLatentLayer = -1;
 #define        NForecast               12            //Number of forecast
 #define        EtalonBalance           1e4
 #define        BatchSize               1e+5
-#define        EmbeddingSize           36
+#define        EmbeddingSize           18
 #define        DiscFactor              0.9f
 #define        FileName                "UniMixer"
 #define        LatentCount             64
