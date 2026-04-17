@@ -451,6 +451,7 @@ union uaLongChar
 #define  defNeuronUniMixer             0x80FE
 #define  defNeuronSiameseNorm          0x80FF
 #define  defNeuronUniMixerBlock        0x8100
+#define  defNeuronINFNetScenarios      0x8101
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -110343,5 +110344,344 @@ void CNeuronUniMixerBlock::TrainMode(bool flag)
    cFeatures.TrainMode(bTrain);
    cFlow.TrainMode(bTrain);
    cOutputProj.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronINFNetScenarios  :  public CNeuronBaseOCL
+  {
+protected:
+   CLayer            cSequence;
+   CLayer            cContext;
+   CLayer            cGlobal;
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronINFNetScenarios(void) {};
+                    ~CNeuronINFNetScenarios(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint window_in, uint &fields[], uint window_out,
+                          uint embed_size, uint candidates, uint topK,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   //---
+   virtual int       Type(void) override const  {  return defNeuronINFNetScenarios; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {  activation = None; }
+
+   //---
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetScenarios::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                  uint window_in, uint &fields[], uint window_out,
+                                  uint embed_size, uint candidates, uint topK,
+                                  ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+//--- Fields require [Sequence, Context, Global]
+   if(fields.Size() < 3)
+      ReturnFalse;
+   uint fields_total = 0;
+   for(int i = 0; i < 3; i++)
+     {
+      if(fields[i] <= 0)
+         ReturnFalse;
+      fields_total += fields[i];
+     }
+   if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, fields_total * window_out, optimization_type, batch))
+      ReturnFalse;
+//---
+   cSequence.Clear();
+   cContext.Clear();
+   cGlobal.Clear();
+   cSequence.SetOpenCL(OpenCL);
+   cContext.SetOpenCL(OpenCL);
+   cGlobal.SetOpenCL(OpenCL);
+   uint index = 0;
+//--- Sequence
+     {
+      CNeuronBaseOCL* neuron = new CNeuronBaseOCL();
+      if(!neuron ||
+         !neuron.Init(0, index, OpenCL, window_in * fields[0], optimization, iBatch) ||
+         !cSequence.Add(neuron))
+         DeleteObjAndFalse(neuron);
+      neuron.SetActivationFunction(None);
+      index++;
+      CNeuronScenariosToken* scen = new CNeuronScenariosToken();
+      if(!scen ||
+         !scen.Init(0, index, OpenCL, window_in, fields[0], window_out, fields[0], embed_size, candidates, topK, optimization, iBatch) ||
+         !cSequence.Add(scen))
+         DeleteObjAndFalse(scen);
+      scen.SetActivationFunction(None);
+     }
+//--- Context
+     {
+      index++;
+      CNeuronBaseOCL* neuron = new CNeuronBaseOCL();
+      if(!neuron ||
+         !neuron.Init(0, index, OpenCL, window_in * fields[1], optimization, iBatch) ||
+         !cContext.Add(neuron))
+         DeleteObjAndFalse(neuron);
+      neuron.SetActivationFunction(None);
+      index++;
+      CNeuronFieldPatternEmbedding* scen = new CNeuronFieldPatternEmbedding();
+      if(!scen ||
+         !scen.Init(fields[1]*window_out, index, OpenCL, window_in, fields[1], (window_out+1)/2, candidates, topK, optimization, iBatch) ||
+         !cContext.Add(scen))
+         DeleteObjAndFalse(scen);
+      scen.SetActivationFunction(None);
+      CNeuronBaseOCL* mix=new CNeuronBaseOCL();
+      if(!mix ||
+         !mix.Init(0,index,OpenCL,window_out*fields[1],optimization,iBatch) ||
+         !cContext.Add(mix))
+        DeleteObjAndFalse(mix);
+      mix.SetActivationFunction(None);
+     }
+//--- Global
+     {
+      index++;
+      CFieldAwareParams* scen = new CFieldAwareParams();
+      if(!scen ||
+         !scen.Init(0, index, OpenCL, window_out, fields[2], embed_size, candidates, topK, optimization, iBatch) ||
+         !cGlobal.Add(scen))
+         DeleteObjAndFalse(scen);
+      scen.SetActivationFunction(None);
+     }
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetScenarios::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* sequence = cSequence[0];
+   CNeuronBaseOCL* context = cContext[0];
+   CNeuronBaseOCL* global = NULL;
+//---
+   if(!sequence || !context ||
+      !DeConcat(sequence.getOutput(), context.getOutput(), NeuronOCL.getOutput(),
+                sequence.Neurons(), context.Neurons(), 1))
+      ReturnFalse;
+//--- Sequemce
+   for(int i = 1; i < cSequence.Total(); i++)
+     {
+      sequence = cSequence[i];
+      if(!sequence ||
+         !sequence.FeedForward(cSequence[i - 1]))
+         ReturnFalse;
+     }
+//--- Contest
+   for(int i = 1; i < cContext.Total(); i++)
+     {
+      context = cContext[i];
+      if(!context ||
+         !context.FeedForward(cContext[i - 1]))
+         ReturnFalse;
+     }
+//--- Global
+   if(bTrain)
+     {
+      for(int i = 0; i < cGlobal.Total(); i++)
+        {
+         global = cGlobal[i];
+         if(!global ||
+            !global.FeedForward((i==0 ? NeuronOCL : cGlobal[i - 1])))
+            ReturnFalse;
+        }
+     }
+   else
+     {
+      global = cGlobal[-1];
+      if(!global)
+         ReturnFalse;
+     }
+//--- Concatenate
+   if(!Concat(sequence.getOutput(), context.getOutput(), global.getOutput(), Output,
+              sequence.Neurons(), context.Neurons(), global.Neurons(), 1))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetScenarios::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* sequence = cSequence[-1];
+   CNeuronBaseOCL* context = cContext[-1];
+   CNeuronBaseOCL* global = cGlobal[-1];
+//--- Concatenating
+   if(!sequence || !context || !global ||
+      !DeConcat(sequence.getGradient(), context.getGradient(), global.getGradient(), Gradient,
+                sequence.Neurons(), context.Neurons(), global.Neurons(), 1))
+      ReturnFalse;
+   Deactivation(sequence);
+   Deactivation(context);
+   Deactivation(global);
+//--- Global
+   for(int i = cGlobal.Total() - 2; i >= 1; i--)
+     {
+      global = cGlobal[i];
+      if(!global ||
+         !global.CalcHiddenGradients(cGlobal[i + 1]))
+         ReturnFalse;
+     }
+//--- Contest
+   for(int i = cContext.Total() - 2; i >= 0; i--)
+     {
+      context = cContext[i];
+      if(!context ||
+         !context.CalcHiddenGradients(cContext[i + 1]))
+         ReturnFalse;
+     }
+//--- Sequemce
+   for(int i = cSequence.Total() - 2; i >= 0; i--)
+     {
+      sequence = cSequence[i];
+      if(!sequence ||
+         !sequence.CalcHiddenGradients(cSequence[i + 1]))
+         ReturnFalse;
+     }
+//---
+   if(!Concat(sequence.getGradient(), context.getGradient(), NeuronOCL.getGradient(),
+              sequence.Neurons(), context.Neurons(), 1))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetScenarios::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   CNeuronBaseOCL* neuron = NULL;
+//--- Sequemce
+   for(int i = 1; i < cSequence.Total(); i++)
+     {
+      neuron = cSequence[i];
+      if(!neuron ||
+         !neuron.UpdateInputWeights(cSequence[i - 1]))
+         ReturnFalse;
+     }
+//--- Contest
+   for(int i = 1; i < cContext.Total(); i++)
+     {
+      neuron = cContext[i];
+      if(!neuron ||
+         !neuron.FeedForward(cContext[i - 1]))
+         ReturnFalse;
+     }
+//--- Global
+   neuron = cGlobal[0];
+   for(int i = 0; i < cGlobal.Total(); i++)
+     {
+      neuron = cGlobal[i];
+      if(!neuron ||
+         !neuron.UpdateInputWeights((i==0 ? NeuronOCL : cGlobal[i - 1])))
+         ReturnFalse;
+     }
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetScenarios::Save(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Save(file_handle))
+      ReturnFalse;
+//---
+   if(!cSequence.Save(file_handle))
+      ReturnFalse;
+   if(!cContext.Save(file_handle))
+      ReturnFalse;
+   if(!cGlobal.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetScenarios::Load(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Load(file_handle))
+      ReturnFalse;
+//---
+   if(!cSequence.Load(file_handle))
+      ReturnFalse;
+   if(!cContext.Load(file_handle))
+      ReturnFalse;
+   if(!cGlobal.Load(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetScenarios::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
+      ReturnFalse;
+   CNeuronINFNetScenarios* Source = source;
+   dWeightsUpdate(cSequence, Source, tau);
+   dWeightsUpdate(cContext, Source, tau);
+   dWeightsUpdate(cGlobal, Source, tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetScenarios::Clear(void)
+  {
+   if(!CNeuronBaseOCL::Clear())
+      ReturnFalse;
+   if(!cSequence.ClearStates())
+      ReturnFalse;
+   if(!cContext.ClearStates())
+      ReturnFalse;
+   if(!cGlobal.ClearStates())
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronINFNetScenarios::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronBaseOCL::SetOpenCL(obj);
+   cSequence.SetOpenCL(OpenCL);
+   cContext.SetOpenCL(OpenCL);
+   cGlobal.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronINFNetScenarios::TrainMode(bool flag)
+  {
+   CNeuronBaseOCL::TrainMode(flag);
+   cSequence.TrainMode(bTrain);
+   cContext.TrainMode(bTrain);
+   cGlobal.TrainMode(bTrain);
   }
 //+------------------------------------------------------------------+
