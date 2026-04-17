@@ -110476,7 +110476,7 @@ bool CNeuronINFNetScenarios::feedForward(CNeuronBaseOCL *NeuronOCL)
       !DeConcat(sequence.getOutput(), context.getOutput(), NeuronOCL.getOutput(),
                 sequence.Neurons(), context.Neurons(), 1))
       ReturnFalse;
-//--- Sequemce
+//--- Sequence
    for(int i = 1; i < cSequence.Total(); i++)
      {
       sequence = cSequence[i];
@@ -110484,7 +110484,7 @@ bool CNeuronINFNetScenarios::feedForward(CNeuronBaseOCL *NeuronOCL)
          !sequence.FeedForward(cSequence[i - 1]))
          ReturnFalse;
      }
-//--- Contest
+//--- Context
    for(int i = 1; i < cContext.Total(); i++)
      {
       context = cContext[i];
@@ -110543,7 +110543,7 @@ bool CNeuronINFNetScenarios::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
          !global.CalcHiddenGradients(cGlobal[i + 1]))
          ReturnFalse;
      }
-//--- Contest
+//--- Context
    for(int i = cContext.Total() - 2; i >= 0; i--)
      {
       context = cContext[i];
@@ -110551,7 +110551,7 @@ bool CNeuronINFNetScenarios::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
          !context.CalcHiddenGradients(cContext[i + 1]))
          ReturnFalse;
      }
-//--- Sequemce
+//--- Sequence
    for(int i = cSequence.Total() - 2; i >= 0; i--)
      {
       sequence = cSequence[i];
@@ -110572,7 +110572,7 @@ bool CNeuronINFNetScenarios::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 bool CNeuronINFNetScenarios::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* neuron = NULL;
-//--- Sequemce
+//--- Sequence
    for(int i = 1; i < cSequence.Total(); i++)
      {
       neuron = cSequence[i];
@@ -110580,7 +110580,7 @@ bool CNeuronINFNetScenarios::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
          !neuron.UpdateInputWeights(cSequence[i - 1]))
          ReturnFalse;
      }
-//--- Contest
+//--- Context
    for(int i = 1; i < cContext.Total(); i++)
      {
       neuron = cContext[i];
