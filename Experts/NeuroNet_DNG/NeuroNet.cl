@@ -90,7 +90,7 @@ float fActivation(const float value, const int function)
          break;
      }
 //---
-   return result;
+   return IsNaNOrInf(result, 0);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -13822,10 +13822,10 @@ __kernel void ConcatVecMatrixGrad(__global float *vector_in_gr,
   {
    const int loc_id = get_local_id(0);
    const int c = get_global_id(1);
-   const int v = get_local_id(2);
+   const int glob_id = get_global_id(2);
    const int total_loc = get_local_size(0);
    const int cols = get_global_size(1);
-   const int glob_id = get_global_size(2);
+   const int total_glob = get_global_size(2);
 //---
    __local float temp[LOCAL_ARRAY_SIZE];
 //---
@@ -13875,5 +13875,162 @@ __kernel void ConcatVecMatrixGrad(__global float *vector_in_gr,
          matrix_in_gr[flat_m] = mat_grad;
         }
      }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void INFNetBGU(__global const float2*  scal_and_shift,
+                        __global const float*   sequence,
+                        __global const float*   context,
+                        __global const float*   scenarios,
+                        __global float*      sequence_out,
+                        __global float*      context_out,
+                        __global float*      scenarios_out,
+                        const int   sequence_units,
+                        const int   sequence_vars,
+                        const int   context_units,
+                        const int   scenarios_units
+                       )
+  {
+   const int id_n = get_global_id(0);
+   const int d = get_global_id(1);
+   const int v = get_global_id(2);
+   const int total_n = get_global_size(0);
+   const int dimension = get_global_size(1);
+   const int variables = get_global_size(2);
+   __global const float* inputs = sequence;
+   __global float* outputs = sequence_out;
+   int units = 0;
+   int var = 0;
+   float2 ss = 0;
+   if(v < sequence_vars)
+     {
+      units = sequence_units;
+      var = v;
+      ss = scal_and_shift[RCtoFlat(v, d, sequence_vars + scenarios_units + 1, dimension, 0)];
+     }
+   else
+      if(v == sequence_vars)
+        {
+         inputs = context;
+         outputs = context_out;
+         units = context_units;
+         if(id_n < units)
+            ss = scal_and_shift[RCtoFlat(v, d, sequence_vars + scenarios_units + 1, dimension, 0)];
+        }
+      else
+        {
+         inputs = scenarios;
+         outputs = scenarios_out;
+         units = scenarios_units;
+         if(id_n < units)
+            ss = scal_and_shift[RCtoFlat(sequence_vars + 1 + id_n, d, sequence_vars + scenarios_units + 1, dimension, 0)];
+        }
+//---
+   ss = IsNaNOrInf2(ss, (float2)0);
+   float sig_a = fActivation(ss.s0, ActFunc_SIGMOID);
+   for(int i = id_n; i < units; i += total_n)
+     {
+      int shift = RCtoFlat(i, d, units, dimension, var);
+      float val = IsNaNOrInf(inputs[shift], 0);
+      val = IsNaNOrInf(val * (1 + sig_a) + ss.s1, 0);
+      outputs[shift] = val;
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void INFNetBGUGrad(__global const float2* scal_and_shift,
+                            __global float2*       scal_and_shift_grad,
+                            __global const float*  sequence,
+                            __global const float*  context,
+                            __global const float*  scenarios,
+                            __global float*        sequence_grad,
+                            __global float*        context_grad,
+                            __global float*        scenarios_grad,
+                            __global const float*  sequence_out_grad,
+                            __global const float*  context_out_grad,
+                            __global const float*  scenarios_out_grad,
+                            const int sequence_units,
+                            const int sequence_vars,
+                            const int context_units,
+                            const int scenarios_units
+                           )
+  {
+   const int id_n      = get_local_id(0);
+   const int d         = get_global_id(1);
+   const int v         = get_global_id(2);
+   const int total_n   = get_local_size(0);
+   const int dimension = get_global_size(1);
+//---
+   __local float4 Temp[LOCAL_ARRAY_SIZE];
+//---
+   __global const float* inputs   = sequence;
+   __global float*       grad_in  = sequence_grad;
+   __global const float* grad_out = sequence_out_grad;
+   int    units          = 0;
+   int    var            = 0;
+   int    ss_idx         = 0;
+   float2 ss             = (float2)0;
+   bool   scenarios_mode = false;
+   const int ss_rows = sequence_vars + scenarios_units + 1;
+   if(v < sequence_vars)
+     {
+      units  = sequence_units;
+      var    = v;
+      ss_idx = RCtoFlat(v, d, ss_rows, dimension, 0);
+      ss     = IsNaNOrInf2(scal_and_shift[ss_idx], (float2)0);
+     }
+   else
+      if(v == sequence_vars)
+        {
+         inputs   = context;
+         grad_in  = context_grad;
+         grad_out = context_out_grad;
+         units    = context_units;
+         if(id_n < units)
+           {
+            ss_idx   = RCtoFlat(v, d, ss_rows, dimension, 0);
+            ss       = IsNaNOrInf2(scal_and_shift[ss_idx], (float2)0);
+           }
+        }
+      else
+        {
+         inputs         = scenarios;
+         grad_in        = scenarios_grad;
+         grad_out       = scenarios_out_grad;
+         units          = scenarios_units;
+         scenarios_mode = true;
+         if(id_n < units)
+           {
+            ss_idx = RCtoFlat(sequence_vars + 1 + id_n, d, ss_cols, dimension, 0);
+            ss     = IsNaNOrInf2(scal_and_shift[ss_idx], (float2)0);
+           }
+        }
+   const float sig_a = fActivation(ss.s0, ActFunc_SIGMOID);
+   float d_alpha_acc = 0.0f;
+   float d_beta_acc  = 0.0f;
+   for(int i = id_n; i < units; i += total_n)
+     {
+      int   shift = RCtoFlat(i, d, units, dimension, var);
+      float x     = IsNaNOrInf(inputs[shift],  0.0f);
+      float dy    = IsNaNOrInf(grad_out[shift], 0.0f);
+      grad_in[shift] = IsNaNOrInf(dy * (1 + sig_a), 0.0f);
+      d_alpha_acc += dy * x;
+      d_beta_acc  += dy;
+     }
+   if(!scenarios_mode)
+     {
+      float4 sums = LocalSum4((float4)(d_alpha_acc, d_beta_acc, 0.0f, 0.0f), 0, Temp);
+      if(get_local_id(0) == 0)
+        {
+         sums.s0 = Deactivation(sums.s0, sig_a, ActFunc_SIGMOID);
+         scal_and_shift_grad[ss_idx] = sums.lo;
+        }
+     }
+   else
+      if(id_n < units)
+         scal_and_shift_grad[ss_idx] = (float2)(Deactivation(d_alpha_acc, sig_a, ActFunc_SIGMOID),
+                                                IsNaNOrInf(d_beta_acc,  0.0f));
   }
 //+------------------------------------------------------------------+
