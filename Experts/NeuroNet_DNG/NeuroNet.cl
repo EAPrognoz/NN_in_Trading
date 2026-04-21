@@ -14003,7 +14003,7 @@ __kernel void INFNetBGUGrad(__global const float2* scal_and_shift,
          scenarios_mode = true;
          if(id_n < units)
            {
-            ss_idx = RCtoFlat(sequence_vars + 1 + id_n, d, ss_cols, dimension, 0);
+            ss_idx = RCtoFlat(sequence_vars + 1 + id_n, d, ss_rows, dimension, 0);
             ss     = IsNaNOrInf2(scal_and_shift[ss_idx], (float2)0);
            }
         }
