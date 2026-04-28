@@ -453,6 +453,7 @@ union uaLongChar
 #define  defNeuronUniMixerBlock        0x8100
 #define  defNeuronINFNetScenarios      0x8101
 #define  defNeuronINFNetHUBSequence    0x8102
+#define  defNeuronINFNetBlock          0x8103
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -2455,6 +2456,36 @@ union uaLongChar
 #define def_k_concvm_gr_rows                    5
 #define def_k_concvm_gr_variables               6
 #define def_k_concvm_gr_multvarsecond           7
+//---
+#define def_k_INFNetBGU                         260
+#define def_k_infnbgu_scal_and_shift            0
+#define def_k_infnbgu_sequence                  1
+#define def_k_infnbgu_context                   2
+#define def_k_infnbgu_scenarios                 3
+#define def_k_infnbgu_sequence_out              4
+#define def_k_infnbgu_context_out               5
+#define def_k_infnbgu_scenarios_out             6
+#define def_k_infnbgu_sequence_units            7
+#define def_k_infnbgu_sequence_vars             8
+#define def_k_infnbgu_context_units             9
+#define def_k_infnbgu_scenarios_units           10
+//---
+#define def_k_INFNetBGUGrad                     261
+#define def_k_infnbgugr_scal_and_shift          0
+#define def_k_infnbgugr_scal_and_shift_grad     1
+#define def_k_infnbgugr_sequence                2
+#define def_k_infnbgugr_context                 3
+#define def_k_infnbgugr_scenarios               4
+#define def_k_infnbgugr_sequence_grad           5
+#define def_k_infnbgugr_context_grad            6
+#define def_k_infnbgugr_scenarios_grad          7
+#define def_k_infnbgugr_sequence_out_grad       8
+#define def_k_infnbgugr_context_out_grad        9
+#define def_k_infnbgugr_scenarios_out_grad      10
+#define def_k_infnbgugr_sequence_units          11
+#define def_k_infnbgugr_sequence_vars           12
+#define def_k_infnbgugr_context_units           13
+#define def_k_infnbgugr_scenarios_units         14
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -3159,6 +3190,9 @@ bool CLayer::CreateElement(int index)
    CNeuronUniMixer* unimix = NULL;
    CNeuronSiameseNorm* siamnorm = NULL;
    CNeuronUniMixerBlock* umblock = NULL;
+   CNeuronINFNetScenarios* infnscen=NULL;
+   CNeuronINFNetHUBSequence* hub=NULL;
+   CNeuronINFNetBlock*infnblock=NULL;
 //---
    uint windows[] = {1, 1, 1};
    uint mfe_windows[] = {3, 3};
@@ -6316,6 +6350,39 @@ bool CLayer::CreateElement(int index)
               }
             DeleteObj(umblock);
             break;
+         case defNeuronINFNetScenarios:
+            infnscen = new CNeuronINFNetScenarios;
+            if(!infnscen)
+               ReturnFalse;
+            if(infnscen.Init(iOutputs, index, OpenCL, 3, windows, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = infnscen;
+               return true;
+              }
+            DeleteObj(infnscen);
+            break;
+         case defNeuronINFNetHUBSequence:
+            hub = new CNeuronINFNetHUBSequence;
+            if(!hub)
+               ReturnFalse;
+            if(hub.Init(iOutputs, index, OpenCL, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = hub;
+               return true;
+              }
+            DeleteObj(hub);
+            break;
+         case defNeuronINFNetBlock:
+            infnblock = new CNeuronINFNetBlock;
+            if(!infnblock)
+               ReturnFalse;
+            if(infnblock.Init(iOutputs, index, OpenCL, windows, 2, 2, 10, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = infnblock;
+               return true;
+              }
+            DeleteObj(infnblock);
+            break;
          default:
             result = false;
             break;
@@ -7335,6 +7402,9 @@ bool CNet::Create(CArrayObj *Description)
          CNeuronUniMixer* unimix = NULL;
          CNeuronSiameseNorm* siamnorm = NULL;
          CNeuronUniMixerBlock* umblock = NULL;
+         CNeuronINFNetScenarios* infnscen=NULL;
+         CNeuronINFNetHUBSequence* hub=NULL;
+         CNeuronINFNetBlock* infnblock=NULL;
          //---
          switch(desc.type)
            {
@@ -12383,6 +12453,54 @@ bool CNet::Create(CArrayObj *Description)
                  {
                   DeleteObj(temp);
                   DeleteObjAndFalse(umblock);
+                 }
+               break;
+            case defNeuronINFNetScenarios:
+               infnscen = new CNeuronINFNetScenarios();
+               if(!infnscen)
+                  DeleteObjAndFalse(temp);
+               if(!infnscen.Init(outputs, 0, opencl, desc.window, desc.units, desc.window_out, desc.step,
+                                desc.variables, uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(infnscen);
+                 }
+               if(!temp.Add(infnscen))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(infnscen);
+                 }
+               break;
+            case defNeuronINFNetHUBSequence:
+               hub = new CNeuronINFNetHUBSequence();
+               if(!hub)
+                  DeleteObjAndFalse(temp);
+               if(!hub.Init(outputs, 0, opencl, desc.window, desc.count, desc.window_out, desc.variables, desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(hub);
+                 }
+               if(!temp.Add(hub))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(hub);
+                 }
+               break;
+            case defNeuronINFNetBlock:
+               infnblock = new CNeuronINFNetBlock();
+               if(!infnblock)
+                  DeleteObjAndFalse(temp);
+               if(!infnblock.Init(outputs, 0, opencl, desc.windows, desc.units[0], desc.step,
+                                desc.units[1], desc.layers, desc.window_out, desc.variables,
+                                uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(infnblock);
+                 }
+               if(!temp.Add(infnblock))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(infnblock);
                  }
                break;
             //---
@@ -28301,7 +28419,7 @@ bool CNet::OpenCLInit(void)
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(260);
+   opencl.SetKernelsCount(262);
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")
@@ -28562,6 +28680,8 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_MHFlashSTCAGrad, "MHFlashSTCAGrad")
    CreateKernel(def_k_ConcatVecMatrix, "ConcatVecMatrix")
    CreateKernel(def_k_ConcatVecMatrixGrad, "ConcatVecMatrixGrad")
+   CreateKernel(def_k_INFNetBGU, "INFNetBGU")
+   CreateKernel(def_k_INFNetBGUGrad, "INFNetBGUGrad")
 //---
    return true;
   }
@@ -110687,7 +110807,7 @@ void CNeuronINFNetScenarios::TrainMode(bool flag)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-class CNeuronINFNetHUBSequence  :   CNeuronSpikeConvBlock
+class CNeuronINFNetHUBSequence  :   public CNeuronSpikeConvBlock
   {
 protected:
    CNeuronSpikeConvBlock   cProjection;
@@ -110697,8 +110817,8 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
-                     CNeuronINFNetHUBSequence(void);
-                    ~CNeuronINFNetHUBSequence(void);
+                     CNeuronINFNetHUBSequence(void) {};
+                    ~CNeuronINFNetHUBSequence(void) {};
    //---
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint window, uint units_count, uint hub_size, uint variables,
@@ -110835,4 +110955,750 @@ void CNeuronINFNetHUBSequence::TrainMode(bool flag)
    CNeuronSpikeConvBlock::TrainMode(flag);
    cProjection.TrainMode(bTrain);
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronINFNetBlock :  public CNeuronPerTokenSwiGLU
+  {
+protected:
+   uint                       iDimension;
+   uint                       iSequenceUnits;
+   uint                       iSequenceVar;
+   uint                       iContextUnits;
+   uint                       iScenariosUnits;
+   CNeuronUniMixerTokenizer   cPrepare;
+   CLayer                     cSequence;
+   CLayer                     cContext;
+   CLayer                     cScenarios;
+   CLayer                     cHUBs;
+   //---
+   virtual bool      INFNetBGU(CNeuronBaseOCL* scale_and_shift, CNeuronBaseOCL* sequence_in, CNeuronBaseOCL* sequence_out,
+                               CNeuronBaseOCL* context_in, CNeuronBaseOCL* context_out,
+                               CNeuronBaseOCL* scenarios_in, CNeuronBaseOCL* scenarios_out);
+   virtual bool      INFNetBGUGrad(CNeuronBaseOCL* scale_and_shift, CNeuronBaseOCL* sequence_in, CNeuronBaseOCL* sequence_out,
+                                   CNeuronBaseOCL* context_in, CNeuronBaseOCL* context_out,
+                                   CNeuronBaseOCL* scenarios_in, CNeuronBaseOCL* scenarios_out);
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronINFNetBlock(void) {};
+                    ~CNeuronINFNetBlock(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint &dimensions[], uint units_s, uint heads, uint stack_size,
+                          uint layers, uint embed_size, uint candidates, uint topK,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   //---
+   virtual int       Type(void) override const  {  return defNeuronINFNetBlock; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   //---
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                              uint &dimensions[], uint units_s, uint heads, uint stack_size,
+                              uint layers, uint embed_size, uint candidates, uint topK,
+                              ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(dimensions.Size() <= units_s || layers < 1 || units_s < 1)
+      ReturnFalse;
+   iSequenceVar = units_s;
+   iSequenceUnits = stack_size;
+   iContextUnits = dimensions.Size() - units_s;
+   iDimension = embed_size;
+   iScenariosUnits = iSequenceVar + iContextUnits + 1;
+   uint inside_embed_size = (embed_size + 1) / 2;
+//---
+   if(!CNeuronPerTokenSwiGLU::Init(numOutputs, myIndex, open_cl, iDimension, iScenariosUnits + iSequenceVar + 1,
+                                   inside_embed_size, candidates, topK, optimization_type, batch))
+      ReturnFalse;
+//--- Prepare
+   uint index = 0;
+   if(!cPrepare.Init(0, index, OpenCL, dimensions, iSequenceVar + iContextUnits, iDimension,
+                     iSequenceVar + iContextUnits, candidates, topK, optimization, iBatch))
+      ReturnFalse;
+//---
+   cSequence.Clear();
+   cContext.Clear();
+   cScenarios.Clear();
+   cHUBs.Clear();
+   cSequence.SetOpenCL(OpenCL);
+   cContext.SetOpenCL(OpenCL);
+   cScenarios.SetOpenCL(OpenCL);
+   cHUBs.SetOpenCL(OpenCL);
+//--- Sequence
+   index++;
+   CNeuronBaseOCL* neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, iDimension * iSequenceVar, optimization, iBatch) ||
+      !cSequence.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   index++;
+   CNeuronAddToStack* stack = new CNeuronAddToStack();
+   if(!stack ||
+      !stack.Init(0, index, OpenCL, iSequenceUnits, iDimension, iSequenceVar, optimization, iBatch) ||
+      !cSequence.Add(stack))
+      DeleteObjAndFalse(stack);
+   for(uint i = 0; i < layers; i++)
+     {
+      index++;
+      neuron = new CNeuronBaseOCL();
+      if(!neuron ||
+         !neuron.Init(0, index, OpenCL, stack.Neurons(), optimization, iBatch) ||
+         !cSequence.Add(neuron))
+         DeleteObjAndFalse(neuron);
+      neuron.SetActivationFunction(None);
+     }
+//--- Context
+   for(uint i = 0; i <= layers; i++)
+     {
+      index++;
+      neuron = new CNeuronBaseOCL();
+      if(!neuron ||
+         !neuron.Init(0, index, OpenCL, iDimension * iContextUnits, optimization, iBatch) ||
+         !cContext.Add(neuron))
+         DeleteObjAndFalse(neuron);
+      neuron.SetActivationFunction(None);
+     }
+//--- Scenarios
+   index++;
+   CNeuronINFNetScenarios* scen = new CNeuronINFNetScenarios();
+   uint fields[] = {iSequenceVar, iContextUnits, 1};
+   if(!scen ||
+      !scen.Init(0, index, OpenCL, iDimension, fields, iDimension, inside_embed_size, candidates, topK, optimization, iBatch) ||
+      !cScenarios.Add(scen))
+      DeleteObjAndFalse(scen);
+   for(uint i = 0; i < layers; i++)
+     {
+      index++;
+      neuron = new CNeuronBaseOCL();
+      if(!neuron ||
+         !neuron.Init(0, index, OpenCL, scen.Neurons(), optimization, iBatch) ||
+         !cScenarios.Add(neuron))
+         DeleteObjAndFalse(neuron);
+      neuron.SetActivationFunction(None);
+     }
+//--- HUBs
+   index++;
+   CNeuronINFNetHUBSequence* hub = new CNeuronINFNetHUBSequence();
+   if(!hub ||
+      !hub.Init(0, index, OpenCL, iDimension, iSequenceUnits, iDimension, iSequenceVar, optimization, iBatch) ||
+      !cHUBs.Add(hub))
+      DeleteObjAndFalse(hub);
+   hub = new CNeuronINFNetHUBSequence();
+   if(!hub ||
+      !hub.Init(0, index, OpenCL, iDimension, iContextUnits, iDimension, 1, optimization, iBatch) ||
+      !cHUBs.Add(hub))
+      DeleteObjAndFalse(hub);
+   index++;
+   neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, scen.Neurons() + iDimension * (iSequenceVar + 1), optimization, iBatch) ||
+      !cHUBs.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   CNeuronDomainAwareAttention* att = NULL;
+   CNeuronFieldAwareConv* conv = NULL;
+   for(uint i = 0; i < layers; i++)
+     {
+      index++;
+      att = new CNeuronDomainAwareAttention();
+      if(!att ||
+         !att.Init(0, index, OpenCL, iDimension, iScenariosUnits + iSequenceVar + 1, heads, iDimension, iSequenceUnits * iSequenceVar,
+                   inside_embed_size, candidates, topK, optimization, iBatch) ||
+         !cHUBs.Add(att))
+         DeleteObjAndFalse(att);
+      index++;
+      att = new CNeuronDomainAwareAttention();
+      if(!att ||
+         !att.Init(0, index, OpenCL, iDimension, iScenariosUnits + iSequenceVar + 1, heads, iDimension, iContextUnits,
+                   inside_embed_size, candidates, topK, optimization, iBatch) ||
+         !cHUBs.Add(att))
+         DeleteObjAndFalse(att);
+      index++;
+      att = new CNeuronDomainAwareAttention();
+      if(!att ||
+         !att.Init(0, index, OpenCL, iDimension, iScenariosUnits + iSequenceVar + 1, heads, iDimension, iScenariosUnits,
+                   inside_embed_size, candidates, topK, optimization, iBatch) ||
+         !cHUBs.Add(att))
+         DeleteObjAndFalse(att);
+      index++;
+      neuron = new CNeuronBaseOCL();
+      if(!neuron ||
+         !neuron.Init(0, index, OpenCL, 3 * att.Neurons(), optimization, iBatch) ||
+         !cHUBs.Add(neuron))
+         DeleteObjAndFalse(neuron);
+      neuron.SetActivationFunction(None);
+      index++;
+      conv = new CNeuronFieldAwareConv();
+      if(!conv ||
+         !conv.Init(0, index, OpenCL, 3 * iDimension, 2 * iDimension, iSequenceVar + iScenariosUnits + 1, inside_embed_size,
+                    candidates, topK, optimization, iBatch) ||
+         !cHUBs.Add(conv))
+         DeleteObjAndFalse(conv);
+      index++;
+      conv = new CNeuronFieldAwareConv();
+      if(!conv ||
+         !conv.Init(0, index, OpenCL, 3 * iDimension, iDimension, iSequenceVar + iScenariosUnits + 1, inside_embed_size,
+                    candidates, topK, optimization, iBatch) ||
+         !cHUBs.Add(conv))
+         DeleteObjAndFalse(conv);
+     }
+   index++;
+   att = new CNeuronDomainAwareAttention();
+   if(!att ||
+      !att.Init(0, index, OpenCL, iDimension, iScenariosUnits + iSequenceVar + 1, heads, iDimension, iSequenceUnits * iSequenceVar,
+                inside_embed_size, candidates, topK, optimization, iBatch) ||
+      !cHUBs.Add(att))
+      DeleteObjAndFalse(att);
+   index++;
+   att = new CNeuronDomainAwareAttention();
+   if(!att ||
+      !att.Init(0, index, OpenCL, iDimension, iScenariosUnits + iSequenceVar + 1, heads, iDimension, iContextUnits,
+                inside_embed_size, candidates, topK, optimization, iBatch) ||
+      !cHUBs.Add(att))
+      DeleteObjAndFalse(att);
+   index++;
+   att = new CNeuronDomainAwareAttention();
+   if(!att ||
+      !att.Init(0, index, OpenCL, iDimension, iScenariosUnits + iSequenceVar + 1, heads, iDimension, iScenariosUnits,
+                inside_embed_size, candidates, topK, optimization, iBatch) ||
+      !cHUBs.Add(att))
+      DeleteObjAndFalse(att);
+   index++;
+   neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, 3 * att.Neurons(), optimization, iBatch) ||
+      !cHUBs.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   index++;
+   conv = new CNeuronFieldAwareConv();
+   if(!conv ||
+      !conv.Init(0, index, OpenCL, 3 * iDimension, iDimension, iSequenceVar + iScenariosUnits + 1, inside_embed_size,
+                 candidates, topK, optimization, iBatch) ||
+      !cHUBs.Add(conv))
+      DeleteObjAndFalse(conv);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!cPrepare.FeedForward(NeuronOCL))
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* sequence = cSequence[0];
+   CNeuronBaseOCL* context = cContext[0];
+   if(!sequence || !context ||
+      !DeConcat(sequence.getOutput(), context.getOutput(), cPrepare.getOutput(),
+                sequence.Neurons(), context.Neurons(), 1))
+      ReturnFalse;
+   sequence = cSequence[1];
+   if(!sequence ||
+      !sequence.FeedForward(cSequence[0]))
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* scen = cScenarios[0];
+   if(!scen ||
+      !scen.FeedForward(cPrepare.AsObject()))
+      ReturnFalse;
+//--- HUBs
+   CNeuronBaseOCL* hub = cHUBs[0];
+   if(!hub ||
+      !hub.FeedForward(sequence))
+      ReturnFalse;
+   hub = cHUBs[1];
+   if(!hub ||
+      !hub.FeedForward(context))
+      ReturnFalse;
+   hub = cHUBs[2];
+   if(!hub ||
+      !Concat(cHUBs[0].getOutput(), cHUBs[1].getOutput(), scen.getOutput(), hub.getOutput()
+              , cHUBs[0].Neurons(), cHUBs[1].Neurons(), scen.Neurons(), 1))
+      ReturnFalse;
+//---
+   int layers = cContext.Total() - 1;
+   for(int i = 0; i < layers; i++)
+     {
+      CNeuronBaseOCL* att_seq = cHUBs[i * 6 + 3];
+      if(!att_seq ||
+         !att_seq.FeedForward(hub, sequence.getOutput()))
+         ReturnFalse;
+      CNeuronBaseOCL* att_cont = cHUBs[i * 6 + 4];
+      if(!att_cont ||
+         !att_cont.FeedForward(hub, context.getOutput()))
+         ReturnFalse;
+      CNeuronBaseOCL* att_scen = cHUBs[i * 6 + 5];
+      if(!att_scen ||
+         !att_scen.FeedForward(hub, scen.getOutput()))
+         ReturnFalse;
+      CNeuronBaseOCL* concat = cHUBs[i * 6 + 6];
+      if(!concat ||
+         !Concat(att_seq.getOutput(), att_cont.getOutput(), att_scen.getOutput(),
+                 concat.getOutput(), iDimension, iDimension, iDimension, iSequenceVar + iScenariosUnits + 1))
+         ReturnFalse;
+      CNeuronBaseOCL* scal_and_shift = cHUBs[i * 6 + 7];
+      if(!scal_and_shift ||
+         !scal_and_shift.FeedForward(concat))
+         ReturnFalse;
+      sequence = cSequence[i + 2];
+      context = cContext[i + 1];
+      scen = cScenarios[i + 1];
+      if(!sequence || !context || !scen ||
+         !INFNetBGU(scal_and_shift, cSequence[i + 1], sequence, cContext[i], context, cScenarios[i], scen))
+         ReturnFalse;
+      hub = cHUBs[i * 6 + 8];
+      if(!hub.FeedForward(concat))
+         ReturnFalse;
+     }
+   CNeuronBaseOCL* att_seq = cHUBs[layers * 6 + 3];
+   if(!att_seq ||
+      !att_seq.FeedForward(hub, sequence.getOutput()))
+      ReturnFalse;
+   CNeuronBaseOCL* att_cont = cHUBs[layers * 6 + 4];
+   if(!att_cont ||
+      !att_cont.FeedForward(hub, context.getOutput()))
+      ReturnFalse;
+   CNeuronBaseOCL* att_scen = cHUBs[layers * 6 + 5];
+   if(!att_scen ||
+      !att_scen.FeedForward(hub, scen.getOutput()))
+      ReturnFalse;
+   CNeuronBaseOCL* concat = cHUBs[layers * 6 + 6];
+   if(!concat ||
+      !Concat(att_seq.getOutput(), att_cont.getOutput(), att_scen.getOutput(),
+              concat.getOutput(), iDimension, iDimension, iDimension, iSequenceVar + iScenariosUnits + 1))
+      ReturnFalse;
+   hub = cHUBs[layers * 6 + 7];
+   if(!hub.FeedForward(concat))
+      ReturnFalse;
+//---
+   if(!CNeuronPerTokenSwiGLU::feedForward(hub))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::INFNetBGU(CNeuronBaseOCL *scale_and_shift, CNeuronBaseOCL *sequence_in,
+                                   CNeuronBaseOCL *sequence_out, CNeuronBaseOCL *context_in,
+                                   CNeuronBaseOCL *context_out, CNeuronBaseOCL *scenarios_in,
+                                   CNeuronBaseOCL *scenarios_out)
+  {
+   if(!OpenCL || !scale_and_shift || !sequence_in || !sequence_out ||
+      !context_in || !context_out ||
+      !scenarios_in || !scenarios_out)
+      ReturnFalse;
+//---
+   uint global_work_offset[3] = {0};
+   uint global_work_size[] = { (uint)MathMin(
+                                  MathMax(
+                                     MathMax(iScenariosUnits, iContextUnits),
+                                     iSequenceUnits),
+                                  OpenCL.GetMaxLocalSize(1)),
+                               iDimension,
+                               iSequenceVar + 2
+                             };
+   uint local_work_size[] = { global_work_size[0], 1, 1};
+   uint kernel = def_k_INFNetBGU;
+   setBuffer(kernel, def_k_infnbgu_scal_and_shift, scale_and_shift.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgu_context, context_in.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgu_context_out, context_out.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgu_sequence, sequence_in.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgu_sequence_out, sequence_out.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgu_scenarios, scenarios_in.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgu_scenarios_out, scenarios_out.getOutputIndex())
+   setArgument(kernel, def_k_infnbgu_context_units, iContextUnits)
+   setArgument(kernel, def_k_infnbgu_scenarios_units, iScenariosUnits)
+   setArgument(kernel, def_k_infnbgu_sequence_units, iSequenceUnits)
+   setArgument(kernel, def_k_infnbgu_sequence_vars, iSequenceVar)
+   kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
+//---
+   if(!Normalize(sequence_out.getOutput(), iDimension) ||
+      !Normalize(context_out.getOutput(), iDimension) ||
+      !Normalize(scenarios_out.getOutput(), iDimension))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::INFNetBGUGrad(CNeuronBaseOCL *scale_and_shift, CNeuronBaseOCL *sequence_in,
+                                       CNeuronBaseOCL *sequence_out, CNeuronBaseOCL *context_in,
+                                       CNeuronBaseOCL *context_out, CNeuronBaseOCL *scenarios_in,
+                                       CNeuronBaseOCL *scenarios_out)
+  {
+   if(!OpenCL || !scale_and_shift || !sequence_in || !sequence_out ||
+      !context_in || !context_out ||
+      !scenarios_in || !scenarios_out)
+      ReturnFalse;
+//---
+   uint global_work_offset[3] = {0};
+   uint global_work_size[] = { (uint)MathMin(
+                                  MathMax(
+                                     MathMax(iScenariosUnits, iContextUnits),
+                                     iSequenceUnits),
+                                  OpenCL.GetMaxLocalSize(1)),
+                               iDimension,
+                               iSequenceVar + 2
+                             };
+   uint local_work_size[] = { global_work_size[0], 1, 1};
+   uint kernel = def_k_INFNetBGUGrad;
+   setBuffer(kernel, def_k_infnbgugr_scal_and_shift, scale_and_shift.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgugr_scal_and_shift_grad, scale_and_shift.getGradientIndex())
+   setBuffer(kernel, def_k_infnbgugr_context, context_in.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgugr_context_grad, context_in.getGradientIndex())
+   setBuffer(kernel, def_k_infnbgugr_context_out_grad, context_out.getGradientIndex())
+   setBuffer(kernel, def_k_infnbgugr_sequence, sequence_in.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgugr_sequence_grad, sequence_in.getGradientIndex())
+   setBuffer(kernel, def_k_infnbgugr_sequence_out_grad, sequence_out.getGradientIndex())
+   setBuffer(kernel, def_k_infnbgugr_scenarios, scenarios_in.getOutputIndex())
+   setBuffer(kernel, def_k_infnbgugr_scenarios_grad, scenarios_in.getGradientIndex())
+   setBuffer(kernel, def_k_infnbgugr_scenarios_out_grad, scenarios_out.getGradientIndex())
+   setArgument(kernel, def_k_infnbgugr_context_units, iContextUnits)
+   setArgument(kernel, def_k_infnbgugr_scenarios_units, iScenariosUnits)
+   setArgument(kernel, def_k_infnbgugr_sequence_units, iSequenceUnits)
+   setArgument(kernel, def_k_infnbgugr_sequence_vars, iSequenceVar)
+   kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
+   Deactivation(scenarios_in);
+   Deactivation(sequence_in);
+   Deactivation(context_in);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   if(!CNeuronPerTokenSwiGLU::calcInputGradients(cHUBs[-1]))
+      ReturnFalse;
+//---
+   int layers = cContext.Total() - 1;
+   CNeuronBaseOCL* concat = cHUBs[-2];
+   if(!concat ||
+      !concat.CalcHiddenGradients(cHUBs[-1]))
+      ReturnFalse;
+   CNeuronBaseOCL* att_seq = cHUBs[-5];
+   CNeuronBaseOCL* att_cont = cHUBs[-4];
+   CNeuronBaseOCL* att_scen = cHUBs[-3];
+   if(!att_seq || !att_cont || !att_scen ||
+      !DeConcat(att_seq.getGradient(), att_cont.getGradient(), att_scen.getGradient(),
+                concat.getGradient(), iDimension, iDimension, iDimension, iSequenceVar + iScenariosUnits + 1))
+      ReturnFalse;
+   CNeuronBaseOCL* hub = cHUBs[-6];
+   CNeuronBaseOCL* sequence = cSequence[-1];
+   CNeuronBaseOCL* context = cContext[-1];
+   CNeuronBaseOCL* scen = cScenarios[-1];
+   CNeuronBaseOCL* scal_and_shift = NULL;
+//---
+   if(!hub || !sequence ||
+      !hub.CalcHiddenGradients(att_seq, sequence.getOutput(), sequence.getGradient(),
+                               (ENUM_ACTIVATION)sequence.Activation()))
+      ReturnFalse;
+   CBufferFloat* temp = hub.getGradient();
+   if(!hub.SetGradient(hub.getPrevOutput(), false) || !context ||
+      !hub.CalcHiddenGradients(att_cont, context.getOutput(), context.getGradient(),
+                               (ENUM_ACTIVATION)context.Activation()) ||
+      !SumAndNormalize(temp, hub.getGradient(), temp, iDimension, false, 0, 0, 0, 1))
+      ReturnFalse;
+   if(!scen ||
+      !hub.CalcHiddenGradients(att_scen, scen.getOutput(), scen.getGradient(),
+                               (ENUM_ACTIVATION)scen.Activation()) ||
+      !SumAndNormalize(temp, hub.getGradient(), temp, iDimension, false, 0, 0, 0, 1) ||
+      !hub.SetGradient(temp, false))
+      ReturnFalse;
+//---
+   for(int i = layers - 1; i >= 0; i--)
+     {
+      att_seq = cHUBs[i * 6 + 3];
+      att_cont = cHUBs[i * 6 + 4];
+      att_scen = cHUBs[i * 6 + 5];
+      concat = cHUBs[i * 6 + 6];
+      scal_and_shift = cHUBs[i * 6 + 7];
+      sequence = cSequence[i + 1];
+      context = cContext[i];
+      scen = cScenarios[i];
+      if(!sequence || !context || !scen ||
+         !INFNetBGUGrad(scal_and_shift, sequence, cSequence[i + 2], context, cContext[i + 1], scen, cScenarios[i + 1]))
+         ReturnFalse;
+      if(!concat ||
+         !concat.CalcHiddenGradients(scal_and_shift))
+         ReturnFalse;
+      temp = concat.getGradient();
+      if(!concat.SetGradient(concat.getPrevOutput(), false) ||
+         !concat.CalcHiddenGradients(hub) ||
+         !SumAndNormalize(temp, concat.getGradient(), temp, iDimension, false, 0, 0, 0, 1) ||
+         !concat.SetGradient(temp, false))
+         ReturnFalse;
+      hub = cHUBs[i * 6 + 2];
+      if(!att_seq || !att_cont || !att_scen ||
+         !DeConcat(att_seq.getGradient(), att_cont.getGradient(), att_scen.getGradient(),
+                   concat.getGradient(), iDimension, iDimension, iDimension, iSequenceVar + iScenariosUnits + 1))
+         ReturnFalse;
+      //---
+      if(!hub || !sequence ||
+         !hub.CalcHiddenGradients(att_seq, sequence.getOutput(), sequence.getGradient(),
+                                  (ENUM_ACTIVATION)sequence.Activation()))
+         ReturnFalse;
+      temp = hub.getGradient();
+      if(!hub.SetGradient(hub.getPrevOutput(), false) || !context ||
+         !hub.CalcHiddenGradients(att_cont, context.getOutput(), context.getGradient(),
+                                  (ENUM_ACTIVATION)context.Activation()) ||
+         !SumAndNormalize(temp, hub.getGradient(), temp, iDimension, false, 0, 0, 0, 1))
+         ReturnFalse;
+      if(!scen ||
+         !hub.CalcHiddenGradients(att_scen, scen.getOutput(), scen.getGradient(),
+                                  (ENUM_ACTIVATION)scen.Activation()) ||
+         !SumAndNormalize(temp, hub.getGradient(), temp, iDimension, false, 0, 0, 0, 1) ||
+         !hub.SetGradient(temp, false))
+         ReturnFalse;
+     }
+   if(!cHUBs[0] || !cHUBs[1] ||
+      !DeConcat(cHUBs[0].getGradient(), cHUBs[1].getGradient(), scen.getPrevOutput(), hub.getGradient(), 
+                                    cHUBs[0].Neurons(), cHUBs[1].Neurons(), scen.Neurons(), 1))
+      ReturnFalse;
+   if(!SumAndNormalize(scen.getGradient(), scen.getPrevOutput(),scen.getGradient(),iDimension,false,0,0,0,1))
+     ReturnFalse;
+   temp=context.getGradient();
+   if(!context.SetGradient(context.getPrevOutput(),false) ||
+      !context.CalcHiddenGradients(cHUBs[1]) ||
+      !SumAndNormalize(temp,context.getGradient(),temp,iDimension,false,0,0,0,1) ||
+      !context.SetGradient(temp,false))
+     ReturnFalse;
+   temp=sequence.getGradient();
+   if(!sequence.SetGradient(sequence.getPrevOutput(),false) ||
+      !sequence.CalcHiddenGradients(cHUBs[0]) ||
+      !SumAndNormalize(temp,sequence.getGradient(),temp,iDimension,false,0,0,0,1) ||
+      !sequence.SetGradient(temp,false))
+     ReturnFalse;
+   sequence=cSequence[0];
+   if(!sequence ||
+      !sequence.CalcHiddenGradients(cSequence[1]))
+     ReturnFalse;
+//---
+   if(!cPrepare.CalcHiddenGradients(scen))
+     ReturnFalse;
+   if(!Concat(sequence.getGradient(), context.getGradient(), cPrepare.getPrevOutput(),
+                sequence.Neurons(), context.Neurons(), 1))
+      ReturnFalse;
+   if(cPrepare.Activation()!=None)
+     if(!DeActivation(cPrepare.getOutput(),cPrepare.getPrevOutput(),cPrepare.getPrevOutput(),cPrepare.Activation()))
+       ReturnFalse;
+   if(!SumAndNormalize(cPrepare.getGradient(),cPrepare.getPrevOutput(),cPrepare.getGradient(),iDimension,false,0,0,0,1))
+     ReturnFalse;
+//---
+   if(!NeuronOCL.CalcHiddenGradients(cPrepare.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!cPrepare.UpdateInputWeights(NeuronOCL))
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* sequence = cSequence[1];
+   CNeuronBaseOCL* context = cContext[0];
+   if(!sequence ||
+      !sequence.UpdateInputWeights(cSequence[0]))
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* scen = cScenarios[0];
+   if(!scen ||
+      !scen.UpdateInputWeights(cPrepare.AsObject()))
+      ReturnFalse;
+//--- HUBs
+   CNeuronBaseOCL* hub = cHUBs[0];
+   if(!hub ||
+      !hub.UpdateInputWeights(sequence))
+      ReturnFalse;
+   hub = cHUBs[1];
+   if(!hub ||
+      !hub.UpdateInputWeights(context))
+      ReturnFalse;
+   hub = cHUBs[2];
+//---
+   int layers = cContext.Total() - 1;
+   for(int i = 0; i < layers; i++)
+     {
+      CNeuronBaseOCL* att_seq = cHUBs[i * 6 + 3];
+      if(!att_seq ||
+         !att_seq.UpdateInputWeights(hub, sequence.getOutput()))
+         ReturnFalse;
+      CNeuronBaseOCL* att_cont = cHUBs[i * 6 + 4];
+      if(!att_cont ||
+         !att_cont.UpdateInputWeights(hub, context.getOutput()))
+         ReturnFalse;
+      CNeuronBaseOCL* att_scen = cHUBs[i * 6 + 5];
+      if(!att_scen ||
+         !att_scen.UpdateInputWeights(hub, scen.getOutput()))
+         ReturnFalse;
+      CNeuronBaseOCL* concat = cHUBs[i * 6 + 6];
+      CNeuronBaseOCL* scal_and_shift = cHUBs[i * 6 + 7];
+      if(!scal_and_shift ||
+         !scal_and_shift.UpdateInputWeights(concat))
+         ReturnFalse;
+      hub = cHUBs[i * 6 + 8];
+      if(!hub.UpdateInputWeights(concat))
+         ReturnFalse;
+     }
+   CNeuronBaseOCL* att_seq = cHUBs[layers * 6 + 3];
+   if(!att_seq ||
+      !att_seq.UpdateInputWeights(hub, sequence.getOutput()))
+      ReturnFalse;
+   CNeuronBaseOCL* att_cont = cHUBs[layers * 6 + 4];
+   if(!att_cont ||
+      !att_cont.UpdateInputWeights(hub, context.getOutput()))
+      ReturnFalse;
+   CNeuronBaseOCL* att_scen = cHUBs[layers * 6 + 5];
+   if(!att_scen ||
+      !att_scen.UpdateInputWeights(hub, scen.getOutput()))
+      ReturnFalse;
+   CNeuronBaseOCL* concat = cHUBs[layers * 6 + 6];
+   hub = cHUBs[layers * 6 + 7];
+   if(!hub.UpdateInputWeights(concat))
+      ReturnFalse;
+//---
+   if(!CNeuronPerTokenSwiGLU::updateInputWeights(hub))
+      ReturnFalse;
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::Save(const int file_handle)
+  {
+   if(!CNeuronPerTokenSwiGLU::Save(file_handle))
+      ReturnFalse;
+//---
+   dFileWriteUInt(file_handle, iDimension);
+   dFileWriteUInt(file_handle, iSequenceUnits);
+   dFileWriteUInt(file_handle, iSequenceVar);
+   dFileWriteUInt(file_handle, iContextUnits);
+   dFileWriteUInt(file_handle, iScenariosUnits);
+   if(!cPrepare.Save(file_handle))
+      ReturnFalse;
+   if(!cSequence.Save(file_handle))
+      ReturnFalse;
+   if(!cContext.Save(file_handle))
+      ReturnFalse;
+   if(!cScenarios.Save(file_handle))
+      ReturnFalse;
+   if(!cHUBs.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::Load(const int file_handle)
+  {
+   if(!CNeuronPerTokenSwiGLU::Load(file_handle))
+      ReturnFalse;
+//---
+   dFileReadUInt(file_handle, iDimension);
+   dFileReadUInt(file_handle, iSequenceUnits);
+   dFileReadUInt(file_handle, iSequenceVar);
+   dFileReadUInt(file_handle, iContextUnits);
+   dFileReadUInt(file_handle, iScenariosUnits);
+   if(!LoadInsideLayer(file_handle,cPrepare.AsObject()))
+      ReturnFalse;
+   if(!cSequence.Load(file_handle))
+      ReturnFalse;
+   if(!cContext.Load(file_handle))
+      ReturnFalse;
+   if(!cScenarios.Load(file_handle))
+      ReturnFalse;
+   if(!cHUBs.Load(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::Clear(void)
+  {
+   if(!CNeuronPerTokenSwiGLU::Clear())
+      ReturnFalse;
+//---
+   if(!cPrepare.Clear())
+      ReturnFalse;
+   if(!cSequence.ClearStates())
+      ReturnFalse;
+   if(!cContext.ClearStates())
+      ReturnFalse;
+   if(!cScenarios.ClearStates())
+      ReturnFalse;
+   if(!cHUBs.ClearStates())
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronINFNetBlock::WeightsUpdate(CNeuronBaseOCL *source,float tau)
+  {
+   if(!CNeuronPerTokenSwiGLU::WeightsUpdate(source,tau))
+      ReturnFalse;
+//---
+   CNeuronINFNetBlock* Source=source;
+   dWeightsUpdate(cPrepare,Source,tau);
+   dWeightsUpdate(cSequence,Source,tau);
+   dWeightsUpdate(cContext,Source,tau);
+   dWeightsUpdate(cScenarios,Source,tau);
+   dWeightsUpdate(cHUBs,Source,tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronINFNetBlock::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronPerTokenSwiGLU::SetOpenCL(obj);
+//---
+   cPrepare.SetOpenCL(OpenCL);
+   cSequence.SetOpenCL(OpenCL);
+   cContext.SetOpenCL(OpenCL);
+   cScenarios.SetOpenCL(OpenCL);
+   cHUBs.SetOpenCL(OpenCL);
+   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronINFNetBlock::TrainMode(bool flag)
+  {
+   CNeuronPerTokenSwiGLU::TrainMode(flag);
+//---
+   cPrepare.TrainMode(bTrain);
+   cSequence.TrainMode(bTrain);
+   cContext.TrainMode(bTrain);
+   cScenarios.TrainMode(bTrain);
+   cHUBs.TrainMode(bTrain);
+   }
 //+------------------------------------------------------------------+

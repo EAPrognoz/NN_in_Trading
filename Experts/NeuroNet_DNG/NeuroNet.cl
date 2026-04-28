@@ -13853,7 +13853,7 @@ __kernel void ConcatVecMatrixGrad(__global float *vector_in_gr,
       vec_grad = LocalSum(vec_grad, 0, temp);
       if(loc_id == 0)
         {
-         int flat_v = RCtoFlat(0, c, 1, dimension_v, v);
+         int flat_v = RCtoFlat(0, c, 1, dimension_v, glob_id);
          vector_in_gr[flat_v] = vec_grad;
         }
      }
