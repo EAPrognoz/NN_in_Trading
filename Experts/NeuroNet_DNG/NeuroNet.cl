@@ -1276,27 +1276,29 @@ __kernel void ConcatenateBuffers(__global float *input1, int window1,
                                  __global float *output)
   {
    int n = get_global_id(0);
+   int w = get_global_id(1);
+   int total_w=get_global_size(1);
    int shift = n * (window1 + window2 + window3 + window4);
    int shift_in = n * window1;
-   for(int i = 0; i < window1; i++)
+   for(int i = w; i < window1; i+=total_w)
       output[shift + i] = IsNaNOrInf(input1[shift_in + i], 0);
 //---
    shift += window1;
    shift_in = n * window2;
 //---
-   for(int i = 0; i < window2; i++)
+   for(int i = w; i < window2; i+=total_w)
       output[shift + i] = IsNaNOrInf(input2[shift_in + i], 0);
 //---
    shift += window2;
    shift_in = n * window3;
 //---
-   for(int i = 0; i < window3; i++)
+   for(int i = w; i < window3; i+=total_w)
       output[shift + i] = IsNaNOrInf(input3[shift_in + i], 0);
 //---
    shift += window3;
    shift_in = n * window4;
 //---
-   for(int i = 0; i < window4; i++)
+   for(int i = w; i < window4; i+=total_w)
       output[shift + i] = IsNaNOrInf(input4[shift_in + i], 0);
   }
 //+------------------------------------------------------------------+
@@ -1315,17 +1317,19 @@ __kernel void DeconcatenateBuffers(__global float *output1, int window1,
                                    __global float *inputs)
   {
    int n = get_global_id(0);
+   int w = get_global_id(1);
+   int total_w=get_global_size(1);
 //--- Head 1
    int shift = n * (window1 + window2 + window3 + window4);
    int shift_out = n * window1;
 //---
-   for(int i = 0; i < window1; i++)
+   for(int i = w; i < window1; i+=total_w)
       output1[shift_out + i] = IsNaNOrInf(inputs[shift + i], 0);
 //--- Head 2
    shift += window1;
    shift_out = n * window2;
 //---
-   for(int i = 0; i < window2; i++)
+   for(int i = w; i < window2; i+=total_w)
       output2[shift_out + i] = IsNaNOrInf(inputs[shift + i], 0);
 //--- Head 3
    shift += window2;
@@ -1333,7 +1337,7 @@ __kernel void DeconcatenateBuffers(__global float *output1, int window1,
      {
       shift_out = n * window3;
       //---
-      for(int i = 0; i < window3; i++)
+   for(int i = w; i < window3; i+=total_w)
          output3[shift_out + i] = IsNaNOrInf(inputs[shift + i], 0);
      }
 //--- Head 4
@@ -1342,7 +1346,7 @@ __kernel void DeconcatenateBuffers(__global float *output1, int window1,
      {
       shift_out = n * window4;
       //---
-      for(int i = 0; i < window4; i++)
+   for(int i = w; i < window4; i+=total_w)
          output4[shift_out + i] = IsNaNOrInf(inputs[shift + i], 0);
      }
   }

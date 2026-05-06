@@ -29,7 +29,7 @@
 //+------------------------------------------------------------------+
 ///\defgroup const  Global constants
 ///@{
-#define  lr                3.0e-3f  ///<learning rate
+#define  lr                1.0e-2f  ///<learning rate
 #define  momentum          0.9f     ///<momentum for SGD optimization
 #define  WeightsMultiplier 0.01f
 //---
@@ -455,6 +455,10 @@ union uaLongChar
 #define  defNeuronINFNetHUBSequence    0x8102
 #define  defNeuronINFNetBlock          0x8103
 #define  defNeuronSequenceTokenizer    0x8104
+#define  defNeuronDifferenceTokenizer  0x8105
+#define  defNeuronReGENTADBackbone     0x8106
+#define  defNeuronReGENTADHead         0x8107
+#define  defNeuronReGENTAD             0x8108
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -3193,7 +3197,12 @@ bool CLayer::CreateElement(int index)
    CNeuronUniMixerBlock* umblock = NULL;
    CNeuronINFNetScenarios* infnscen = NULL;
    CNeuronINFNetHUBSequence* hub = NULL;
-   CNeuronINFNetBlock*infnblock = NULL;
+   CNeuronINFNetBlock* infnblock = NULL;
+   CNeuronSequenceTokenizer* seq_tok = NULL;
+   CNeuronDifferenceTokenizer* diff_tok = NULL;
+   CNeuronReGENTADBackbone* regen_backbone = NULL;
+   CNeuronReGENTADHead* regen_head = NULL;
+   CNeuronReGENTAD* regentad = NULL;
 //---
    uint windows[] = {1, 1, 1};
    uint mfe_windows[] = {3, 3};
@@ -6384,6 +6393,61 @@ bool CLayer::CreateElement(int index)
               }
             DeleteObj(infnblock);
             break;
+         case defNeuronSequenceTokenizer:
+            seq_tok = new CNeuronSequenceTokenizer;
+            if(!seq_tok)
+               ReturnFalse;
+            if(seq_tok.Init(iOutputs, index, OpenCL, 2, 2, 2, ADAM, 1))
+              {
+               m_data[index] = seq_tok;
+               return true;
+              }
+            DeleteObj(seq_tok);
+            break;
+         case defNeuronDifferenceTokenizer:
+            diff_tok = new CNeuronDifferenceTokenizer;
+            if(!diff_tok)
+               ReturnFalse;
+            if(diff_tok.Init(iOutputs, index, OpenCL, 5, 2, ADAM, 1))
+              {
+               m_data[index] = diff_tok;
+               return true;
+              }
+            DeleteObj(diff_tok);
+            break;
+         case defNeuronReGENTADBackbone:
+            regen_backbone = new CNeuronReGENTADBackbone;
+            if(!regen_backbone)
+               ReturnFalse;
+            if(regen_backbone.Init(iOutputs, index, OpenCL, windows, 2, 2, 10, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = regen_backbone;
+               return true;
+              }
+            DeleteObj(regen_backbone);
+            break;
+         case defNeuronReGENTADHead:
+            regen_head = new CNeuronReGENTADHead;
+            if(!regen_head)
+               ReturnFalse;
+            if(regen_head.Init(iOutputs, index, OpenCL, 3, 2, 2, 2, NULL, ADAM, 1))
+              {
+               m_data[index] = regen_head;
+               return true;
+              }
+            DeleteObj(regen_head);
+            break;
+         case defNeuronReGENTAD:
+            regentad = new CNeuronReGENTAD;
+            if(!regentad)
+               ReturnFalse;
+            if(regentad.Init(iOutputs, index, OpenCL, windows, 2, 2, 10, 2, 2, 3, 2, ADAM, 1))
+              {
+               m_data[index] = regentad;
+               return true;
+              }
+            DeleteObj(regentad);
+            break;
          default:
             result = false;
             break;
@@ -7406,6 +7470,11 @@ bool CNet::Create(CArrayObj *Description)
          CNeuronINFNetScenarios* infnscen = NULL;
          CNeuronINFNetHUBSequence* hub = NULL;
          CNeuronINFNetBlock* infnblock = NULL;
+         CNeuronSequenceTokenizer* seq_tok = NULL;
+         CNeuronDifferenceTokenizer* diff_tok = NULL;
+         CNeuronReGENTADBackbone* regen_backbone = NULL;
+         CNeuronReGENTADHead* regen_head = NULL;
+         CNeuronReGENTAD* regentad = NULL;
          //---
          switch(desc.type)
            {
@@ -12504,6 +12573,87 @@ bool CNet::Create(CArrayObj *Description)
                   DeleteObjAndFalse(infnblock);
                  }
                break;
+            case defNeuronSequenceTokenizer:
+               seq_tok = new CNeuronSequenceTokenizer();
+               if(!seq_tok)
+                  DeleteObjAndFalse(temp);
+               if(!seq_tok.Init(outputs, 0, opencl, desc.window, desc.count, desc.window_out,
+                                desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(seq_tok);
+                 }
+               if(!temp.Add(seq_tok))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(seq_tok);
+                 }
+               break;
+            case defNeuronDifferenceTokenizer:
+               diff_tok = new CNeuronDifferenceTokenizer();
+               if(!diff_tok)
+                  DeleteObjAndFalse(temp);
+               if(!diff_tok.Init(outputs, 0, opencl, desc.window, desc.window_out, desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(diff_tok);
+                 }
+               if(!temp.Add(diff_tok))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(diff_tok);
+                 }
+               break;
+            case defNeuronReGENTADBackbone:
+               regen_backbone = new CNeuronReGENTADBackbone();
+               if(!regen_backbone)
+                  DeleteObjAndFalse(temp);
+               if(!regen_backbone.Init(outputs, 0, opencl, desc.windows, desc.units[0], desc.step,
+                                       desc.units[1], desc.layers, desc.window_out, desc.variables,
+                                       uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(regen_backbone);
+                 }
+               if(!temp.Add(regen_backbone))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(regen_backbone);
+                 }
+               break;
+            case defNeuronReGENTADHead:
+               regen_head = new CNeuronReGENTADHead();
+               if(!regen_head)
+                  DeleteObjAndFalse(temp);
+               if(!regen_head.Init(outputs, 0, opencl, desc.window, desc.units[0], desc.window_out,
+                                   desc.units[1], NULL, desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(regen_head);
+                 }
+               if(!temp.Add(regen_head))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(regen_head);
+                 }
+               break;
+            case defNeuronReGENTAD:
+               regentad = new CNeuronReGENTAD();
+               if(!regentad)
+                  DeleteObjAndFalse(temp);
+               if(!regentad.Init(outputs, 0, opencl, desc.windows, desc.units[0], desc.step,
+                                 desc.units[1], desc.layers, desc.window_out, desc.variables,
+                                 uint(desc.probability), desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(regentad);
+                 }
+               if(!temp.Add(regentad))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(regentad);
+                 }
+               break;
             //---
             default:
                ReturnFalse;
@@ -16938,9 +17088,8 @@ bool CNeuronMHAttentionOCL::feedForward(CNeuronBaseOCL *prevLayer)
      }
 //---
      {
-      uint global_work_offset[1] = {0};
-      uint global_work_size[1];
-      global_work_size[0] = iUnits;
+      uint global_work_offset[2] = {0};
+      uint global_work_size[2] = { iUnits, iWindow };
       setBuffer(def_k_ConcatenateMatrix, def_k_conc_input1, AttentionOut.getOutputIndex());
       setArgument(def_k_ConcatenateMatrix, def_k_conc_window1, iWindow);
       setBuffer(def_k_ConcatenateMatrix, def_k_conc_input2, AttentionOut2.getOutputIndex());
@@ -17037,9 +17186,8 @@ bool CNeuronMHAttentionOCL::calcInputGradients(CNeuronBaseOCL *prevLayer)
       ReturnFalse;
 //---
      {
-      uint global_work_offset[1] = {0};
-      uint global_work_size[1];
-      global_work_size[0] = iUnits;
+      uint global_work_offset[2] = {0};
+      uint global_work_size[2] = {iUnits, iWindow};
       setBuffer(def_k_DeconcatenateMatrix, def_k_dconc_output1, AttentionOut.getGradientIndex());
       setArgument(def_k_DeconcatenateMatrix, def_k_dconc_window1, iWindow);
       setBuffer(def_k_DeconcatenateMatrix, def_k_dconc_output2, AttentionOut2.getGradientIndex());
@@ -19143,7 +19291,7 @@ CNeuronBatchNormOCL::~CNeuronBatchNormOCL(void)
 //+------------------------------------------------------------------+
 bool CNeuronBatchNormOCL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
-   return Init(numOutputs, myIndex, OpenCL, numNeurons, iBatch, optimization_type);
+   return Init(numOutputs, myIndex, open_cl, numNeurons, batch, optimization_type);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -19155,9 +19303,10 @@ bool CNeuronBatchNormOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_c
    activation = None;
    iBatchSize = (int)batchSize;
 //---
-   DeleteObj(BatchOptions);
+   if(!BatchOptions)
+      BatchOptions = new CBufferFloat();
+   BatchOptions.BufferFree();
    int count = (int)numNeurons * (optimization_type == SGD ? 7 : 9);
-   BatchOptions = new CBufferFloat();
    if(!BatchOptions.BufferInit(count, 0.0f))
       ReturnFalse;
    if(!BatchOptions.BufferCreate(OpenCL))
@@ -26717,9 +26866,10 @@ bool CNeuronBaseOCL::Concat(CBufferFloat * input1, CBufferFloat * input2, CBuffe
 //+------------------------------------------------------------------+
 bool CNeuronBaseOCL::Concat(int input1, int input2, int input3, int input4, int output, int window1, int window2, int window3, int window4, int count)
   {
-   uint global_work_offset[1] = {0};
-   uint global_work_size[1];
+   uint global_work_offset[2] = {0};
+   uint global_work_size[2];
    global_work_size[0] = count;
+   global_work_size[1] = MathMax(MathMax(window1, window2), MathMax(window3, window4));
    setBuffer(def_k_ConcatenateMatrix, def_k_conc_input1, input1)
    setArgument(def_k_ConcatenateMatrix, def_k_conc_window1, window1)
    setBuffer(def_k_ConcatenateMatrix, def_k_conc_input2, input2)
@@ -26752,9 +26902,8 @@ bool CNeuronBaseOCL::DeConcat(CBufferFloat * input1, CBufferFloat * input2, CBuf
 //+------------------------------------------------------------------+
 bool CNeuronBaseOCL::DeConcat(CBufferFloat * input1, CBufferFloat * input2, CBufferFloat * input3, CBufferFloat * input4, CBufferFloat * output, int window1, int window2, int window3, int window4, int count)
   {
-   uint global_work_offset[1] = {0};
-   uint global_work_size[1];
-   global_work_size[0] = count;
+   uint global_work_offset[2] = {0};
+   uint global_work_size[2] = {count, MathMax(MathMax(window1, window2), MathMax(window3, window4))};
    setBuffer(def_k_DeconcatenateMatrix, def_k_dconc_output1, input1.GetIndex())
    setArgument(def_k_DeconcatenateMatrix, def_k_dconc_window1, window1)
    setBuffer(def_k_DeconcatenateMatrix, def_k_dconc_output2, input2.GetIndex())
@@ -107358,7 +107507,7 @@ bool CNeuronPerTokenFFN::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                               ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronFieldAwareConv::Init(numOutputs, myIndex, open_cl, 2 * window, window,
-                                   units, embed_size, candidates, topK, optimization_type, iBatch))
+                                   units, embed_size, candidates, topK, optimization_type, batch))
       ReturnFalse;
    activation = None;
    if(!cProj.Init(0, 0, OpenCL, window, CNeuronFieldAwareConv::GetWindow(), GetFields(),
@@ -111731,6 +111880,7 @@ public:
    virtual void      TrainMode(bool flag) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual CNeuronBatchNormOCL*    GetNorm(void) { return cNorm.AsObject(); }
   };
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -111882,5 +112032,1302 @@ void CNeuronSequenceTokenizer::TrainMode(bool flag)
    cNorm.TrainMode(bTrain);
    for(uint i = 0; i < cProj.Size(); i++)
       cProj[i].TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronDifferenceTokenizer :  public CNeuronBaseOCL
+  {
+protected:
+   CLayer            cFlow;
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None) override;
+
+public:
+                     CNeuronDifferenceTokenizer(void) {};
+                    ~CNeuronDifferenceTokenizer(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint inpSize,
+                          uint tokenSize, ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   //---
+   virtual int       Type(void) override const  {  return defNeuronDifferenceTokenizer; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   //---
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronDifferenceTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                      uint inpSize, uint tokenSize, ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, tokenSize, optimization_type, batch))
+      ReturnFalse;
+//---
+   cFlow.Clear();
+   cFlow.SetOpenCL(OpenCL);
+//---
+   uint index = 0;
+   CNeuronBaseOCL* neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, inpSize, optimization, iBatch) ||
+      !cFlow.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   index++;
+   CNeuronBatchNormOCL* norm = new CNeuronBatchNormOCL();
+   if(!norm ||
+      !norm.Init(0, index, OpenCL, inpSize, optimization, iBatch) ||
+      !cFlow.Add(norm))
+      DeleteObjAndFalse(norm);
+   norm.SetActivationFunction(None);
+   index++;
+   uint window = 3;
+   uint units = (inpSize + window - 1) / window;
+   CNeuronSpikeConvBlock* conv = new CNeuronSpikeConvBlock();
+   if(!conv ||
+      !conv.Init(0, index, OpenCL, window, window, window, units, 1, optimization, iBatch) ||
+      !cFlow.Add(conv))
+      DeleteObjAndFalse(conv);
+   conv = new CNeuronSpikeConvBlock();
+   if(!conv ||
+      !conv.Init(tokenSize, index, OpenCL, 2 * window, window, window, units - 1, 1, optimization, iBatch) ||
+      !cFlow.Add(conv))
+      DeleteObjAndFalse(conv);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronDifferenceTokenizer::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
+  {
+   if(!NeuronOCL || !SecondInput)
+      ReturnFalse;
+   CNeuronBaseOCL* neuron = cFlow[0];
+   if(!neuron || NeuronOCL.Neurons() < neuron.Neurons() ||
+      SecondInput.Total() < neuron.Neurons())
+      ReturnFalse;
+//---
+   if(!Different(NeuronOCL.getOutput(), SecondInput, neuron.getOutput(), neuron.Neurons(), 0, 0, 0, 1))
+      ReturnFalse;
+   for(int i = 1; i < cFlow.Total(); i++)
+     {
+      neuron = cFlow[i];
+      if(!neuron ||
+         !neuron.FeedForward(cFlow[i - 1]))
+         ReturnFalse;
+     }
+//---
+   if(!CNeuronBaseOCL::feedForward(neuron))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronDifferenceTokenizer::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+      CBufferFloat *SecondInput,
+      CBufferFloat *SecondGradient,
+      ENUM_ACTIVATION SecondActivation = None)
+  {
+   if(!NeuronOCL || !SecondInput || !SecondGradient)
+      ReturnFalse;
+   CNeuronBaseOCL* neuron = cFlow[0];
+   if(!neuron || NeuronOCL.Neurons() < neuron.Neurons() ||
+      SecondGradient.Total() < neuron.Neurons())
+      ReturnFalse;
+//---
+   if(!CNeuronBaseOCL::calcInputGradients(cFlow[-1]))
+      ReturnFalse;
+//---
+   for(int i = cFlow.Total() - 2; i >= 0; i--)
+     {
+      neuron = cFlow[i];
+      if(!neuron ||
+         !neuron.CalcHiddenGradients(cFlow[i + 1]))
+         ReturnFalse;
+     }
+//---
+   if(!DifferentGrad(NeuronOCL.getGradient(), SecondGradient, neuron.getGradient(), neuron.Neurons(), 0, 0, 0, 1))
+      ReturnFalse;
+   Deactivation(NeuronOCL);
+   if(SecondActivation != None)
+      if(!DeActivation(SecondInput, SecondGradient, SecondGradient, SecondActivation))
+         ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronDifferenceTokenizer::updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second)
+  {
+   CNeuronBaseOCL* neuron = cFlow[0];
+   for(int i = 1; i < cFlow.Total(); i++)
+     {
+      neuron = cFlow[i];
+      if(!neuron ||
+         !neuron.UpdateInputWeights(cFlow[i - 1]))
+         ReturnFalse;
+     }
+//---
+   if(!CNeuronBaseOCL::updateInputWeights(neuron))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronDifferenceTokenizer::Save(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Save(file_handle))
+      ReturnFalse;
+   if(!cFlow.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronDifferenceTokenizer::Load(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Load(file_handle))
+      ReturnFalse;
+   if(!cFlow.Load(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronDifferenceTokenizer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
+      ReturnFalse;
+   CNeuronDifferenceTokenizer* Source = source;
+   dWeightsUpdate(cFlow, Source, tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronDifferenceTokenizer::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronBaseOCL::SetOpenCL(obj);
+   cFlow.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronDifferenceTokenizer::TrainMode(bool flag)
+  {
+   CNeuronBaseOCL::TrainMode(flag);
+   cFlow.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronReGENTADBackbone :  public CNeuronBaseOCL
+  {
+protected:
+   CLayer                     cSeqToken;
+   CLayer                     cTransformer;
+   CLayer                     cRecurrent;
+   CNeuronDifferenceTokenizer cDifference;
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronReGENTADBackbone(void) {};
+                    ~CNeuronReGENTADBackbone(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint &dimensions[], uint units_s, uint heads, uint stack_size,
+                          uint layers, uint embed_size, uint candidates, uint topK,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   //---
+   virtual int       Type(void) override const  {  return defNeuronReGENTADBackbone; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
+   //---
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+   virtual CNeuronBatchNormOCL*    GetNorm(void);
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADBackbone::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                   uint &dimensions[], uint units_s, uint heads, uint stack_size,
+                                   uint layers, uint embed_size, uint candidates, uint topK,
+                                   ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(dimensions.Size() < 2 || layers < 1 || units_s < 1)
+      ReturnFalse;
+   uint iSequenceDim = units_s * dimensions[0];
+   uint iContextDim = 0;
+   for(uint i = 1; i < dimensions.Size(); i++)
+      iContextDim += dimensions[i];
+   uint iScenariosUnits = dimensions.Size() + 1;
+//---
+   if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, (iScenariosUnits + 4)*embed_size,
+                            optimization_type, batch))
+      ReturnFalse;
+   activation = None;
+//---
+   cSeqToken.Clear();
+   cTransformer.Clear();
+   cRecurrent.Clear();
+   cSeqToken.SetOpenCL(OpenCL);
+   cTransformer.SetOpenCL(OpenCL);
+   cRecurrent.SetOpenCL(OpenCL);
+//--- Sequence tokenizer
+   uint index = 0;
+   CNeuronBaseOCL* neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, iSequenceDim, optimization, iBatch) ||
+      !cSeqToken.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   index++;
+   CNeuronSequenceTokenizer* seq_tok = new CNeuronSequenceTokenizer();
+   if(!seq_tok ||
+      !seq_tok.Init(0, index, OpenCL, dimensions[0], units_s, embed_size, optimization, iBatch) ||
+      !cSeqToken.Add(seq_tok))
+      DeleteObjAndFalse(seq_tok);
+   seq_tok.SetActivationFunction(SoftPlus);
+//--- Transformer
+   index++;
+   neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, iContextDim, optimization, iBatch) ||
+      !cTransformer.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   index++;
+   neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, iContextDim + seq_tok.Neurons(), optimization, iBatch) ||
+      !cTransformer.Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   uint dims[];
+   if(ArrayCopy(dims, dimensions, 0, 0, dimensions.Size()) < (int)dimensions.Size())
+      ReturnFalse;
+   dims[0] = seq_tok.Neurons();
+   index++;
+   CNeuronINFNetBlock* transf = new CNeuronINFNetBlock();
+   if(!transf ||
+      !transf.Init(0, index, OpenCL, dims, 1, heads, stack_size, layers, embed_size, candidates, topK, optimization, iBatch) ||
+      !cTransformer.Add(transf))
+      DeleteObjAndFalse(transf);
+//--- Recurrent
+   CNeuronLSTMOCL* lstm = NULL;
+   uint size = seq_tok.Neurons();
+   for(uint i = 0; i < layers; i++)
+     {
+      lstm = new CNeuronLSTMOCL();
+      index++;
+      if(!lstm ||
+         !lstm.Init(0, index, OpenCL, size, optimization, iBatch) ||
+         !lstm.SetInputs(size) ||
+         !cRecurrent.Add(lstm))
+         DeleteObjAndFalse(lstm);
+      lstm.SetActivationFunction(TANH);
+     }
+   index++;
+   CNeuronBatchNormOCL* norm = new CNeuronBatchNormOCL();
+   if(!norm ||
+      !norm.Init(0, index, OpenCL, lstm.Neurons(), optimization, iBatch) ||
+      !cRecurrent.Add(norm))
+      DeleteObjAndFalse(norm);
+//---
+   index++;
+   if(!cDifference.Init(0, index, OpenCL, norm.Neurons(), embed_size, optimization, iBatch))
+      ReturnFalse;
+   cDifference.SetActivationFunction(TANH);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADBackbone::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* sequence = cSeqToken[0];
+   CNeuronBaseOCL* context = cTransformer[0];
+   if(!sequence || !context)
+      ReturnFalse;
+   uint iSequenceDim = sequence.Neurons();
+   uint iContextDim = context.Neurons();
+   if(!DeConcat(sequence.getOutput(), context.getOutput(), NeuronOCL.getOutput(),
+                iSequenceDim, iContextDim, 1))
+      ReturnFalse;
+//--- Sequence tokenizer
+   for(int i = 1; i < cSeqToken.Total(); i++)
+     {
+      sequence = cSeqToken[i];
+      if(!sequence ||
+         !sequence.FeedForward(cSeqToken[i - 1]))
+         ReturnFalse;
+     }
+   iSequenceDim = sequence.Neurons();
+//--- Transformer
+   context = cTransformer[1];
+   if(!context ||
+      !Concat(sequence.getOutput(), cTransformer[0].getOutput(), context.getOutput(),
+              iSequenceDim, iContextDim, 1))
+      ReturnFalse;
+   for(int i = 2; i < cTransformer.Total(); i++)
+     {
+      context = cTransformer[i];
+      if(!context ||
+         !context.FeedForward(cTransformer[i - 1]))
+         ReturnFalse;
+     }
+//--- Recurrent
+   sequence = cRecurrent[0];
+   if(!sequence ||
+      !sequence.FeedForward(cSeqToken[-1]))
+      ReturnFalse;
+   for(int i = 1; i < cRecurrent.Total(); i++)
+     {
+      sequence = cRecurrent[i];
+      if(!sequence ||
+         !sequence.FeedForward(cRecurrent[i - 1]))
+         ReturnFalse;
+     }
+//---
+   if(!cDifference.FeedForward(context, sequence.getOutput()))
+      ReturnFalse;
+   if(!Concat(context.getOutput(), sequence.getOutput(), cDifference.getOutput(), Output,
+              context.Neurons(), sequence.Neurons(), cDifference.Neurons(), 1))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADBackbone::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* sequence = cRecurrent[-1];
+   CNeuronBaseOCL* context = cTransformer[-1];
+   if(!sequence || !context)
+      ReturnFalse;
+   uint iSequenceDim = sequence.Neurons();
+   uint iContextDim = context.Neurons();
+   if(!DeConcat(context.getGradient(), sequence.getGradient(), cDifference.getGradient(), Gradient,
+                iContextDim, iSequenceDim, cDifference.Neurons(), 1))
+      ReturnFalse;
+   Deactivation(cDifference);
+   Deactivation(context);
+   Deactivation(sequence);
+   CBufferFloat* temp = context.getGradient();
+   if(!context.SetGradient(context.getPrevOutput(), false) ||
+      !context.getGradient().Fill(0) ||
+      !sequence.getPrevOutput().Fill(0))
+      ReturnFalse;
+   if(!context.CalcHiddenGradients(cDifference.AsObject(),
+                                   sequence.getOutput(),
+                                   sequence.getPrevOutput(),
+                                   (ENUM_ACTIVATION)sequence.Activation()))
+      ReturnFalse;
+   if(!SumAndNormalize(temp, context.getGradient(), temp, 1, false, 0, 0, 0, 1) ||
+      !context.SetGradient(temp, false) ||
+      !SumAndNormalize(sequence.getGradient(), sequence.getPrevOutput(), sequence.getGradient(), 1, false, 0, 0, 0, 1))
+      ReturnFalse;
+//--- Recurrent
+   for(int i = cRecurrent.Total() - 2; i >= 0; i--)
+     {
+      sequence = cRecurrent[i];
+      if(!sequence ||
+         !sequence.CalcHiddenGradients(cRecurrent[i + 1]))
+         ReturnFalse;
+     }
+//--- Transformer
+   for(int i = cTransformer.Total() - 2; i >= 1; i--)
+     {
+      context = cTransformer[i];
+      if(!context ||
+         !context.CalcHiddenGradients(cTransformer[i + 1]))
+         ReturnFalse;
+     }
+   context = cTransformer[0];
+   sequence = cSeqToken[-1];
+   if(!context || !sequence)
+      ReturnFalse;
+   iSequenceDim = sequence.Neurons();
+   iContextDim = context.Neurons();
+   if(!DeConcat(sequence.getPrevOutput(), context.getGradient(), cTransformer[1].getGradient(),
+                iSequenceDim, iContextDim, 1))
+      ReturnFalse;
+//--- Sequence tokenizer
+   if(!sequence.CalcHiddenGradients(cRecurrent[0]))
+      ReturnFalse;
+   if(sequence.Activation() != None)
+      if(!DeActivation(sequence.getOutput(), sequence.getPrevOutput(),
+                       sequence.getPrevOutput(), sequence.Activation()))
+         ReturnFalse;
+   if(!SumAndNormalize(sequence.getGradient(), sequence.getPrevOutput(), sequence.getGradient(), 1, false, 0, 0, 0, 1))
+      ReturnFalse;
+   for(int i = cSeqToken.Total() - 2; i >= 0; i--)
+     {
+      sequence = cSeqToken[i];
+      if(!sequence ||
+         !sequence.CalcHiddenGradients(cSeqToken[i + 1]))
+         ReturnFalse;
+     }
+   iSequenceDim = sequence.Neurons();
+//---
+   if(!Concat(sequence.getGradient(), context.getGradient(), NeuronOCL.getGradient(),
+              iSequenceDim, iContextDim, 1))
+      ReturnFalse;
+   Deactivation(NeuronOCL);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADBackbone::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+//---
+   CNeuronBaseOCL* sequence = cSeqToken[0];
+   CNeuronBaseOCL* context = cTransformer[0];
+//--- Sequence tokenizer
+   for(int i = 1; i < cSeqToken.Total(); i++)
+     {
+      sequence = cSeqToken[i];
+      if(!sequence ||
+         !sequence.UpdateInputWeights(cSeqToken[i - 1]))
+         ReturnFalse;
+     }
+//--- Transformer
+   for(int i = 2; i < cTransformer.Total(); i++)
+     {
+      context = cTransformer[i];
+      if(!context ||
+         !context.UpdateInputWeights(cTransformer[i - 1]))
+         ReturnFalse;
+     }
+//--- Recurrent
+   sequence = cRecurrent[0];
+   if(!sequence ||
+      !sequence.UpdateInputWeights(cSeqToken[-1]))
+      ReturnFalse;
+   for(int i = 1; i < cRecurrent.Total(); i++)
+     {
+      sequence = cRecurrent[i];
+      if(!sequence ||
+         !sequence.UpdateInputWeights(cRecurrent[i - 1]))
+         ReturnFalse;
+     }
+//---
+   if(!cDifference.UpdateInputWeights(context, sequence.getOutput()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADBackbone::Save(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Save(file_handle))
+      ReturnFalse;
+   if(!cSeqToken.Save(file_handle))
+      ReturnFalse;
+   if(!cTransformer.Save(file_handle))
+      ReturnFalse;
+   if(!cRecurrent.Save(file_handle))
+      ReturnFalse;
+   if(!cDifference.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADBackbone::Load(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Load(file_handle))
+      ReturnFalse;
+   if(!cSeqToken.Load(file_handle))
+      ReturnFalse;
+   if(!cTransformer.Load(file_handle))
+      ReturnFalse;
+   if(!cRecurrent.Load(file_handle))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cDifference.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADBackbone::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
+      ReturnFalse;
+//---
+   CNeuronReGENTADBackbone* Source = source;
+   dWeightsUpdate(cSeqToken, Source, tau);
+   dWeightsUpdate(cTransformer, Source, tau);
+   dWeightsUpdate(cRecurrent, Source, tau);
+   dWeightsUpdate(cDifference, Source, tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADBackbone::Clear(void)
+  {
+   if(!CNeuronBaseOCL::Clear())
+      ReturnFalse;
+   if(!cSeqToken.ClearStates())
+      ReturnFalse;
+   if(!cTransformer.ClearStates())
+      ReturnFalse;
+   if(!cRecurrent.ClearStates())
+      ReturnFalse;
+   if(!cDifference.Clear())
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronReGENTADBackbone::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronBaseOCL::SetOpenCL(obj);
+   cSeqToken.SetOpenCL(OpenCL);
+   cTransformer.SetOpenCL(OpenCL);
+   cRecurrent.SetOpenCL(OpenCL);
+   cDifference.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronReGENTADBackbone::TrainMode(bool flag)
+  {
+   CNeuronBaseOCL::TrainMode(flag);
+   cSeqToken.TrainMode(bTrain);
+   cTransformer.TrainMode(bTrain);
+   cRecurrent.TrainMode(bTrain);
+   cDifference.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+CNeuronBatchNormOCL* CNeuronReGENTADBackbone::GetNorm(void)
+  {
+   CNeuronBatchNormOCL* result = NULL;
+   for(int i = 0; (i < cSeqToken.Total() && !result); i++)
+     {
+      if(!cSeqToken[i] || cSeqToken[i].Type() != defNeuronSequenceTokenizer)
+         continue;
+      result = ((CNeuronSequenceTokenizer*)cSeqToken[i]).GetNorm();
+      break;
+     }
+//---
+   return result;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronReGENTADHead  :  public CNeuronRevINDenormOCL
+  {
+protected:
+   CLayer            cFlow;
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronReGENTADHead(void) {};
+                    ~CNeuronReGENTADHead(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint dimension_in, uint units_in, uint dimension_out,
+                          uint units_out, CNeuronBatchNormOCL* norm,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   //---
+   virtual int       Type(void) override const  {  return defNeuronReGENTADHead; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
+   //---
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+   virtual bool      SetNorm(CNeuronBatchNormOCL* norm);
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                               uint dimension_in, uint units_in, uint dimension_out,
+                               uint units_out, CNeuronBatchNormOCL *norm,
+                               ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(!CNeuronRevINDenormOCL::Init(numOutputs, myIndex, open_cl, dimension_out * units_out, 0, norm))
+      ReturnFalse;
+   activation = None;
+//---
+   cFlow.Clear();
+   cFlow.SetOpenCL(OpenCL);
+//---
+   uint index = 0;
+   CNeuronTransposeOCL* transp = new CNeuronTransposeOCL();
+   if(!transp ||
+      !transp.Init(0, index, OpenCL, units_in, dimension_in, optimization, iBatch) ||
+      !cFlow.Add(transp))
+      DeleteObjAndFalse(transp);
+   transp.SetActivationFunction(None);
+   index++;
+   uint dim_hide = (MathMax(units_in, units_out) + 1) / 2;
+   CNeuronSpikeConvBlock* conv = new CNeuronSpikeConvBlock();
+   if(!conv ||
+      !conv.Init(0, index, OpenCL, units_in, units_in, dim_hide, dimension_in, 1, optimization, iBatch) ||
+      !cFlow.Add(conv))
+      DeleteObjAndFalse(conv);
+   index++;
+   conv = new CNeuronSpikeConvBlock();
+   if(!conv ||
+      !conv.Init(0, index, OpenCL, dim_hide, dim_hide, units_out, dimension_in, 1, optimization, iBatch) ||
+      !cFlow.Add(conv))
+      DeleteObjAndFalse(conv);
+   index++;
+   transp = new CNeuronTransposeOCL();
+   if(!transp ||
+      !transp.Init(0, index, OpenCL, dimension_in, units_out, optimization, iBatch) ||
+      !cFlow.Add(transp))
+      DeleteObjAndFalse(transp);
+   transp.SetActivationFunction(None);
+   dim_hide = (MathMax(dimension_in, dimension_out) + 1) / 2;
+   index++;
+   conv = new CNeuronSpikeConvBlock();
+   if(!conv ||
+      !conv.Init(0, index, OpenCL, dimension_in, dimension_in, dim_hide, units_out, 1, optimization, iBatch) ||
+      !cFlow.Add(conv))
+      DeleteObjAndFalse(conv);
+   index++;
+   conv = new CNeuronSpikeConvBlock();
+   if(!conv ||
+      !conv.Init(0, index, OpenCL, dim_hide, dim_hide, dimension_out, units_out, 1, optimization, iBatch) ||
+      !cFlow.Add(conv))
+      DeleteObjAndFalse(conv);
+   index++;
+   transp = new CNeuronTransposeOCL();
+   if(!transp ||
+      !transp.Init(0, index, OpenCL, units_out, dimension_out, optimization, iBatch) ||
+      !cFlow.Add(transp))
+      DeleteObjAndFalse(transp);
+   transp.SetActivationFunction(None);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   CNeuronBaseOCL* prev = NeuronOCL;
+   CNeuronBaseOCL* curr = NULL;
+   for(int i = 0; i < cFlow.Total(); i++)
+     {
+      curr = cFlow[i];
+      if(!curr ||
+         !curr.FeedForward(prev))
+         ReturnFalse;
+      prev = curr;
+     }
+   return CNeuronRevINDenormOCL::feedForward(prev);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL* curr = NULL;
+   CNeuronBaseOCL* next = (cFlow.Total() == 0 ? NeuronOCL : cFlow[-1]);
+   if(!CNeuronRevINDenormOCL::calcInputGradients(next))
+      ReturnFalse;
+   for(int i = cFlow.Total() - 2; i >= 0; i--)
+     {
+      curr = cFlow[i];
+      if(!curr ||
+         !curr.CalcHiddenGradients(next))
+         ReturnFalse;
+      next = curr;
+     }
+//---
+   if(NeuronOCL != next)
+      if(!NeuronOCL.CalcHiddenGradients(next))
+         ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   CNeuronBaseOCL* prev = NeuronOCL;
+   CNeuronBaseOCL* curr = NULL;
+   for(int i = 0; i < cFlow.Total(); i++)
+     {
+      curr = cFlow[i];
+      if(!curr ||
+         !curr.UpdateInputWeights(prev))
+         ReturnFalse;
+      prev = curr;
+     }
+   return CNeuronRevINDenormOCL::updateInputWeights(prev);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::Save(const int file_handle)
+  {
+   if(!CNeuronRevINDenormOCL::Save(file_handle))
+      ReturnFalse;
+   if(!cFlow.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::Load(const int file_handle)
+  {
+   if(!CNeuronRevINDenormOCL::Load(file_handle))
+      ReturnFalse;
+   if(!cFlow.Load(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!CNeuronRevINDenormOCL::WeightsUpdate(source, tau))
+      ReturnFalse;
+   CNeuronReGENTADHead* Source = source;
+   dWeightsUpdate(cFlow, Source, tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::Clear(void)
+  {
+   if(!CNeuronRevINDenormOCL::Clear())
+      ReturnFalse;
+   if(!cFlow.ClearStates())
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronReGENTADHead::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronRevINDenormOCL::SetOpenCL(obj);
+   cFlow.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronReGENTADHead::TrainMode(bool flag)
+  {
+   CNeuronRevINDenormOCL::TrainMode(flag);
+   cFlow.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTADHead::SetNorm(CNeuronBatchNormOCL *norm)
+  {
+   if(BatchOptions != norm.BatchOptions)
+     {
+      DeleteObj(BatchOptions);
+      BatchOptions = norm.BatchOptions;
+     }
+//---
+   return !!BatchOptions;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronReGENTAD   :  public CNeuronBaseOCL
+  {
+protected:
+   CNeuronReGENTADBackbone    cBackbone;
+   CLayer                     cHeads[3];
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronReGENTAD(void) {};
+                    ~CNeuronReGENTAD(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint &dimensions[], uint units_s, uint heads, uint stack_size,
+                          uint layers, uint embed_size, uint candidates, uint topK,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   //---
+   virtual int       Type(void) override const  {  return defNeuronReGENTAD; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
+   //---
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTAD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                           uint &dimensions[], uint units_s, uint heads, uint stack_size,
+                           uint layers, uint embed_size, uint candidates, uint topK,
+                           ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(!cBackbone.Init(0, 0, open_cl, dimensions, units_s, heads, stack_size, layers,
+                      embed_size, candidates, topK, optimization_type, batch))
+      ReturnFalse;
+   if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, cBackbone.Neurons() + 3 * embed_size,
+                            optimization_type, batch))
+      ReturnFalse;
+   activation = None;
+//---
+   for(uint i = 0; i < cHeads.Size(); i++)
+     {
+      cHeads[i].Clear();
+      cHeads[i].SetOpenCL(OpenCL);
+     }
+//---
+   CNeuronReGENTADHead*          head = NULL;
+   CNeuronDifferenceTokenizer*   diff = NULL;
+   uint backbone_units = cBackbone.Neurons() / embed_size;
+   uint index = 1;
+   for(int i = 0; i < 2; i++)
+     {
+      head = new CNeuronReGENTADHead();
+      if(!head ||
+         !head.Init(0, index, OpenCL, embed_size, backbone_units, dimensions[0], units_s,
+                    cBackbone.GetNorm(), optimization, iBatch) ||
+         !cHeads[i].Add(head))
+         DeleteObjAndFalse(head);
+      index++;
+      diff = new CNeuronDifferenceTokenizer();
+      if(!diff ||
+         !diff.Init(0, index, OpenCL, head.Neurons(), embed_size, optimization, iBatch) ||
+         !cHeads[i].Add(head))
+         DeleteObjAndFalse(head);
+      diff.SetActivationFunction(TANH);
+      index++;
+     }
+//---
+   CNeuronBaseOCL* neuron = new CNeuronBaseOCL();
+   if(!neuron ||
+      !neuron.Init(0, index, OpenCL, cBackbone.Neurons() + diff.Neurons(), optimization, iBatch) ||
+      !cHeads[2].Add(neuron))
+      DeleteObjAndFalse(neuron);
+   neuron.SetActivationFunction(None);
+   index++;
+   head = new CNeuronReGENTADHead();
+   if(!head ||
+      !head.Init(0, index, OpenCL, embed_size, backbone_units + 1, dimensions[0], units_s,
+                 cBackbone.GetNorm(), optimization, iBatch) ||
+      !cHeads[2].Add(head))
+      DeleteObjAndFalse(head);
+   index++;
+   diff = new CNeuronDifferenceTokenizer();
+   if(!diff ||
+      !diff.Init(0, index, OpenCL, head.Neurons(), embed_size, optimization, iBatch) ||
+      !cHeads[2].Add(head))
+      DeleteObjAndFalse(head);
+   diff.SetActivationFunction(TANH);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTAD::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//--- Forecats 1
+   CNeuronBaseOCL* curr = NULL;
+   CNeuronBaseOCL* prev = cBackbone.AsObject();
+   for(int i = 0; i < cHeads[1].Total(); i++)
+     {
+      curr = cHeads[1][i];
+      if(!curr ||
+         !curr.FeedForward(prev, NeuronOCL.getOutput()))
+         ReturnFalse;
+      prev = curr;
+     }
+//--- Forecats 2
+   curr = cHeads[2][0];
+   if(!curr ||
+      !Concat(cBackbone.getOutput(), prev.getOutput(), curr.getOutput(),
+              cBackbone.Neurons(), prev.Neurons(), 1))
+      ReturnFalse;
+   prev = curr;
+   for(int i = 1; i < cHeads[2].Total(); i++)
+     {
+      curr = cHeads[2][i];
+      if(!curr ||
+         !curr.FeedForward(prev, NeuronOCL.getOutput()))
+         ReturnFalse;
+      prev = curr;
+     }
+//--- Backprop
+   if(bTrain)
+     {
+      //--- Forecast 2
+      curr = cHeads[2][-2];
+      float error = 0;
+      if(!curr ||
+         !curr.calcOutputGradients(NeuronOCL.getOutput(), error))
+         ReturnFalse;
+      for(int i = cHeads[2].Total() - 3; i >= 0; i--)
+        {
+         curr = cHeads[2][i];
+         if(!curr ||
+            !curr.CalcHiddenGradients(cHeads[2][i + 1]))
+            ReturnFalse;
+        }
+      for(int i = 1; i < cHeads[2].Total() - 1; i++)
+        {
+         curr = cHeads[2][i];
+         if(!curr ||
+            !curr.UpdateInputWeights(cHeads[2][i - 1]))
+            ReturnFalse;
+        }
+      //--- Forecast 1
+      curr = cHeads[2][0];
+      prev = cHeads[1][-1];
+      if(!DeConcat(cBackbone.getPrevOutput(), prev.getGradient(), curr.getGradient(),
+                   cBackbone.Neurons(), prev.Neurons(), 1))
+         ReturnFalse;
+      Deactivation(prev);
+      curr = cHeads[1][-2];
+      if(!curr ||
+         !curr.CalcHiddenGradients(prev, NeuronOCL.getOutput(),
+                                   NeuronOCL.getGradient(),
+                                   (ENUM_ACTIVATION)NeuronOCL.Activation()))
+         ReturnFalse;
+      CBufferFloat* temp = curr.getGradient();
+      if(!curr.SetGradient(curr.getPrevOutput(), false) ||
+         !curr.calcOutputGradients(NeuronOCL.getOutput(), error) ||
+         !SumAndNormalize(temp, curr.getGradient(), temp, 1, false, 0, 0, 0, 1) ||
+         !curr.SetGradient(temp, false))
+         ReturnFalse;
+      for(int i = cHeads[1].Total() - 3; i >= 0; i--)
+        {
+         curr = cHeads[1][i];
+         if(!curr ||
+            !curr.CalcHiddenGradients(cHeads[1][i + 1], NeuronOCL.getOutput(),
+                                      NeuronOCL.getGradient(),
+                                      (ENUM_ACTIVATION)NeuronOCL.Activation()))
+            ReturnFalse;
+        }
+      if(!cBackbone.CalcHiddenGradients(curr) ||
+         !SumAndNormalize(cBackbone.getGradient(), cBackbone.getPrevOutput(), cBackbone.getGradient(), 1, false, 0, 0, 0, 1))
+         ReturnFalse;
+      if(!NeuronOCL.CalcHiddenGradients(cBackbone.AsObject()))
+         ReturnFalse;
+      if(!cBackbone.UpdateInputWeights(NeuronOCL))
+         ReturnFalse;
+      prev = cBackbone.AsObject();
+      for(int i = 0; i < cHeads[1].Total(); i++)
+        {
+         curr = cHeads[1][i];
+         if(!curr ||
+            !curr.UpdateInputWeights(prev))
+            ReturnFalse;
+         prev = curr;
+        }
+     }
+//--- Backbone
+   if(!cBackbone.FeedForward(NeuronOCL))
+      ReturnFalse;
+//--- Recover
+   prev = cBackbone.AsObject();
+   for(int i = 0; i < cHeads[0].Total(); i++)
+     {
+      curr = cHeads[0][i];
+      if(!curr ||
+         !curr.FeedForward(prev, NeuronOCL.getOutput()))
+         ReturnFalse;
+      prev = curr;
+     }
+//---
+   if(!Concat(cBackbone.getOutput(), cHeads[0][-1].getOutput(), cHeads[1][-1].getOutput(), cHeads[2][-1].getOutput(), Output,
+              cBackbone.Neurons(), cHeads[0][-1].Neurons(), cHeads[1][-1].Neurons(), cHeads[2][-1].Neurons(), 1))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTAD::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//---
+   if(!cHeads[0][-1] || !cHeads[1][-1] || !cHeads[2][-1] ||
+      !DeConcat(cBackbone.getPrevOutput(), cHeads[0][-1].getGradient(), cHeads[1][-1].getGradient(), cHeads[2][-1].getGradient(), Gradient,
+                cBackbone.Neurons(), cHeads[0][-1].Neurons(), cHeads[1][-1].Neurons(), cHeads[2][-1].Neurons(), 1))
+      ReturnFalse;
+//--- Forecast 2
+   CNeuronBaseOCL* curr = cHeads[2][-1];
+   Deactivation(curr)
+   for(int i = cHeads[2].Total() - 2; i >= 0; i--)
+     {
+      curr = cHeads[2][i];
+      if(!curr ||
+         !curr.CalcHiddenGradients(cHeads[2][i + 1], NeuronOCL.getOutput(),
+                                   NeuronOCL.getGradient(),
+                                   (ENUM_ACTIVATION)NeuronOCL.Activation()))
+         ReturnFalse;
+     }
+//--- Forecast 1
+   curr = cHeads[2][0];
+   CNeuronBaseOCL* prev = cHeads[1][-1];
+   if(!DeConcat(cBackbone.getPrevOutput(), prev.getPrevOutput(), curr.getGradient(),
+                cBackbone.Neurons(), prev.Neurons(), 1) ||
+      !SumAndNormalize(prev.getGradient(), prev.getPrevOutput(), prev.getGradient(), 1, false, 0, 0, 0, 1))
+      ReturnFalse;
+   Deactivation(prev);
+   for(int i = cHeads[1].Total() - 2; i >= 0; i--)
+     {
+      curr = cHeads[1][i];
+      if(!curr ||
+         !curr.CalcHiddenGradients(cHeads[1][i + 1], NeuronOCL.getOutput(),
+                                   NeuronOCL.getGradient(),
+                                   (ENUM_ACTIVATION)NeuronOCL.Activation()))
+         ReturnFalse;
+     }
+//--- Recovery
+   prev = cHeads[0][-1];
+   Deactivation(prev);
+   curr = cHeads[0][-2];
+   if(!curr ||
+      !curr.CalcHiddenGradients(prev, NeuronOCL.getOutput(),
+                                NeuronOCL.getGradient(),
+                                (ENUM_ACTIVATION)NeuronOCL.Activation()))
+      ReturnFalse;
+   CBufferFloat* temp = curr.getGradient();
+   float error = 0;
+   if(!curr.SetGradient(curr.getPrevOutput(), false) ||
+      !curr.calcOutputGradients(NeuronOCL.getOutput(), error) ||
+      !SumAndNormalize(temp, curr.getGradient(), temp, 1, false, 0, 0, 0, 1) ||
+      !curr.SetGradient(temp, false))
+      ReturnFalse;
+   for(int i = cHeads[0].Total() - 3; i >= 0; i--)
+     {
+      curr = cHeads[0][i];
+      if(!curr ||
+         !curr.CalcHiddenGradients(cHeads[0][i + 1], NeuronOCL.getOutput(),
+                                   NeuronOCL.getGradient(),
+                                   (ENUM_ACTIVATION)NeuronOCL.Activation()))
+         ReturnFalse;
+     }
+   if(!cBackbone.CalcHiddenGradients(curr) ||
+      !SumAndNormalize(cBackbone.getGradient(), cBackbone.getPrevOutput(), cBackbone.getGradient(), 1, false, 0, 0, 0, 1))
+      ReturnFalse;
+   if(!NeuronOCL.CalcHiddenGradients(cBackbone.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTAD::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+//--- Forecats 1
+   CNeuronBaseOCL* curr = NULL;
+   CNeuronBaseOCL* prev = cBackbone.AsObject();
+   for(int i = 0; i < cHeads[1].Total(); i++)
+     {
+      curr = cHeads[1][i];
+      if(!curr ||
+         !curr.UpdateInputWeights(prev, NeuronOCL.getOutput()))
+         ReturnFalse;
+      prev = curr;
+     }
+//--- Forecats 2
+   prev = cHeads[2][0];
+   for(int i = 1; i < cHeads[2].Total(); i++)
+     {
+      curr = cHeads[2][i];
+      if(!curr ||
+         !curr.UpdateInputWeights(prev, NeuronOCL.getOutput()))
+         ReturnFalse;
+      prev = curr;
+     }
+//--- Backbone
+   if(!cBackbone.UpdateInputWeights(NeuronOCL))
+      ReturnFalse;
+//--- Recover
+   prev = cBackbone.AsObject();
+   for(int i = 0; i < cHeads[0].Total(); i++)
+     {
+      curr = cHeads[0][i];
+      if(!curr ||
+         !curr.UpdateInputWeights(prev, NeuronOCL.getOutput()))
+         ReturnFalse;
+      prev = curr;
+     }
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTAD::Save(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Save(file_handle))
+      ReturnFalse;
+   if(!cBackbone.Save(file_handle))
+      ReturnFalse;
+   for(uint i = 0; i < cHeads.Size(); i++)
+      if(!cHeads[i].Save(file_handle))
+         ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTAD::Load(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Load(file_handle))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cBackbone.AsObject()))
+      ReturnFalse;
+   for(uint i = 0; i < cHeads.Size(); i++)
+     {
+      if(!cHeads[i].Load(file_handle))
+         ReturnFalse;
+      for(int n = 0; n < cHeads[i].Total(); n++)
+         if(cHeads[i][n].Type() == defNeuronReGENTADHead)
+           {
+            CNeuronReGENTADHead* head = cHeads[i][n];
+            if(!head.SetNorm(cBackbone.GetNorm()))
+               ReturnFalse;
+           }
+     }
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTAD::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
+      ReturnFalse;
+   CNeuronReGENTAD* Source = source;
+   dWeightsUpdate(cBackbone, Source, tau);
+   for(uint i = 0; i < cHeads.Size(); i++)
+      dWeightsUpdate(cHeads[i], Source, tau);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronReGENTAD::Clear(void)
+  {
+   if(!CNeuronBaseOCL::Clear())
+      ReturnFalse;
+   if(!cBackbone.Clear())
+      ReturnFalse;
+   for(uint i = 0; i < cHeads.Size(); i++)
+      if(!cHeads[i].ClearStates())
+         ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronReGENTAD::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronBaseOCL::SetOpenCL(obj);
+   cBackbone.SetOpenCL(OpenCL);
+   for(uint i = 0; i < cHeads.Size(); i++)
+      cHeads[i].SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronReGENTAD::TrainMode(bool flag)
+  {
+   CNeuronBaseOCL::TrainMode(flag);
+   cBackbone.TrainMode(bTrain);
+   for(uint i = 0; i < cHeads.Size(); i++)
+      cHeads[i].TrainMode(bTrain);
   }
 //+------------------------------------------------------------------+

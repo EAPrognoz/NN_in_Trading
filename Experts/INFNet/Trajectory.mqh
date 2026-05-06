@@ -62,7 +62,7 @@ int            iLatentLayer = -1;
 #define        NExperts                5
 #define        NScenarios              21
 #define        TopK                    3
-#define        StackSize               24*5
+#define        StackSize               24*21*12
 #define        Blocks                  24
 //+------------------------------------------------------------------+
 //|                                                                  |
