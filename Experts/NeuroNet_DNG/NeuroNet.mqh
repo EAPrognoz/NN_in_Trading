@@ -112977,8 +112977,8 @@ bool CNeuronReGENTAD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
       diff = new CNeuronDifferenceTokenizer();
       if(!diff ||
          !diff.Init(0, index, OpenCL, head.Neurons(), embed_size, optimization, iBatch) ||
-         !cHeads[i].Add(head))
-         DeleteObjAndFalse(head);
+         !cHeads[i].Add(diff))
+         DeleteObjAndFalse(diff);
       diff.SetActivationFunction(TANH);
       index++;
      }
@@ -113000,8 +113000,8 @@ bool CNeuronReGENTAD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
    diff = new CNeuronDifferenceTokenizer();
    if(!diff ||
       !diff.Init(0, index, OpenCL, head.Neurons(), embed_size, optimization, iBatch) ||
-      !cHeads[2].Add(head))
-      DeleteObjAndFalse(head);
+      !cHeads[2].Add(diff))
+      DeleteObjAndFalse(diff);
    diff.SetActivationFunction(TANH);
 //---
    return true;
@@ -113208,7 +113208,7 @@ bool CNeuronReGENTAD::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
       ReturnFalse;
-//--- Forecats 1
+//--- Forecast 1
    CNeuronBaseOCL* curr = NULL;
    CNeuronBaseOCL* prev = cBackbone.AsObject();
    for(int i = 0; i < cHeads[1].Total(); i++)
@@ -113219,7 +113219,7 @@ bool CNeuronReGENTAD::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
          ReturnFalse;
       prev = curr;
      }
-//--- Forecats 2
+//--- Forecast 2
    prev = cHeads[2][0];
    for(int i = 1; i < cHeads[2].Total(); i++)
      {
