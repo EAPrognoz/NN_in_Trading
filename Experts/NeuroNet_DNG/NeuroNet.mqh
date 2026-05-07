@@ -112103,7 +112103,7 @@ bool CNeuronDifferenceTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *
       DeleteObjAndFalse(conv);
    conv = new CNeuronSpikeConvBlock();
    if(!conv ||
-      !conv.Init(tokenSize, index, OpenCL, 2 * window, window, window, units - 1, 1, optimization, iBatch) ||
+      !conv.Init(tokenSize, index, OpenCL, 2 * window, window, window, MathMax(units - 1,1), 1, optimization, iBatch) ||
       !cFlow.Add(conv))
       DeleteObjAndFalse(conv);
 //---
@@ -112708,9 +112708,12 @@ bool CNeuronReGENTADHead::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl
                                uint units_out, CNeuronBatchNormOCL *norm,
                                ENUM_OPTIMIZATION optimization_type, uint batch)
   {
-   if(!CNeuronRevINDenormOCL::Init(numOutputs, myIndex, open_cl, dimension_out * units_out, 0, norm))
+   if(!CNeuronRevINDenormOCL::Init(numOutputs, myIndex, open_cl, dimension_out * units_out, -1, NULL))
       ReturnFalse;
    activation = None;
+   if(!!norm)
+     if(!SetNorm(norm))
+       ReturnFalse;
 //---
    cFlow.Clear();
    cFlow.SetOpenCL(OpenCL);
