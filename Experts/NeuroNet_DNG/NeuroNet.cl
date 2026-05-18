@@ -1277,28 +1277,28 @@ __kernel void ConcatenateBuffers(__global float *input1, int window1,
   {
    int n = get_global_id(0);
    int w = get_global_id(1);
-   int total_w=get_global_size(1);
+   int total_w = get_global_size(1);
    int shift = n * (window1 + window2 + window3 + window4);
    int shift_in = n * window1;
-   for(int i = w; i < window1; i+=total_w)
+   for(int i = w; i < window1; i += total_w)
       output[shift + i] = IsNaNOrInf(input1[shift_in + i], 0);
 //---
    shift += window1;
    shift_in = n * window2;
 //---
-   for(int i = w; i < window2; i+=total_w)
+   for(int i = w; i < window2; i += total_w)
       output[shift + i] = IsNaNOrInf(input2[shift_in + i], 0);
 //---
    shift += window2;
    shift_in = n * window3;
 //---
-   for(int i = w; i < window3; i+=total_w)
+   for(int i = w; i < window3; i += total_w)
       output[shift + i] = IsNaNOrInf(input3[shift_in + i], 0);
 //---
    shift += window3;
    shift_in = n * window4;
 //---
-   for(int i = w; i < window4; i+=total_w)
+   for(int i = w; i < window4; i += total_w)
       output[shift + i] = IsNaNOrInf(input4[shift_in + i], 0);
   }
 //+------------------------------------------------------------------+
@@ -1318,18 +1318,18 @@ __kernel void DeconcatenateBuffers(__global float *output1, int window1,
   {
    int n = get_global_id(0);
    int w = get_global_id(1);
-   int total_w=get_global_size(1);
+   int total_w = get_global_size(1);
 //--- Head 1
    int shift = n * (window1 + window2 + window3 + window4);
    int shift_out = n * window1;
 //---
-   for(int i = w; i < window1; i+=total_w)
+   for(int i = w; i < window1; i += total_w)
       output1[shift_out + i] = IsNaNOrInf(inputs[shift + i], 0);
 //--- Head 2
    shift += window1;
    shift_out = n * window2;
 //---
-   for(int i = w; i < window2; i+=total_w)
+   for(int i = w; i < window2; i += total_w)
       output2[shift_out + i] = IsNaNOrInf(inputs[shift + i], 0);
 //--- Head 3
    shift += window2;
@@ -1337,7 +1337,7 @@ __kernel void DeconcatenateBuffers(__global float *output1, int window1,
      {
       shift_out = n * window3;
       //---
-   for(int i = w; i < window3; i+=total_w)
+      for(int i = w; i < window3; i += total_w)
          output3[shift_out + i] = IsNaNOrInf(inputs[shift + i], 0);
      }
 //--- Head 4
@@ -1346,7 +1346,7 @@ __kernel void DeconcatenateBuffers(__global float *output1, int window1,
      {
       shift_out = n * window4;
       //---
-   for(int i = w; i < window4; i+=total_w)
+      for(int i = w; i < window4; i += total_w)
          output4[shift_out + i] = IsNaNOrInf(inputs[shift + i], 0);
      }
   }
@@ -13536,7 +13536,7 @@ __kernel void MHFlashSTCA(__global const float *query,
       //--- norm score
       float max = fmax(prev_max, LocalMax(score, 1, temp));
       if(score > MIN_VALUE)
-         score = exp(score - max);
+         score = IsNaNOrInf(exp(score - max), 0.0f);
       else
          score = 0.0f;
       if(sumexp == 0.0f)
@@ -14036,5 +14036,430 @@ __kernel void INFNetBGUGrad(__global const float2* scal_and_shift,
       if(id_n < units)
          scal_and_shift_grad[ss_idx] = (float2)(Deactivation(d_alpha_acc, sig_a, ActFunc_SIGMOID),
                                                 IsNaNOrInf(d_beta_acc,  0.0f));
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void MHCrossAttvsSim(__global const float *query,
+                              __global const float *key,
+                              __global const float *value,
+                              __global const float *prototype,
+                              __global const float *levels,
+                              __global float       *logsumexp,
+                              __global float       *output_at,
+                              __global float       *similarity,
+                              const int             dimension,
+                              const int             total_X)
+  {
+   const int q_id        = get_global_id(0);
+   const int local_id    = get_local_id(1);
+   const int h_id        = get_global_id(2);
+   const int total_q     = get_global_size(0);
+   const int total_loc   = get_local_size(1);
+   const int total_heads = get_global_size(2);
+//---
+   __local float  temp[LOCAL_ARRAY_SIZE];
+   __local float4 temp4[LOCAL_ARRAY_SIZE];
+//---
+   const int shift_q     = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
+   const int logse_shift = RCtoFlat(q_id, h_id, total_q, total_heads, 0);
+   const float threshold = levels[logse_shift];
+   /*
+      Loop 1: compute logsumexp via online softmax (no masking)
+   */
+   float prev_max = MIN_VALUE;
+   float sumexp   = 0.0f;
+   for(int id = 0; id < total_X; id += total_loc)
+     {
+      int x_id = id + local_id;
+      const int shift_x = RCtoFlat(h_id, 0, total_heads, dimension, x_id);
+      float score = 0.0f;
+      if(x_id < total_X)
+        {
+         for(int d = 0; d < dimension; d += 4)
+           {
+            float4 q = IsNaNOrInf4((float4)(
+                                      query[shift_q + d],
+                                      ((d + 1) < dimension ? query[shift_q + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
+                                   ), 0.0f);
+            float4 k = IsNaNOrInf4((float4)(
+                                      key[shift_x + d],
+                                      ((d + 1) < dimension ? key[shift_x + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? key[shift_x + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? key[shift_x + d + 3] : 0.0f)
+                                   ), 0.0f);
+            score += IsNaNOrInf(dot(q, k), 0.0f);
+           }
+         score /= sqrt((float)dimension);
+        }
+      else
+         score = MIN_VALUE;
+      float max = fmax(prev_max, LocalMax(score, 1, temp));
+      score   = (score > MIN_VALUE) ? IsNaNOrInf(exp(score - max), 0.0f) : 0.0f;
+      if(sumexp == 0.0f)
+         sumexp = LocalSum(score, 1, temp);
+      else
+         sumexp = IsNaNOrInf(exp(prev_max - max) * sumexp, 0.0f) + LocalSum(score, 1, temp);
+      prev_max = max;
+     }
+//--- Write logsumexp
+   const float lse = (sumexp > 0.0f) ? IsNaNOrInf(prev_max + log(sumexp), 0.0f) : 0.0f;
+   if(local_id == 0)
+      logsumexp[logse_shift] = lse;
+   /*
+   Loop 2: accumulate value and similarity
+   score = exp(score - lse); skip if score < threshold
+   score are already normalized — no division by sumexp needed
+   */
+   float out_at  = 0.0f;
+   float out_sim = 0.0f;
+   for(int id = 0; id < total_X; id += total_loc)
+     {
+      int x_id = id + local_id;
+      const int shift_x = RCtoFlat(h_id, 0, total_heads, dimension, x_id);
+      float score = 0.0f;
+      if(x_id < total_X && sumexp > 0.0f)
+        {
+         for(int d = 0; d < dimension; d += 4)
+           {
+            float4 q = IsNaNOrInf4((float4)(
+                                      query[shift_q + d],
+                                      ((d + 1) < dimension ? query[shift_q + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
+                                   ), 0.0f);
+            float4 k = IsNaNOrInf4((float4)(
+                                      key[shift_x + d],
+                                      ((d + 1) < dimension ? key[shift_x + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? key[shift_x + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? key[shift_x + d + 3] : 0.0f)
+                                   ), 0.0f);
+            score += IsNaNOrInf(dot(q, k), 0.0f);
+           }
+         score /= sqrt((float)dimension);
+         score = IsNaNOrInf(exp(score - lse), 0.0f);
+         if(score < threshold)
+            score = 0.0f;
+        }
+      for(int d = 0; d < dimension; d += 4)
+        {
+         float4 val = (float4)0.0f;
+         float4 sim = (float4)0.0f;
+         if(score > 0.0f)
+           {
+            float4 v = IsNaNOrInf4((float4)(
+                                      value[shift_x + d],
+                                      ((d + 1) < dimension ? value[shift_x + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? value[shift_x + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? value[shift_x + d + 3] : 0.0f)
+                                   ), 0.0f);
+            float4 p = IsNaNOrInf4((float4)(
+                                      prototype[shift_x + d],
+                                      ((d + 1) < dimension ? prototype[shift_x + d + 1] : 0.0f),
+                                      ((d + 2) < dimension ? prototype[shift_x + d + 2] : 0.0f),
+                                      ((d + 3) < dimension ? prototype[shift_x + d + 3] : 0.0f)
+                                   ), 0.0f);
+            val = IsNaNOrInf4(v * score, 0.0f);
+            sim = IsNaNOrInf4(p * score, 0.0f);
+           }
+         val = LocalSum4(val, 1, temp4);
+         sim = LocalSum4(sim, 1, temp4);
+         int idx = local_id - d;
+         if(idx >= 0 && idx < 4)
+           {
+            out_at  += vget4(val, idx);
+            out_sim += vget4(sim, idx);
+           }
+        }
+     }
+//--- Write results (weights already normalized via lse)
+   if(local_id < dimension)
+     {
+      output_at[shift_q + local_id]  = IsNaNOrInf(out_at,  0.0f);
+      similarity[shift_q + local_id] = IsNaNOrInf(out_sim, 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void MHCrossAttvsSimGrad(__global const float *query,
+                                  __global const float *key,
+                                  __global const float *value,
+                                  __global const float *prototype,
+                                  __global const float *levels,
+                                  __global const float *logsumexp,
+                                  __global const float *output_at,
+                                  __global const float *similarity,
+                                  __global const float *grad_output_at,
+                                  __global const float *grad_similarity,
+                                  __global float       *grad_query,
+                                  __global float       *grad_key,
+                                  __global float       *grad_value,
+                                  __global float       *grad_prototype,
+                                  __global float       *grad_levels,
+                                  const int             dimension,
+                                  const int             total_X)
+  {
+   const int id          = get_global_id(0);
+   const int local_id    = get_local_id(1);
+   const int h_id        = get_global_id(2);
+   const int total_q     = get_global_size(0);
+   const int total_loc   = get_local_size(1);
+   const int total_heads = get_global_size(2);
+//---
+   __local float  temp[LOCAL_ARRAY_SIZE];
+   __local float4 temp4[LOCAL_ARRAY_SIZE];
+   const float inv_sqrt_d = 1.0f / sqrt((float)dimension);
+   /*
+   Block 1: grad_query + grad_levels
+   global_id(0) = q_id, owns shift_q — no race condition
+   */
+   if(id < total_q)
+     {
+      const int q_id        = id;
+      const int shift_q     = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
+      const int logse_shift = RCtoFlat(q_id, h_id, total_q, total_heads, 0);
+      const float threshold = levels[logse_shift];
+      const float lse       = logsumexp[logse_shift];
+      //--- D = dot(grad_output_at, output_at) + dot(grad_similarity, similarity)
+      //--- used in softmax gradient: grad_score = score * (dot(go,v) + dot(gs,p) - D)
+      float D = 0.0f;
+      for(int d = local_id; d < dimension; d += total_loc)
+        {
+         D += IsNaNOrInf(grad_output_at[shift_q + d]  * output_at[shift_q + d],  0.0f);
+         D += IsNaNOrInf(grad_similarity[shift_q + d] * similarity[shift_q + d], 0.0f);
+        }
+      D = LocalSum(D, 1, temp);
+      //--- Iterate over x_id
+      float out_gq   = 0.0f;
+      float grad_lev = 0.0f;
+      for(int l_id = 0; l_id < total_X; l_id += total_loc)
+        {
+         int x_id = l_id + local_id;
+         const int shift_x = RCtoFlat(h_id, 0, total_heads, dimension, x_id);
+         float score     = 0.0f;
+         float grad_score = 0.0f;
+         if(x_id < total_X)
+           {
+            float score    = 0.0f;
+            float dot_go_v = 0.0f;
+            float dot_gs_p = 0.0f;
+            for(int d = 0; d < dimension; d += 4)
+              {
+               float4 q_d  = IsNaNOrInf4((float4)(
+                                            query[shift_q + d],
+                                            ((d + 1) < dimension ? query[shift_q + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 k_d  = IsNaNOrInf4((float4)(
+                                            key[shift_x + d],
+                                            ((d + 1) < dimension ? key[shift_x + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? key[shift_x + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? key[shift_x + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 v_d  = IsNaNOrInf4((float4)(
+                                            value[shift_x + d],
+                                            ((d + 1) < dimension ? value[shift_x + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? value[shift_x + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? value[shift_x + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 p_d  = IsNaNOrInf4((float4)(
+                                            prototype[shift_x + d],
+                                            ((d + 1) < dimension ? prototype[shift_x + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? prototype[shift_x + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? prototype[shift_x + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 go_d = IsNaNOrInf4((float4)(
+                                            grad_output_at[shift_q + d],
+                                            ((d + 1) < dimension ? grad_output_at[shift_q + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? grad_output_at[shift_q + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? grad_output_at[shift_q + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 gs_d = IsNaNOrInf4((float4)(
+                                            grad_similarity[shift_q + d],
+                                            ((d + 1) < dimension ? grad_similarity[shift_q + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? grad_similarity[shift_q + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? grad_similarity[shift_q + d + 3] : 0.0f)
+                                         ), 0.0f);
+               score    += IsNaNOrInf(dot(q_d,  k_d), 0.0f);
+               dot_go_v += IsNaNOrInf(dot(go_d, v_d), 0.0f);
+               dot_gs_p += IsNaNOrInf(dot(gs_d, p_d), 0.0f);
+              }
+            score /= sqrt((float)dimension);
+            score = IsNaNOrInf(exp(score - lse), 0.0f);
+            grad_score = IsNaNOrInf(score * (dot_go_v + dot_gs_p - D), 0.0f);
+           }
+         //--- Surrogate gradient for threshold: -sign(level) * sum(grad_score)
+         grad_lev -= grad_score;
+         //--- grad_query += grad_score * inv_sqrt_d * key
+         for(int d = 0; d < dimension; d += 4)
+           {
+            float4 k_d = (float4)0.0f;
+            if(fabs(grad_score) > 0 && x_id < total_X)
+               k_d = IsNaNOrInf4((float4)(
+                                    key[shift_x + d],
+                                    ((d + 1) < dimension ? key[shift_x + d + 1] : 0.0f),
+                                    ((d + 2) < dimension ? key[shift_x + d + 2] : 0.0f),
+                                    ((d + 3) < dimension ? key[shift_x + d + 3] : 0.0f)
+                                 ), 0.0f);
+            float4 gq = LocalSum4(k_d * (grad_score * inv_sqrt_d), 1, temp4);
+            int idx = local_id - d;
+            if(idx >= 0 && idx < 4)
+               out_gq += vget4(gq, idx);
+           }
+        }
+      //--- Write grad_query
+      if(local_id < dimension)
+         grad_query[shift_q + local_id] = IsNaNOrInf(out_gq, 0.0f);
+      //--- Write grad_levels
+      grad_lev = LocalSum(grad_lev, 1, temp);
+      if(local_id == 0)
+        {
+         float lev = levels[logse_shift];
+         grad_levels[logse_shift] = (fabs(grad_lev) > 0.0f)
+                                    ? IsNaNOrInf(grad_lev, 0.0f)
+                                    : 0.0f;
+        }
+     }
+   /*
+   Block 2: grad_key + grad_value + grad_prototype
+   global_id(0) = x_id, global_id(2) = h_id, owns shift_x
+   iterates over q_id in local dim — no race condition
+   */
+   if(id < total_X)
+     {
+      const int x_id    = id;
+      const int shift_x = RCtoFlat(h_id, 0, total_heads, dimension, x_id);
+      float grad_k = 0.0f;
+      float grad_v = 0.0f;
+      float grad_p = 0.0f;
+      for(int l_id = 0; l_id < total_q; l_id += total_loc)
+        {
+         int q_id = l_id + local_id;
+         float score      = 0.0f;
+         float grad_score = 0.0f;
+         if(q_id < total_q)
+           {
+            const int shift_q     = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
+            const int logse_shift = RCtoFlat(q_id, h_id, total_q, total_heads, 0);
+            const float threshold = levels[logse_shift];
+            const float lse       = logsumexp[logse_shift];
+            float D        = 0.0f;
+            float dot_go_v = 0.0f;
+            float dot_gs_p = 0.0f;
+            for(int d = 0; d < dimension; d += 4)
+              {
+               float4 q_d  = IsNaNOrInf4((float4)(
+                                            query[shift_q + d],
+                                            ((d + 1) < dimension ? query[shift_q + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? query[shift_q + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? query[shift_q + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 k_d  = IsNaNOrInf4((float4)(
+                                            key[shift_x + d],
+                                            ((d + 1) < dimension ? key[shift_x + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? key[shift_x + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? key[shift_x + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 v_d  = IsNaNOrInf4((float4)(
+                                            value[shift_x + d],
+                                            ((d + 1) < dimension ? value[shift_x + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? value[shift_x + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? value[shift_x + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 p_d  = IsNaNOrInf4((float4)(
+                                            prototype[shift_x + d],
+                                            ((d + 1) < dimension ? prototype[shift_x + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? prototype[shift_x + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? prototype[shift_x + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 go_d = IsNaNOrInf4((float4)(
+                                            grad_output_at[shift_q + d],
+                                            ((d + 1) < dimension ? grad_output_at[shift_q + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? grad_output_at[shift_q + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? grad_output_at[shift_q + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 gs_d = IsNaNOrInf4((float4)(
+                                            grad_similarity[shift_q + d],
+                                            ((d + 1) < dimension ? grad_similarity[shift_q + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? grad_similarity[shift_q + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? grad_similarity[shift_q + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 o_d  = IsNaNOrInf4((float4)(
+                                            output_at[shift_q + d],
+                                            ((d + 1) < dimension ? output_at[shift_q + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? output_at[shift_q + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? output_at[shift_q + d + 3] : 0.0f)
+                                         ), 0.0f);
+               float4 s_d  = IsNaNOrInf4((float4)(
+                                            similarity[shift_q + d],
+                                            ((d + 1) < dimension ? similarity[shift_q + d + 1] : 0.0f),
+                                            ((d + 2) < dimension ? similarity[shift_q + d + 2] : 0.0f),
+                                            ((d + 3) < dimension ? similarity[shift_q + d + 3] : 0.0f)
+                                         ), 0.0f);
+               score    += IsNaNOrInf(dot(q_d,  k_d),  0.0f);
+               dot_go_v += IsNaNOrInf(dot(go_d, v_d),  0.0f);
+               dot_gs_p += IsNaNOrInf(dot(gs_d, p_d),  0.0f);
+               D        += IsNaNOrInf(dot(go_d, o_d),  0.0f);
+               D        += IsNaNOrInf(dot(gs_d, s_d),  0.0f);
+              }
+            score /= sqrt((float)dimension);
+            score = IsNaNOrInf(exp(score - lse), 0.0f);
+            if(score > 0.0f)
+               grad_score = IsNaNOrInf(score * (dot_go_v + dot_gs_p - D), 0.0f);
+           }
+         //--- grad_key   += grad_score * inv_sqrt_d * query
+         //--- grad_value += score * grad_output_at
+         //--- grad_proto += score * grad_similarity
+         for(int d = 0; d < dimension; d += 4)
+           {
+            float4 q_d  = (float4)0.0f;
+            float4 go_d = (float4)0.0f;
+            float4 gs_d = (float4)0.0f;
+            if(q_id < total_q)
+              {
+               const int sq = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
+               q_d  = IsNaNOrInf4((float4)(
+                                     query[sq + d],
+                                     ((d + 1) < dimension ? query[sq + d + 1] : 0.0f),
+                                     ((d + 2) < dimension ? query[sq + d + 2] : 0.0f),
+                                     ((d + 3) < dimension ? query[sq + d + 3] : 0.0f)
+                                  ), 0.0f);
+               go_d = IsNaNOrInf4((float4)(
+                                     grad_output_at[sq + d],
+                                     ((d + 1) < dimension ? grad_output_at[sq + d + 1] : 0.0f),
+                                     ((d + 2) < dimension ? grad_output_at[sq + d + 2] : 0.0f),
+                                     ((d + 3) < dimension ? grad_output_at[sq + d + 3] : 0.0f)
+                                  ), 0.0f);
+               gs_d = IsNaNOrInf4((float4)(
+                                     grad_similarity[sq + d],
+                                     ((d + 1) < dimension ? grad_similarity[sq + d + 1] : 0.0f),
+                                     ((d + 2) < dimension ? grad_similarity[sq + d + 2] : 0.0f),
+                                     ((d + 3) < dimension ? grad_similarity[sq + d + 3] : 0.0f)
+                                  ), 0.0f);
+              }
+            float4 gk = LocalSum4(q_d  * (grad_score * inv_sqrt_d), 1, temp4);
+            float4 gv = LocalSum4(go_d * score,                     1, temp4);
+            float4 gp = LocalSum4(gs_d * score,                     1, temp4);
+            int idx = local_id - d;
+            if(idx >= 0 && idx < 4)
+              {
+               grad_k += vget4(gk, idx);
+               grad_v += vget4(gv, idx);
+               grad_p += vget4(gp, idx);
+              }
+           }
+        }
+      //--- Write grad_key/value/prototype — single work-group owns shift_x, no conflicts
+      if(local_id < dimension)
+        {
+         grad_key[shift_x + local_id]       = IsNaNOrInf(grad_k, 0.0f);
+         grad_value[shift_x + local_id]     = IsNaNOrInf(grad_v, 0.0f);
+         grad_prototype[shift_x + local_id] = IsNaNOrInf(grad_p, 0.0f);
+        }
+     }
   }
 //+------------------------------------------------------------------+
