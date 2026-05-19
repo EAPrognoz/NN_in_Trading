@@ -113807,6 +113807,9 @@ bool CNeuronDictionaryCrossAtt::Load(const int file_handle)
       ReturnFalse;
    if(!LoadInsideLayer(file_handle, cLevels.AsObject()))
       ReturnFalse;
+//--- Sub-modules with trainable weights
+   if(!LoadInsideLayer(file_handle, cQuerys.AsObject()))
+      ReturnFalse;
 //--- Restore architectural parameters from loaded sub-objects
 //    (these fields are not serialised separately)
    iHeads           = cLevels.Neurons() / cQuerys.GetUnits();
@@ -113819,9 +113822,6 @@ bool CNeuronDictionaryCrossAtt::Load(const int file_handle)
       ReturnFalse;
    bufLogSumExp = OpenCL.AddBuffer(sizeof(float) * cLevels.Neurons(), CL_MEM_READ_WRITE);
    if(bufLogSumExp <= 0)
-      ReturnFalse;
-//--- Sub-modules with trainable weights
-   if(!LoadInsideLayer(file_handle, cQuerys.AsObject()))
       ReturnFalse;
 //--- cAttentionOut and cSimilarity: no trainable params — re-initialise from dimensions
    uint index = 5;  // position in sub-object sequence (see Init)
