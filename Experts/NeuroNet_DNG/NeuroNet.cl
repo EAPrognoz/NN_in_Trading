@@ -9055,36 +9055,35 @@ __kernel void FeedForwardMultWinConv(__global const float *matrix_w,
    const size_t v = get_global_id(1);
    const size_t outputs = get_global_size(0);
 //---
-   const int id = i % (window_out * windows_total);
+   const int block = window_out * windows_total;
+   const int id = (int)(i % block);
+   const int win_id = id / window_out;
+   const int out_id = id % window_out;
 //---
    int step = 0;
-   int shift_in = 0;
+   int window_shift = 0;
    int shift_weight = 0;
-   int window_in = 0;
-   int window = 0;
-//---
    for(int w = 0; w < windows_total; w++)
      {
       int win = windows_in[w];
-      step += win;
-      if(((w + 1) * window_out) < id)
+      if(w < win_id)
         {
-         shift_in = step;
-         window_in = win;
+         window_shift += win;
          shift_weight += (win + 1) * window_out;
         }
+      step += win;
      }
-//---
-   int steps = (int)(i / (window_out * windows_total));
-   shift_in += steps * step + v * inputs;
-   shift_weight += (id % window_out) * (window_in + 1);
+   int window_in = windows_in[win_id];
+   int steps = (int)(i / block);
+   int shift_in = steps * step + window_shift;
+   shift_weight += out_id * (window_in + 1);
    float sum = matrix_w[shift_weight + window_in];
    float inp = 0.0f;
 //---
    for(int w = 0; w < window_in; w++)
       if((shift_in + w) < inputs)
         {
-         inp = IsNaNOrInf(matrix_i[shift_in + w], 0.0f);
+         inp = IsNaNOrInf(matrix_i[v * inputs + shift_in + w], 0.0f);
          if(inp == 0.0f)
             continue;
          sum += IsNaNOrInf(inp * matrix_w[shift_weight + w], 0.0f);
@@ -9126,7 +9125,7 @@ __kernel void CalcHiddenGradientMultWinConv(__global const float *matrix_w,
    for(int w = 0; w < windows_total; w++)
      {
       window_in = windows_in[w];
-      if((before + window_in) >= id)
+      if(id < (before + window_in))
          break;
       window = w + 1;
       before += window_in;
@@ -9176,28 +9175,36 @@ __kernel void UpdateWeightsMultWinConvAdam(__global float *matrix_w,
    int step_out = window_out * windows_total;
 //---
    int step_in = 0;
+   for(int w = 0; w < windows_total; w++)
+      step_in += windows_in[w];
+//---
+   int window_shift = 0;
    int shift_in = 0;
    int shift_out = 0;
    int window = 0;
-   int number_w = 0;
+   int weight_shift = 0;
+   int local_weight = 0;
 //---
    for(int w = 0; w < windows_total; w++)
      {
       int win = windows_in[w];
-      if((step_in + w)*window_out <= i &&
-         (step_in + win + w + 1)*window_out > i)
+      int block = (win + 1) * window_out;
+      if(i < weight_shift + block)
         {
-         shift_in = step_in;
-         shift_out = (step_in + w + 1) * window_out;
+         shift_in = window_shift;
+         shift_out = w * window_out;
          window = win;
-         number_w = w;
+         local_weight = i - weight_shift;
+         break;
         }
-      step_in += win;
+      window_shift += win;
+      weight_shift += block;
      }
-   bool bias = ((i - (shift_in + number_w) * window_out) % (window + 1) == window);
-   int t = (i - (shift_in + number_w) * window_out) / (window + 1);
-   shift_out += t + v * outputs;
-   shift_in += (i - (shift_in + number_w) * window_out) % (window + 1) + v * inputs;
+   bool bias = ((local_weight % (window + 1)) == window);
+   int t = local_weight / (window + 1);
+   int input_offset = local_weight % (window + 1);
+   shift_out += t;
+   shift_in += input_offset;
 //---
    float grad = 0;
    int total = (inputs + step_in - 1) / step_in;
@@ -9205,19 +9212,21 @@ __kernel void UpdateWeightsMultWinConvAdam(__global float *matrix_w,
    for(int t = 0; t < total; t++)
      {
       int sh_out = t * step_out + shift_out;
-      if(bias && sh_out < outputs)
+      if(sh_out >= outputs)
+         break;
+      if(bias)
         {
-         grad += IsNaNOrInf(matrix_og[sh_out], 0);
+         grad += IsNaNOrInf(matrix_og[v * outputs + sh_out], 0);
          continue;
         }
       //---
       int sh_in = t * step_in + shift_in;
       if(sh_in >= inputs)
          break;
-      float grad_out = IsNaNOrInf(matrix_og[sh_out], 0.0f);
+      float grad_out = IsNaNOrInf(matrix_og[v * outputs + sh_out], 0.0f);
       if(grad_out == 0.0f)
          continue;
-      float inp = IsNaNOrInf(matrix_i[sh_in], 0.0f);
+      float inp = IsNaNOrInf(matrix_i[v * inputs + sh_in], 0.0f);
       if(inp == 0.0f)
          continue;
       grad += IsNaNOrInf(grad_out * inp, 0);
@@ -14216,7 +14225,6 @@ __kernel void MHCrossAttvsSimGrad(__global const float *query,
    Block 1: grad_query + grad_levels
    global_id(0) = q_id, owns shift_q — no race condition
    */
-   if(id < total_q)
      {
       const int q_id        = id;
       const int shift_q     = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
@@ -14318,7 +14326,6 @@ __kernel void MHCrossAttvsSimGrad(__global const float *query,
       grad_lev = LocalSum(grad_lev, 1, temp);
       if(local_id == 0)
         {
-         float lev = levels[logse_shift];
          grad_levels[logse_shift] = (fabs(grad_lev) > 0.0f)
                                     ? IsNaNOrInf(grad_lev, 0.0f)
                                     : 0.0f;
@@ -14329,9 +14336,9 @@ __kernel void MHCrossAttvsSimGrad(__global const float *query,
    global_id(0) = x_id, global_id(2) = h_id, owns shift_x
    iterates over q_id in local dim — no race condition
    */
-   if(id < total_X)
+   for(int id2 = 0; id2 < total_X; id2 += total_q)
      {
-      const int x_id    = id;
+      const int x_id    = id2 + id;
       const int shift_x = RCtoFlat(h_id, 0, total_heads, dimension, x_id);
       float grad_k = 0.0f;
       float grad_v = 0.0f;
@@ -14341,7 +14348,7 @@ __kernel void MHCrossAttvsSimGrad(__global const float *query,
          int q_id = l_id + local_id;
          float score      = 0.0f;
          float grad_score = 0.0f;
-         if(q_id < total_q)
+         if(q_id < total_q && x_id < total_X)
            {
             const int shift_q     = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
             const int logse_shift = RCtoFlat(q_id, h_id, total_q, total_heads, 0);
@@ -14419,7 +14426,7 @@ __kernel void MHCrossAttvsSimGrad(__global const float *query,
             float4 q_d  = (float4)0.0f;
             float4 go_d = (float4)0.0f;
             float4 gs_d = (float4)0.0f;
-            if(q_id < total_q)
+            if(q_id < total_q && x_id < total_X)
               {
                const int sq = RCtoFlat(h_id, 0, total_heads, dimension, q_id);
                q_d  = IsNaNOrInf4((float4)(
@@ -14461,5 +14468,100 @@ __kernel void MHCrossAttvsSimGrad(__global const float *query,
          grad_prototype[shift_x + local_id] = IsNaNOrInf(grad_p, 0.0f);
         }
      }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void MarketStateDensity(__global const float* sequence,
+                                 __global float* distribution,
+                                 const uint sequence_size,
+                                 const uint quantiles,
+                                 const float quant_step
+                                )
+  {
+//--- features
+   const uint feature = get_global_id(0);
+   const uint dimension = get_global_size(0);
+//--- local worker index
+   const uint lid = get_local_id(1);
+//--- local size over sequence axis
+   const uint local_n = get_local_size(1);
+//--- total quantiles
+   const int bins = 2 * quantiles + 1;
+//--- variables
+   const uint var = get_global_id(2);
+   const uint variables = get_global_size(2);
+//---
+   __local float4 Temp[LOCAL_ARRAY_SIZE];
+//--- current state reference
+   if(lid == 0)
+      Temp[0].s0 = IsNaNOrInf(sequence[RCtoFlat(0, feature, sequence_size, dimension, var)], 0.0f);
+   BarrierLoc;
+   const float current = Temp[0].s0;
+//--- iterate through sequence
+   uint count = 0;
+   for(uint i = 0; i < sequence_size; i += local_n)
+     {
+      int q = bins + 2;
+      if(i + lid < sequence_size)
+        {
+         const float value = IsNaNOrInf(sequence[RCtoFlat(i + lid, feature, sequence_size, dimension, var)], 0.0f);
+         //--- deviation from current state
+         const float diff = current - value;
+         //--- quantization
+         q = (int)floor(diff / quant_step);
+         // center shift
+         q += (int)quantiles;
+         // clamp
+         q = clamp(q, 0, bins - 1);
+        }
+      // accumulate
+      for(int b = 0; b < bins; b += 4)
+        {
+         float4 b4 = (float4)0.0f;
+         switch(q - b)
+           {
+            case 0:
+               b4.s0 = 1;
+               break;
+            case 1:
+               b4.s1 = 1;
+               break;
+            case 2:
+               b4.s2 = 1;
+               break;
+            case 3:
+               b4.s3 = 1;
+               break;
+           }
+         BarrierLoc;
+         count += (uint)vget4(LocalSum4(b4, 1, Temp), lid - b);
+        }
+     }
+//--- normalization and save
+   if(lid < bins)
+      distribution[RCtoFlat(lid, feature, bins, dimension, var)] = ((float)count / sequence_size);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void NLLGrad(__global const float* log_b,
+                      __global float* grad_in,
+                      __global const float* grad_out,
+                      __global float* grad_log_b
+                     )
+  {
+   const uint i = get_global_id(0);
+//--- log-scale resistance
+   const float s = log_b[i];
+//--- forecat gradient
+   const float grad = grad_out[i];
+//--- gradient
+   const float g = IsNaNOrInf(grad * exp(-s), 0.0f);
+//--- to inputs
+   grad_in[i] = g;
+//--- local gradient for s
+//--- d(g*e^-s)/ds = -g*e^-s
+   grad_log_b[i] = -g;
   }
 //+------------------------------------------------------------------+
