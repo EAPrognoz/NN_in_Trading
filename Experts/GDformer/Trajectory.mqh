@@ -48,10 +48,10 @@ int            iLatentLayer = -1;
 #define        NForecast               12            //Number of forecast
 #define        EtalonBalance           1e4
 #define        BatchSize               1e+5
-#define        EmbeddingSize           8
-#define        DiscFactor              0.9f
+#define        EmbeddingSize           16
+#define        DiscFactor              0.5f
 #define        FileName                "GDformer"
-#define        LatentCount             32
+#define        LatentCount             64
 #define        LatentLayer             iLatentLayer
 #define        MaxSL                   1000
 #define        MaxTP                   1000
@@ -62,7 +62,7 @@ int            iLatentLayer = -1;
 #define        NExperts                5
 #define        NScenarios              21
 #define        TopK                    3
-#define        StackSize               24*21
+#define        StackSize               24*12
 #define        Blocks                  24
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -725,7 +725,7 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
    int total_bars = (start_bar + HistoryBars + (!!forecast ? NForecast : 0));
    if(!state || !time || start_bar < 0 ||
       total_bars > int(Rates.Size()))
-      return false;
+      ReturnFalse;
 //---
    matrix<float> mState = matrix<float>::Zeros(BarDescr, HistoryBars);
    vector<float> vForecast = vector<float>::Zeros(NForecast * BarDescr);
@@ -741,7 +741,7 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
       float macd = (float)MACD.Main(b + bar);
       float sign = (float)MACD.Signal(b + bar);
       if(rsi == EMPTY_VALUE || cci == EMPTY_VALUE || atr == EMPTY_VALUE || macd == EMPTY_VALUE || sign == EMPTY_VALUE)
-         return false;
+         ReturnFalse;
       //---
       mState[0, b] = (float)(Rates[b + bar].close - open);
       mState[1, b] = (float)(Rates[b + bar].high - open);
@@ -753,13 +753,13 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
       mState[7, b] = macd;
       mState[8, b] = sign;
       if(!time.Add(float(Rates[b + bar].time)))
-         return false;
+         ReturnFalse;
      }
    if(!state.AssignArray(mState))
-      return false;
+      ReturnFalse;
    if(time.GetIndex() >= 0)
       if(!time.BufferWrite())
-         return false;
+         ReturnFalse;
    if(!forecast)
       return true;
 //---
@@ -772,7 +772,7 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
       float macd = (float)MACD.Main(bar - b);
       float sign = (float)MACD.Signal(bar - b);
       if(rsi == EMPTY_VALUE || cci == EMPTY_VALUE || atr == EMPTY_VALUE || macd == EMPTY_VALUE || sign == EMPTY_VALUE)
-         return false;
+         ReturnFalse;
       //---
       int shift = (NForecast - b) * BarDescr;
       vForecast[shift] = (float)(Rates[bar - b].close - open);
@@ -787,7 +787,7 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
      }
 //---
    if(!forecast.AssignArray(vForecast))
-      return false;
+      ReturnFalse;
 //---
    return true;
   }
