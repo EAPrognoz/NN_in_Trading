@@ -471,6 +471,9 @@ union uaLongChar
 #define  defNeuronUncAD_UGP            0x810E
 #define  defNeuronUncAD_UGPL           0x810F
 #define  defNeuronUncAD                0x8110
+#define  defNeuronMomADTTM             0x8111
+#define  defNeuronMomADMPI             0x8112
+#define  defNeuronMomAD                0x8113
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -2547,6 +2550,36 @@ union uaLongChar
 #define def_k_nllgr_grad_in                     1
 #define def_k_nllgr_grad_out                    2
 #define def_k_nllgr_grad_log_b                  3
+//---
+#define def_k_SparseSoftmaxHausdorff            266
+#define def_k_ssh_plan                          0
+#define def_k_ssh_decis                         1
+#define def_k_ssh_output                        2
+#define def_k_ssh_top_index                     3
+#define def_k_ssh_dimension                     4
+#define def_k_ssh_top_k                         5
+//---
+#define def_k_SparseSoftmaxHausdorffGrad        267
+#define def_k_sshg_plan                         0
+#define def_k_sshg_grad_plan                    1
+#define def_k_sshg_decis                        2
+#define def_k_sshg_grad_decis                   3
+#define def_k_sshg_grad_out                     4
+#define def_k_sshg_top_index                    5
+#define def_k_sshg_dimension                    6
+#define def_k_sshg_count_plan                   7
+#define def_k_sshg_count_decis                  8
+#define def_k_sshg_top_k                        9
+//---
+#define def_k_MomADTTMMeanScores                268
+#define def_k_madttm_ms_distance                0
+#define def_k_madttm_ms_output                  1
+#define def_k_madttm_ms_decisions               2
+//---
+#define def_k_MomADTTMMeanScoresGrad            269
+#define def_k_madttm_msg_scores_gr              0
+#define def_k_madttm_msg_distance_gr            1
+#define def_k_madttm_msg_decisions              2
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -2586,17 +2619,5 @@ enum ENUM_OPTIMIZATION
 #endif // NEURONET_DEFINITIONS_MQH
 
 #ifndef NEURONET_BUILDING_FACADE
-#define NEURONET_BUILDING_FACADE
-#ifndef NEURONET_DECLARATIONS_MQH
-#include "NeuroNet_Declarations.mqh"
-#endif // NEURONET_DECLARATIONS_MQH
-#include "NeuroNet_Core.mqh"
-#include "NeuroNet_RecurrentState.mqh"
-#include "NeuroNet_SpikeFlow.mqh"
-#include "NeuroNet_Attention.mqh"
-#include "NeuroNet_GraphSparse.mqh"
-#include "NeuroNet_AgentsRL.mqh"
-#include "NeuroNet_TimeSeries.mqh"
-#include "NeuroNet_Misc.mqh"
-#undef NEURONET_BUILDING_FACADE
+#include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE

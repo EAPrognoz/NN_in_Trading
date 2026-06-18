@@ -14565,3 +14565,231 @@ __kernel void NLLGrad(__global const float* log_b,
    grad_log_b[i] = -g;
   }
 //+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void SparseSoftmaxHausdorff(__global const float *plan,
+                                     __global const float *decis,
+                                     __global float *output,
+                                     __global float *top_index,
+                                     const int dimension,
+                                     const int top_k
+                                    )
+  {
+   const int d = get_local_id(0);
+   const int plan_id = get_global_id(1);
+   const int decis_id = get_global_id(2);
+   const int total_decis = get_global_size(2);
+   const int pair = plan_id * total_decis + decis_id;
+//---
+   __local float values[LOCAL_ARRAY_SIZE];
+   __local float top_values[LOCAL_ARRAY_SIZE];
+   __local int top_indices[LOCAL_ARRAY_SIZE];
+//---
+   float value = 0.0f;
+   if(d < dimension)
+     {
+      const float diff = plan[plan_id * dimension + d] - decis[decis_id * dimension + d];
+      value = IsNaNOrInf(fabs(diff), 0.0f);
+     }
+   values[d] = value;
+   BarrierLoc;
+//---
+   if(d == 0)
+     {
+      const int actual_top = min(top_k, dimension);
+      for(int k = 0; k < actual_top; k++)
+        {
+         float best = MIN_VALUE;
+         int best_id = -1;
+         for(int i = 0; i < dimension; i++)
+           {
+            int used = 0;
+            for(int p = 0; p < k; p++)
+              {
+               if(top_indices[p] == i)
+                 {
+                  used = 1;
+                  break;
+                 }
+              }
+            if(used)
+               continue;
+            const float candidate = values[i];
+            if(candidate > best || (candidate == best && (best_id < 0 || i < best_id)))
+              {
+               best = candidate;
+               best_id = i;
+              }
+           }
+         top_values[k] = IsNaNOrInf(best, 0.0f);
+         top_indices[k] = best_id;
+        }
+//--- sparse softmax on selected dimensions
+      float max_value = top_values[0];
+      for(int k = 1; k < actual_top; k++)
+         max_value = fmax(max_value, top_values[k]);
+      float sum_exp = 0.0f;
+      float result = 0.0f;
+      for(int k = 0; k < actual_top; k++)
+        {
+         const float weight = IsNaNOrInf(exp(top_values[k] - max_value), 0.0f);
+         sum_exp += weight;
+         result += weight * top_values[k];
+        }
+      result = (sum_exp > 0.0f ? result / sum_exp : 0.0f);
+      output[pair] = IsNaNOrInf(result, 0.0f);
+      for(int k = 0; k < actual_top; k++)
+         top_index[pair * top_k + k] = (float)top_indices[k];
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void SparseSoftmaxHausdorffGrad(__global const float *plan,
+                                         __global float *grad_plan,
+                                         __global const float *decis,
+                                         __global float *grad_decis,
+                                         __global const float *grad_out,
+                                         __global const float *top_index,
+                                         const int dimension,
+                                         const int count_plan,
+                                         const int count_decis,
+                                         const int top_k
+                                        )
+  {
+   const int d = get_global_id(0);
+   const int id = get_global_id(1);
+   const int side = get_global_id(2);
+//---
+   if(d >= dimension)
+      return;
+//---
+   float result = 0.0f;
+   if(side == 0)
+     {
+      if(id >= count_plan)
+         return;
+      for(int decis_id = 0; decis_id < count_decis; decis_id++)
+        {
+         const int pair = id * count_decis + decis_id;
+         const int shift = pair * top_k;
+         float max_value = MIN_VALUE;
+         for(int k = 0; k < top_k; k++)
+           {
+            const int top_d = (int)(top_index[shift + k] + 0.001f);
+            const float diff = plan[id * dimension + top_d] - decis[decis_id * dimension + top_d];
+            const float value = IsNaNOrInf(fabs(diff), 0.0f);
+            max_value = fmax(max_value, value);
+           }
+         float sum_exp = 0.0f;
+         float out_value = 0.0f;
+         for(int k = 0; k < top_k; k++)
+           {
+            const int top_d = (int)(top_index[shift + k] + 0.001f);
+            const float diff = plan[id * dimension + top_d] - decis[decis_id * dimension + top_d];
+            const float value = IsNaNOrInf(fabs(diff), 0.0f);
+            const float exp_value = IsNaNOrInf(exp(value - max_value), 0.0f);
+            sum_exp += exp_value;
+            out_value += exp_value * value;
+           }
+         if(sum_exp <= 0.0f)
+            continue;
+         out_value /= sum_exp;
+         const float grad = IsNaNOrInf(grad_out[pair], 0.0f);
+         for(int k = 0; k < top_k; k++)
+           {
+            const int top_d = (int)(top_index[shift + k] + 0.001f);
+            if(top_d != d)
+               continue;
+            const float diff = plan[id * dimension + d] - decis[decis_id * dimension + d];
+            const float value = IsNaNOrInf(fabs(diff), 0.0f);
+            const float weight = IsNaNOrInf(exp(value - max_value) / sum_exp, 0.0f);
+            const float sgn = (diff > 0.0f ? 1.0f : (diff < 0.0f ? -1.0f : 0.0f));
+            result += grad * weight * (1.0f + value - out_value) * sgn;
+           }
+        }
+      grad_plan[id * dimension + d] = IsNaNOrInf(result, 0.0f);
+     }
+   else
+     {
+      if(id >= count_decis)
+         return;
+      for(int plan_id = 0; plan_id < count_plan; plan_id++)
+        {
+         const int pair = plan_id * count_decis + id;
+         const int shift = pair * top_k;
+         float max_value = MIN_VALUE;
+         for(int k = 0; k < top_k; k++)
+           {
+            const int top_d = (int)(top_index[shift + k] + 0.001f);
+            const float diff = plan[plan_id * dimension + top_d] - decis[id * dimension + top_d];
+            const float value = IsNaNOrInf(fabs(diff), 0.0f);
+            max_value = fmax(max_value, value);
+           }
+         float sum_exp = 0.0f;
+         float out_value = 0.0f;
+         for(int k = 0; k < top_k; k++)
+           {
+            const int top_d = (int)(top_index[shift + k] + 0.001f);
+            const float diff = plan[plan_id * dimension + top_d] - decis[id * dimension + top_d];
+            const float value = IsNaNOrInf(fabs(diff), 0.0f);
+            const float exp_value = IsNaNOrInf(exp(value - max_value), 0.0f);
+            sum_exp += exp_value;
+            out_value += exp_value * value;
+           }
+         if(sum_exp <= 0.0f)
+            continue;
+         out_value /= sum_exp;
+         const float grad = IsNaNOrInf(grad_out[pair], 0.0f);
+         for(int k = 0; k < top_k; k++)
+           {
+            const int top_d = (int)(top_index[shift + k] + 0.001f);
+            if(top_d != d)
+               continue;
+            const float diff = plan[plan_id * dimension + d] - decis[id * dimension + d];
+            const float value = IsNaNOrInf(fabs(diff), 0.0f);
+            const float weight = IsNaNOrInf(exp(value - max_value) / sum_exp, 0.0f);
+            const float sgn = (diff > 0.0f ? 1.0f : (diff < 0.0f ? -1.0f : 0.0f));
+            result -= grad * weight * (1.0f + value - out_value) * sgn;
+           }
+        }
+      grad_decis[id * dimension + d] = IsNaNOrInf(result, 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void MomADTTMMeanScores(__global const float *distance,
+                                 __global float *output,
+                                 const int decisions
+                                )
+  {
+   const int plan_id = get_global_id(0);
+   if(decisions <= 0)
+     {
+      output[plan_id] = 0.0f;
+      return;
+     }
+//---
+   float sum = 0.0f;
+   for(int j = 0; j < decisions; j++)
+      sum += IsNaNOrInf(distance[plan_id * decisions + j], 0.0f);
+   output[plan_id] = IsNaNOrInf(-sum / (float)decisions, 0.0f);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void MomADTTMMeanScoresGrad(__global const float *scores_gr,
+                                     __global float *distance_gr,
+                                     const int decisions
+                                    )
+  {
+   const int plan_id = get_global_id(0);
+   const int decis_id = get_global_id(1);
+   if(decisions <= 0)
+      return;
+//---
+   distance_gr[plan_id * decisions + decis_id] =
+      IsNaNOrInf(-scores_gr[plan_id] / (float)decisions, 0.0f);
+  }
+//+------------------------------------------------------------------+
