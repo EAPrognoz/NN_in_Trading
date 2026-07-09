@@ -12602,6 +12602,232 @@ public:
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+class CNeuronCogDriverData  :  public CNeuronSpikeConvBlock
+  {
+protected:
+   uint              iWindow;
+   uint              iVariables;
+   uint              iStateStackSize;
+   uint              iQuantStackSize;
+   uint              iQuantiles;
+   float             fRange;
+   CNeuronBatchNormOCL cNorm;
+   CNeuronAddToStack cStateStack;
+   CNeuronUncAD_MSD  cMSD;
+   CNeuronConvOCL    cAffine;
+   CNeuronAddToStack cQuantStack;
+   CNeuronBaseOCL    cPrevQuantStack;
+   //---
+   virtual bool      AffineStack(void);
+   virtual bool      AffineStackGradient(void);
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronCogDriverData(void) : iWindow(0),
+                     iVariables(0),
+                     iStateStackSize(0),
+                     iQuantStackSize(0),
+                     iQuantiles(0),
+                     fRange(0) {};
+                    ~CNeuronCogDriverData(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint window, uint variables, uint state_stack_size,
+                          uint quant_stack_size, uint quantiles, float range,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual int       Type(void) override const  {  return defNeuronCogDriverData;   }
+   //--- methods for working with files
+   virtual bool      Save(int const file_handle) override;
+   virtual bool      Load(int const file_handle) override;
+   //---
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronCogDriverRankTCM  :  public CNeuronBaseOCL
+  {
+protected:
+   uint              iInputDim;
+   uint              iQueryDim;
+   uint              iVariables;
+   uint              iHeads;
+   uint              iHeadDim;
+   uint              iTotalQueryDim;
+   uint              iTotalHeads;
+   uint              iMemoryLen;
+   uint              iMemoryCount;
+   bool              bLastQueryValid;
+   CNeuronSpikeConvBlock cQueryProjection;
+   CNeuronBaseOCL    cGateInput;
+   CNeuronBaseOCL    cGateProjection;
+   CNeuronBaseOCL    cMemoryContext;
+   CNeuronBaseOCL    cSelfContext;
+   CBufferFloat      cMemoryQuery;
+   CBufferFloat      cMemoryAge;
+   CBufferFloat      cMemoryScore;
+   CBufferFloat      cMemoryValid;
+   CBufferFloat      cMemoryKV;
+   CBufferFloat      cMemoryKVGradient;
+   CBufferFloat      cSelfKV;
+   CBufferFloat      cSelfKVGradient;
+   CBufferFloat      cLogSumExp;
+   CBufferFloat      cSelfLogSumExp;
+   CBufferFloat      cQueryGateGradient;
+   CBufferFloat      cGateQueryGradient;
+   CBufferFloat      cGateContextGradient;
+   //---
+   virtual bool      InitStateBuffers(void);
+   virtual bool      InsertPendingQuery(void);
+   virtual bool      BuildMemoryKV(void);
+   virtual bool      FlashAttentionForward(CBufferFloat *query, CBufferFloat *out);
+   virtual bool      FlashAttentionBackward(CBufferFloat *query, CBufferFloat *query_gr,
+         CBufferFloat *out, CBufferFloat *out_gr);
+   virtual bool      BuildSelfKV(CBufferFloat *source);
+   virtual bool      SelfAttentionForward(CBufferFloat *query, CBufferFloat *out);
+   virtual bool      SelfAttentionBackward(CBufferFloat *query, CBufferFloat *query_gr,
+                                           CBufferFloat *out, CBufferFloat *out_gr);
+   virtual bool      MeanFlashScores(CBufferFloat *query);
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronCogDriverRankTCM(void) :  iInputDim(0),
+                     iQueryDim(0),
+                     iVariables(0),
+                     iHeads(0),
+                     iHeadDim(0),
+                     iTotalQueryDim(0),
+                     iTotalHeads(0),
+                     iMemoryLen(0),
+                     iMemoryCount(0),
+                     bLastQueryValid(false) {};
+                    ~CNeuronCogDriverRankTCM(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint input_dim, uint query_dim, uint variables, uint memory_len, uint heads,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual int       Type(void) override const  {  return defNeuronCogDriverRankTCM;   }
+   virtual uint      MemoryCount(void) const { return iMemoryCount; }
+   virtual bool      LastQueryValid(void) const { return bLastQueryValid; }
+   //--- methods for working with files
+   virtual bool      Save(int const file_handle) override;
+   virtual bool      Load(int const file_handle) override;
+   //---
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronCogDriverForecastHead  :  public CNeuronMLMHAttentionOCL
+  {
+protected:
+   uint              iVariables;
+   CNeuronBaseOCL    cPlanInput;
+   CNeuronConvOCL    cContextProjection;
+   CNeuronLearnabledPE cQueryPE;
+   CLayer            cCrossAttention;
+   CLayer            cCrossResidual;
+   CLayer            cCrossFF1;
+   CLayer            cCrossFF2;
+   CLayer            cCrossFFOutput;
+   CLayer            cSelfOutput;
+   CNeuronBaseOCL    cErrorInput;
+   CNeuronConvOCL    cErrorHead;
+   CBufferFloat      cContextKV;
+   CBufferFloat      cContextKVGradient;
+   CBufferFloat      cShiftedConfidence;
+   CBufferFloat      cDeltaMask;
+   CBufferFloat      cPlanDelta;
+   CBufferFloat      cPlanDeltaNorm;
+   CBufferFloat      cConfidence;
+   CBufferFloat      cErrorTarget;
+   //---
+   virtual bool      ShiftState(void);
+   virtual bool      BuildContextKV(void);
+   virtual bool      BuildContextProjectionGradient(void);
+   virtual bool      BuildErrorInput(CNeuronBaseOCL *NeuronOCL);
+   virtual bool      BuildErrorTarget(void);
+   virtual bool      BuildConfidence(void);
+   virtual bool      BuildDeltaNorm(void);
+   virtual bool      CrossLayerForward(uint layer, CNeuronBaseOCL *plan, CNeuronBaseOCL *context);
+   virtual bool      CrossLayerBackward(uint layer, CNeuronBaseOCL *plan, CNeuronBaseOCL *context, CBufferFloat *out_grad);
+   virtual bool      CrossLayerUpdateWeights(uint layer, CNeuronBaseOCL *plan, CNeuronBaseOCL *context);
+   virtual bool      SelfLayerForward(uint layer, CNeuronBaseOCL *NeuronOCL);
+   virtual bool      SelfLayerBackward(uint layer, CNeuronBaseOCL *NeuronOCL, CBufferFloat *out_grad);
+   virtual bool      SelfLayerUpdateWeights(uint layer, CNeuronBaseOCL *NeuronOCL);
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronCogDriverForecastHead(void) : iVariables(0) {};
+                    ~CNeuronCogDriverForecastHead(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint dimension, uint horizon, uint variables, uint forecast_blocks,
+                          uint heads, ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual int       Type(void) override const  {  return defNeuronCogDriverForecastHead;   }
+   virtual CBufferFloat *GetExpectedError(void) { return cErrorHead.getOutput(); }
+   virtual CBufferFloat *GetConfidence(void) { return GetPointer(cConfidence); }
+   virtual CBufferFloat *GetPlanDeltaNorm(void) { return GetPointer(cPlanDeltaNorm); }
+   //--- methods for working with files
+   virtual bool      Save(int const file_handle) override;
+   virtual bool      Load(int const file_handle) override;
+   //---
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CNeuronCogDriverForecastToken  :  public CNeuronBaseOCL
+  {
+protected:
+   uint              iDimension;
+   uint              iHorizon;
+   CNeuronRoPE       cRoPE;
+   CBufferFloat      cConfidenceGradient;
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+
+public:
+                     CNeuronCogDriverForecastToken(void) : iDimension(0), iHorizon(0) {};
+                    ~CNeuronCogDriverForecastToken(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint dimension, uint horizon,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+   //---
+   virtual int       Type(void) override const  {  return defNeuronCogDriverForecastToken;   }
+   //--- methods for working with files
+   virtual bool      Save(int const file_handle) override;
+   virtual bool      Load(int const file_handle) override;
+   //---
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override { return true; }
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 class CNeuronUncAD_MUE  :  public CNeuronSpikeConvBlock
   {
 protected:

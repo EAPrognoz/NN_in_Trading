@@ -14567,6 +14567,161 @@ __kernel void NLLGrad(__global const float* log_b,
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+__kernel void CogDriverForecastShiftState(__global const float* plan,
+      __global const float* confidence,
+      __global float* shifted_plan,
+      __global float* shifted_confidence,
+      __global float* delta_mask,
+      const int dimension,
+      const int horizon
+                                         )
+  {
+   const int id = get_global_id(0);
+   const int total = dimension * horizon;
+   if(id >= total || dimension <= 0 || horizon <= 0)
+      return;
+   const int h = id / dimension;
+   const int d = id - h * dimension;
+   if(h < horizon - 1)
+      shifted_plan[id] = IsNaNOrInf(plan[(h + 1) * dimension + d], 0.0f);
+   else
+      shifted_plan[id] = 0.0f;
+   if(d == 0)
+     {
+      if(h < horizon - 1)
+        {
+         shifted_confidence[h] = IsNaNOrInf(confidence[h + 1], 0.0f);
+         delta_mask[h] = 1.0f;
+        }
+      else
+        {
+         shifted_confidence[h] = 0.0f;
+         delta_mask[h] = 0.0f;
+        }
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverForecastBuildKV(__global const float* context,
+                                       __global float* context_kv,
+                                       const int dimension,
+                                       const int horizon,
+                                       const int variables,
+                                       const int heads,
+                                       const int head_dim
+                                      )
+  {
+   const int variable = get_global_id(0);
+   const int h = get_global_id(1);
+   const int flat_dim = get_global_id(2);
+   if(variable >= variables || h >= horizon || flat_dim >= dimension ||
+      heads <= 0 || head_dim <= 0)
+      return;
+   const int head = flat_dim / head_dim;
+   if(head >= heads)
+      return;
+   const int local_dim = flat_dim - head * head_dim;
+   const int token = variable * horizon + h;
+   const int src_base = variable * 2 * horizon * dimension + h * 2 * dimension;
+   const float key = IsNaNOrInf(context[src_base + flat_dim], 0.0f);
+   const float value = IsNaNOrInf(context[src_base + dimension + flat_dim], 0.0f);
+   const int k_shift = RCtoFlat(head, local_dim, 2 * heads, head_dim, token);
+   const int v_shift = RCtoFlat(head + heads, local_dim, 2 * heads, head_dim, token);
+   context_kv[k_shift] = key;
+   context_kv[v_shift] = value;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverForecastBuildKVGrad(__global const float* context_kv_gr,
+      __global float* context_gr,
+      const int dimension,
+      const int horizon,
+      const int variables,
+      const int heads,
+      const int head_dim
+                                          )
+  {
+   const int variable = get_global_id(0);
+   const int h = get_global_id(1);
+   const int flat_dim = get_global_id(2);
+   if(variable >= variables || h >= horizon || flat_dim >= dimension ||
+      heads <= 0 || head_dim <= 0)
+      return;
+   const int head = flat_dim / head_dim;
+   if(head >= heads)
+      return;
+   const int local_dim = flat_dim - head * head_dim;
+   const int token = variable * horizon + h;
+   const int dst_base = variable * 2 * horizon * dimension + h * 2 * dimension;
+   const int k_shift = RCtoFlat(head, local_dim, 2 * heads, head_dim, token);
+   const int v_shift = RCtoFlat(head + heads, local_dim, 2 * heads, head_dim, token);
+   context_gr[dst_base + flat_dim] += IsNaNOrInf(context_kv_gr[k_shift], 0.0f);
+   context_gr[dst_base + dimension + flat_dim] += IsNaNOrInf(context_kv_gr[v_shift], 0.0f);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverForecastConfidence(__global const float* expected_error,
+      __global float* confidence,
+      const int total
+                                         )
+  {
+   const int id = get_global_id(0);
+   if(id >= total)
+      return;
+   const float error = fmax(IsNaNOrInf(expected_error[id], 0.0f), 0.0f);
+   confidence[id] = 1.0f / (1.0f + error);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverForecastDeltaNorm(__global const float* plan,
+      __global const float* shifted_plan,
+      __global float* plan_delta,
+      __global float* plan_delta_norm,
+      const int dimension,
+      const int horizon
+                                        )
+  {
+   const int h = get_global_id(0);
+   if(h >= horizon || dimension <= 0)
+      return;
+   float sum = 0.0f;
+   for(int d = 0; d < dimension; d++)
+     {
+      const int idx = h * dimension + d;
+      const float delta = IsNaNOrInf(plan[idx] - shifted_plan[idx], 0.0f);
+      plan_delta[idx] = delta;
+      sum += delta * delta;
+     }
+   plan_delta_norm[h] = sqrt(sum / (float)dimension);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverForecastGradientRMS(__global const float* gradient,
+      __global float* error_target,
+      const int dimension,
+      const int horizon
+                                          )
+  {
+   const int h = get_global_id(0);
+   if(h >= horizon || dimension <= 0)
+      return;
+   float sum = 0.0f;
+   for(int d = 0; d < dimension; d++)
+     {
+      const int idx = h * dimension + d;
+      const float g = IsNaNOrInf(gradient[idx], 0.0f);
+      sum += g * g;
+     }
+   error_target[h] = sqrt(sum / (float)dimension);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 __kernel void SparseSoftmaxHausdorff(__global const float *plan,
                                      __global const float *decis,
                                      __global float *output,
@@ -14624,7 +14779,7 @@ __kernel void SparseSoftmaxHausdorff(__global const float *plan,
          top_values[k] = IsNaNOrInf(best, 0.0f);
          top_indices[k] = best_id;
         }
-//--- sparse softmax on selected dimensions
+      //--- sparse softmax on selected dimensions
       float max_value = top_values[0];
       for(int k = 1; k < actual_top; k++)
          max_value = fmax(max_value, top_values[k]);
@@ -14646,15 +14801,15 @@ __kernel void SparseSoftmaxHausdorff(__global const float *plan,
 //|                                                                  |
 //+------------------------------------------------------------------+
 __kernel void SparseSoftmaxHausdorffGrad(__global const float *plan,
-                                         __global float *grad_plan,
-                                         __global const float *decis,
-                                         __global float *grad_decis,
-                                         __global const float *grad_out,
-                                         __global const float *top_index,
-                                         const int dimension,
-                                         const int count_plan,
-                                         const int count_decis,
-                                         const int top_k
+      __global float *grad_plan,
+      __global const float *decis,
+      __global float *grad_decis,
+      __global const float *grad_out,
+      __global const float *top_index,
+      const int dimension,
+      const int count_plan,
+      const int count_decis,
+      const int top_k
                                         )
   {
    const int d = get_global_id(0);
@@ -14791,5 +14946,265 @@ __kernel void MomADTTMMeanScoresGrad(__global const float *scores_gr,
 //---
    distance_gr[plan_id * decisions + decis_id] =
       IsNaNOrInf(-scores_gr[plan_id] / (float)decisions, 0.0f);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverAffineStack(__global float* stack,
+                                   __global float* snapshot,
+                                   __global const float* affine,
+                                   const int stack_size,
+                                   const int quant_dimension
+                                  )
+  {
+   const int feature = get_global_id(0);
+   const int t = get_global_id(1);
+   const int shift = feature * stack_size + t;
+   const int modality = feature / quant_dimension;
+   const float scale = IsNaNOrInf(affine[modality * 2], 0.0f);
+   const float bias = IsNaNOrInf(affine[modality * 2 + 1], 0.0f);
+   const float old = IsNaNOrInf(stack[shift], 0.0f);
+//---
+   snapshot[shift] = old;
+   stack[shift] = IsNaNOrInf(old * scale + bias, 0.0f);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverAffineStackGrad(__global const float* snapshot,
+                                       __global const float* stack_gr,
+                                       __global float* affine_gr,
+                                       const int stack_size,
+                                       const int quant_dimension
+                                      )
+  {
+   const int modality = get_global_id(0);
+   const int param = get_global_id(1);
+   const int start = modality * quant_dimension;
+   float grad = 0.0f;
+//---
+   for(int f = 0; f < quant_dimension; f++)
+     {
+      const int feature = start + f;
+      for(int t = 0; t < stack_size - 1; t++)
+        {
+         const int old_shift = feature * stack_size + t;
+         const int grad_shift = feature * stack_size + t + 1;
+         const float g = IsNaNOrInf(stack_gr[grad_shift], 0.0f);
+         if(param == 0)
+            grad += g * IsNaNOrInf(snapshot[old_shift], 0.0f);
+         else
+            grad += g;
+        }
+     }
+   affine_gr[modality * 2 + param] = IsNaNOrInf(grad, 0.0f);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverRankTCMInsertPending(__global float* memory,
+                                            __global float* age,
+                                            __global float* score,
+                                            __global float* valid,
+                                            __global const float* pending_query,
+                                            const int memory_len,
+                                            const int query_dim,
+                                            const int variables
+                                           )
+  {
+   const int variable = get_global_id(0);
+   const int dim = get_global_id(1);
+   const int lid = get_local_id(1);
+   const int lsize = get_local_size(1);
+   if(variable >= variables || dim >= query_dim || memory_len <= 0 || query_dim <= 0)
+      return;
+   __local int invalid_slot[LOCAL_ARRAY_SIZE];
+   __local int min_slot[LOCAL_ARRAY_SIZE];
+   __local int min_age[LOCAL_ARRAY_SIZE];
+   __local float min_score[LOCAL_ARRAY_SIZE];
+   __local int insert_slot[1];
+   int local_invalid = memory_len;
+   int local_min_slot = -1;
+   int local_min_age = 0;
+   float local_min_score = MAX_VALUE;
+//--- each work-item scans a part of one variable memory row
+   int step = min((int)LOCAL_ARRAY_SIZE, (int)lsize);
+   if(lid < step)
+     {
+      for(int slot = lid; slot < memory_len; slot += step)
+        {
+         const int state_shift = RCtoFlat(slot, variable, memory_len, variables, 0);
+         if(valid[state_shift] < 0.5f)
+           {
+            if(slot < local_invalid)
+               local_invalid = slot;
+            continue;
+           }
+         const float sc = IsNaNOrInf(score[state_shift], MIN_VALUE);
+         const int t_age = (int)IsNaNOrInf(age[state_shift], 0.0f);
+         age[state_shift] = (float)(t_age + 1);
+         if(local_min_slot < 0 || sc < local_min_score ||
+            (sc == local_min_score && t_age > local_min_age))
+           {
+            local_min_slot = slot;
+            local_min_score = sc;
+            local_min_age = t_age;
+           }
+        }
+      invalid_slot[lid] = local_invalid;
+      min_slot[lid] = local_min_slot;
+      min_score[lid] = local_min_score;
+      min_age[lid] = local_min_age;
+     }
+   BarrierLoc
+//--- reduce to one replacement slot per variable
+   if(lid == 0)
+     {
+      int best_invalid = memory_len;
+      int best_min_slot = -1;
+      int best_min_age = 0;
+      float best_min_score = MAX_VALUE;
+      for(int i = 0; i < lsize; i++)
+        {
+         if(invalid_slot[i] < best_invalid)
+            best_invalid = invalid_slot[i];
+         if(min_slot[i] >= 0 &&
+            (best_min_slot < 0 || min_score[i] < best_min_score ||
+             (min_score[i] == best_min_score && min_age[i] < best_min_age)))
+           {
+            best_min_slot = min_slot[i];
+            best_min_score = min_score[i];
+            best_min_age = min_age[i];
+           }
+        }
+      insert_slot[0] = (best_invalid < memory_len ? best_invalid : best_min_slot);
+     }
+   BarrierLoc
+   const int target_slot = insert_slot[0];
+   if(target_slot < 0)
+      return;
+//--- write the delayed query to the replacement slot
+   memory[RCtoFlat(variable, dim, variables, query_dim, target_slot)] =
+      IsNaNOrInf(pending_query[RCtoFlat(variable, dim, variables, query_dim, 0)], 0.0f);
+   if(lid == 0)
+     {
+      const int state_shift = RCtoFlat(target_slot, variable, memory_len, variables, 0);
+      age[state_shift] = 1.0f;
+      score[state_shift] = 0.0f;
+      valid[state_shift] = 1.0f;
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverRankTCMBuildKV(__global const float* memory,
+                                      __global const float* age,
+                                      __global const float* valid,
+                                      __global float* memory_kv,
+                                      const int memory_count,
+                                      const int variables,
+                                      const int heads,
+                                      const int head_dim
+                                     )
+  {
+   const int slot = get_global_id(0);
+   const int variable = get_global_id(1);
+   const int flat_dim = get_global_id(2);
+   if(slot >= memory_count || variable >= variables || heads <= 0 || head_dim <= 0)
+      return;
+   const int query_dim = heads * head_dim;
+   if(flat_dim >= query_dim)
+      return;
+//---
+   const int head = flat_dim / head_dim;
+   const int local_dim = flat_dim - head * head_dim;
+   const int state_shift = RCtoFlat(slot, variable, memory_count, variables, 0);
+   float value = 0.0f;
+   if(valid[state_shift] >= 0.5f)
+     {
+      const float a = IsNaNOrInf(age[state_shift], 0.0f);
+      const float period = pow(10000.0f, (float)(2 * (local_dim / 2)) / (float)max(head_dim, 1));
+      const float phase = a / period;
+      const float pe = ((local_dim & 1) == 0 ? sin(phase) : cos(phase));
+      value = IsNaNOrInf(memory[RCtoFlat(variable, flat_dim, variables, query_dim, slot)] + pe, 0.0f);
+     }
+   const int total_heads = variables * heads;
+   const int effective_head = variable * heads + head;
+   const int k_shift = RCtoFlat(effective_head, local_dim, 2 * total_heads, head_dim, slot);
+   const int v_shift = RCtoFlat(effective_head + total_heads, local_dim, 2 * total_heads, head_dim, slot);
+   memory_kv[k_shift] = value;
+   memory_kv[v_shift] = value;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverRankTCMMeanFlashScore(__global const float* query,
+      __global const float* memory_kv,
+      __global const float* valid,
+      __global float* out_score,
+      __global const float* logsumexp,
+      const int memory_count,
+      const int variables,
+      const int heads,
+      const int head_dim
+                                            )
+  {
+   const int slot = get_global_id(0);
+   const int variable = get_global_id(1);
+   if(slot >= memory_count || variable >= variables || heads <= 0 || head_dim <= 0)
+      return;
+   const int state_shift = RCtoFlat(slot, variable, memory_count, variables, 0);
+   if(valid[state_shift] < 0.5f)
+     {
+      out_score[state_shift] = MIN_VALUE;
+      return;
+     }
+//---
+   float score = 0.0f;
+   const int total_heads = variables * heads;
+   for(int head = 0; head < heads; head++)
+     {
+      const int effective_head = variable * heads + head;
+      const int shift_q = RCtoFlat(effective_head, 0, total_heads, head_dim, 0);
+      const int shift_k = RCtoFlat(effective_head, 0, 2 * total_heads, head_dim, slot);
+      const int shift_lse = RCtoFlat(0, effective_head, 1, total_heads, 0);
+      const float head_lse = IsNaNOrInf(logsumexp[shift_lse], 0.0f);
+      float dotv = 0.0f;
+      for(int d = 0; d < head_dim; d++)
+         dotv += IsNaNOrInf(query[shift_q + d], 0.0f) *
+                 IsNaNOrInf(memory_kv[shift_k + d], 0.0f);
+      const float raw_score = IsNaNOrInf(dotv / sqrt((float)head_dim), MIN_VALUE);
+      score += IsNaNOrInf(exp(clamp(raw_score - head_lse, -120.0f, 0.0f)), 0.0f);
+     }
+   out_score[state_shift] = IsNaNOrInf(score / (float)heads, 0.0f);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void CogDriverRankTCMSelfKV(__global const float* source,
+      __global float* self_kv,
+      const int query_dim,
+                                     const int variables,
+                                     const int heads,
+                                     const int head_dim
+                                    )
+  {
+   const int key_variable = get_global_id(0);
+   const int flat_dim = get_global_id(1);
+   if(key_variable >= variables || flat_dim >= query_dim || heads <= 0 || head_dim <= 0)
+      return;
+//---
+   const int head = flat_dim / head_dim;
+   const int local_dim = flat_dim - head * head_dim;
+   const int total_heads = variables * heads;
+   const float value = IsNaNOrInf(source[RCtoFlat(key_variable, flat_dim, variables, query_dim, 0)], 0.0f);
+   for(int query_variable = 0; query_variable < variables; query_variable++)
+     {
+      const int effective_head = query_variable * heads + head;
+      const int k_shift = RCtoFlat(effective_head, local_dim, 2 * total_heads, head_dim, key_variable);
+      const int v_shift = RCtoFlat(effective_head + total_heads, local_dim, 2 * total_heads, head_dim, key_variable);
+      self_kv[k_shift] = value;
+      self_kv[v_shift] = value;
+     }
   }
 //+------------------------------------------------------------------+

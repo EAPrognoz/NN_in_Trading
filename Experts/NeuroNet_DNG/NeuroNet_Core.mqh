@@ -515,6 +515,10 @@ bool CLayer::CreateElement(int index)
    CNeuronUncAD_UGPL* uncad_ugpl = NULL;
    CNeuronUncAD* uncad = NULL;
    CNeuronMomAD* momad = NULL;
+   CNeuronCogDriverData* cogdriver_data = NULL;
+   CNeuronCogDriverRankTCM* cogdriver_rank = NULL;
+   CNeuronCogDriverForecastHead* cogdriver_forecast = NULL;
+   CNeuronCogDriverForecastToken* cogdriver_token = NULL;
 //---
    uint windows[] = {1, 1, 1};
    uint mfe_windows[] = {3, 3};
@@ -3804,6 +3808,50 @@ bool CLayer::CreateElement(int index)
               }
             DeleteObj(momad);
             break;
+         case defNeuronCogDriverData:
+            cogdriver_data = new CNeuronCogDriverData;
+            if(!cogdriver_data)
+               ReturnFalse;
+            if(cogdriver_data.Init(iOutputs, index, OpenCL, 2, 2, 20, 2, 2, 1.0f, ADAM, 1))
+              {
+               m_data[index] = cogdriver_data;
+               return true;
+              }
+            DeleteObj(cogdriver_data);
+            break;
+         case defNeuronCogDriverRankTCM:
+            cogdriver_rank = new CNeuronCogDriverRankTCM;
+            if(!cogdriver_rank)
+               ReturnFalse;
+            if(cogdriver_rank.Init(iOutputs, index, OpenCL, 8, 8, 2, 4, 2, ADAM, 1))
+              {
+               m_data[index] = cogdriver_rank;
+               return true;
+              }
+            DeleteObj(cogdriver_rank);
+            break;
+         case defNeuronCogDriverForecastHead:
+            cogdriver_forecast = new CNeuronCogDriverForecastHead;
+            if(!cogdriver_forecast)
+               ReturnFalse;
+            if(cogdriver_forecast.Init(iOutputs, index, OpenCL, 8, 4, 2, 2, 2, ADAM, 1))
+              {
+               m_data[index] = cogdriver_forecast;
+               return true;
+              }
+            DeleteObj(cogdriver_forecast);
+            break;
+         case defNeuronCogDriverForecastToken:
+            cogdriver_token = new CNeuronCogDriverForecastToken;
+            if(!cogdriver_token)
+               ReturnFalse;
+            if(cogdriver_token.Init(iOutputs, index, OpenCL, 8, 4, ADAM, 1))
+              {
+               m_data[index] = cogdriver_token;
+               return true;
+              }
+            DeleteObj(cogdriver_token);
+            break;
          case defNeuronReGENTADBackbone:
             regen_backbone = new CNeuronReGENTADBackbone;
             if(!regen_backbone)
@@ -4753,6 +4801,10 @@ bool CNet::Create(CArrayObj *Description)
          CNeuronUncAD_UGPL* uncad_ugpl = NULL;
          CNeuronUncAD* uncad = NULL;
          CNeuronMomAD* momad = NULL;
+         CNeuronCogDriverData* cogdriver_data = NULL;
+         CNeuronCogDriverRankTCM* cogdriver_rank = NULL;
+         CNeuronCogDriverForecastHead* cogdriver_forecast = NULL;
+         CNeuronCogDriverForecastToken* cogdriver_token = NULL;
          //---
          switch(desc.type)
            {
@@ -10020,6 +10072,81 @@ bool CNet::Create(CArrayObj *Description)
                  {
                   DeleteObj(temp);
                   DeleteObjAndFalse(uncad_mue);
+                 }
+               break;
+            case defNeuronCogDriverData:
+               if(desc.units.Size() < 3)
+                  DeleteObjAndFalse(temp);
+               cogdriver_data = new CNeuronCogDriverData();
+               if(!cogdriver_data)
+                  DeleteObjAndFalse(temp);
+               if(!cogdriver_data.Init(outputs, 0, opencl, desc.window,
+                                       desc.count, desc.units[0],
+                                       desc.units[1], desc.units[2],
+                                       float(desc.probability),
+                                       desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(cogdriver_data);
+                 }
+               if(!temp.Add(cogdriver_data))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(cogdriver_data);
+                 }
+               break;
+            case defNeuronCogDriverRankTCM:
+               if(desc.units.Size() < 2 || desc.variables == 0)
+                  DeleteObjAndFalse(temp);
+               cogdriver_rank = new CNeuronCogDriverRankTCM();
+               if(!cogdriver_rank)
+                  DeleteObjAndFalse(temp);
+               if(!cogdriver_rank.Init(outputs, 0, opencl, desc.window,
+                                       desc.count, desc.variables, desc.units[0], desc.units[1],
+                                       desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(cogdriver_rank);
+                 }
+               if(!temp.Add(cogdriver_rank))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(cogdriver_rank);
+                 }
+               break;
+            case defNeuronCogDriverForecastHead:
+               if(desc.units.Size() < 2 || desc.variables == 0)
+                  DeleteObjAndFalse(temp);
+               cogdriver_forecast = new CNeuronCogDriverForecastHead();
+               if(!cogdriver_forecast)
+                  DeleteObjAndFalse(temp);
+               if(!cogdriver_forecast.Init(outputs, 0, opencl, desc.window,
+                                           desc.count, desc.variables, desc.units[0], desc.units[1],
+                                           desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(cogdriver_forecast);
+                 }
+               if(!temp.Add(cogdriver_forecast))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(cogdriver_forecast);
+                 }
+               break;
+            case defNeuronCogDriverForecastToken:
+               cogdriver_token = new CNeuronCogDriverForecastToken();
+               if(!cogdriver_token)
+                  DeleteObjAndFalse(temp);
+               if(!cogdriver_token.Init(outputs, 0, opencl, desc.window,
+                                        desc.count, desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(cogdriver_token);
+                 }
+               if(!temp.Add(cogdriver_token))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(cogdriver_token);
                  }
                break;
             case defNeuronUncAD_UGP:
@@ -16152,7 +16279,7 @@ bool CNet::OpenCLInit(void)
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(270);
+   opencl.SetKernelsCount(282);
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")
@@ -16423,6 +16550,18 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_SparseSoftmaxHausdorffGrad, "SparseSoftmaxHausdorffGrad")
    CreateKernel(def_k_MomADTTMMeanScores, "MomADTTMMeanScores")
    CreateKernel(def_k_MomADTTMMeanScoresGrad, "MomADTTMMeanScoresGrad")
+   CreateKernel(def_k_CogDriverAffineStack, "CogDriverAffineStack")
+   CreateKernel(def_k_CogDriverAffineStackGrad, "CogDriverAffineStackGrad")
+   CreateKernel(def_k_CogDriverRankTCMInsertPending, "CogDriverRankTCMInsertPending")
+   CreateKernel(def_k_CogDriverRankTCMBuildKV, "CogDriverRankTCMBuildKV")
+   CreateKernel(def_k_CogDriverRankTCMMeanFlashScore, "CogDriverRankTCMMeanFlashScore")
+   CreateKernel(def_k_CogDriverRankTCMSelfKV, "CogDriverRankTCMSelfKV")
+   CreateKernel(def_k_CogDriverForecastShiftState, "CogDriverForecastShiftState")
+   CreateKernel(def_k_CogDriverForecastConfidence, "CogDriverForecastConfidence")
+   CreateKernel(def_k_CogDriverForecastDeltaNorm, "CogDriverForecastDeltaNorm")
+   CreateKernel(def_k_CogDriverForecastBuildKV, "CogDriverForecastBuildKV")
+   CreateKernel(def_k_CogDriverForecastBuildKVGrad, "CogDriverForecastBuildKVGrad")
+   CreateKernel(def_k_CogDriverForecastGradientRMS, "CogDriverForecastGradientRMS")
 //---
    return true;
   }

@@ -31,7 +31,7 @@
 //+------------------------------------------------------------------+
 ///\defgroup const  Global constants
 ///@{
-#define  lr                1.0e-2f  ///<learning rate
+#define  lr                3.0e-4f  ///<learning rate
 #define  momentum          0.9f     ///<momentum for SGD optimization
 #define  WeightsMultiplier 0.01f
 //---
@@ -474,6 +474,10 @@ union uaLongChar
 #define  defNeuronMomADTTM             0x8111
 #define  defNeuronMomADMPI             0x8112
 #define  defNeuronMomAD                0x8113
+#define  defNeuronCogDriverData        0x8114
+#define  defNeuronCogDriverRankTCM     0x8115
+#define  defNeuronCogDriverForecastHead 0x8116
+#define  defNeuronCogDriverForecastToken 0x8117
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -2580,6 +2584,105 @@ union uaLongChar
 #define def_k_madttm_msg_scores_gr              0
 #define def_k_madttm_msg_distance_gr            1
 #define def_k_madttm_msg_decisions              2
+//---
+#define def_k_CogDriverAffineStack              270
+#define def_k_cdas_stack                        0
+#define def_k_cdas_snapshot                     1
+#define def_k_cdas_affine                       2
+#define def_k_cdas_stack_size                   3
+#define def_k_cdas_quant_dimension              4
+//---
+#define def_k_CogDriverAffineStackGrad          271
+#define def_k_cdasg_snapshot                    0
+#define def_k_cdasg_stack_gr                    1
+#define def_k_cdasg_affine_gr                   2
+#define def_k_cdasg_stack_size                  3
+#define def_k_cdasg_quant_dimension             4
+//---
+#define def_k_CogDriverRankTCMInsertPending     272
+#define def_k_cdrtcm_insert_memory              0
+#define def_k_cdrtcm_insert_age                 1
+#define def_k_cdrtcm_insert_score               2
+#define def_k_cdrtcm_insert_valid               3
+#define def_k_cdrtcm_insert_pending_query       4
+#define def_k_cdrtcm_insert_memory_len          5
+#define def_k_cdrtcm_insert_query_dim           6
+#define def_k_cdrtcm_insert_variables           7
+//---
+#define def_k_CogDriverRankTCMBuildKV           273
+#define def_k_cdrtcm_kv_memory                  0
+#define def_k_cdrtcm_kv_age                     1
+#define def_k_cdrtcm_kv_valid                   2
+#define def_k_cdrtcm_kv_out                     3
+#define def_k_cdrtcm_kv_memory_count            4
+#define def_k_cdrtcm_kv_variables               5
+#define def_k_cdrtcm_kv_heads                   6
+#define def_k_cdrtcm_kv_head_dim                7
+//---
+#define def_k_CogDriverRankTCMMeanFlashScore    274
+#define def_k_cdrtcm_score_query                0
+#define def_k_cdrtcm_score_kv                   1
+#define def_k_cdrtcm_score_valid                2
+#define def_k_cdrtcm_score_out                  3
+#define def_k_cdrtcm_score_logsumexp            4
+#define def_k_cdrtcm_score_memory_count         5
+#define def_k_cdrtcm_score_variables            6
+#define def_k_cdrtcm_score_heads                7
+#define def_k_cdrtcm_score_head_dim             8
+//---
+#define def_k_CogDriverRankTCMSelfKV            275
+#define def_k_cdrtcm_selfkv_source              0
+#define def_k_cdrtcm_selfkv_out                 1
+#define def_k_cdrtcm_selfkv_query_dim           2
+#define def_k_cdrtcm_selfkv_variables           3
+#define def_k_cdrtcm_selfkv_heads               4
+#define def_k_cdrtcm_selfkv_head_dim            5
+//---
+#define def_k_CogDriverForecastShiftState       276
+#define def_k_cdfh_shift_plan                   0
+#define def_k_cdfh_shift_confidence             1
+#define def_k_cdfh_shift_shifted_plan           2
+#define def_k_cdfh_shift_shifted_confidence     3
+#define def_k_cdfh_shift_delta_mask             4
+#define def_k_cdfh_shift_query_dim              5
+#define def_k_cdfh_shift_horizon                6
+//---
+#define def_k_CogDriverForecastConfidence       277
+#define def_k_cdfh_conf_expected_error          0
+#define def_k_cdfh_conf_confidence              1
+#define def_k_cdfh_conf_total                   2
+//---
+#define def_k_CogDriverForecastDeltaNorm        278
+#define def_k_cdfh_delta_plan                   0
+#define def_k_cdfh_delta_shifted_plan           1
+#define def_k_cdfh_delta_plan_delta             2
+#define def_k_cdfh_delta_plan_delta_norm        3
+#define def_k_cdfh_delta_query_dim              4
+#define def_k_cdfh_delta_horizon                5
+//---
+#define def_k_CogDriverForecastBuildKV          279
+#define def_k_cdfh_kv_context                   0
+#define def_k_cdfh_kv_out                       1
+#define def_k_cdfh_kv_dimension                 2
+#define def_k_cdfh_kv_horizon                   3
+#define def_k_cdfh_kv_variables                 4
+#define def_k_cdfh_kv_heads                     5
+#define def_k_cdfh_kv_head_dim                  6
+//---
+#define def_k_CogDriverForecastBuildKVGrad      280
+#define def_k_cdfh_kvg_kv_gr                    0
+#define def_k_cdfh_kvg_context_gr               1
+#define def_k_cdfh_kvg_dimension                2
+#define def_k_cdfh_kvg_horizon                  3
+#define def_k_cdfh_kvg_variables                4
+#define def_k_cdfh_kvg_heads                    5
+#define def_k_cdfh_kvg_head_dim                 6
+//---
+#define def_k_CogDriverForecastGradientRMS      281
+#define def_k_cdfh_grms_gradient                0
+#define def_k_cdfh_grms_error_target            1
+#define def_k_cdfh_grms_dimension               2
+#define def_k_cdfh_grms_horizon                 3
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

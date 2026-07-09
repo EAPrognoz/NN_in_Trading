@@ -18892,11 +18892,11 @@ bool CNeuronMomADTTM::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
    if(!cCandidatesGradient.BufferCreate(OpenCL))
       ReturnFalse;
 //---
-   CBufferFloat* dist_index=cDistance.getPrevOutput();
+   CBufferFloat* dist_index = cDistance.getPrevOutput();
    dist_index.BufferFree();
-   if(!dist_index.BufferInit(top_total,0) ||
+   if(!dist_index.BufferInit(top_total, 0) ||
       !dist_index.BufferCreate(OpenCL))
-     ReturnFalse;
+      ReturnFalse;
 //---
    return true;
   }
@@ -19092,11 +19092,11 @@ bool CNeuronMomADTTM::Load(const int file_handle)
    if(!cCandidatesGradient.BufferCreate(OpenCL))
       ReturnFalse;
 //---
-   CBufferFloat* dist_index=cDistance.getPrevOutput();
+   CBufferFloat* dist_index = cDistance.getPrevOutput();
    dist_index.BufferFree();
-   if(!dist_index.BufferInit(top_total,0) ||
+   if(!dist_index.BufferInit(top_total, 0) ||
       !dist_index.BufferCreate(OpenCL))
-     ReturnFalse;
+      ReturnFalse;
 //---
    return true;
   }
@@ -19483,6 +19483,1907 @@ bool CNeuronUncAD_MSD::Load(const int file_handle)
    dFileReadUInt(file_handle, iVariables);
    dFileReadUInt(file_handle, iQuantiles);
    dFileReadUFloat(file_handle, fQuantSize);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                uint window, uint variables, uint state_stack_size,
+                                uint quant_stack_size, uint quantiles, float range,
+                                ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(window == 0 || variables == 0 || state_stack_size < (10 * quantiles) ||
+      quant_stack_size < 2 || quantiles == 0 || range <= 0)
+      ReturnFalse;
+   uint bins = 2 * quantiles + 1;
+   uint quant_dimension = window * bins;
+   uint quant_features = quant_dimension * variables;
+   if(!CNeuronSpikeConvBlock::Init(numOutputs, myIndex, open_cl,
+                                   quant_stack_size, quant_stack_size, 1,
+                                   1, quant_features, optimization_type, batch))
+      ReturnFalse;
+//---
+   iWindow = window;
+   iVariables = variables;
+   iStateStackSize = state_stack_size;
+   iQuantStackSize = quant_stack_size;
+   iQuantiles = quantiles;
+   fRange = range;
+//---
+   if(!cNorm.Init(0, 0, OpenCL, window * variables, iBatch, optimization))
+      ReturnFalse;
+   cNorm.SetActivationFunction(None);
+   if(!cStateStack.Init(0, 1, OpenCL, state_stack_size, window, variables, optimization, iBatch))
+      ReturnFalse;
+   if(!cMSD.Init(0, 2, OpenCL, window, state_stack_size, variables, quantiles, range, optimization, iBatch))
+      ReturnFalse;
+   if(!cAffine.Init(0, 3, OpenCL, window, window, 2, 1, variables, optimization, iBatch))
+      ReturnFalse;
+   cAffine.SetActivationFunction(None);
+   if(!cQuantStack.Init(0, 4, OpenCL, quant_stack_size, 1, quant_features, optimization, iBatch))
+      ReturnFalse;
+   if(!cPrevQuantStack.Init(0, 5, OpenCL, quant_stack_size * quant_features, optimization, iBatch))
+      ReturnFalse;
+   cPrevQuantStack.SetActivationFunction(None);
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::AffineStack(void)
+  {
+   if(!OpenCL)
+      ReturnFalse;
+//---
+   uint quant_dimension = iWindow * (2 * iQuantiles + 1);
+   uint quant_features = quant_dimension * iVariables;
+   if(cQuantStack.Neurons() != int(iQuantStackSize * quant_features) ||
+      cPrevQuantStack.Neurons() != cQuantStack.Neurons() ||
+      cAffine.Neurons() != int(2 * iVariables))
+      ReturnFalse;
+//---
+   uint global_work_offset[] = {0, 0};
+   uint global_work_size[] = {quant_features, iQuantStackSize};
+   uint kernel = def_k_CogDriverAffineStack;
+   setBuffer(kernel, def_k_cdas_stack, cQuantStack.getOutputIndex())
+   setBuffer(kernel, def_k_cdas_snapshot, cPrevQuantStack.getOutputIndex())
+   setBuffer(kernel, def_k_cdas_affine, cAffine.getOutputIndex())
+   setArgument(kernel, def_k_cdas_stack_size, (int)iQuantStackSize)
+   setArgument(kernel, def_k_cdas_quant_dimension, (int)quant_dimension)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cQuantStack.getOutput().BufferRead() || !cPrevQuantStack.getOutput().BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::AffineStackGradient(void)
+  {
+   if(!OpenCL)
+      ReturnFalse;
+//---
+   uint quant_dimension = iWindow * (2 * iQuantiles + 1);
+   uint kernel = def_k_CogDriverAffineStackGrad;
+   uint global_work_offset[] = {0, 0};
+   uint global_work_size[] = {iVariables, 2};
+   setBuffer(kernel, def_k_cdasg_snapshot, cPrevQuantStack.getOutputIndex())
+   setBuffer(kernel, def_k_cdasg_stack_gr, cQuantStack.getGradientIndex())
+   setBuffer(kernel, def_k_cdasg_affine_gr, cAffine.getGradientIndex())
+   setArgument(kernel, def_k_cdasg_stack_size, (int)iQuantStackSize)
+   setArgument(kernel, def_k_cdasg_quant_dimension, (int)quant_dimension)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cAffine.getGradient().BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL || NeuronOCL.Neurons() < int(iWindow * iVariables))
+      ReturnFalse;
+   if(!cNorm.FeedForward(NeuronOCL))
+      ReturnFalse;
+   if(!cStateStack.FeedForward(cNorm.AsObject()))
+      ReturnFalse;
+   if(!cMSD.FeedForward(cStateStack.AsObject()))
+      ReturnFalse;
+   if(!cAffine.FeedForward(cNorm.AsObject()))
+      ReturnFalse;
+   if(!AffineStack())
+      ReturnFalse;
+   if(!cQuantStack.FeedForward(cMSD.AsObject()))
+      ReturnFalse;
+   if(!CNeuronSpikeConvBlock::feedForward(cQuantStack.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+   if(!CNeuronSpikeConvBlock::calcInputGradients(cQuantStack.AsObject()))
+      ReturnFalse;
+   if(!AffineStackGradient())
+      ReturnFalse;
+   if(!NeuronOCL.getGradient().Fill(0))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+   if(!CNeuronSpikeConvBlock::updateInputWeights(cQuantStack.AsObject()))
+      ReturnFalse;
+   if(!cAffine.UpdateInputWeights(cNorm.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::Save(const int file_handle)
+  {
+   if(!CNeuronSpikeConvBlock::Save(file_handle))
+      ReturnFalse;
+   dFileWriteUInt(file_handle, iWindow);
+   dFileWriteUInt(file_handle, iVariables);
+   dFileWriteUInt(file_handle, iStateStackSize);
+   dFileWriteUInt(file_handle, iQuantStackSize);
+   dFileWriteUInt(file_handle, iQuantiles);
+   dFileWriteFloat(file_handle, fRange);
+   if(!cNorm.Save(file_handle))
+      ReturnFalse;
+   if(!cStateStack.Save(file_handle))
+      ReturnFalse;
+   if(!cMSD.Save(file_handle))
+      ReturnFalse;
+   if(!cAffine.Save(file_handle))
+      ReturnFalse;
+   if(!cQuantStack.Save(file_handle))
+      ReturnFalse;
+   if(!cPrevQuantStack.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::Load(const int file_handle)
+  {
+   if(!CNeuronSpikeConvBlock::Load(file_handle))
+      ReturnFalse;
+   dFileReadUInt(file_handle, iWindow);
+   dFileReadUInt(file_handle, iVariables);
+   dFileReadUInt(file_handle, iStateStackSize);
+   dFileReadUInt(file_handle, iQuantStackSize);
+   dFileReadUInt(file_handle, iQuantiles);
+   dFileReadUFloat(file_handle, fRange);
+   if(!LoadInsideLayer(file_handle, cNorm.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cStateStack.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cMSD.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cAffine.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cQuantStack.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cPrevQuantStack.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronCogDriverData::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronSpikeConvBlock::SetOpenCL(obj);
+   cNorm.SetOpenCL(OpenCL);
+   cStateStack.SetOpenCL(OpenCL);
+   cMSD.SetOpenCL(OpenCL);
+   cAffine.SetOpenCL(OpenCL);
+   cQuantStack.SetOpenCL(OpenCL);
+   cPrevQuantStack.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronCogDriverData::TrainMode(bool flag)
+  {
+   CNeuronSpikeConvBlock::TrainMode(flag);
+   cNorm.TrainMode(bTrain);
+   cStateStack.TrainMode(bTrain);
+   cMSD.TrainMode(bTrain);
+   cAffine.TrainMode(bTrain);
+   cQuantStack.TrainMode(bTrain);
+   cPrevQuantStack.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!source || source.Type() != Type())
+      ReturnFalse;
+   if(!CNeuronSpikeConvBlock::WeightsUpdate(source, tau))
+      ReturnFalse;
+//---
+   CNeuronCogDriverData* Source = source;
+   if(!cNorm.WeightsUpdate(Source.cNorm.AsObject(), tau))
+      ReturnFalse;
+   if(!cStateStack.WeightsUpdate(Source.cStateStack.AsObject(), tau))
+      ReturnFalse;
+   if(!cMSD.WeightsUpdate(Source.cMSD.AsObject(), tau))
+      ReturnFalse;
+   if(!cAffine.WeightsUpdate(Source.cAffine.AsObject(), tau))
+      ReturnFalse;
+   if(!cQuantStack.WeightsUpdate(Source.cQuantStack.AsObject(), tau))
+      ReturnFalse;
+   if(!cPrevQuantStack.WeightsUpdate(Source.cPrevQuantStack.AsObject(), tau))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::Clear(void)
+  {
+   if(!CNeuronSpikeConvBlock::Clear())
+      ReturnFalse;
+   if(!cNorm.Clear())
+      ReturnFalse;
+   if(!cStateStack.Clear())
+      ReturnFalse;
+   if(!cMSD.Clear())
+      ReturnFalse;
+   if(!cAffine.Clear())
+      ReturnFalse;
+   if(!cQuantStack.Clear())
+      ReturnFalse;
+   if(!cPrevQuantStack.Clear())
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::InitStateBuffers(void)
+  {
+   uint memory_total = iMemoryLen * iVariables * iQueryDim;
+   uint kv_total = 2 * iMemoryLen * iTotalQueryDim;
+   uint self_kv_total = 2 * iVariables * iTotalQueryDim;
+   if(memory_total == 0 || kv_total == 0 || self_kv_total == 0 || iTotalHeads == 0)
+      ReturnFalse;
+//---
+   if(!cMemoryQuery.BufferInit(memory_total, 0) || !cMemoryQuery.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cMemoryAge.BufferInit(iMemoryLen * iVariables, 0) || !cMemoryAge.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cMemoryScore.BufferInit(iMemoryLen * iVariables, 0) || !cMemoryScore.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cMemoryValid.BufferInit(iMemoryLen * iVariables, 0) || !cMemoryValid.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cMemoryKV.BufferInit(kv_total, 0) || !cMemoryKV.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cMemoryKVGradient.BufferInit(kv_total, 0) || !cMemoryKVGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cSelfKV.BufferInit(self_kv_total, 0) || !cSelfKV.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cSelfKVGradient.BufferInit(self_kv_total, 0) || !cSelfKVGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cLogSumExp.BufferInit(iTotalHeads, 0) || !cLogSumExp.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cSelfLogSumExp.BufferInit(iTotalHeads, 0) || !cSelfLogSumExp.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cQueryGateGradient.BufferInit(iTotalQueryDim, 0) || !cQueryGateGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cGateQueryGradient.BufferInit(iTotalQueryDim, 0) || !cGateQueryGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cGateContextGradient.BufferInit(iTotalQueryDim, 0) || !cGateContextGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                   uint input_dim, uint query_dim, uint variables, uint memory_len, uint heads,
+                                   ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(input_dim == 0 || query_dim == 0 || variables == 0 || memory_len == 0 || heads == 0 ||
+      query_dim % heads != 0)
+      ReturnFalse;
+   uint total_query = variables * query_dim;
+   if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, total_query, optimization_type, batch))
+      ReturnFalse;
+//---
+   iInputDim = input_dim;
+   iQueryDim = query_dim;
+   iVariables = variables;
+   iHeads = heads;
+   iHeadDim = query_dim / heads;
+   iTotalQueryDim = total_query;
+   iTotalHeads = variables * heads;
+   iMemoryLen = memory_len;
+   iMemoryCount = 0;
+   bLastQueryValid = false;
+//---
+   if(!cQueryProjection.Init(0, 0, OpenCL, input_dim, input_dim, query_dim, variables, 1,
+                             optimization, iBatch))
+      ReturnFalse;
+   cQueryProjection.SetActivationFunction(None);
+   if(!cGateInput.Init(total_query, 1, OpenCL, 2 * total_query, optimization, iBatch))
+      ReturnFalse;
+   cGateInput.SetActivationFunction(None);
+   if(!cGateProjection.Init(0, 2, OpenCL, total_query, optimization, iBatch))
+      ReturnFalse;
+   cGateProjection.SetActivationFunction(SIGMOID);
+   if(!cMemoryContext.Init(0, 3, OpenCL, total_query, optimization, iBatch))
+      ReturnFalse;
+   cMemoryContext.SetActivationFunction(None);
+   if(!cSelfContext.Init(0, 4, OpenCL, total_query, optimization, iBatch))
+      ReturnFalse;
+   cSelfContext.SetActivationFunction(None);
+   if(!InitStateBuffers())
+      ReturnFalse;
+//---
+   return Clear();
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::InsertPendingQuery(void)
+  {
+   if(!bLastQueryValid)
+      return true;
+   if(!OpenCL)
+      ReturnFalse;
+   CBufferFloat *pending = cQueryProjection.getOutput();
+   if(!pending)
+      ReturnFalse;
+//--- insert the previous query independently for each variable
+   uint kernel = def_k_CogDriverRankTCMInsertPending;
+   uint global_work_offset[2] = {0, 0};
+   uint global_work_size[2] = {iVariables, iQueryDim};
+   uint local_work_size[2] = {1, iQueryDim};
+   setBuffer(kernel, def_k_cdrtcm_insert_memory, cMemoryQuery.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_insert_age, cMemoryAge.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_insert_score, cMemoryScore.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_insert_valid, cMemoryValid.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_insert_pending_query, pending.GetIndex())
+   setArgument(kernel, def_k_cdrtcm_insert_memory_len, (int)iMemoryLen)
+   setArgument(kernel, def_k_cdrtcm_insert_query_dim, (int)iQueryDim)
+   setArgument(kernel, def_k_cdrtcm_insert_variables, (int)iVariables)
+   kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
+   iMemoryCount = (uint)MathMin(iMemoryLen, iMemoryCount + 1);
+#ifdef _DEBUG
+   if(!cMemoryQuery.BufferRead() || !cMemoryAge.BufferRead() ||
+      !cMemoryScore.BufferRead() || !cMemoryValid.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::BuildMemoryKV(void)
+  {
+   if(!OpenCL || iMemoryCount == 0)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverRankTCMBuildKV;
+   uint global_work_offset[3] = {0, 0, 0};
+   uint global_work_size[3] = {iMemoryCount, iVariables, iQueryDim};
+   setBuffer(kernel, def_k_cdrtcm_kv_memory, cMemoryQuery.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_kv_age, cMemoryAge.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_kv_valid, cMemoryValid.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_kv_out, cMemoryKV.GetIndex())
+   setArgument(kernel, def_k_cdrtcm_kv_memory_count, (int)iMemoryCount)
+   setArgument(kernel, def_k_cdrtcm_kv_variables, (int)iVariables)
+   setArgument(kernel, def_k_cdrtcm_kv_heads, (int)iHeads)
+   setArgument(kernel, def_k_cdrtcm_kv_head_dim, (int)iHeadDim)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cMemoryKV.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::FlashAttentionForward(CBufferFloat *query, CBufferFloat *out)
+  {
+   if(!OpenCL || !query || !out || iMemoryCount == 0)
+      ReturnFalse;
+//---
+   uint global_work_offset[3] = {0};
+   uint global_work_size[] = {1,
+                              (uint)MathMin(MathMax(iMemoryCount, iHeadDim), OpenCL.GetMaxLocalSize(1)),
+                              iTotalHeads
+                             };
+   uint local_work_size[] = {1, global_work_size[1], 1};
+   uint kernel = def_k_MHFlashAttention;
+   setBuffer(kernel, def_k_mhflat_q, query.GetIndex())
+   setBuffer(kernel, def_k_mhflat_kv, cMemoryKV.GetIndex())
+   setBuffer(kernel, def_k_mhflat_logsumexp, cLogSumExp.GetIndex())
+   setBuffer(kernel, def_k_mhflat_out, out.GetIndex())
+   setArgument(kernel, def_k_mhflat_dimension, (int)iHeadDim)
+   setArgument(kernel, def_k_mhflat_total_kv, (int)iMemoryCount)
+   setArgument(kernel, def_k_mhflat_mask_future, 0)
+   kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
+#ifdef _DEBUG
+   if(!out.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::FlashAttentionBackward(CBufferFloat *query, CBufferFloat *query_gr,
+      CBufferFloat *out, CBufferFloat *out_gr)
+  {
+   if(!OpenCL || !query || !query_gr || !out || !out_gr || iMemoryCount == 0)
+      ReturnFalse;
+//---
+   uint global_work_offset[3] = {0};
+   uint global_work_size[] = {MathMax((int)1, (int)iMemoryCount), iHeadDim, iTotalHeads};
+   uint local_work_size[] = {1, global_work_size[1], 1};
+   uint kernel = def_k_MHFlashAttentionGrad;
+   setBuffer(kernel, def_k_mhflatg_q, query.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_q_gr, query_gr.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_kv, cMemoryKV.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_kv_gr, cMemoryKVGradient.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_logsumexp, cLogSumExp.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_out, out.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_out_gr, out_gr.GetIndex())
+   setArgument(kernel, def_k_mhflatg_dimension, (int)iHeadDim)
+   setArgument(kernel, def_k_mhflatg_total_q, 1)
+   setArgument(kernel, def_k_mhflatg_total_kv, (int)iMemoryCount)
+   setArgument(kernel, def_k_mhflatg_mask_future, 0)
+   kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
+#ifdef _DEBUG
+   if(!query_gr.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::BuildSelfKV(CBufferFloat *source)
+  {
+   if(!OpenCL || !source)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverRankTCMSelfKV;
+   uint global_work_offset[2] = {0, 0};
+   uint global_work_size[2] = {iVariables, iTotalQueryDim};
+   setBuffer(kernel, def_k_cdrtcm_selfkv_source, source.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_selfkv_out, cSelfKV.GetIndex())
+   setArgument(kernel, def_k_cdrtcm_selfkv_query_dim, (int)iQueryDim)
+   setArgument(kernel, def_k_cdrtcm_selfkv_variables, (int)iVariables)
+   setArgument(kernel, def_k_cdrtcm_selfkv_heads, (int)iHeads)
+   setArgument(kernel, def_k_cdrtcm_selfkv_head_dim, (int)iHeadDim)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cSelfKV.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::SelfAttentionForward(CBufferFloat *query, CBufferFloat *out)
+  {
+   if(!OpenCL || !query || !out || iVariables == 0)
+      ReturnFalse;
+   if(!BuildSelfKV(query))
+      ReturnFalse;
+//---
+   uint global_work_offset[3] = {0};
+   uint global_work_size[] = {1,
+                              (uint)MathMin(MathMax(iVariables, iHeadDim), OpenCL.GetMaxLocalSize(1)),
+                              iTotalHeads
+                             };
+   uint local_work_size[] = {1, global_work_size[1], 1};
+   uint kernel = def_k_MHFlashAttention;
+   setBuffer(kernel, def_k_mhflat_q, query.GetIndex())
+   setBuffer(kernel, def_k_mhflat_kv, cSelfKV.GetIndex())
+   setBuffer(kernel, def_k_mhflat_logsumexp, cSelfLogSumExp.GetIndex())
+   setBuffer(kernel, def_k_mhflat_out, out.GetIndex())
+   setArgument(kernel, def_k_mhflat_dimension, (int)iHeadDim)
+   setArgument(kernel, def_k_mhflat_total_kv, (int)iVariables)
+   setArgument(kernel, def_k_mhflat_mask_future, 0)
+   kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
+#ifdef _DEBUG
+   if(!out.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::SelfAttentionBackward(CBufferFloat *query, CBufferFloat *query_gr,
+      CBufferFloat *out, CBufferFloat *out_gr)
+  {
+   if(!OpenCL || !query || !query_gr || !out || !out_gr || iVariables == 0)
+      ReturnFalse;
+//---
+   uint global_work_offset[3] = {0};
+   uint global_work_size[] = {MathMax((int)1, (int)iVariables), iHeadDim, iTotalHeads};
+   uint local_work_size[] = {1, global_work_size[1], 1};
+   uint kernel = def_k_MHFlashAttentionGrad;
+   setBuffer(kernel, def_k_mhflatg_q, query.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_q_gr, query_gr.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_kv, cSelfKV.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_kv_gr, cSelfKVGradient.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_logsumexp, cSelfLogSumExp.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_out, out.GetIndex())
+   setBuffer(kernel, def_k_mhflatg_out_gr, out_gr.GetIndex())
+   setArgument(kernel, def_k_mhflatg_dimension, (int)iHeadDim)
+   setArgument(kernel, def_k_mhflatg_total_q, 1)
+   setArgument(kernel, def_k_mhflatg_total_kv, (int)iVariables)
+   setArgument(kernel, def_k_mhflatg_mask_future, 0)
+   kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
+#ifdef _DEBUG
+   if(!query_gr.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::MeanFlashScores(CBufferFloat *query)
+  {
+   if(!OpenCL || !query || iMemoryCount == 0)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverRankTCMMeanFlashScore;
+   uint global_work_offset[2] = {0, 0};
+   uint global_work_size[2] = {iMemoryCount, iVariables};
+   setBuffer(kernel, def_k_cdrtcm_score_query, query.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_score_kv, cMemoryKV.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_score_valid, cMemoryValid.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_score_out, cMemoryScore.GetIndex())
+   setBuffer(kernel, def_k_cdrtcm_score_logsumexp, cLogSumExp.GetIndex())
+   setArgument(kernel, def_k_cdrtcm_score_memory_count, (int)iMemoryCount)
+   setArgument(kernel, def_k_cdrtcm_score_variables, (int)iVariables)
+   setArgument(kernel, def_k_cdrtcm_score_heads, (int)iHeads)
+   setArgument(kernel, def_k_cdrtcm_score_head_dim, (int)iHeadDim)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cMemoryScore.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL || NeuronOCL.Neurons() < int(iInputDim * iVariables))
+      ReturnFalse;
+//--- Step 1: deferred memory mutation from the previous pass
+   if(!InsertPendingQuery())
+      ReturnFalse;
+//--- Step 2: current query
+   if(!cQueryProjection.FeedForward(NeuronOCL))
+      ReturnFalse;
+   CBufferFloat *query = cQueryProjection.getOutput();
+   if(!query)
+      ReturnFalse;
+//--- Step 3-5: attention, score, and fusion
+   if(iMemoryCount == 0)
+     {
+      if(!SelfAttentionForward(query, Output))
+         ReturnFalse;
+      bLastQueryValid = true;
+      return true;
+     }
+   if(!BuildMemoryKV())
+      ReturnFalse;
+   if(!FlashAttentionForward(query, cMemoryContext.getOutput()))
+      ReturnFalse;
+   if(!SelfAttentionForward(cMemoryContext.getOutput(), cSelfContext.getOutput()))
+      ReturnFalse;
+   if(!MeanFlashScores(query))
+      ReturnFalse;
+   if(!Concat(query, cSelfContext.getOutput(), cGateInput.getOutput(),
+              (int)iTotalQueryDim, (int)iTotalQueryDim, 1))
+      ReturnFalse;
+   if(!cGateProjection.FeedForward(cGateInput.AsObject()))
+      ReturnFalse;
+   if(!GateElementMult(cSelfContext.getOutput(), query, cGateProjection.getOutput(), Output))
+      ReturnFalse;
+//--- cQueryProjection output is the pending query for the next forward pass.
+   bLastQueryValid = true;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+   CBufferFloat *query = cQueryProjection.getOutput();
+   CBufferFloat *query_gr = cQueryProjection.getGradient();
+   if(!query || !query_gr)
+      ReturnFalse;
+   if(!query_gr.Fill(0))
+      ReturnFalse;
+//---
+   if(iMemoryCount == 0)
+     {
+      if(!cSelfKVGradient.Fill(0))
+         ReturnFalse;
+      if(!SelfAttentionBackward(query, query_gr, Output, Gradient))
+         ReturnFalse;
+     }
+   else
+     {
+      if(!cMemoryContext.getGradient().Fill(0) ||
+         !cSelfContext.getGradient().Fill(0) ||
+         !cGateProjection.getGradient().Fill(0) ||
+         !cGateInput.getGradient().Fill(0))
+         ReturnFalse;
+      if(!GateElementMultGrad(cSelfContext.getOutput(), cSelfContext.getGradient(),
+                              query, query_gr,
+                              cGateProjection.getOutput(), cGateProjection.getGradient(),
+                              Gradient, None, None, SIGMOID))
+         ReturnFalse;
+      if(!cGateInput.CalcHiddenGradients(cGateProjection.AsObject()))
+         ReturnFalse;
+      if(!DeConcat(GetPointer(cGateQueryGradient), GetPointer(cGateContextGradient),
+                   cGateInput.getGradient(), (int)iTotalQueryDim, (int)iTotalQueryDim, 1))
+         ReturnFalse;
+      if(!SumAndNormalize(query_gr, GetPointer(cGateQueryGradient), query_gr,
+                          (int)iTotalQueryDim, false, 0, 0, 0, 1.0f))
+         ReturnFalse;
+      if(!SumAndNormalize(cSelfContext.getGradient(), GetPointer(cGateContextGradient),
+                          cSelfContext.getGradient(), (int)iTotalQueryDim, false, 0, 0, 0, 1.0f))
+         ReturnFalse;
+      CBufferFloat *gate_gr = query_gr;
+      CBufferFloat *flash_gr = GetPointer(cQueryGateGradient);
+      if(!flash_gr || !flash_gr.Fill(0))
+         ReturnFalse;
+      if(!cQueryProjection.SetGradient(flash_gr, false))
+         ReturnFalse;
+      if(!cSelfKVGradient.Fill(0))
+        {
+         if(!cQueryProjection.SetGradient(gate_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+      if(!SelfAttentionBackward(cMemoryContext.getOutput(), cMemoryContext.getGradient(),
+                                cSelfContext.getOutput(), cSelfContext.getGradient()))
+        {
+         if(!cQueryProjection.SetGradient(gate_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+      if(!cMemoryKVGradient.Fill(0))
+        {
+         if(!cQueryProjection.SetGradient(gate_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+      if(!FlashAttentionBackward(query, cQueryProjection.getGradient(),
+                                 cMemoryContext.getOutput(), cMemoryContext.getGradient()))
+        {
+         if(!cQueryProjection.SetGradient(gate_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+      if(!SumAndNormalize(cQueryProjection.getGradient(), gate_gr, gate_gr,
+                          (int)iTotalQueryDim, false, 0, 0, 0, 1.0f))
+        {
+         if(!cQueryProjection.SetGradient(gate_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+      if(!cQueryProjection.SetGradient(gate_gr, false))
+         ReturnFalse;
+      query_gr = gate_gr;
+     }
+//---
+   if(!NeuronOCL.CalcHiddenGradients(cQueryProjection.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL)
+      ReturnFalse;
+   if(!cGateProjection.UpdateInputWeights(cGateInput.AsObject()))
+      ReturnFalse;
+   if(!cQueryProjection.UpdateInputWeights(NeuronOCL.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::Save(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Save(file_handle))
+      ReturnFalse;
+   dFileWriteUInt(file_handle, iInputDim);
+   dFileWriteUInt(file_handle, iQueryDim);
+   dFileWriteUInt(file_handle, iVariables);
+   dFileWriteUInt(file_handle, iHeads);
+   dFileWriteUInt(file_handle, iHeadDim);
+   dFileWriteUInt(file_handle, iTotalQueryDim);
+   dFileWriteUInt(file_handle, iTotalHeads);
+   dFileWriteUInt(file_handle, iMemoryLen);
+   dFileWriteUInt(file_handle, iMemoryCount);
+   dFileWriteUInt(file_handle, uint(bLastQueryValid));
+   if(!cQueryProjection.Save(file_handle))
+      ReturnFalse;
+   if(!cGateInput.Save(file_handle))
+      ReturnFalse;
+   if(!cGateProjection.Save(file_handle))
+      ReturnFalse;
+   if(!cMemoryContext.Save(file_handle))
+      ReturnFalse;
+   if(!cSelfContext.Save(file_handle))
+      ReturnFalse;
+   if(!cMemoryQuery.Save(file_handle) ||
+      !cMemoryAge.Save(file_handle) ||
+      !cMemoryScore.Save(file_handle) ||
+      !cMemoryValid.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::Load(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Load(file_handle))
+      ReturnFalse;
+   uint last_valid = 0;
+   dFileReadUInt(file_handle, iInputDim);
+   dFileReadUInt(file_handle, iQueryDim);
+   dFileReadUInt(file_handle, iVariables);
+   dFileReadUInt(file_handle, iHeads);
+   dFileReadUInt(file_handle, iHeadDim);
+   dFileReadUInt(file_handle, iTotalQueryDim);
+   dFileReadUInt(file_handle, iTotalHeads);
+   dFileReadUInt(file_handle, iMemoryLen);
+   dFileReadUInt(file_handle, iMemoryCount);
+   dFileReadUInt(file_handle, last_valid);
+   bLastQueryValid = (last_valid != 0);
+   if(!LoadInsideLayer(file_handle, cQueryProjection.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cGateInput.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cGateProjection.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cMemoryContext.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cSelfContext.AsObject()))
+      ReturnFalse;
+   if(!cMemoryQuery.Load(file_handle) ||
+      !cMemoryAge.Load(file_handle) ||
+      !cMemoryScore.Load(file_handle) ||
+      !cMemoryValid.Load(file_handle))
+      ReturnFalse;
+//--- transient buffers are rebuilt from dimensions
+   if(!cMemoryKV.BufferInit(2 * iMemoryLen * iTotalQueryDim, 0) || !cMemoryKV.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cMemoryKVGradient.BufferInit(2 * iMemoryLen * iTotalQueryDim, 0) || !cMemoryKVGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cSelfKV.BufferInit(2 * iVariables * iTotalQueryDim, 0) || !cSelfKV.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cSelfKVGradient.BufferInit(2 * iVariables * iTotalQueryDim, 0) || !cSelfKVGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cLogSumExp.BufferInit(iTotalHeads, 0) || !cLogSumExp.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cSelfLogSumExp.BufferInit(iTotalHeads, 0) || !cSelfLogSumExp.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cQueryGateGradient.BufferInit(iTotalQueryDim, 0) || !cQueryGateGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cGateQueryGradient.BufferInit(iTotalQueryDim, 0) || !cGateQueryGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cGateContextGradient.BufferInit(iTotalQueryDim, 0) || !cGateContextGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronCogDriverRankTCM::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronBaseOCL::SetOpenCL(obj);
+   cQueryProjection.SetOpenCL(OpenCL);
+   cGateInput.SetOpenCL(OpenCL);
+   cGateProjection.SetOpenCL(OpenCL);
+   cMemoryContext.SetOpenCL(OpenCL);
+   cSelfContext.SetOpenCL(OpenCL);
+   cMemoryQuery.BufferCreate(OpenCL);
+   cMemoryAge.BufferCreate(OpenCL);
+   cMemoryScore.BufferCreate(OpenCL);
+   cMemoryValid.BufferCreate(OpenCL);
+   cMemoryKV.BufferCreate(OpenCL);
+   cMemoryKVGradient.BufferCreate(OpenCL);
+   cSelfKV.BufferCreate(OpenCL);
+   cSelfKVGradient.BufferCreate(OpenCL);
+   cLogSumExp.BufferCreate(OpenCL);
+   cSelfLogSumExp.BufferCreate(OpenCL);
+   cQueryGateGradient.BufferCreate(OpenCL);
+   cGateQueryGradient.BufferCreate(OpenCL);
+   cGateContextGradient.BufferCreate(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronCogDriverRankTCM::TrainMode(bool flag)
+  {
+   CNeuronBaseOCL::TrainMode(flag);
+   cQueryProjection.TrainMode(bTrain);
+   cGateInput.TrainMode(bTrain);
+   cGateProjection.TrainMode(bTrain);
+   cMemoryContext.TrainMode(bTrain);
+   cSelfContext.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!source || source.Type() != Type())
+      ReturnFalse;
+   if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
+      ReturnFalse;
+//---
+   CNeuronCogDriverRankTCM *Source = source;
+   if(!cQueryProjection.WeightsUpdate(Source.cQueryProjection.AsObject(), tau))
+      ReturnFalse;
+   if(!cGateInput.WeightsUpdate(Source.cGateInput.AsObject(), tau))
+      ReturnFalse;
+   if(!cGateProjection.WeightsUpdate(Source.cGateProjection.AsObject(), tau))
+      ReturnFalse;
+   if(!cMemoryContext.WeightsUpdate(Source.cMemoryContext.AsObject(), tau))
+      ReturnFalse;
+   if(!cSelfContext.WeightsUpdate(Source.cSelfContext.AsObject(), tau))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::Clear(void)
+  {
+   if(!CNeuronBaseOCL::Clear())
+      ReturnFalse;
+   if(!cQueryProjection.Clear())
+      ReturnFalse;
+   if(!cGateInput.Clear())
+      ReturnFalse;
+   if(!cGateProjection.Clear())
+      ReturnFalse;
+   if(!cMemoryContext.Clear())
+      ReturnFalse;
+   if(!cSelfContext.Clear())
+      ReturnFalse;
+   if(!cMemoryQuery.Fill(0) ||
+      !cMemoryAge.Fill(0) ||
+      !cMemoryScore.Fill(0) ||
+      !cMemoryValid.Fill(0) ||
+      !cMemoryKV.Fill(0) ||
+      !cMemoryKVGradient.Fill(0) ||
+      !cSelfKV.Fill(0) ||
+      !cSelfKVGradient.Fill(0) ||
+      !cLogSumExp.Fill(0) ||
+      !cSelfLogSumExp.Fill(0) ||
+      !cQueryGateGradient.Fill(0) ||
+      !cGateQueryGradient.Fill(0) ||
+      !cGateContextGradient.Fill(0))
+      ReturnFalse;
+   iMemoryCount = 0;
+   bLastQueryValid = false;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::ShiftState(void)
+  {
+   if(!OpenCL)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverForecastShiftState;
+   uint global_work_offset[1] = {0};
+   uint global_work_size[1] = {iUnits * iWindow};
+   setBuffer(kernel, def_k_cdfh_shift_plan, Output.GetIndex())
+   setBuffer(kernel, def_k_cdfh_shift_confidence, cConfidence.GetIndex())
+   setBuffer(kernel, def_k_cdfh_shift_shifted_plan, cPlanInput.getOutputIndex())
+   setBuffer(kernel, def_k_cdfh_shift_shifted_confidence, cShiftedConfidence.GetIndex())
+   setBuffer(kernel, def_k_cdfh_shift_delta_mask, cDeltaMask.GetIndex())
+   setArgument(kernel, def_k_cdfh_shift_query_dim, (int)iWindow)
+   setArgument(kernel, def_k_cdfh_shift_horizon, (int)iUnits)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cPlanInput.getOutput().BufferRead() || !cShiftedConfidence.BufferRead() || !cDeltaMask.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::BuildContextKV(void)
+  {
+   if(!OpenCL)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverForecastBuildKV;
+   uint global_work_offset[3] = {0, 0, 0};
+   uint global_work_size[3] = {iVariables, iUnits, iWindow};
+   setBuffer(kernel, def_k_cdfh_kv_context, cContextProjection.getOutputIndex())
+   setBuffer(kernel, def_k_cdfh_kv_out, cContextKV.GetIndex())
+   setArgument(kernel, def_k_cdfh_kv_dimension, (int)iWindow)
+   setArgument(kernel, def_k_cdfh_kv_horizon, (int)iUnits)
+   setArgument(kernel, def_k_cdfh_kv_variables, (int)iVariables)
+   setArgument(kernel, def_k_cdfh_kv_heads, (int)iHeads)
+   setArgument(kernel, def_k_cdfh_kv_head_dim, (int)iWindowKey)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cContextKV.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::BuildContextProjectionGradient(void)
+  {
+   if(!OpenCL)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverForecastBuildKVGrad;
+   uint global_work_offset[3] = {0, 0, 0};
+   uint global_work_size[3] = {iVariables, iUnits, iWindow};
+   setBuffer(kernel, def_k_cdfh_kvg_kv_gr, cContextKVGradient.GetIndex())
+   setBuffer(kernel, def_k_cdfh_kvg_context_gr, cContextProjection.getGradientIndex())
+   setArgument(kernel, def_k_cdfh_kvg_dimension, (int)iWindow)
+   setArgument(kernel, def_k_cdfh_kvg_horizon, (int)iUnits)
+   setArgument(kernel, def_k_cdfh_kvg_variables, (int)iVariables)
+   setArgument(kernel, def_k_cdfh_kvg_heads, (int)iHeads)
+   setArgument(kernel, def_k_cdfh_kvg_head_dim, (int)iWindowKey)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cContextProjection.getGradient().BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::BuildErrorInput(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL || NeuronOCL.Neurons() < int(iVariables * iWindow))
+      ReturnFalse;
+   if(!ConcatVecMatrix(NeuronOCL.getOutput(), Output, cErrorInput.getOutput(),
+                       iVariables * iWindow, iUnits, iWindow, 1, false))
+      ReturnFalse;
+//---
+   return cErrorHead.FeedForward(cErrorInput.AsObject());
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::BuildErrorTarget(void)
+  {
+   if(!OpenCL)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverForecastGradientRMS;
+   uint global_work_offset[1] = {0};
+   uint global_work_size[1] = {iUnits};
+   setBuffer(kernel, def_k_cdfh_grms_gradient, getGradientIndex())
+   setBuffer(kernel, def_k_cdfh_grms_error_target, cErrorTarget.GetIndex())
+   setArgument(kernel, def_k_cdfh_grms_dimension, (int)iWindow)
+   setArgument(kernel, def_k_cdfh_grms_horizon, (int)iUnits)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cErrorTarget.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::BuildConfidence(void)
+  {
+   if(!OpenCL)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverForecastConfidence;
+   uint global_work_offset[1] = {0};
+   uint global_work_size[1] = {iUnits};
+   setBuffer(kernel, def_k_cdfh_conf_expected_error, cErrorHead.getOutputIndex())
+   setBuffer(kernel, def_k_cdfh_conf_confidence, cConfidence.GetIndex())
+   setArgument(kernel, def_k_cdfh_conf_total, (int)iUnits)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cConfidence.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::BuildDeltaNorm(void)
+  {
+   if(!OpenCL)
+      ReturnFalse;
+//---
+   uint kernel = def_k_CogDriverForecastDeltaNorm;
+   uint global_work_offset[1] = {0};
+   uint global_work_size[1] = {iUnits};
+   setBuffer(kernel, def_k_cdfh_delta_plan, Output.GetIndex())
+   setBuffer(kernel, def_k_cdfh_delta_shifted_plan, cPlanInput.getOutputIndex())
+   setBuffer(kernel, def_k_cdfh_delta_plan_delta, cPlanDelta.GetIndex())
+   setBuffer(kernel, def_k_cdfh_delta_plan_delta_norm, cPlanDeltaNorm.GetIndex())
+   setArgument(kernel, def_k_cdfh_delta_query_dim, (int)iWindow)
+   setArgument(kernel, def_k_cdfh_delta_horizon, (int)iUnits)
+   kernelExecute(kernel, global_work_offset, global_work_size)
+#ifdef _DEBUG
+   if(!cPlanDelta.BufferRead() || !cPlanDeltaNorm.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                        uint dimension, uint horizon, uint variables, uint forecast_blocks,
+                                        uint heads, ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(dimension == 0 || horizon == 0 || variables == 0 || forecast_blocks == 0 || heads == 0 ||
+      dimension % heads != 0)
+      ReturnFalse;
+   uint head_dim = dimension / heads;
+   if(!CNeuronMLMHAttentionOCL::Init(numOutputs, myIndex, open_cl, dimension, head_dim,
+                                     heads, horizon, forecast_blocks, optimization_type, batch))
+      ReturnFalse;
+//---
+   iVariables = variables;
+   SetActivationFunction(None);
+//--- wrappers and trainable context projection
+   if(!cPlanInput.Init(0, 0, OpenCL, iUnits * iWindow, optimization, iBatch))
+      ReturnFalse;
+   cPlanInput.SetActivationFunction(None);
+   if(!cContextProjection.Init(0, 1, OpenCL, iWindow, iWindow,
+                               2 * iUnits * iWindow, iVariables,
+                               optimization, iBatch))
+      ReturnFalse;
+   cContextProjection.SetActivationFunction(None);
+   if(!cQueryPE.Init(0, 2, OpenCL, iUnits * iWindow, optimization, iBatch))
+      ReturnFalse;
+   cQueryPE.SetActivationFunction(None);
+//--- forecast blocks
+   cCrossAttention.Clear();
+   cCrossResidual.Clear();
+   cCrossFF1.Clear();
+   cCrossFF2.Clear();
+   cCrossFFOutput.Clear();
+   cSelfOutput.Clear();
+   cCrossAttention.SetOpenCL(OpenCL);
+   cCrossResidual.SetOpenCL(OpenCL);
+   cCrossFF1.SetOpenCL(OpenCL);
+   cCrossFF2.SetOpenCL(OpenCL);
+   cCrossFFOutput.SetOpenCL(OpenCL);
+   cSelfOutput.SetOpenCL(OpenCL);
+   uint index = 3;
+   uint plan_total = iUnits * iWindow;
+   for(uint i = 0; i < iLayers; i++)
+     {
+      CCrossMHFlashAttention *cross = new CCrossMHFlashAttention();
+      if(!cross ||
+         !cross.Init(0, index++, OpenCL, iWindowKey, iHeads, false,
+                     iUnits, iVariables * iUnits, optimization, iBatch) ||
+         !cCrossAttention.Add(cross))
+         DeleteObjAndFalse(cross);
+      CNeuronBaseOCL *holder = new CNeuronBaseOCL();
+      if(!holder ||
+         !holder.Init(0, index++, OpenCL, plan_total, optimization, iBatch) ||
+         !cCrossResidual.Add(holder))
+         DeleteObjAndFalse(holder);
+      holder.SetActivationFunction(None);
+      CNeuronConvOCL *ff1 = new CNeuronConvOCL();
+      if(!ff1 ||
+         !ff1.Init(0, index++, OpenCL, iWindow, iWindow, 4 * iWindow, iUnits,
+                   optimization, iBatch) ||
+         !cCrossFF1.Add(ff1))
+         DeleteObjAndFalse(ff1);
+      ff1.SetActivationFunction(GELU);
+      CNeuronConvOCL *ff2 = new CNeuronConvOCL();
+      if(!ff2 ||
+         !ff2.Init(0, index++, OpenCL, 4 * iWindow, 4 * iWindow, iWindow, iUnits,
+                   optimization, iBatch) ||
+         !cCrossFF2.Add(ff2))
+         DeleteObjAndFalse(ff2);
+      ff2.SetActivationFunction(None);
+      holder = new CNeuronBaseOCL();
+      if(!holder ||
+         !holder.Init(0, index++, OpenCL, plan_total, optimization, iBatch) ||
+         !cCrossFFOutput.Add(holder))
+         DeleteObjAndFalse(holder);
+      holder.SetActivationFunction(None);
+      holder = new CNeuronBaseOCL();
+      if(!holder ||
+         !holder.Init(0, index++, OpenCL, plan_total, optimization, iBatch) ||
+         !cSelfOutput.Add(holder))
+         DeleteObjAndFalse(holder);
+      holder.SetActivationFunction(None);
+     }
+   uint error_width = (iVariables + 1) * iWindow;
+   if(!cErrorInput.Init(0, index++, OpenCL, iUnits * error_width, optimization, iBatch))
+      ReturnFalse;
+   cErrorInput.SetActivationFunction(None);
+   if(!cErrorHead.Init(0, index++, OpenCL, error_width, error_width, 1, iUnits,
+                       optimization, iBatch))
+      ReturnFalse;
+   cErrorHead.SetActivationFunction(SoftPlus);
+//--- state and diagnostics
+   uint context_kv_total = 2 * iVariables * iUnits * iWindow;
+   if(!cContextKV.BufferInit(context_kv_total, 0) || !cContextKV.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cContextKVGradient.BufferInit(context_kv_total, 0) || !cContextKVGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cShiftedConfidence.BufferInit(iUnits, 0) || !cShiftedConfidence.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cDeltaMask.BufferInit(iUnits, 0) || !cDeltaMask.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cPlanDelta.BufferInit(plan_total, 0) || !cPlanDelta.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cPlanDeltaNorm.BufferInit(iUnits, 0) || !cPlanDeltaNorm.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cConfidence.BufferInit(iUnits, 0) || !cConfidence.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cErrorTarget.BufferInit(iUnits, 0) || !cErrorTarget.BufferCreate(OpenCL))
+      ReturnFalse;
+//---
+   return Clear();
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::CrossLayerForward(uint layer,
+      CNeuronBaseOCL *plan,
+      CNeuronBaseOCL *context)
+  {
+   if(!plan || !context || layer >= iLayers)
+      ReturnFalse;
+   CNeuronBaseOCL *query = plan;
+   if(layer == 0)
+     {
+      if(!cQueryPE.FeedForward(plan))
+         ReturnFalse;
+      query = cQueryPE.AsObject();
+     }
+   CCrossMHFlashAttention *cross = cCrossAttention.At((int)layer);
+   CNeuronBaseOCL *cross_res = cCrossResidual.At((int)layer);
+   CNeuronConvOCL *ff1 = cCrossFF1.At((int)layer);
+   CNeuronConvOCL *ff2 = cCrossFF2.At((int)layer);
+   CNeuronBaseOCL *ff_out = cCrossFFOutput.At((int)layer);
+   if(!cross || !cross_res || !ff1 || !ff2 || !ff_out)
+      ReturnFalse;
+   if(!cross.FeedForward(query, GetPointer(cContextKV)))
+      ReturnFalse;
+   if(!SumAndNormalize(cross.getOutput(), plan.getOutput(), cross_res.getOutput(), (int)iWindow))
+      ReturnFalse;
+   if(!ff1.FeedForward(cross_res))
+      ReturnFalse;
+   if(!ff2.FeedForward(ff1.AsObject()))
+      ReturnFalse;
+   if(!SumAndNormalize(ff2.getOutput(), cross_res.getOutput(), ff_out.getOutput(), (int)iWindow))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::CrossLayerBackward(uint layer, CNeuronBaseOCL *plan,
+      CNeuronBaseOCL *context, CBufferFloat *out_grad)
+  {
+   if(!plan || !context || !out_grad || layer >= iLayers)
+      ReturnFalse;
+   CNeuronConvOCL *ff1 = cCrossFF1.At((int)layer);
+   CNeuronConvOCL *ff2 = cCrossFF2.At((int)layer);
+   CNeuronBaseOCL *cross_res = cCrossResidual.At((int)layer);
+   CCrossMHFlashAttention *cross = cCrossAttention.At((int)layer);
+   if(!ff1 || !ff2 || !cross_res || !cross)
+      ReturnFalse;
+   CBufferFloat *ff2_gr = ff2.getGradient();
+   if(!ff2.SetGradient(out_grad, false))
+      ReturnFalse;
+   if(!ff1.CalcHiddenGradients(ff2.AsObject()))
+     {
+      if(!ff2.SetGradient(ff2_gr, false))
+         ReturnFalse;
+      ReturnFalse;
+     }
+   if(!ff2.SetGradient(ff2_gr, false))
+      ReturnFalse;
+   if(!cross_res.CalcHiddenGradients(ff1.AsObject()))
+      ReturnFalse;
+   if(!SumAndNormalize(out_grad, cross_res.getGradient(), cross_res.getGradient(),
+                       (int)iWindow, false, 0, 0, 0, 1))
+      ReturnFalse;
+   CBufferFloat *cross_gr = cross.getGradient();
+   if(!cross.SetGradient(cross_res.getGradient(), false))
+      ReturnFalse;
+   if(!cContextKVGradient.Fill(0))
+     {
+      if(!cross.SetGradient(cross_gr, false))
+         ReturnFalse;
+      ReturnFalse;
+     }
+   if(layer == 0)
+     {
+      if(!cPlanInput.getGradient().Fill(0))
+        {
+         if(!cross.SetGradient(cross_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+      if(!cQueryPE.CalcHiddenGradients(cross.AsObject(),
+                                       GetPointer(cContextKV), GetPointer(cContextKVGradient), None))
+        {
+         if(!cross.SetGradient(cross_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+      if(!cPlanInput.CalcHiddenGradients(cQueryPE.AsObject()))
+        {
+         if(!cross.SetGradient(cross_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+     }
+   else
+     {
+      if(!plan.CalcHiddenGradients(cross,
+                                   GetPointer(cContextKV), GetPointer(cContextKVGradient), None))
+        {
+         if(!cross.SetGradient(cross_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+      if(!SumAndNormalize(cross_res.getGradient(), plan.getGradient(), plan.getGradient(),
+                          (int)iWindow, false, 0, 0, 0, 1))
+        {
+         if(!cross.SetGradient(cross_gr, false))
+            ReturnFalse;
+         ReturnFalse;
+        }
+     }
+   if(!cross.SetGradient(cross_gr, false))
+      ReturnFalse;
+//---
+   return BuildContextProjectionGradient();
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::CrossLayerUpdateWeights(uint layer, CNeuronBaseOCL *plan,
+      CNeuronBaseOCL *context)
+  {
+   if(!plan || !context || layer >= iLayers)
+      ReturnFalse;
+   CNeuronBaseOCL *cross_res = cCrossResidual.At((int)layer);
+   CNeuronConvOCL *ff1 = cCrossFF1.At((int)layer);
+   CNeuronConvOCL *ff2 = cCrossFF2.At((int)layer);
+   if(!cross_res || !ff1 || !ff2)
+      ReturnFalse;
+   if(layer == 0)
+      if(!cQueryPE.UpdateInputWeights(cPlanInput.AsObject()))
+         ReturnFalse;
+   if(!ff1.UpdateInputWeights(cross_res))
+      ReturnFalse;
+   if(!ff2.UpdateInputWeights(ff1.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::SelfLayerForward(uint layer, CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL || layer >= iLayers)
+      ReturnFalse;
+//--- Calculate Queries, Keys, Values
+   CBufferFloat *inputs = NeuronOCL.getOutput();
+   CBufferFloat *qkv = QKV_Tensors.At(layer * 2);
+   if(!ConvolutionForward(QKV_Weights.At(layer * (optimization == SGD ? 2 : 3)), inputs, qkv,
+                          iWindow, 3 * iWindowKey * iHeads, None))
+      ReturnFalse;
+//--- Score and attention
+   CBufferFloat *scores = S_Tensors.At(layer * 2);
+   if(!AttentionScore(qkv, scores, false))
+      ReturnFalse;
+   CBufferFloat *attn = AO_Tensors.At(layer * 2);
+   if(!AttentionOut(qkv, scores, attn))
+      ReturnFalse;
+//--- Attention projection + residual/norm
+   CBufferFloat *temp = FF_Tensors.At(layer * 6);
+   if(!ConvolutionForward(FF_Weights.At(layer * (optimization == SGD ? 6 : 9)), attn, temp,
+                          iWindowKey * iHeads, iWindow, None))
+      ReturnFalse;
+   if(!SumAndNormalize(temp, inputs, temp, iWindow))
+      ReturnFalse;
+//--- Self feed-forward + residual/norm
+   inputs = temp;
+   temp = FF_Tensors.At(layer * 6 + 1);
+   if(!ConvolutionForward(FF_Weights.At(layer * (optimization == SGD ? 6 : 9) + 1), inputs, temp,
+                          iWindow, 4 * iWindow, GELU))
+      ReturnFalse;
+   CBufferFloat *out = Output;
+   if(layer + 1 < iLayers)
+     {
+      CNeuronBaseOCL *holder = cSelfOutput.At((int)layer);
+      if(!holder)
+         ReturnFalse;
+      out = holder.getOutput();
+     }
+   if(!ConvolutionForward(FF_Weights.At(layer * (optimization == SGD ? 6 : 9) + 2), temp, out,
+                          4 * iWindow, iWindow, activation))
+      ReturnFalse;
+   if(!SumAndNormalize(out, inputs, out, iWindow))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::SelfLayerBackward(uint layer, CNeuronBaseOCL *NeuronOCL, CBufferFloat *out_grad)
+  {
+   if(!NeuronOCL || !out_grad || layer >= iLayers)
+      ReturnFalse;
+//--- Passing gradient through self feed-forward layers
+   if(!ConvolutionInputGradients(FF_Weights.At(layer * (optimization == SGD ? 6 : 9) + 2),
+                                 out_grad, FF_Tensors.At(layer * 6 + 1),
+                                 FF_Tensors.At(layer * 6 + 4), 4 * iWindow, iWindow, None))
+      ReturnFalse;
+   CBufferFloat *temp = FF_Tensors.At(layer * 6 + 3);
+   if(!ConvolutionInputGradients(FF_Weights.At(layer * (optimization == SGD ? 6 : 9) + 1),
+                                 FF_Tensors.At(layer * 6 + 4), FF_Tensors.At(layer * 6),
+                                 temp, iWindow, 4 * iWindow, GELU))
+      ReturnFalse;
+   if(!SumAndNormalize(out_grad, temp, temp, iWindow, false))
+      ReturnFalse;
+   out_grad = temp;
+//--- Passing gradient through self attention
+   if(!ConvolutionInputGradients(FF_Weights.At(layer * (optimization == SGD ? 6 : 9)),
+                                 out_grad, AO_Tensors.At(layer * 2),
+                                 AO_Tensors.At(layer * 2 + 1), iWindowKey * iHeads, iWindow, None))
+      ReturnFalse;
+   if(!AttentionInsideGradients(QKV_Tensors.At(layer * 2), QKV_Tensors.At(layer * 2 + 1),
+                                S_Tensors.At(layer * 2), AO_Tensors.At(layer * 2 + 1)))
+      ReturnFalse;
+   temp = NeuronOCL.getGradient();
+   if(!ConvolutionInputGradients(QKV_Weights.At(layer * (optimization == SGD ? 2 : 3)),
+                                 QKV_Tensors.At(layer * 2 + 1), NeuronOCL.getOutput(),
+                                 temp, iWindow, 3 * iWindowKey * iHeads, None))
+      ReturnFalse;
+   if(!SumAndNormalize(out_grad, temp, temp, iWindow, false))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::SelfLayerUpdateWeights(uint layer, CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!NeuronOCL || layer >= iLayers)
+      ReturnFalse;
+   CBufferFloat *inputs = NeuronOCL.getOutput();
+   if(!ConvolutuionUpdateWeights(QKV_Weights.At(layer * (optimization == SGD ? 2 : 3)),
+                                 QKV_Tensors.At(layer * 2 + 1), inputs,
+                                 (optimization == SGD ? QKV_Weights.At(layer * 2 + 1) : QKV_Weights.At(layer * 3 + 1)),
+                                 (optimization == SGD ? NULL : QKV_Weights.At(layer * 3 + 2)),
+                                 iWindow, 3 * iWindowKey * iHeads, 0, iHeads))
+      ReturnFalse;
+   if(!ConvolutuionUpdateWeights(FF_Weights.At(layer * (optimization == SGD ? 6 : 9)),
+                                 FF_Tensors.At(layer * 6 + 3), AO_Tensors.At(layer * 2),
+                                 (optimization == SGD ? FF_Weights.At(layer * 6 + 3) : FF_Weights.At(layer * 9 + 3)),
+                                 (optimization == SGD ? NULL : FF_Weights.At(layer * 9 + 6)),
+                                 iWindowKey * iHeads, iWindow, 0, 1))
+      ReturnFalse;
+   if(!ConvolutuionUpdateWeights(FF_Weights.At(layer * (optimization == SGD ? 6 : 9) + 1),
+                                 FF_Tensors.At(layer * 6 + 4), FF_Tensors.At(layer * 6),
+                                 (optimization == SGD ? FF_Weights.At(layer * 6 + 4) : FF_Weights.At(layer * 9 + 4)),
+                                 (optimization == SGD ? NULL : FF_Weights.At(layer * 9 + 7)),
+                                 iWindow, 4 * iWindow, 0, 1))
+      ReturnFalse;
+   CBufferFloat *ff2_out_gr = Gradient;
+   if(layer + 1 < iLayers)
+     {
+      CNeuronBaseOCL *holder = cSelfOutput.At((int)layer);
+      if(!holder)
+         ReturnFalse;
+      ff2_out_gr = holder.getGradient();
+     }
+   if(!ConvolutuionUpdateWeights(FF_Weights.At(layer * (optimization == SGD ? 6 : 9) + 2),
+                                 ff2_out_gr, FF_Tensors.At(layer * 6 + 1),
+                                 (optimization == SGD ? FF_Weights.At(layer * 6 + 5) : FF_Weights.At(layer * 9 + 5)),
+                                 (optimization == SGD ? NULL : FF_Weights.At(layer * 9 + 8)),
+                                 4 * iWindow, iWindow, 0, 1))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!OpenCL || !NeuronOCL || NeuronOCL.Neurons() < int(iVariables * iWindow))
+      ReturnFalse;
+//--- recurrent plan state is captured before Output is overwritten
+   if(!ShiftState())
+      ReturnFalse;
+//--- variables x dimension context -> trainable K/V tokens for variables * horizon
+   if(!cContextProjection.FeedForward(NeuronOCL))
+      ReturnFalse;
+   if(!BuildContextKV())
+      ReturnFalse;
+//--- forecast transformer blocks
+   CNeuronBaseOCL *plan = cPlanInput.AsObject();
+   CNeuronBaseOCL *context = cContextProjection.AsObject();
+   for(uint i = 0; i < iLayers; i++)
+     {
+      CNeuronBaseOCL *ff_out = cCrossFFOutput.At((int)i);
+      if(!ff_out)
+         ReturnFalse;
+      if(!CrossLayerForward(i, plan, context))
+         ReturnFalse;
+      if(!SelfLayerForward(i, ff_out))
+         ReturnFalse;
+      if(i + 1 < iLayers)
+         plan = cSelfOutput.At((int)i);
+     }
+//--- side outputs
+   if(!BuildErrorInput(NeuronOCL))
+      ReturnFalse;
+   if(!BuildConfidence())
+      ReturnFalse;
+   if(!BuildDeltaNorm())
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!OpenCL || !NeuronOCL)
+      ReturnFalse;
+//--- expected-error head learns decoder-gradient magnitude without feeding it back into z_pred
+   float error = 0;
+   if(!BuildErrorTarget())
+      ReturnFalse;
+   if(!cErrorHead.calcOutputGradients(GetPointer(cErrorTarget), error))
+      ReturnFalse;
+//--- gradients through forecast blocks; shifted plan branch is detached
+   if(!cContextProjection.getGradient().Fill(0))
+      ReturnFalse;
+   CNeuronBaseOCL *context = cContextProjection.AsObject();
+   for(int i = int(iLayers) - 1; i >= 0; i--)
+     {
+      CNeuronBaseOCL *self_input = cCrossFFOutput.At(i);
+      CNeuronBaseOCL *self_out = cSelfOutput.At(i);
+      if(!self_input || !self_out)
+         ReturnFalse;
+      CBufferFloat *out_grad = (i == int(iLayers) - 1 ? Gradient : self_out.getGradient());
+      if(!SelfLayerBackward((uint)i, self_input, out_grad))
+         ReturnFalse;
+      CNeuronBaseOCL *plan = (i == 0 ? cPlanInput.AsObject() : cSelfOutput.At(i - 1));
+      if(!CrossLayerBackward((uint)i, plan, context, self_input.getGradient()))
+         ReturnFalse;
+     }
+//--- accumulated KV gradient -> projection gradient -> RankTCM output gradient
+   if(!NeuronOCL.CalcHiddenGradients(cContextProjection.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!OpenCL || !NeuronOCL)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL *plan = cPlanInput.AsObject();
+   CNeuronBaseOCL *context = cContextProjection.AsObject();
+   for(uint i = 0; i < iLayers; i++)
+     {
+      CNeuronBaseOCL *ff_out = cCrossFFOutput.At((int)i);
+      if(!ff_out)
+         ReturnFalse;
+      if(!CrossLayerUpdateWeights(i, plan, context))
+         ReturnFalse;
+      if(!SelfLayerUpdateWeights(i, ff_out))
+         ReturnFalse;
+      if(i + 1 < iLayers)
+         plan = cSelfOutput.At((int)i);
+     }
+   if(!cContextProjection.UpdateInputWeights(NeuronOCL.AsObject()))
+      ReturnFalse;
+   if(!cErrorHead.UpdateInputWeights(cErrorInput.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::Save(const int file_handle)
+  {
+   if(!CNeuronMLMHAttentionOCL::Save(file_handle))
+      ReturnFalse;
+   dFileWriteUInt(file_handle, iVariables);
+   if(!cPlanInput.Save(file_handle) ||
+      !cContextProjection.Save(file_handle) ||
+      !cQueryPE.Save(file_handle) ||
+      !cCrossAttention.Save(file_handle) ||
+      !cCrossResidual.Save(file_handle) ||
+      !cCrossFF1.Save(file_handle) ||
+      !cCrossFF2.Save(file_handle) ||
+      !cCrossFFOutput.Save(file_handle) ||
+      !cSelfOutput.Save(file_handle) ||
+      !cErrorInput.Save(file_handle) ||
+      !cErrorHead.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::Load(const int file_handle)
+  {
+   if(!CNeuronMLMHAttentionOCL::Load(file_handle))
+      ReturnFalse;
+   dFileReadUInt(file_handle, iVariables);
+   if(!LoadInsideLayer(file_handle, cPlanInput.AsObject()) ||
+      !LoadInsideLayer(file_handle, cContextProjection.AsObject()) ||
+      !LoadInsideLayer(file_handle, cQueryPE.AsObject()) ||
+      !cCrossAttention.Load(file_handle) ||
+      !cCrossResidual.Load(file_handle) ||
+      !cCrossFF1.Load(file_handle) ||
+      !cCrossFF2.Load(file_handle) ||
+      !cCrossFFOutput.Load(file_handle) ||
+      !cSelfOutput.Load(file_handle) ||
+      !LoadInsideLayer(file_handle, cErrorInput.AsObject()) ||
+      !LoadInsideLayer(file_handle, cErrorHead.AsObject()))
+      ReturnFalse;
+   cPlanInput.SetOpenCL(OpenCL);
+   cContextProjection.SetOpenCL(OpenCL);
+   cQueryPE.SetOpenCL(OpenCL);
+   cCrossAttention.SetOpenCL(OpenCL);
+   cCrossResidual.SetOpenCL(OpenCL);
+   cCrossFF1.SetOpenCL(OpenCL);
+   cCrossFF2.SetOpenCL(OpenCL);
+   cCrossFFOutput.SetOpenCL(OpenCL);
+   cSelfOutput.SetOpenCL(OpenCL);
+   cErrorInput.SetOpenCL(OpenCL);
+   cErrorHead.SetOpenCL(OpenCL);
+//--- transient state is rebuilt from dimensions
+   uint plan_total = iUnits * iWindow;
+   uint context_kv_total = 2 * iVariables * iUnits * iWindow;
+   if(!cContextKV.BufferInit(context_kv_total, 0) || !cContextKV.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cContextKVGradient.BufferInit(context_kv_total, 0) || !cContextKVGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cShiftedConfidence.BufferInit(iUnits, 0) || !cShiftedConfidence.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cDeltaMask.BufferInit(iUnits, 0) || !cDeltaMask.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cPlanDelta.BufferInit(plan_total, 0) || !cPlanDelta.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cPlanDeltaNorm.BufferInit(iUnits, 0) || !cPlanDeltaNorm.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cConfidence.BufferInit(iUnits, 0) || !cConfidence.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cErrorTarget.BufferInit(iUnits, 0) || !cErrorTarget.BufferCreate(OpenCL))
+      ReturnFalse;
+//---
+   return Clear();
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronCogDriverForecastHead::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronMLMHAttentionOCL::SetOpenCL(obj);
+   cPlanInput.SetOpenCL(OpenCL);
+   cContextProjection.SetOpenCL(OpenCL);
+   cQueryPE.SetOpenCL(OpenCL);
+   cCrossAttention.SetOpenCL(OpenCL);
+   cCrossResidual.SetOpenCL(OpenCL);
+   cCrossFF1.SetOpenCL(OpenCL);
+   cCrossFF2.SetOpenCL(OpenCL);
+   cCrossFFOutput.SetOpenCL(OpenCL);
+   cSelfOutput.SetOpenCL(OpenCL);
+   cErrorInput.SetOpenCL(OpenCL);
+   cErrorHead.SetOpenCL(OpenCL);
+   cContextKV.BufferCreate(OpenCL);
+   cContextKVGradient.BufferCreate(OpenCL);
+   cShiftedConfidence.BufferCreate(OpenCL);
+   cDeltaMask.BufferCreate(OpenCL);
+   cPlanDelta.BufferCreate(OpenCL);
+   cPlanDeltaNorm.BufferCreate(OpenCL);
+   cConfidence.BufferCreate(OpenCL);
+   cErrorTarget.BufferCreate(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronCogDriverForecastHead::TrainMode(bool flag)
+  {
+   CNeuronBaseOCL::TrainMode(flag);
+   cPlanInput.TrainMode(bTrain);
+   cContextProjection.TrainMode(bTrain);
+   cQueryPE.TrainMode(bTrain);
+   cCrossAttention.TrainMode(bTrain);
+   cCrossResidual.TrainMode(bTrain);
+   cCrossFF1.TrainMode(bTrain);
+   cCrossFF2.TrainMode(bTrain);
+   cCrossFFOutput.TrainMode(bTrain);
+   cSelfOutput.TrainMode(bTrain);
+   cErrorInput.TrainMode(bTrain);
+   cErrorHead.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!source || source.Type() != Type())
+      ReturnFalse;
+   if(!CNeuronMLMHAttentionOCL::WeightsUpdate(source, tau))
+      ReturnFalse;
+//---
+   CNeuronCogDriverForecastHead *Source = source;
+   if(!cPlanInput.WeightsUpdate(Source.cPlanInput.AsObject(), tau) ||
+      !cContextProjection.WeightsUpdate(Source.cContextProjection.AsObject(), tau) ||
+      !cQueryPE.WeightsUpdate(Source.cQueryPE.AsObject(), tau) ||
+      !cCrossAttention.WeightsUpdate(GetPointer(Source.cCrossAttention), tau) ||
+      !cCrossResidual.WeightsUpdate(GetPointer(Source.cCrossResidual), tau) ||
+      !cCrossFF1.WeightsUpdate(GetPointer(Source.cCrossFF1), tau) ||
+      !cCrossFF2.WeightsUpdate(GetPointer(Source.cCrossFF2), tau) ||
+      !cCrossFFOutput.WeightsUpdate(GetPointer(Source.cCrossFFOutput), tau) ||
+      !cSelfOutput.WeightsUpdate(GetPointer(Source.cSelfOutput), tau) ||
+      !cErrorInput.WeightsUpdate(Source.cErrorInput.AsObject(), tau) ||
+      !cErrorHead.WeightsUpdate(Source.cErrorHead.AsObject(), tau))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastHead::Clear(void)
+  {
+   if(!CNeuronBaseOCL::Clear())
+      ReturnFalse;
+   if(!cPlanInput.Clear() ||
+      !cContextProjection.Clear() ||
+      !cQueryPE.Clear() ||
+      !cCrossAttention.ClearStates() ||
+      !cCrossResidual.ClearStates() ||
+      !cCrossFF1.ClearStates() ||
+      !cCrossFF2.ClearStates() ||
+      !cCrossFFOutput.ClearStates() ||
+      !cSelfOutput.ClearStates() ||
+      !cErrorInput.Clear() ||
+      !cErrorHead.Clear())
+      ReturnFalse;
+   if(!cContextKV.Fill(0) ||
+      !cContextKVGradient.Fill(0) ||
+      !cShiftedConfidence.Fill(0) ||
+      !cDeltaMask.Fill(0) ||
+      !cPlanDelta.Fill(0) ||
+      !cPlanDeltaNorm.Fill(0) ||
+      !cConfidence.Fill(0) ||
+      !cErrorTarget.Fill(0))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastToken::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+      uint dimension, uint horizon, ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   if(dimension == 0 || horizon == 0 || dimension % 2 != 0)
+      ReturnFalse;
+   if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, horizon * (dimension + 1),
+                            optimization_type, batch))
+      ReturnFalse;
+//---
+   iDimension = dimension;
+   iHorizon = horizon;
+   SetActivationFunction(None);
+   if(!cRoPE.Init(0, myIndex + 1, OpenCL, iHorizon, iDimension, 1, optimization, iBatch))
+      ReturnFalse;
+   cRoPE.SetActivationFunction(None);
+   if(!cConfidenceGradient.BufferInit(iHorizon, 0) || !cConfidenceGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+//---
+   return Clear();
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastToken::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!OpenCL || !NeuronOCL || NeuronOCL.Type() != defNeuronCogDriverForecastHead ||
+      NeuronOCL.Neurons() != int(iHorizon * iDimension))
+      ReturnFalse;
+//---
+   CNeuronCogDriverForecastHead *forecast = NeuronOCL;
+   CBufferFloat *confidence = forecast.GetConfidence();
+   if(!confidence || confidence.Total() < int(iHorizon))
+      ReturnFalse;
+   if(!cRoPE.FeedForward(NeuronOCL.AsObject()))
+      ReturnFalse;
+   if(!Concat(cRoPE.getOutput(), confidence, Output, (int)iDimension, 1, (int)iHorizon))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastToken::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!OpenCL || !NeuronOCL || NeuronOCL.Type() != defNeuronCogDriverForecastHead)
+      ReturnFalse;
+   if(!DeConcat(cRoPE.getGradient(), GetPointer(cConfidenceGradient), Gradient,
+                (int)iDimension, 1, (int)iHorizon))
+      ReturnFalse;
+   if(!cRoPE.CalcHiddenGradients(NeuronOCL.AsObject()))
+      ReturnFalse;
+   if(NeuronOCL.Activation() != None)
+      if(!DeActivation(NeuronOCL.getOutput(), NeuronOCL.getGradient(), NeuronOCL.getGradient(),
+                       NeuronOCL.Activation()))
+         ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastToken::Save(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Save(file_handle))
+      ReturnFalse;
+   dFileWriteUInt(file_handle, iDimension);
+   dFileWriteUInt(file_handle, iHorizon);
+   if(!cRoPE.Save(file_handle))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastToken::Load(const int file_handle)
+  {
+   if(!CNeuronBaseOCL::Load(file_handle))
+      ReturnFalse;
+   dFileReadUInt(file_handle, iDimension);
+   dFileReadUInt(file_handle, iHorizon);
+   if(!LoadInsideLayer(file_handle, cRoPE.AsObject()))
+      ReturnFalse;
+   cRoPE.SetOpenCL(OpenCL);
+   if(!cConfidenceGradient.BufferInit(iHorizon, 0) || !cConfidenceGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+//---
+   return Clear();
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronCogDriverForecastToken::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronBaseOCL::SetOpenCL(obj);
+   cRoPE.SetOpenCL(OpenCL);
+   cConfidenceGradient.BufferCreate(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CNeuronCogDriverForecastToken::TrainMode(bool flag)
+  {
+   CNeuronBaseOCL::TrainMode(flag);
+   cRoPE.TrainMode(bTrain);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverForecastToken::Clear(void)
+  {
+   if(!CNeuronBaseOCL::Clear() ||
+      !cRoPE.Clear() ||
+      !cConfidenceGradient.Fill(0))
+      ReturnFalse;
 //---
    return true;
   }

@@ -295,7 +295,6 @@ void OnTick()
       //---
       Result.Clear();
       if(!Result.Add(reward)
-         || !cCritic[0].TrainMode(true)
          || !cCritic[0].backProp(Result, (CNet*)GetPointer(cActor[0]), LatentLayer))
         {
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -347,20 +346,21 @@ void OnTick()
       //---
       if((MathRand() % ActorUpdate) == 0)
         {
+         cCritic[0].TrainMode(false);
          if(!cCritic[0].feedForward(GetPointer(cActor[0]), -1, GetPointer(cActor[0]), LatentLayer))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             return;
            }
          cCritic[0].getResults(Result);
-         if(!Result.Update(0, float(MathMax(Result[0], 0) + PrevBalance * 0.1 * PrevBalance / EtalonBalance)) ||
-            !cCritic[0].TrainMode(false) ||
+         if(!Result.Update(0, float(MathMax(Result[0], 0) + (PrevBalance * 0.1 + PrevBalance) / EtalonBalance)) ||
             !cCritic[0].backProp(Result, (CNet*)GetPointer(cActor[0]), LatentLayer) ||
             !cActor[0].backPropGradient((CBufferFloat*)GetPointer(bTime), NULL, -1, true))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             return;
            }
+         cCritic[0].TrainMode(true);
         }
       if(PrevBalance < 20)
          ExpertRemove();
@@ -564,10 +564,8 @@ bool FillStack(void)
            }
         }
      }
-   for(uint i = 0; i < cActor.Size(); i++)
-      cActor[i].TrainMode(true);
-   for(uint i = 0; i < cCritic.Size(); i++)
-      cCritic[i].TrainMode(true);
+   cActor[0].TrainMode(true);
+   cCritic[0].TrainMode(true);
    Comment("");
    if(MQLInfoInteger(MQL_TESTER))
       Print("Fill stack Done");
