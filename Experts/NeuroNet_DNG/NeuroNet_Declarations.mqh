@@ -142,6 +142,7 @@ class COpenCLMy   :  public COpenCL
   {
 protected:
    uaLongChar              uLocalDimension;
+   uaLongChar              uMaxWorkGroup;
 
 public:
    /** Constructor */
@@ -154,6 +155,7 @@ public:
    int               AddBuffer(uint size_in_bytes, const uint flags);
    //---
    long              GetMaxLocalSize(const int dimension) const { return uLocalDimension.data[dimension]; }
+   long              GetMaxWorkGroupSize(void) const { return uMaxWorkGroup.data[0]; }
    ulong             GetBufferSize(const int buffer_index) const;
   };
 //+------------------------------------------------------------------+
@@ -312,12 +314,13 @@ protected:
    float                   recentAverageError;                 ///< Average error
    CArrayLayer            *layers;                             ///< Array of layers
    COpenCLMy              *opencl;                             ///< Class for working with OpenCL
+   bool                    bOwnOpenCL;                         ///< This net created and must release OpenCL
    virtual bool            OpenCLInit(void);
 
 public:
    /** Constructor */
-                     CNet(void)  { Create(NULL); }
-                     CNet(CArrayObj *Description)  { Create(Description); }
+                     CNet(void) : bOwnOpenCL(false) { Create(NULL); }
+                     CNet(CArrayObj *Description) : bOwnOpenCL(false) { Create(Description); }
    bool                    Create(CArrayObj *Description);
    /** Destructor */      ~CNet(void);
    bool                    feedForward(CArrayFloat *inputVals, int window = 1, bool tem = true, CBufferFloat *SecondInput = NULL); ///< Feed Forward method.@param[in] prevLayer Pointer to previos layer. @param[in] window Window of input data. @param[in] tem Use Time Embedding.
@@ -497,12 +500,15 @@ protected:
    ///\ingroup neuron_base_ff
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) { return feedForward(NeuronOCL); }               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForwardSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return feedForward(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL)); }
 
    ///\ingroup neuron_base_opt
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second)  {  return updateInputWeights(NeuronOCL); }        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return updateInputWeights(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);        ///< Method to transfer gradients to previous layer @param[in] NeuronOCL Pointer to previous layer.
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) { return calcInputGradients(NeuronOCL); }
+   virtual bool      calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return calcInputGradients(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL), (SecondNeuron ? SecondNeuron.getGradient() : NULL), (SecondNeuron ? (ENUM_ACTIVATION)SecondNeuron.Activation() : None)); }
    virtual bool      calcHiddenGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) { ReturnFalse; }
    virtual bool      calcHiddenGradients(CNeuronBaseOCL *NeuronOCL);          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
    virtual float     GenerateWeight(void);
@@ -612,10 +618,13 @@ public:
    virtual ENUM_OPTIMIZATION Optimization(void)    {  return optimization; }
    //---
    virtual bool      FeedForward(CObject *SourceObject, CBufferFloat *SecondInput = NULL);                    ///< Dispatch method for defining the subroutine for feed forward process. @param SourceObject Pointer to the previous layer.
+   virtual bool      FeedForwardSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron);
    virtual bool      UpdateInputWeights(CObject *SourceObject, CBufferFloat *SecondInput = NULL);             ///< Dispatch method for defining the subroutine for updating weights.@param SourceObject Pointer to previos layer.
+   virtual bool      UpdateInputWeightsSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron);
    ///\ingroup neuron_base_gr
    ///@{
    virtual bool      CalcHiddenGradients(CObject *TargetObject, CBufferFloat *SecondInput = NULL, CBufferFloat *SecondGradient = NULL, ENUM_ACTIVATION SecondActivation = None);        ///< Dispatch method for defining the subroutine for transferring the gradient to the previous layer. @param TargetObject Pointer to the next layer.
+   virtual bool      CalcHiddenGradientsSecond(CObject *TargetObject, CNeuronBaseOCL *SecondNeuron);
    virtual bool      calcOutputGradients(CBufferFloat *Target, float &error);               ///< Method of output gradients calculation by calling kernel ::CalcOutputGradient().@param Target Traget value
    virtual bool      calcAlignmentGradient(const CNeuronBaseOCL *neuron, const bool add = false);
    ///@}
@@ -629,6 +638,10 @@ public:
    virtual CLayerDescription* GetLayerInfo(void);
    virtual bool      numOutputs(const uint outputs, ENUM_OPTIMIZATION optimization_type);
    virtual void      SetOpenCL(COpenCLMy *obj);
+   //--- Load() allocates buffers from their serialized shapes.  It needs the
+   //--- context before allocation, but SetOpenCL() is for already shaped
+   //--- buffers and must not be used on a constructor-empty object.
+   virtual void      AttachOpenCL(COpenCLMy *obj) { OpenCL=obj; }
    virtual CObject*  AsObject(void) {  return GetPointer(this);   }
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau);
@@ -694,6 +707,9 @@ public:
    ///< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object.@param[in] window Size of input window @param[in] step Step size.@param[in] window_out Size of output window @param[in] units_countNumber of neurons.@param[in] optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
    virtual CBufferFloat* GetWeightsConv(void)   {  return WeightsConv;  }
+   //--- Direct non-owning device-buffer input path.
+   bool              FeedForwardBuffer(CBufferFloat *source);
+   bool              UpdateInputWeightsBuffer(CBufferFloat *source);
    //---
    virtual int       Type(void) override const  {  return defNeuronConvOCL;   }///< Identificator of class.@return Type of class
    //--- methods for working with files
@@ -13032,6 +13048,228 @@ public:
   };
 //+------------------------------------------------------------------+
 //|                                                                  |
+//+------------------------------------------------------------------+
+class CScenarioCodebook : public CObject
+  {
+protected:
+   uint              iScenarios;
+   uint              iDimension;
+   COpenCLMy         *OpenCL;
+   CBufferFloat      cPrototypes;
+   CBufferFloat      cEMASums;
+   CBufferFloat      cEMACounts;
+   CBufferFloat      cUsage;
+   CBufferFloat      cInactive;
+   CBufferFloat      cInactivityAge;
+
+public:
+                     CScenarioCodebook(void) : iScenarios(0), iDimension(0), OpenCL(NULL) {};
+                    ~CScenarioCodebook(void) { OpenCL = NULL; };
+   //---
+   bool              Init(uint scenarios, uint dimension, COpenCLMy *open_cl);
+   bool              Save(const int file_handle);
+   bool              Load(const int file_handle, COpenCLMy *open_cl);
+   bool              ValidateContract(uint scenarios, uint dimension);
+   void              SetOpenCL(COpenCLMy *open_cl);
+   uint              Scenarios(void) const { return iScenarios; }
+   uint              Dimension(void) const { return iDimension; }
+   CBufferFloat      *GetPrototypes(void) { return GetPointer(cPrototypes); }
+   CBufferFloat      *GetEMASums(void) { return GetPointer(cEMASums); }
+   CBufferFloat      *GetEMACounts(void) { return GetPointer(cEMACounts); }
+   CBufferFloat      *GetUsage(void) { return GetPointer(cUsage); }
+   CBufferFloat      *GetInactive(void) { return GetPointer(cInactive); }
+   CBufferFloat      *GetInactivityAge(void) { return GetPointer(cInactivityAge); }
+  };
+//+------------------------------------------------------------------+
+//| Shared scenario-major forecast foundation                        |
+//+------------------------------------------------------------------+
+class CNeuronScenarioForecast : public CNeuronBaseOCL
+  {
+protected:
+   uint              iVariables;
+   uint              iScenarios;
+   uint              iTopK;
+   uint              iHorizon;
+   uint              iDimension;
+   uint              iLastAssignment;
+   bool              bLastTargetAccepted;
+   bool              bLastControlValid;
+   //---
+   CScenarioCodebook cCodebook;
+   CNeuronBaseOCL    cGeneratorInput;
+   CNeuronBaseOCL    cRouterInput;
+   CNeuronBaseOCL    cConfidenceInput;
+   CNeuronConvOCL    cGenerator;
+   CNeuronConvOCL    cRouter;
+   CNeuronConvOCL    cConfidenceHead;
+   CNeuronSoftMaxOCL cRouterSoftmax;
+   CNeuronBaseOCL    cResponsibilityScores;
+   CNeuronSparseSoftMax cTopKSelector;
+   //---
+   CBufferFloat      cConfidence;
+   CBufferFloat      cLogConfidence;
+   CBufferFloat      cLogProbabilities;
+   CBufferFloat      cResponsibilities;
+   CBufferFloat      cTarget;
+   CBufferFloat      cHardLoss;
+   CBufferFloat      cBatchControl;
+   CBufferFloat      cRecovery;
+   CBufferFloat      cForwardValidity;
+   CBufferFloat      cDiagnosticPartials;
+   CBufferFloat      cEpochDiagnostics;
+   CBufferFloat      cDiagnosticScratch;
+   //---
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+   //---
+   bool              ValidateLaunchConfiguration(COpenCLMy *open_cl, uint scenarios, uint horizon,
+         uint latent, uint variables);
+   bool              BindResponsibilitiesKernel(CBufferFloat *target_source,
+         CBufferFloat *observation_by_scenario);
+   bool              UpdateCodebook(CBufferFloat *delta_target,float decay = 0.99f);
+
+public:
+                     CNeuronScenarioForecast(void) : iVariables(0), iScenarios(0), iTopK(0), iHorizon(0), iDimension(0),
+                     iLastAssignment(0), bLastTargetAccepted(false), bLastControlValid(false) {};
+                    ~CNeuronScenarioForecast(void) {};
+   //---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint scenarios = 21, uint top_k = 3, uint horizon = 12,
+                          uint latent = 16, ENUM_OPTIMIZATION optimization_type = ADAM,
+                          uint batch = 1, uint variables = 1);
+   //---
+   bool              BuildResponsibilities(CBufferFloat *target);
+   bool              BuildResponsibilities(CBufferFloat *target,CBufferFloat *delta_target);
+   bool              ResetEpochDiagnostics(void);
+   bool              CommitBatchDiagnostics(void);
+   bool              BuildEpochCodebookDiagnostics(void);
+   bool              ReadEpochDiagnostics(double &mix_loss, double &router_loss,
+                                          double &trajectory_loss, double &confidence_loss,
+                                          double &latent_error, double &observation_error,
+                                          double &valid_batches, double &invalid_batches,
+                                          double &usage_entropy, double &pairwise_codebook,
+                                          double &inactive_count);
+   //---
+   virtual int       Type(void) override const { return defNeuronScenarioForecast; }
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   bool              Load(const int file_handle, COpenCLMy *open_cl);
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+   //---
+   uint              Variables(void) const { return iVariables; }
+   uint              Scenarios(void) const { return iScenarios; }
+   uint              GetTopK(void) const { return iTopK; }
+   uint              Horizon(void) const { return iHorizon; }
+   uint              Dimension(void) const { return iDimension; }
+   //---
+   CBufferFloat      *GetZ(void) { return getOutput(); }
+   CBufferFloat      *GetU(void) { return GetPointer(cConfidence); }
+   CBufferFloat      *GetLogU(void) { return GetPointer(cLogConfidence); }
+   CBufferFloat      *GetPi(void) { return cRouterSoftmax.getOutput(); }
+   CBufferFloat      *GetLogPi(void) { return GetPointer(cLogProbabilities); }
+   CBufferFloat      *GetResponsibilities(void) { return GetPointer(cResponsibilities); }
+   //---
+   CScenarioCodebook *GetCodebook(void) { return GetPointer(cCodebook); }
+   CNeuronConvOCL    *GetGenerator(void) { return GetPointer(cGenerator); }
+   CNeuronConvOCL    *GetRouter(void) { return GetPointer(cRouter); }
+   CNeuronConvOCL    *GetConfidenceHead(void) { return GetPointer(cConfidenceHead); }
+   CNeuronSoftMaxOCL *GetRouterSoftmax(void) { return GetPointer(cRouterSoftmax); }
+   CNeuronSparseSoftMax *GetTopKSelector(void) { return GetPointer(cTopKSelector); }
+   //---
+   ulong             ContractSignature(void);
+   bool              ExportDetached(CBufferFloat *z, CBufferFloat *u, CBufferFloat *log_u,
+                                    CBufferFloat *pi, CBufferFloat *log_pi);
+   uint              TrainableWeights(void);
+   uint              LastAssignment(void) const { return iLastAssignment; }
+   bool              LastTargetAccepted(void) const { return bLastTargetAccepted; }
+   bool              LastBatchControlValid(void) const { return bLastControlValid; }
+   uint              ActiveTrajectories(void);
+   uint              DenseRouterGradientCount(void);
+  };
+//+------------------------------------------------------------------+
+//| Scenario-local Flash cross-attention for ORION Actor/Critic      |
+//+------------------------------------------------------------------+
+class CNeuronScenarioCrossAttention : public CNeuronMSRes
+  {
+protected:
+   uint                       iVariables;
+   uint                       iScenarios;
+   uint                       iHorizon;
+   uint                       iDimension;
+   uint                       iQueries;
+   uint                       iStackSize;
+   uint                       iTopK;
+   bool                       bCritic;
+   CNeuronMultiWindowsConvOCL cQueryProjection;
+   CNeuronBaseOCL             cQueryGradient;
+   CNeuronConvOCL             cWz;
+   CNeuronConvOCL             cWu;
+   CNeuronBaseOCL             cTokenSum;
+   CNeuronLearnabledPE        cTokenPE;
+   CNeuronTransposeRCDOCL     cTokensTranspose;
+   CNeuronBaseOCL             cKV;
+   CNeuronBaseOCL             cKVGradK;
+   CNeuronBaseOCL             cKVGradV;
+   CCrossMHFlashAttention     cAttention;
+   CNeuronTransposeRCDOCL     cAttentionTranspose;
+   CNeuronBaseOCL             cHeadGate;
+   CNeuronTransposeRCDOCL     cHeadGateTranspose;
+   CNeuronConvOCL             cOutputProjection;
+   CNeuronConvOCL             cQueryResidual;
+   CNeuronBaseOCL             cMHAOutput;
+//--- Actor-only MPI continuity.  The scenario axis remains intact through
+//--- cScenarioHistory; Pi is applied only afterwards in cHeadGate.
+   CNeuronAddToStack          cHistoryStack;
+   CNeuronMomADTTM            cHistoryTTM;
+   CNeuronConvOCL             cHistoryTokenProjection;
+   CCrossMHFlashAttention     cHistoryMarket;
+   CNeuronCrossAttention      cHistoryContext;
+   CNeuronCrossAttention      cScenarioHistory;
+   //---
+   virtual bool               feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool               feedForwardSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *Forecast) override;
+   virtual bool               calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool               calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *Forecast) override;
+   virtual bool               updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
+   virtual bool               updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *Forecast) override;
+   bool                       InitHolders(uint myIndex, ENUM_OPTIMIZATION optimization_type, uint batch);
+
+public:
+                     CNeuronScenarioCrossAttention(void) : iVariables(0), iScenarios(0), iHorizon(0), iDimension(0),
+                     iQueries(0), iStackSize(0), iTopK(0), bCritic(false) {};
+                    ~CNeuronScenarioCrossAttention(void) {};
+   //---
+   virtual bool               Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                   uint scenarios = 21, uint horizon = 12, uint latent = 16,
+                                   bool critic = false, ENUM_OPTIMIZATION optimization_type = ADAM,
+                                   uint batch = 1, uint variables = 1, uint stack_size = 1,
+                                   uint top_k = 1);
+   virtual int                Type(void) override const { return defNeuronScenarioCrossAttention; }
+   virtual bool               Save(const int file_handle) override;
+   virtual bool               Load(const int file_handle) override;
+   bool                       Load(const int file_handle, COpenCLMy *open_cl);
+   virtual void               SetOpenCL(COpenCLMy *obj) override;
+   virtual void               TrainMode(bool flag) override;
+   virtual bool               WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool               Clear(void) override;
+   uint                       Variables(void) const { return iVariables; }
+   uint                       Scenarios(void) const { return iScenarios; }
+   uint                       Horizon(void) const { return iHorizon; }
+   uint                       Latent(void) const { return iDimension; }
+   uint                       Queries(void) const { return iQueries; }
+   uint                       HistorySize(void) const { return iStackSize; }
+   uint                       HistoryTopK(void) const { return iTopK; }
+   bool                       IsCritic(void) const { return bCritic; }
+   CNeuronConvOCL            *GetWz(void) { return GetPointer(cWz); }
+   CNeuronConvOCL            *GetWu(void) { return GetPointer(cWu); }
+   CBufferFloat              *GetHeadContexts(void) { return (bCritic ? cAttention.getOutput() : cScenarioHistory.getOutput()); }
+   bool                       HasHistory(void) const { return !bCritic; }
+   CNeuronAddToStack         *GetHistoryStack(void) { return (bCritic ? NULL : GetPointer(cHistoryStack)); }
+  };
 //+------------------------------------------------------------------+
 #endif // NEURONET_DECLARATIONS_MQH
 

@@ -11,6 +11,7 @@
 #define l2 1.0e-4f
 #define MAX_GRAD 1.0e-2f
 #define LOCAL_ARRAY_SIZE 64
+#define SCENARIO_LOCAL_CAP 256
 #define MAX_VALUE 3.4e37f
 #define MIN_VALUE -MAX_VALUE
 //--- Activation Functions
@@ -1561,14 +1562,28 @@ __kernel void Dropout(__global const float *inputs, ///<[in] Input matrix
 //+------------------------------------------------------------------+
 __kernel void BatchFeedForward(__global float *inputs, __global float *options,
                                __global float *output, int batch,
-                               int optimization, int activation)
+                               int optimization, int activation, int training)
   {
-   if(batch <= 1)
-      return;
    int n = get_global_id(0);
    int shift = n * (optimization == 0 ? 7 : 9);
 //---
    float inp = IsNaNOrInf(inputs[n], 0);
+   if(training == 0)
+     {
+      const float mean = IsNaNOrInf(options[shift], 0);
+      float variance = IsNaNOrInf(options[shift + 1], 1);
+      if(variance <= 0)
+         variance = 1;
+      float gamma = IsNaNOrInf(options[shift + 3], 1);
+      if(gamma == 0)
+         gamma = 1;
+      const float betta = IsNaNOrInf(options[shift + 4], 0);
+      const float nx = (inp - mean) / sqrt(variance);
+       output[n] = fActivation(gamma * nx + betta, activation);
+       return;
+      }
+   if(batch <= 1)
+      return;
    float mean = (IsNaNOrInf(options[shift], 0) * max((float)batch - 1.0f, 0.0f) + inp) / max((float)batch, 1.0f);
    float delt = inp - mean;
    float variance = (IsNaNOrInf(options[shift + 1] * max((float)batch - 1.0f, 0.0f), 0) + delt * delt) / max((float)batch, 1.0f);
@@ -13322,7 +13337,7 @@ __kernel void MHFlashAttention(__global const float *query,
    float prev_max = MIN_VALUE;
    float sumexp = 0;
    float out = 0;
-   for(int id = local_id; id < total_kv; id += total_loc)
+   for(int id = 0; id < total_kv; id += total_loc)
      {
       int k_id = id + local_id;
       const int shift_k = RCtoFlat(h_id, 0, 2 * total_heads, dimension, k_id);
@@ -15205,6 +15220,575 @@ __kernel void CogDriverRankTCMSelfKV(__global const float* source,
       const int v_shift = RCtoFlat(effective_head + total_heads, local_dim, 2 * total_heads, head_dim, key_variable);
       self_kv[k_shift] = value;
       self_kv[v_shift] = value;
+     }
+  }
+//+------------------------------------------------------------------+
+//| Scenario-major forecast: Z[k][h][d], U[k][h], Pi[k]              |
+//+------------------------------------------------------------------+
+__kernel void ScenarioForecastForward(__global const float *input,
+                                      __global const float *prototypes,
+                                      __global float *generator_input,
+                                      __global float *router_input,
+                                      __global float *confidence_input,
+                                      __global const float *generator_output,
+                                      __global const float *router_output,
+                                      __global const float *confidence_output,
+                                      __global float *z,
+                                      __global float *u,
+                                      __global float *pi,
+                                      const int scenarios,
+                                      const int horizon,
+                                      const int dimension,
+                                      const int phase,
+                                      __global float *log_pi,
+                                       __global float *log_u,
+                                       const int variables,
+                                       __global float *forward_validity,
+                                       __global const float *generator_weights,
+                                       __global const float *router_weights,
+                                       __global const float *confidence_weights,
+                                       const int generator_weights_count,
+                                       const int router_weights_count,
+                                       const int confidence_weights_count)
+  {
+   const int d = get_global_id(0);
+   const int v = get_global_id(1);
+   const int k = get_global_id(2);
+   const int ld = get_local_id(0);
+   const int lv = get_local_id(1);
+   __local float Temp[SCENARIO_LOCAL_CAP];
+   if(scenarios <= 0 || variables <= 0 || horizon <= 0 || dimension <= 0 ||
+      dimension * variables > SCENARIO_LOCAL_CAP || d >= dimension || v >= variables || k >= scenarios)
+      return;
+   const float raw_state = input[v * dimension + d];
+   const float state = IsNaNOrInf(raw_state, 0.0f);
+   float valid = (isnan(raw_state) || isinf(raw_state) ? 0.0f : 1.0f);
+   if(phase == 0)
+     {
+      const int global_lane = (k * variables + v) * dimension + d;
+      const int total_lanes = scenarios * variables * dimension;
+      for(int index = global_lane; index < generator_weights_count; index += total_lanes)
+         if(isnan(generator_weights[index]) || isinf(generator_weights[index]))
+            valid = 0.0f;
+      for(int index = global_lane; index < router_weights_count; index += total_lanes)
+         if(isnan(router_weights[index]) || isinf(router_weights[index]))
+            valid = 0.0f;
+      for(int index = global_lane; index < confidence_weights_count; index += total_lanes)
+         if(isnan(confidence_weights[index]) || isinf(confidence_weights[index]))
+            valid = 0.0f;
+      float prototype_mean = 0.0f;
+      for(int h = 0; h < horizon; h++)
+        {
+         const int prototype_shift = ((k * variables + v) * horizon + h) * dimension + d;
+         const int condition_shift = ((k * variables + v) * horizon + h) * 2 * dimension;
+         const float raw_prototype = prototypes[prototype_shift];
+         const float prototype = IsNaNOrInf(raw_prototype, 0.0f);
+         if(isnan(raw_prototype) || isinf(raw_prototype))
+            valid = 0.0f;
+         generator_input[condition_shift + d] = state;
+         generator_input[condition_shift + dimension + d] = prototype;
+         confidence_input[condition_shift + d] = state;
+         confidence_input[condition_shift + dimension + d] = prototype;
+         prototype_mean = IsNaNOrInf(prototype_mean + prototype, 0.0f);
+        }
+      const int router_shift = k * 2 * variables * dimension;
+      router_input[router_shift + v * dimension + d] = state;
+      router_input[router_shift + variables * dimension + v * dimension + d] =
+         IsNaNOrInf(prototype_mean / (float)horizon, 0.0f);
+      const float variable_valid = LocalMin(valid, 0, Temp + lv * dimension);
+      BarrierLoc
+      const float joint_valid = LocalMin(ld == 0 ? variable_valid : 1.0f, 1, Temp + ld * variables);
+      if(ld == 0 && lv == 0)
+         forward_validity[k] = (joint_valid > 0.5f ? 1.0f : 0.0f);
+      return;
+     }
+   for(int h = 0; h < horizon; h++)
+     {
+      const int prototype_shift = ((k * variables + v) * horizon + h) * dimension + d;
+      const float raw_prototype = prototypes[prototype_shift];
+      const float prototype = IsNaNOrInf(raw_prototype, 0.0f);
+      const float raw_residual = generator_output[prototype_shift];
+      const float residual = IsNaNOrInf(raw_residual, 0.0f);
+      if(isnan(raw_state) || isinf(raw_state) || isnan(raw_prototype) || isinf(raw_prototype) ||
+         isnan(raw_residual) || isinf(raw_residual))
+         valid = 0.0f;
+      z[prototype_shift] = IsNaNOrInf(state + prototype + residual, 0.0f);
+      if(d == 0)
+        {
+         const int confidence_shift = (k * variables + v) * horizon + h;
+         const float raw_confidence = confidence_output[confidence_shift];
+         if(isnan(raw_confidence) || isinf(raw_confidence))
+            valid = 0.0f;
+         const float confidence = clamp(IsNaNOrInf(raw_confidence, 0.0f) + 0.001f, 0.001f, 10.0f);
+         u[confidence_shift] = IsNaNOrInf(confidence, 0.001f);
+         log_u[confidence_shift] = IsNaNOrInf(log(confidence + 1.0e-6f), log(0.001001f));
+        }
+     }
+   if(d == 0 && v == 0)
+     {
+      const float raw_router = router_output[k];
+      const float raw_probability = pi[k];
+      if(isnan(raw_router) || isinf(raw_router) || isnan(raw_probability) || isinf(raw_probability))
+         valid = 0.0f;
+      const float probability = clamp(IsNaNOrInf(raw_probability, 0.0f), 0.0f, 1.0f);
+      log_pi[k] = IsNaNOrInf(log(probability + 1.0e-6f), log(1.0e-6f));
+     }
+   const float variable_valid = LocalMin(valid, 0, Temp + lv * dimension);
+   BarrierLoc
+   const float joint_valid = LocalMin(ld == 0 ? variable_valid : 1.0f, 1, Temp + ld * variables);
+   if(ld == 0 && lv == 0)
+      forward_validity[k] = (forward_validity[k] > 0.5f && joint_valid > 0.5f ? 1.0f : 0.0f);
+  }
+//+------------------------------------------------------------------+
+//| Stable Laplace mixture posterior with TopK renormalization       |
+//+------------------------------------------------------------------+
+__kernel void ScenarioResponsibilities(__global float *target,
+                                       __global const float *z,
+                                       __global const float *u,
+                                       __global const float *pi,
+                                       __global float *responsibilities,
+                                       __global float *generator_gradient,
+                                       __global float *router_gradient,
+                                       __global float *confidence_gradient,
+                                       const int scenarios,
+                                       const int top_k,
+                                       const int horizon,
+                                       const int dimension,
+                                       __global float *scores,
+                                       __global const float *sparse,
+                                       __global const float *indexes,
+                                       const int phase,
+                                       const int variables,
+                                       __global const float *prototypes,
+                                       __global float *hard_loss,
+                                       __global float *batch_control,
+                                       const float huber_delta,
+                                       __global const float *target_source,
+                                       __global const float *forward_validity,
+                                       __global float *diagnostic_partials,
+                                       __global float *epoch_diagnostics,
+                                       __global const float *observation_by_scenario,
+                                       __global float *diagnostic_scratch,
+                                       __global const float *usage,
+                                       __global const float *inactive)
+  {
+   if(variables <= 0 || scenarios <= 0 || top_k <= 0 || top_k > scenarios ||
+      horizon <= 0 || dimension <= 0 || dimension * variables > SCENARIO_LOCAL_CAP)
+      return;
+   const int d = get_global_id(0);
+   const int v = get_global_id(1);
+   const int k = get_global_id(2);
+   const int ld = get_local_id(0);
+   const int lv = get_local_id(1);
+   __local float Temp[SCENARIO_LOCAL_CAP];
+   __local float TempSecond[SCENARIO_LOCAL_CAP];
+   if(phase == 0)
+     {
+      if(d >= dimension || v >= variables)
+         return;
+      float valid = 1.0f;
+      for(int h = 0; h < horizon; h++)
+        {
+         const int shift = (v * horizon + h) * dimension + d;
+         const float raw = target_source[shift];
+         if(isnan(raw) || isinf(raw))
+            valid = 0.0f;
+         target[shift] = IsNaNOrInf(raw, 0.0f);
+        }
+      const float variable_valid = LocalMin(valid, 0, Temp + lv * dimension);
+      BarrierLoc
+      const float joint_valid = LocalMin(ld == 0 ? variable_valid : 1.0f, 1, Temp + ld * variables);
+      if(ld == 0 && lv == 0)
+        {
+         float forecast_valid = 1.0f;
+         for(int scenario = 0; scenario < scenarios; scenario++)
+            forecast_valid = min(forecast_valid, forward_validity[scenario]);
+         batch_control[0] = (joint_valid > 0.5f && forecast_valid > 0.5f ? 1.0f : 0.0f);
+         batch_control[1] = -1.0f;
+        }
+      return;
+     }
+   if(phase == 1)
+     {
+      if(d >= dimension || v >= variables || k >= scenarios)
+         return;
+      float laplace = 0.0f;
+      float trajectory = 0.0f;
+      float confidence_cost = 0.0f;
+      float latent_abs = 0.0f;
+      for(int h = 0; h < horizon; h++)
+        {
+         const int shift = ((k * variables + v) * horizon + h) * dimension + d;
+         const int target_shift = (v * horizon + h) * dimension + d;
+         const float scale = clamp(IsNaNOrInf(u[(k * variables + v) * horizon + h], 1.0f), 1.0e-3f, 10.0f);
+         const float error = IsNaNOrInf(target[target_shift] - IsNaNOrInf(z[shift], 0.0f), 0.0f);
+         laplace = IsNaNOrInf(laplace + fabs(error) / scale + log(2.0f * scale), 0.0f);
+         const float absolute_error = fabs(error);
+         trajectory = IsNaNOrInf(trajectory + (absolute_error <= huber_delta ?
+                                    0.5f * absolute_error * absolute_error :
+                                    huber_delta * (absolute_error - 0.5f * huber_delta)), 0.0f);
+         confidence_cost = IsNaNOrInf(confidence_cost + log(scale) + absolute_error / scale, 0.0f);
+         latent_abs = IsNaNOrInf(latent_abs + absolute_error, 0.0f);
+        }
+      const float variable_laplace = LocalSum(laplace, 0, Temp + lv * dimension);
+      BarrierLoc
+      const float joint_laplace = LocalSum(ld == 0 ? variable_laplace : 0.0f, 1, Temp + ld * variables);
+      const float variable_trajectory = LocalSum(trajectory, 0, Temp + lv * dimension);
+      const float variable_confidence = LocalSum(confidence_cost, 0, TempSecond + lv * dimension);
+      BarrierLoc
+      const float joint_trajectory = LocalSum(ld == 0 ? variable_trajectory : 0.0f, 1, Temp + ld * variables);
+      const float joint_confidence = LocalSum(ld == 0 ? variable_confidence : 0.0f, 1, TempSecond + ld * variables);
+      const float variable_latent = LocalSum(latent_abs, 0, Temp + lv * dimension);
+      BarrierLoc
+      const float joint_latent = LocalSum(ld == 0 ? variable_latent : 0.0f, 1, Temp + ld * variables);
+      if(ld == 0 && lv == 0)
+        {
+         const bool valid = (batch_control[0] > 0.5f);
+         scores[k] = (valid ? IsNaNOrInf(log(max(IsNaNOrInf(pi[k], 0.0f), 1.0e-12f)) - joint_laplace,
+                                         MIN_VALUE) : MIN_VALUE);
+//--- Select the nearest forecast Z_k in the same full-future latent space.
+//--- Codebook EMA receives this scenario label and updates its matching Delta-Z prototype.
+         hard_loss[k] = (valid ? IsNaNOrInf(joint_trajectory, MAX_VALUE) : MAX_VALUE);
+         diagnostic_partials[k] = (valid ? IsNaNOrInf(joint_trajectory, 0.0f) : 0.0f);
+         diagnostic_partials[scenarios + k] = (valid ? IsNaNOrInf(joint_confidence, 0.0f) : 0.0f);
+         diagnostic_partials[2 * scenarios + k] = (valid ? IsNaNOrInf(joint_latent, 0.0f) : 0.0f);
+        }
+      return;
+     }
+   if(phase == 2)
+     {
+      const int scenario = get_global_id(0);
+      if(scenario >= scenarios)
+         return;
+      if(batch_control[0] <= 0.5f)
+        {
+         responsibilities[scenario] = 0.0f;
+         router_gradient[scenario] = 0.0f;
+         return;
+        }
+      float responsibility = 0.0f;
+      for(int selected = 0; selected < top_k; selected++)
+         if((int)indexes[selected] == scenario)
+            responsibility = IsNaNOrInf(sparse[selected], 0.0f);
+      responsibilities[scenario] = responsibility;
+      //--- Update kernels add their gradient.  Use the library convention
+      //--- target-output, i.e. posterior responsibility minus router Pi.
+      router_gradient[scenario] = responsibility - IsNaNOrInf(pi[scenario], 0.0f);
+      return;
+     }
+   if(phase == 3)
+     {
+      if(d >= dimension || v >= variables || k >= scenarios)
+         return;
+      const float responsibility = (batch_control[0] > 0.5f ?
+                                    IsNaNOrInf(responsibilities[k], 0.0f) : 0.0f);
+      for(int h = 0; h < horizon; h++)
+        {
+         const int confidence_shift = (k * variables + v) * horizon + h;
+         const int shift = confidence_shift * dimension + d;
+         const int target_shift = (v * horizon + h) * dimension + d;
+         const float scale = clamp(IsNaNOrInf(u[confidence_shift], 1.0f), 1.0e-3f, 10.0f);
+         const float error = IsNaNOrInf(target[target_shift] - z[shift], 0.0f);
+         generator_gradient[shift] = (responsibility > 0.0f ?
+                                      (error > 0.0f ? 1.0f : (error < 0.0f ? -1.0f : 0.0f)) / scale : 0.0f);
+         const float absolute_sum = LocalSum(responsibility > 0.0f ? fabs(error) : 0.0f,
+                                             0, Temp + lv * dimension);
+         if(ld == 0)
+           {
+            //--- U is SoftPlus output plus epsilon.  Convert -dL/dU to the
+            //--- same target-output convention used by convolution updates.
+            //--- A tiny floor lets a confidence collapsed at epsilon recover.
+            const float softplus_output = max(scale - 0.001f, 0.0f);
+            const float softplus_gradient = max(1.0f - exp(-softplus_output), 1.0e-3f);
+            const float confidence_signal = absolute_sum / (scale * scale) -
+                                            (float)dimension / scale;
+            confidence_gradient[confidence_shift] = (responsibility > 0.0f && scale < 10.0f ?
+               IsNaNOrInf(confidence_signal * softplus_gradient, 0.0f) : 0.0f);
+           }
+         BarrierLoc
+        }
+      return;
+     }
+   if(phase == 4)
+     {
+      const int scenario = get_local_id(0);
+      if(scenario >= scenarios)
+         return;
+      const float minimum = LocalMin(hard_loss[scenario], 0, Temp);
+      if(scenario == 0)
+        {
+         int assignment = -1;
+         if(batch_control[0] > 0.5f)
+            for(int candidate = 0; candidate < scenarios; candidate++)
+               if(hard_loss[candidate] == minimum)
+                 { assignment = candidate; break; }
+        batch_control[1] = (float)assignment;
+       }
+      return;
+     }
+   if(phase == 5)
+     {
+      const int scenario = get_local_id(0);
+      if(scenario >= scenarios)
+         return;
+      const float score = scores[scenario];
+      const float responsibility = clamp(IsNaNOrInf(responsibilities[scenario], 0.0f), 0.0f, 1.0f);
+      const float maximum = LocalMax(score, 0, Temp);
+      const float sum_exp = LocalSum(exp(score - maximum), 0, TempSecond);
+      const float router_value = -responsibility * log(max(IsNaNOrInf(pi[scenario], 0.0f), 1.0e-12f));
+      const float router_sum = LocalSum(router_value, 0, Temp);
+      const float trajectory_sum = LocalSum(responsibility * diagnostic_partials[scenario], 0, TempSecond);
+      const float confidence_sum = LocalSum(responsibility * diagnostic_partials[scenarios + scenario], 0, Temp);
+      const float latent_sum = LocalSum(responsibility * diagnostic_partials[2 * scenarios + scenario], 0, TempSecond);
+      const float observation_sum = LocalSum(IsNaNOrInf(observation_by_scenario[scenario], 0.0f), 0, Temp);
+      if(scenario == 0)
+        {
+         if(batch_control[0] > 0.5f)
+           {
+            epoch_diagnostics[0] += IsNaNOrInf(-(maximum + log(max(sum_exp, 1.0e-30f))), 0.0f);
+            epoch_diagnostics[1] += IsNaNOrInf(router_sum, 0.0f);
+            epoch_diagnostics[2] += IsNaNOrInf(trajectory_sum, 0.0f);
+            epoch_diagnostics[3] += IsNaNOrInf(confidence_sum, 0.0f);
+            epoch_diagnostics[4] += IsNaNOrInf(latent_sum, 0.0f);
+            epoch_diagnostics[5] += IsNaNOrInf(observation_sum, 0.0f);
+            epoch_diagnostics[6] += 1.0f;
+           }
+         else
+            epoch_diagnostics[7] += 1.0f;
+        }
+      return;
+     }
+   if(phase == 6)
+     {
+      if(get_global_id(0) == 0)
+         for(int i = 0; i < 11; i++)
+            epoch_diagnostics[i] = 0.0f;
+      return;
+     }
+   if(phase == 7)
+     {
+      const int pair = get_global_id(2);
+      const int pairs = scenarios * (scenarios - 1) / 2;
+      if(d >= dimension || v >= variables || pair >= pairs)
+         return;
+      int left = 0;
+      int right = 1;
+      int remainder = pair;
+      for(left = 0; left < scenarios - 1; left++)
+        {
+         const int row = scenarios - left - 1;
+         if(remainder < row)
+           { right = left + 1 + remainder; break; }
+         remainder -= row;
+        }
+      float square_sum = 0.0f;
+      for(int h = 0; h < horizon; h++)
+        {
+         const int coordinate = (v * horizon + h) * dimension + d;
+         const int stride = variables * horizon * dimension;
+         const float difference = IsNaNOrInf(prototypes[left * stride + coordinate] -
+                                              prototypes[right * stride + coordinate], 0.0f);
+         square_sum += difference * difference;
+        }
+      const float variable_sum = LocalSum(square_sum, 0, Temp + lv * dimension);
+      BarrierLoc
+      const float joint_sum = LocalSum(ld == 0 ? variable_sum : 0.0f, 1, Temp + ld * variables);
+      if(ld == 0 && lv == 0)
+         diagnostic_scratch[pair] = sqrt(max(joint_sum, 0.0f) /
+                                         max((float)(variables * horizon * dimension), 1.0f));
+      return;
+     }
+   if(phase == 8)
+     {
+      const int lane = get_local_id(0);
+      const int pairs = scenarios * (scenarios - 1) / 2;
+      const float usage_value = (lane < scenarios ? max(IsNaNOrInf(usage[lane], 0.0f), 0.0f) : 0.0f);
+      const float usage_sum = LocalSum(usage_value, 0, Temp);
+      const float probability = (usage_sum > 0.0f ? usage_value / usage_sum : 0.0f);
+      const float entropy_value = (probability > 0.0f ? -probability * log(probability) : 0.0f);
+      const float entropy_sum = LocalSum(entropy_value, 0, TempSecond);
+      if(lane == 0)
+         epoch_diagnostics[8] = IsNaNOrInf(entropy_sum, 0.0f);
+      BarrierLoc
+      const float inactive_sum = LocalSum(lane < scenarios && IsNaNOrInf(inactive[lane], 0.0f) > 0.0f ?
+                                           1.0f : 0.0f, 0, Temp);
+      if(lane == 0)
+         epoch_diagnostics[10] = IsNaNOrInf(inactive_sum, 0.0f);
+      BarrierLoc
+      const float pair_sum = LocalSum(lane < pairs ? IsNaNOrInf(diagnostic_scratch[lane], 0.0f) : 0.0f,
+                                      0, Temp);
+      if(lane == 0)
+         epoch_diagnostics[9] = (pairs > 0 ? IsNaNOrInf(pair_sum / (float)pairs, 0.0f) : 0.0f);
+      return;
+     }
+  }
+//+------------------------------------------------------------------+
+//| Codebook EMA; prototypes are updated statistically, not by grad  |
+//+------------------------------------------------------------------+
+__kernel void ScenarioCodebookEMA(__global const float *target,
+                                  __global float *prototypes,
+                                  __global float *ema_sums,
+                                  __global float *ema_counts,
+                                  __global float *usage,
+                                  __global float *inactive,
+                                  __global const float *batch_control,
+                                  const int scenarios,
+                                  const int dimension,
+                                  const float decay,
+                                  __global float *inactivity_age,
+                                  const int seed,
+                                  const int recovery_age,
+                                  __global float *recovery,
+                                  const int phase,
+                                  const int horizon,
+                                  const int variables,
+                                  __global const float *responsibilities)
+  {
+   if(phase == 0)
+     {
+      const int k = get_global_id(0);
+      if(k >= scenarios)
+         return;
+      recovery[k] = 0.0f;
+      if(batch_control[0] <= 0.5f)
+         return;
+//--- The same normalized TopK responsibility that trains Z_k updates
+//--- this scenario's Delta-Z EMA.  Non-TopK scenarios receive zero.
+      const float hit = clamp(IsNaNOrInf(responsibilities[k], 0.0f), 0.0f, 1.0f);
+      const float count = decay * IsNaNOrInf(ema_counts[k], 0.0f) + (1.0f - decay) * hit;
+      const float age = (hit > 0.0f ? 0.0f : IsNaNOrInf(inactivity_age[k], 0.0f) + 1.0f);
+      const bool recover = (hit == 0.0f && age >= (float)recovery_age);
+      recovery[k] = (recover ? 1.0f : 0.0f);
+      ema_counts[k] = (recover ? 1.0f : count);
+      usage[k] = IsNaNOrInf(usage[k], 0.0f) + hit;
+      inactivity_age[k] = (recover ? 0.0f : age);
+      inactive[k] = (!recover && count < 1.0e-4f ? 1.0f : 0.0f);
+      return;
+     }
+   const int d = get_global_id(0);
+   const int v = get_global_id(1);
+   const int k = get_global_id(2);
+   if(phase != 1 || d >= dimension || v >= variables || k >= scenarios || batch_control[0] <= 0.5f)
+      return;
+   const float hit = clamp(IsNaNOrInf(responsibilities[k], 0.0f), 0.0f, 1.0f);
+   const float count = IsNaNOrInf(ema_counts[k], 0.0f);
+   const bool recover = (recovery[k] > 0.5f);
+   for(int h = 0; h < horizon; h++)
+     {
+      const int coordinate = (v * horizon + h) * dimension + d;
+      const int shift = k * variables * horizon * dimension + coordinate;
+      const float sample = IsNaNOrInf(target[coordinate], 0.0f);
+      if(recover)
+        {
+         const float prototype = IsNaNOrInf(sample + 0.01f * sin((float)seed + 17.0f * (float)k +
+                                                 0.61803398875f * (float)(coordinate + 1)), sample);
+         prototypes[shift] = prototype;
+         ema_sums[shift] = prototype;
+        }
+      else
+        {
+         const float sum = IsNaNOrInf(decay * ema_sums[shift] + (1.0f - decay) * hit * sample, 0.0f);
+         ema_sums[shift] = sum;
+         if(count > 1.0e-6f)
+            prototypes[shift] = IsNaNOrInf(sum / count, 0.0f);
+        }
+     }
+  }
+//+------------------------------------------------------------------+
+//| Per-scenario RMS normalization; inactive branches remain zero    |
+//+------------------------------------------------------------------+
+__kernel void ScenarioGradientNormalize(__global float *generator_gradient,
+                                        __global const float *generator_input_gradient,
+                                        __global const float *router_input_gradient,
+                                        __global const float *confidence_input_gradient,
+                                        __global float *input_gradient,
+                                        __global const float *responsibilities,
+                                        const int scenarios,
+                                        const int horizon,
+                                        const int dimension,
+                                        const int phase,
+                                        __global float *confidence_gradient,
+                                        const int variables,
+                                        __global const float *batch_control)
+  {
+   const int d = get_global_id(0);
+   const int v = get_global_id(1);
+   const int k = get_global_id(2);
+   const int ld = get_local_id(0);
+   const int lv = get_local_id(1);
+   __local float Temp[SCENARIO_LOCAL_CAP];
+   __local float TempSecond[SCENARIO_LOCAL_CAP];
+   if(phase == 0)
+     {
+      if(d >= dimension || v >= variables || k >= scenarios)
+         return;
+      const float responsibility = (batch_control[0] > 0.5f ?
+                                    IsNaNOrInf(responsibilities[k], 0.0f) : 0.0f);
+      float generator_square_sum = 0.0f;
+      float confidence_square_sum = 0.0f;
+      for(int h = 0; h < horizon; h++)
+        {
+         const int confidence_shift = (k * variables + v) * horizon + h;
+         const float generator_value = IsNaNOrInf(generator_gradient[confidence_shift * dimension + d], 0.0f);
+         generator_square_sum += generator_value * generator_value;
+         if(d == 0)
+           {
+            const float confidence_value = IsNaNOrInf(confidence_gradient[confidence_shift], 0.0f);
+            confidence_square_sum += confidence_value * confidence_value;
+           }
+        }
+      const float variable_generator = LocalSum(generator_square_sum, 0, Temp + lv * dimension);
+      const float variable_confidence = LocalSum(confidence_square_sum, 0, TempSecond + lv * dimension);
+      BarrierLoc
+      const float joint_generator = LocalSum(ld == 0 ? variable_generator : 0.0f, 1, Temp + ld * variables);
+      const float joint_confidence = LocalSum(ld == 0 ? variable_confidence : 0.0f, 1, TempSecond + ld * variables);
+      if(ld == 0 && lv == 0)
+        {
+         Temp[0] = joint_generator;
+         TempSecond[0] = joint_confidence;
+        }
+      BarrierLoc
+      const float generator_rms = sqrt(Temp[0] / max((float)(variables * horizon * dimension), 1.0f) + 1.0e-12f);
+      const float confidence_rms = sqrt(TempSecond[0] / max((float)(variables * horizon), 1.0f) + 1.0e-12f);
+      const float generator_scale = (responsibility > 0.0f ? responsibility / max(generator_rms, 1.0e-6f) : 0.0f);
+      const float confidence_scale = (responsibility > 0.0f ? responsibility / max(confidence_rms, 1.0e-6f) : 0.0f);
+      for(int h = 0; h < horizon; h++)
+        {
+         const int confidence_shift = (k * variables + v) * horizon + h;
+         const int shift = confidence_shift * dimension + d;
+         generator_gradient[shift] = IsNaNOrInf(generator_gradient[shift] * generator_scale, 0.0f);
+         if(d == 0)
+            confidence_gradient[confidence_shift] = IsNaNOrInf(confidence_gradient[confidence_shift] * confidence_scale, 0.0f);
+        }
+      return;
+     }
+   if(phase == 1)
+     {
+      const int lane = get_local_id(0);
+      const int dimension_index = get_global_id(1);
+      const int variable = get_global_id(2);
+      const int lanes = get_local_size(0);
+      if(dimension_index >= dimension || variable >= variables)
+         return;
+      float partial = 0.0f;
+      if(batch_control[0] > 0.5f)
+         for(int q = lane; q < scenarios * horizon; q += lanes)
+           {
+            const int scenario = q / horizon;
+            const int h = q - scenario * horizon;
+            const int router_shift = scenario * 2 * variables * dimension;
+            if(h == 0)
+               partial += IsNaNOrInf(router_input_gradient[router_shift + variable * dimension + dimension_index], 0.0f);
+            const int shift = ((scenario * variables + variable) * horizon + h) * 2 * dimension + dimension_index;
+            const int direct_shift = ((scenario * variables + variable) * horizon + h) * dimension + dimension_index;
+            partial += IsNaNOrInf(generator_gradient[direct_shift], 0.0f) +
+                       IsNaNOrInf(generator_input_gradient[shift], 0.0f) +
+                       IsNaNOrInf(confidence_input_gradient[shift], 0.0f);
+           }
+      const float aggregate = LocalSum(partial, 0, Temp);
+      if(lane == 0)
+         input_gradient[variable * dimension + dimension_index] = IsNaNOrInf(aggregate, 0.0f);
+      return;
      }
   }
 //+------------------------------------------------------------------+

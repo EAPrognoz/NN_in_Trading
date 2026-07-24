@@ -4603,6 +4603,12 @@ bool CNeuronCrossAttention::Load(const int file_handle)
 //+------------------------------------------------------------------+
 void CNeuronCrossAttention::SetOpenCL(COpenCLMy *obj)
   {
+   if(OpenCL == obj)
+      return;
+   COpenCLMy *previous = OpenCL;
+   if(!!previous && ScoreIndex >= 0)
+      previous.BufferFree(ScoreIndex);
+   ScoreIndex = INVALID_HANDLE;
    CNeuronBaseOCL::SetOpenCL(obj);
    if(!OpenCL)
       return;
@@ -4617,8 +4623,6 @@ void CNeuronCrossAttention::SetOpenCL(COpenCLMy *obj)
    FF[1].SetOpenCL(OpenCL);
    if(!!cContext)
       cContext.SetOpenCL(OpenCL);
-   if(ScoreIndex >= 0)
-      OpenCL.BufferFree(ScoreIndex);
    ScoreIndex = OpenCL.AddBuffer(sizeof(float) * iUnits * iUnits_K * iHeads, CL_MEM_READ_WRITE);
   }
 //+------------------------------------------------------------------+

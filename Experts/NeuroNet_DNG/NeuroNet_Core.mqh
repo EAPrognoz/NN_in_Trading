@@ -204,6 +204,9 @@ bool COpenCLMy::Initialize(const string program, const bool show_log = true)
    uint size = 0;
    if(!CLGetDeviceInfo(GetContext(), CL_DEVICE_MAX_WORK_ITEM_SIZES, uLocalDimension.cdata, size))
       ReturnFalse;
+   size = 0;
+   if(!CLGetDeviceInfo(GetContext(), CL_DEVICE_MAX_WORK_GROUP_SIZE, uMaxWorkGroup.cdata, size))
+      ReturnFalse;
 //---
    return true;
   }
@@ -519,6 +522,8 @@ bool CLayer::CreateElement(int index)
    CNeuronCogDriverRankTCM* cogdriver_rank = NULL;
    CNeuronCogDriverForecastHead* cogdriver_forecast = NULL;
    CNeuronCogDriverForecastToken* cogdriver_token = NULL;
+   CNeuronScenarioForecast* scenario_forecast = NULL;
+   CNeuronScenarioCrossAttention* scenario_cross = NULL;
 //---
    uint windows[] = {1, 1, 1};
    uint mfe_windows[] = {3, 3};
@@ -2833,12 +2838,11 @@ bool CLayer::CreateElement(int index)
             spike_block = new CNeuronSpikeConvBlock();
             if(!spike_block)
                ReturnFalse;
-            if(spike_block.Init(iOutputs, index, OpenCL, 3, 1, 1, 2, 1, ADAM, 1))
-              {
-               m_data[index] = spike_block;
-               return true;
-              }
-            DeleteObj(spike_block);
+            //--- Serialized SpikeConvBlock restores all nested holders in Load().
+            //--- A default Init() creates incompatible temporary shapes first.
+            spike_block.AttachOpenCL(OpenCL);
+            m_data[index] = spike_block;
+            return true;
             break;
          case defNeuronMSRes:
             msres = new CNeuronMSRes();
@@ -3852,6 +3856,28 @@ bool CLayer::CreateElement(int index)
               }
             DeleteObj(cogdriver_token);
             break;
+         case defNeuronScenarioForecast:
+            //--- Serialized layers reconstruct their exact contract in
+            //--- CNeuronScenarioForecast::Load().  Init requires a descriptor
+            //--- and is therefore intentionally reserved for CNet::Create().
+            scenario_forecast = new CNeuronScenarioForecast;
+            if(!scenario_forecast)
+               ReturnFalse;
+            scenario_forecast.AttachOpenCL(OpenCL);
+            m_data[index] = scenario_forecast;
+            return true;
+            break;
+         case defNeuronScenarioCrossAttention:
+            scenario_cross = new CNeuronScenarioCrossAttention;
+            if(!scenario_cross)
+               ReturnFalse;
+            //--- Load reconstructs the serialized MSRes and scenario holders.
+            //--- Initializing defaults here creates shared temporary buffers;
+            //--- their slots can be released while the serialized graph loads.
+            scenario_cross.AttachOpenCL(OpenCL);
+            m_data[index] = scenario_cross;
+            return true;
+            break;
          case defNeuronReGENTADBackbone:
             regen_backbone = new CNeuronReGENTADBackbone;
             if(!regen_backbone)
@@ -4467,6 +4493,10 @@ bool CLayerDescription::Copy(CLayerDescription *source)
    optimization = source.optimization;
    probability = source.probability;
    ArrayCopy(windows, source.windows);
+   ArrayCopy(units, source.units);
+   ArrayCopy(heads, source.heads);
+   radius = source.radius;
+   variables = source.variables;
 //---
    return true;
   }
@@ -4506,7 +4536,10 @@ bool CNet::Create(CArrayObj *Description)
    if(next.type == defNeuron || next.type >= defNeuronBaseOCL)
      {
       if(!OpenCLInit())
+        {
          DeleteObj(opencl);
+         bOwnOpenCL=false;
+        }
      }
    else
      {
@@ -4805,6 +4838,8 @@ bool CNet::Create(CArrayObj *Description)
          CNeuronCogDriverRankTCM* cogdriver_rank = NULL;
          CNeuronCogDriverForecastHead* cogdriver_forecast = NULL;
          CNeuronCogDriverForecastToken* cogdriver_token = NULL;
+         CNeuronScenarioForecast* scenario_forecast = NULL;
+         CNeuronScenarioCrossAttention* scenario_cross = NULL;
          //---
          switch(desc.type)
            {
@@ -10149,6 +10184,46 @@ bool CNet::Create(CArrayObj *Description)
                   DeleteObjAndFalse(cogdriver_token);
                  }
                break;
+            case defNeuronScenarioForecast:
+               scenario_forecast = new CNeuronScenarioForecast();
+               if(!scenario_forecast)
+                  DeleteObjAndFalse(temp);
+               if(!scenario_forecast.Init(outputs, 0, opencl, desc.count,
+                                           desc.variables, desc.window_out, desc.window,
+                                           desc.optimization, desc.batch,
+                                           (desc.layers > 0 ? desc.layers : 1)))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(scenario_forecast);
+                 }
+               if(!temp.Add(scenario_forecast))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(scenario_forecast);
+                 }
+               break;
+            case defNeuronScenarioCrossAttention:
+               scenario_cross = new CNeuronScenarioCrossAttention();
+               if(!scenario_cross)
+                  DeleteObjAndFalse(temp);
+               if(desc.variables != 3 && desc.variables != 5)
+                  DeleteObjAndFalse(temp);
+               if(!scenario_cross.Init(outputs, 0, opencl, desc.count,
+                                        desc.window_out, desc.window, desc.variables == 5,
+                                        desc.optimization, desc.batch,
+                                        (desc.layers > 0 ? desc.layers : 1),
+                                        (desc.step > 0 ? desc.step : 1),
+                                        uint(desc.probability > 0 ? desc.probability : 1)))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(scenario_cross);
+                 }
+               if(!temp.Add(scenario_cross))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(scenario_cross);
+                 }
+               break;
             case defNeuronUncAD_UGP:
                uncad_ugp = new CNeuronUncAD_UGP();
                if(!uncad_ugp)
@@ -11149,11 +11224,29 @@ int COpenCLMy::AddBufferFromArray(T &data[], const uint data_array_offset, const
          m_buffers[result] = INVALID_HANDLE;
         }
       else
+        {
+         static bool first_table_failure=true;
+         if(first_table_failure)
+           {
+            first_table_failure=false;
+            PrintFormat("COpenCLMy::AddBufferFromArray table allocation failed: slots=%d elements=%u bytes=%I64d error=%d",
+                        m_buffers_total,data_array_count,long(data_array_count)*sizeof(T),GetLastError());
+           }
          return result;
+        }
      }
 //---
    if(!BufferFromArray(result, data, data_array_offset, data_array_count, flags))
+     {
+      static bool first_device_failure=true;
+      if(first_device_failure)
+        {
+         first_device_failure=false;
+         PrintFormat("COpenCLMy::AddBufferFromArray device allocation failed: slot=%d elements=%u bytes=%I64d flags=%u error=%d",
+                     result,data_array_count,long(data_array_count)*sizeof(T),flags,GetLastError());
+        }
       return INVALID_HANDLE;
+     }
 //---
    return result;
   }
@@ -11236,7 +11329,6 @@ void CLayer::SetOpenCL(COpenCLMy *obj)
   {
    if(OpenCL == obj)
       return;
-   DeleteObj(OpenCL);
    OpenCL = obj;
 //---
    if(!obj || Total() <= 0)
@@ -11268,11 +11360,13 @@ void CLayer::TrainMode(bool flag)
 CNet::~CNet(void)
   {
    DeleteObj(layers);
-   if(CheckPointer(opencl) != POINTER_INVALID)
+   if(bOwnOpenCL && CheckPointer(opencl) != POINTER_INVALID)
      {
       opencl.Shutdown();
       delete opencl;
      }
+   opencl=NULL;
+   bOwnOpenCL=false;
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -11287,8 +11381,8 @@ CBufferFloat::CBufferFloat(void)  : m_myIndex(INVALID_HANDLE)
 CBufferFloat::~CBufferFloat(void)
   {
    if(CheckPointer(OpenCL) != POINTER_INVALID && m_myIndex >= 0)
-     {
-      if(OpenCL.BufferFree(m_myIndex))
+      {
+       if(OpenCL.BufferFree(m_myIndex))
         {
          m_myIndex = -1;
          OpenCL = NULL;
@@ -11315,8 +11409,19 @@ bool CBufferFloat::BufferCreate(COpenCL *opencl)
       OpenCL = NULL;
      }
 //---
-   if((m_myIndex = ((COpenCLMy*)opencl).AddBufferFromArray(m_data, 0, m_data_total, CL_MEM_READ_WRITE)) < 0)
+   const int index=((COpenCLMy*)opencl).AddBufferFromArray(m_data,0,m_data_total,CL_MEM_READ_WRITE);
+   if(index<0)
+     {
+      static bool first_failure=true;
+      if(first_failure)
+        {
+         first_failure=false;
+         PrintFormat("CBufferFloat::BufferCreate allocation: floats=%d bytes=%I64d error=%d",
+                     m_data_total,long(m_data_total)*sizeof(float),GetLastError());
+        }
       ReturnFalse;
+     }
+   m_myIndex=index;
    OpenCL = opencl;
 //---
    return true;
@@ -11327,12 +11432,14 @@ bool CBufferFloat::BufferCreate(COpenCL *opencl)
 bool CBufferFloat::BufferFree(void)
   {
    if(CheckPointer(OpenCL) != POINTER_INVALID && m_myIndex >= 0)
-      if(OpenCL.BufferFree(m_myIndex))
+      {
+       if(OpenCL.BufferFree(m_myIndex))
         {
          m_myIndex = INVALID_HANDLE;
          OpenCL = NULL;
          return true;
         }
+     }
 //---
    return false;
   }
@@ -11357,7 +11464,9 @@ bool CBufferFloat::BufferWrite(void)
    if(CheckPointer(OpenCL) == POINTER_INVALID || m_myIndex < 0)
       ReturnFalse;
 //---
-   return OpenCL.BufferWrite(m_myIndex, m_data, 0, 0, m_data_total);
+   if(!OpenCL.BufferWrite(m_myIndex, m_data, 0, 0, m_data_total))
+      ReturnFalse;
+   return true;
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -11875,6 +11984,17 @@ bool CNeuronBaseOCL::FeedForward(CObject *SourceObject, CBufferFloat *SecondInpu
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+bool CNeuronBaseOCL::FeedForwardSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron)
+  {
+   if(CheckPointer(SourceObject) == POINTER_INVALID)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL *temp = SourceObject;
+   return feedForwardSecond(temp, SecondNeuron);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool CNeuronBaseOCL::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(CheckPointer(OpenCL) == POINTER_INVALID || CheckPointer(NeuronOCL) == POINTER_INVALID)
@@ -12145,6 +12265,25 @@ bool CNeuronBaseOCL::CalcHiddenGradients(CObject *TargetObject, CBufferFloat *Se
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+bool CNeuronBaseOCL::CalcHiddenGradientsSecond(CObject *TargetObject, CNeuronBaseOCL *SecondNeuron)
+  {
+   if(CheckPointer(TargetObject) == POINTER_INVALID)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL *temp = TargetObject;
+   switch(TargetObject.Type())
+     {
+      case defNeuronBaseOCL:
+         return calcHiddenGradients(temp);
+      case defNeuronMultiModels:
+         return temp.CalcHiddenGradients(GetPointer(this));
+      default:
+         return temp.calcInputGradientsSecond(GetPointer(this), SecondNeuron);
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool CNeuronBaseOCL::UpdateInputWeights(CObject *SourceObject, CBufferFloat *SecondInput = NULL)
   {
 //---
@@ -12158,6 +12297,22 @@ bool CNeuronBaseOCL::UpdateInputWeights(CObject *SourceObject, CBufferFloat *Sec
       return true;
 //---
    return updateInputWeights(temp, SecondInput);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronBaseOCL::UpdateInputWeightsSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron)
+  {
+   if(CheckPointer(SourceObject) == POINTER_INVALID)
+      ReturnFalse;
+//---
+   CNeuronBaseOCL *temp = SourceObject;
+   if(!bTrain && !temp.TrainMode())
+      return true;
+   if(Type() == defNeuronSoftMaxOCL)
+      return true;
+//---
+   return updateInputWeightsSecond(temp, SecondNeuron);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -12440,23 +12595,22 @@ void CNeuronBaseOCL::SetOpenCL(COpenCLMy *obj)
   {
    if(OpenCL == obj)
       return;
-   DeleteObj(OpenCL);
    if(!obj)
       return;
    OpenCL = obj;
-   if(!!Output)
+   if(!!Output && Output.Total()>0)
       Output.BufferCreate(OpenCL);             ///< Buffer of Output tensor
-   if(!!PrevOutput)
+   if(!!PrevOutput && PrevOutput.Total()>0)
       PrevOutput.BufferCreate(OpenCL);         ///< Buffer of previous iteration Output tensor
-   if(!!Weights)
+   if(!!Weights && Weights.Total()>0)
       Weights.BufferCreate(OpenCL);            ///< Buffer of weights matrix
-   if(!!DeltaWeights)
+   if(!!DeltaWeights && DeltaWeights.Total()>0)
       DeltaWeights.BufferCreate(OpenCL);       ///< Buffer of last delta weights matrix (#SGD)
-   if(!!Gradient)
+   if(!!Gradient && Gradient.Total()>0)
       Gradient.BufferCreate(OpenCL);           ///< Buffer of gradient tensor
-   if(!!FirstMomentum)
+   if(!!FirstMomentum && FirstMomentum.Total()>0)
       FirstMomentum.BufferCreate(OpenCL);      ///< Buffer of first momentum matrix (#ADAM)
-   if(!!SecondMomentum)
+   if(!!SecondMomentum && SecondMomentum.Total()>0)
       SecondMomentum.BufferCreate(OpenCL);     ///< Buffer of second momentum matrix (#ADAM)
   }
 //+------------------------------------------------------------------+
@@ -12701,6 +12855,35 @@ bool CNeuronConvOCL::feedForward(CNeuronBaseOCL *NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Direct non-owning device-buffer input                            |
+//+------------------------------------------------------------------+
+bool CNeuronConvOCL::FeedForwardBuffer(CBufferFloat *source)
+  {
+   if(CheckPointer(OpenCL) == POINTER_INVALID || CheckPointer(source) == POINTER_INVALID ||
+      source.GetIndex() < 0 || iWindowOut == 0 || iVariables == 0)
+      ReturnFalse;
+   const uint units = Output.Total() / (iWindowOut * iVariables);
+   const uint expected = (units == 0 ? 0 : ((units - 1) * iStep + iWindow) * iVariables);
+   if(units == 0 || source.Total() != (int)expected)
+      ReturnFalse;
+   uint global_work_offset[3] = {0, 0, 0};
+   uint global_work_size[3] = {units, iWindowOut, iVariables};
+   setBuffer(def_k_FeedForwardConv, def_k_ffc_matrix_w, WeightsConv.GetIndex());
+   setBuffer(def_k_FeedForwardConv, def_k_ffc_matrix_i, source.GetIndex());
+   setBuffer(def_k_FeedForwardConv, def_k_ffc_matrix_o, Output.GetIndex());
+   setArgument(def_k_FeedForwardConv, def_k_ffc_inputs, source.Total() / (int)iVariables);
+   setArgument(def_k_FeedForwardConv, def_k_ffc_step, (int)iStep);
+   setArgument(def_k_FeedForwardConv, def_k_ffc_window_in, (int)iWindow);
+   setArgument(def_k_FeedForwardConv, def_k_ffс_window_out, (int)iWindowOut);
+   setArgument(def_k_FeedForwardConv, def_k_ffc_activation, (int)activation);
+   kernelExecute(def_k_FeedForwardConv, global_work_offset, global_work_size)
+#ifdef  _DEBUG
+   if(!Output.BufferRead())
+      ReturnFalse;
+#endif
+   return true;
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronConvOCL::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
@@ -12820,6 +13003,104 @@ bool CNeuronConvOCL::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
       default:
          ReturnFalse;
          break;
+     }
+#ifdef  _DEBUG
+   if(!WeightsConv.BufferRead())
+      ReturnFalse;
+#endif
+   return true;
+  }
+//+------------------------------------------------------------------+
+//| Direct non-owning device-buffer input weight update              |
+//+------------------------------------------------------------------+
+bool CNeuronConvOCL::UpdateInputWeightsBuffer(CBufferFloat *source)
+  {
+   if(CheckPointer(OpenCL) == POINTER_INVALID || CheckPointer(source) == POINTER_INVALID ||
+      source.GetIndex() < 0 || iWindowOut == 0 || iVariables == 0)
+      ReturnFalse;
+   const uint units = Output.Total() / (iWindowOut * iVariables);
+   const uint expected = (units == 0 ? 0 : ((units - 1) * iStep + iWindow) * iVariables);
+   if(units == 0 || source.Total() != (int)expected)
+      ReturnFalse;
+   uint global_work_offset[1] = {0};
+   uint global_work_size[1] = {WeightsConv.Total()};
+   uint global_work_offset_am[3] = {0, 0, 0};
+   uint global_work_size_am[3] = {iWindow + 1, iWindowOut, iVariables};
+   uint local_work_size_am[3] = {global_work_size_am[0], 1, 1};
+   const int inputs = source.Total() / (int)iVariables;
+   float lt = 0;
+   switch(optimization)
+     {
+      case SGD:
+         setBuffer(def_k_UpdateWeightsConvMomentum, def_k_uwcm_matrix_w, WeightsConv.GetIndex());
+         setBuffer(def_k_UpdateWeightsConvMomentum, def_k_uwcm_matrix_g, getGradientIndex());
+         setBuffer(def_k_UpdateWeightsConvMomentum, def_k_uwcm_matrix_i, source.GetIndex());
+         setBuffer(def_k_UpdateWeightsConvMomentum, def_k_uwcm_matrix_dw, DeltaWeightsConv.GetIndex());
+         setArgument(def_k_UpdateWeightsConvMomentum, def_k_uwcm_inputs, inputs);
+         setArgument(def_k_UpdateWeightsConvMomentum, def_k_uwcm_learning_rates, lr);
+         setArgument(def_k_UpdateWeightsConvMomentum, def_k_uwcm_momentum, alpha);
+         setArgument(def_k_UpdateWeightsConvMomentum, def_k_uwcm_window_in, (int)iWindow);
+         setArgument(def_k_UpdateWeightsConvMomentum, def_k_uwcm_window_out, (int)iWindowOut);
+         setArgument(def_k_UpdateWeightsConvMomentum, def_k_uwcm_step, (int)iStep);
+         ResetLastError();
+         kernelExecute(def_k_UpdateWeightsConvMomentum, global_work_offset, global_work_size)
+         break;
+      case ADAM:
+         setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_w, WeightsConv.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_g, getGradientIndex())
+         setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_i, source.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_m, FirstMomentumConv.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_v, SecondMomentumConv.GetIndex())
+         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+         setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_inputs, inputs)
+         setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_l, lt)
+         setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_b1, b1)
+         setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_b2, b2)
+         setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_window_in, (int)iWindow)
+         setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_window_out, (int)iWindowOut)
+         setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_step, (int)iStep)
+         ResetLastError();
+         kernelExecute(def_k_UpdateWeightsConvAdam, global_work_offset, global_work_size)
+         t++;
+         break;
+      case LS:
+         global_work_size[0] = iWindow + 1;
+         setBuffer(def_k_UpdateWeightsConvLS, def_k_uwcls_matrix_w, WeightsConv.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvLS, def_k_uwcls_matrix_g, getGradientIndex())
+         setBuffer(def_k_UpdateWeightsConvLS, def_k_uwcls_matrix_i, source.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvLS, def_k_uwcls_matrix_xg, FirstMomentumConv.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvLS, def_k_uwcls_matrix_xx, SecondMomentumConv.GetIndex())
+         setArgument(def_k_UpdateWeightsConvLS, def_k_uwls_inputs, inputs)
+         setArgument(def_k_UpdateWeightsConvLS, def_k_uwcls_l, lr)
+         setArgument(def_k_UpdateWeightsConvLS, def_k_uwcls_update, (int)(t >= iBatch))
+         setArgument(def_k_UpdateWeightsConvLS, def_k_uwcls_window_in, (int)iWindow)
+         setArgument(def_k_UpdateWeightsConvLS, def_k_uwcls_window_out, (int)iWindowOut)
+         setArgument(def_k_UpdateWeightsConvLS, def_k_uwcls_step, (int)iStep)
+         ResetLastError();
+         kernelExecute(def_k_UpdateWeightsConvLS, global_work_offset, global_work_size)
+         if(t >= iBatch)
+            t = 0;
+         else
+            t++;
+         break;
+      case ADAM_MINI:
+         setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_w, WeightsConv.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_g, getGradientIndex())
+         setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_i, source.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_m, FirstMomentumConv.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_v, SecondMomentumConv.GetIndex())
+         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+         setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_inputs, inputs)
+         setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_l, lt)
+         setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_b1, b1)
+         setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_b2, b2)
+         setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_step, (int)iStep)
+         ResetLastError();
+         kernelExecuteLoc(def_k_UpdateWeightsConvAdamMini, global_work_offset_am, global_work_size_am, local_work_size_am)
+         t++;
+         break;
+      default:
+         ReturnFalse;
      }
 #ifdef  _DEBUG
    if(!WeightsConv.BufferRead())
@@ -14023,13 +14304,15 @@ bool CNeuronBatchNormOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
    setArgument(def_k_BatchFeedForward, def_k_bff_batch, (int)iBatchCount)
    setArgument(def_k_BatchFeedForward, def_k_bff_optimization, (int)optimization)
    setArgument(def_k_BatchFeedForward, def_k_bff_activation, (int)activation)
+   setArgument(def_k_BatchFeedForward, def_k_bff_training, (int)(bTrain ? 1 : 0))
    ResetLastError();
    kernelExecute(def_k_BatchFeedForward, global_work_offset, global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
       ReturnFalse;
 #endif
-   iBatchCount++;
+   if(bTrain)
+      iBatchCount++;
 //---
    return true;
   }
@@ -14217,19 +14500,26 @@ bool CNet::GetLayerOutput(uint layer, vector<float> &result)
 //+------------------------------------------------------------------+
 void CNet::SetOpenCL(COpenCLMy * obj)
   {
-   if(opencl != obj)
-      DeleteObj(opencl);
-//---
+   if(opencl == obj)
+      return;
+   COpenCLMy *previous=opencl;
+   const bool own_previous=bOwnOpenCL;
    if(!obj || !layers)
       return;
-//---
-   opencl = obj;
+//--- Rebind every buffer while its original context is still alive.  Layers
+//--- and neurons are non-owning observers; only CNet may destroy its context.
    for(int i = 0; i < layers.Total(); i++)
      {
       CLayer *layer = layers.At(i);
-      if(!layer)
-         continue;
-      layer.SetOpenCL(obj);
+      if(layer)
+         layer.SetOpenCL(obj);
+     }
+   opencl = obj;
+   bOwnOpenCL=false;
+   if(own_previous && CheckPointer(previous) != POINTER_INVALID)
+     {
+      previous.Shutdown();
+      delete previous;
      }
   }
 //+------------------------------------------------------------------+
@@ -14599,6 +14889,7 @@ bool CNet::feedForward(CNet* inputNet, int inputLayer = -1, CNet *secondNet = NU
      }
 //---
    CBufferFloat *second = NULL;
+   CNeuronBaseOCL *secondNeuron = NULL;
    bool del_second = false;
    if(!!secondNet)
      {
@@ -14620,9 +14911,14 @@ bool CNet::feedForward(CNet* inputNet, int inputLayer = -1, CNet *secondNet = NU
       else
         {
          if(secondNet.layers.Total() <= secondLayer)
+           {
+            PrintFormat("CNet::feedForward second stream: requested_layer=%d available_layers=%d",
+                        secondLayer,secondNet.layers.Total());
             ReturnFalse;
+           }
          CLayer *layer = secondNet.layers.At(secondLayer);
          CNeuronBaseOCL *neuron = layer.At(0);
+         secondNeuron = neuron;
          second = neuron.getOutput();
         }
      }
@@ -14687,7 +14983,7 @@ bool CNet::feedForward(CNet* inputNet, int inputLayer = -1, CNet *secondNet = NU
       layer = layers.At(l);
       neuron = layer.At(0);
       layer = layers.At(l - 1);
-      if(!neuron.FeedForward(layer.At(0), second))
+      if(secondNeuron ? !neuron.FeedForwardSecond(layer.At(0), secondNeuron) : !neuron.FeedForward(layer.At(0), second))
         {
          if(del_second)
             DeleteObj(second);
@@ -14798,12 +15094,44 @@ bool CNet::backProp(CArrayFloat* targetVals, CNet *secondNet = NULL, int secondL
       return result;
      }
 //---
-   CLayer *layer = secondNet.layers.At(secondLayer);
+   CLayer *layer = layers.At(layers.Total() - 1);
    CNeuronBaseOCL *neuron = layer.At(0);
-   if(!backPropOCL(targetVals, neuron.getOutput(), neuron.getGradient(), false, (ENUM_ACTIVATION)neuron.Activation()))
+   float error = 0.0;
+   if(neuron.Type() != defNeuronSoftMaxOCL
+      && neuron.Type() != defNeuronMantisAttentionUnit
+     )
+     {
+      vector<float> target, output;
+      if(neuron.getOutputVal(output) < neuron.Neurons())
+         ReturnFalse;
+      if(output.HasNan() > 0)
+        {
+         printf("%s - %d -> Output has NaN", __FUNCTION__, __LINE__);
+         ReturnFalse;
+        }
+      if(!target.Resize(targetVals.Total()))
+         ReturnFalse;
+      for(int n = 0; n < targetVals.Total(); n++)
+         target[n] = targetVals.At(n);
+      if(target.Size() > output.Size())
+        {
+         if(!target.Resize(output.Size()))
+            ReturnFalse;
+        }
+      error = output.Loss(target, LOSS_MSE);
+     }
+   if(!neuron.calcOutputGradients(targetVals, error))
       ReturnFalse;
 //---
-   return true;
+   if(neuron.TrainMode())
+     {
+      if(!MathIsValidNumber(error))
+         error = getRecentAverageError();
+      backPropCount++;
+      recentAverageError += (error - recentAverageError) / fmin(recentAverageSmoothingFactor, (float)backPropCount);
+     }
+//---
+   return backPropGradient(secondNet, secondLayer);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -14939,7 +15267,7 @@ bool CNet::backPropGradient(CNet* secondNet, int secondLayer = -1, int LastLayer
       if(CheckPointer(currentLayer) == POINTER_INVALID)
          ReturnFalse;
       neuron = currentLayer.At(0);
-      if(!neuron || !neuron.CalcHiddenGradients(nextLayer.At(0), secondNeuron.getOutput(), secondNeuron.getGradient()))
+      if(!neuron || !neuron.CalcHiddenGradientsSecond(nextLayer.At(0), secondNeuron))
          ReturnFalse;
      }
 //---
@@ -14949,7 +15277,7 @@ bool CNet::backPropGradient(CNet* secondNet, int secondLayer = -1, int LastLayer
       currentLayer = prevLayer;
       prevLayer = layers.At(layerNum - 1);
       neuron = currentLayer.At(0);
-      if(!neuron.UpdateInputWeights(prevLayer.At(0), secondNeuron.getOutput()))
+      if(!neuron.UpdateInputWeightsSecond(prevLayer.At(0), secondNeuron))
          ReturnFalse;
      }
 //---
@@ -15423,8 +15751,21 @@ bool CNet::Clear(void)
       for(int n = 0; n < layer.Total(); n++)
         {
          CNeuronBaseOCL *neuron = layer.At(n);
-         if(!neuron || !neuron.Clear())
-            ReturnFalse;
+         if(!neuron)
+          {
+           PrintFormat("%s: layer=%d neuron=%d is NULL", __FUNCTION__, i, n);
+           ReturnFalse;
+          }
+         if(!neuron.Clear())
+          {
+           CBufferFloat *output=neuron.getOutput();
+           CBufferFloat *gradient=neuron.getGradient();
+           PrintFormat("%s: layer=%d neuron=%d type=%d output=%d index=%d gradient=%d index=%d",
+                       __FUNCTION__,i,n,neuron.Type(),(output ? output.Total() : -1),
+                       (output ? output.GetIndex() : -1),(gradient ? gradient.Total() : -1),
+                       (gradient ? gradient.GetIndex() : -1));
+           ReturnFalse;
+          }
         }
      }
 //---
@@ -15439,6 +15780,7 @@ bool CNet::feedForward(CArrayFloat* inputVals, int window = 1, bool tem = true, 
       ReturnFalse;
 //---
    CBufferFloat *SecondInput = NULL;
+   CNeuronBaseOCL *SecondNeuron = NULL;
    bool del_second = false;
    if(!!secondNet)
      {
@@ -15463,6 +15805,7 @@ bool CNet::feedForward(CArrayFloat* inputVals, int window = 1, bool tem = true, 
             ReturnFalse;
          CLayer *layer = secondNet.layers.At(secondLayer);
          CNeuronBaseOCL *neuron = layer.At(0);
+         SecondNeuron = neuron;
          SecondInput = neuron.getOutput();
         }
      }
@@ -15541,8 +15884,12 @@ bool CNet::feedForward(CArrayFloat* inputVals, int window = 1, bool tem = true, 
       if(CheckPointer(opencl) != POINTER_INVALID)
         {
          CNeuronBaseOCL *current_ocl = current.At(0);
-         if(!current_ocl.FeedForward(previous.At(0), SecondInput))
+         CNeuronBaseOCL *previous_ocl = previous.At(0);
+         if(SecondNeuron ? !current_ocl.FeedForwardSecond(previous.At(0), SecondNeuron) : !current_ocl.FeedForward(previous.At(0), SecondInput))
            {
+            PrintFormat("CNet::feedForward: layer=%d type=%d previous_type=%d previous=%d second_type=%d second=%d",
+                        l,current_ocl.Type(),previous_ocl.Type(),previous_ocl.Neurons(),
+                        (SecondNeuron ? SecondNeuron.Type() : -1),(SecondNeuron ? SecondNeuron.Neurons() : 0));
             result = false;
             break;
            }
@@ -15844,6 +16191,7 @@ bool CNeuronBaseOCL::LoadInsideLayer(int file_handle, CNeuronBaseOCL* neuron)
    int type = FileReadInteger(file_handle);
    if(type != neuron.Type())
       ReturnFalse;
+   neuron.AttachOpenCL(OpenCL);
    if(!neuron.Load(file_handle))
       ReturnFalse;
    neuron.SetOpenCL(OpenCL);
@@ -16272,14 +16620,16 @@ bool CNet::OpenCLInit(void)
       opencl = new COpenCLMy();
       if(!opencl)
          ReturnFalse;
+      bOwnOpenCL=true;
      }
    if(!opencl.Initialize(cl_program, true))
      {
       DeleteObj(opencl);
+      bOwnOpenCL=false;
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(282);
+   opencl.SetKernelsCount(286);
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")
@@ -16562,6 +16912,10 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_CogDriverForecastBuildKV, "CogDriverForecastBuildKV")
    CreateKernel(def_k_CogDriverForecastBuildKVGrad, "CogDriverForecastBuildKVGrad")
    CreateKernel(def_k_CogDriverForecastGradientRMS, "CogDriverForecastGradientRMS")
+   CreateKernel(def_k_ScenarioForecastForward, "ScenarioForecastForward")
+   CreateKernel(def_k_ScenarioResponsibilities, "ScenarioResponsibilities")
+   CreateKernel(def_k_ScenarioCodebookEMA, "ScenarioCodebookEMA")
+   CreateKernel(def_k_ScenarioGradientNormalize, "ScenarioGradientNormalize")
 //---
    return true;
   }

@@ -478,6 +478,8 @@ union uaLongChar
 #define  defNeuronCogDriverRankTCM     0x8115
 #define  defNeuronCogDriverForecastHead 0x8116
 #define  defNeuronCogDriverForecastToken 0x8117
+#define  defNeuronScenarioForecast      0x8118
+#define  defNeuronScenarioCrossAttention 0x8119
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -781,6 +783,7 @@ union uaLongChar
 #define def_k_bff_batch                3  ///< Batch size
 #define def_k_bff_optimization         4  ///< Optimization type
 #define def_k_bff_activation           5  ///< Activation type
+#define def_k_bff_training             6  ///< Training mode (stats are immutable in inference)
 //---
 #define def_k_CalcHiddenGradientBatch   25 ///< Index of the Kernel of the Batch neuron to transfer gradient to previous layer (#CNeuronBathcNormOCL)
 #define def_k_bchg_options             0  ///<[in] Options matrix m*(7 or 9), where m - Number of neurons in previous layer
@@ -2683,6 +2686,99 @@ union uaLongChar
 #define def_k_cdfh_grms_error_target            1
 #define def_k_cdfh_grms_dimension               2
 #define def_k_cdfh_grms_horizon                 3
+//---
+#define def_k_ScenarioForecastForward           282
+#define def_k_sff_input                           0
+#define def_k_sff_prototypes                      1
+#define def_k_sff_generator_input                 2
+#define def_k_sff_router_input                    3
+#define def_k_sff_confidence_input                4
+#define def_k_sff_generator_output                5
+#define def_k_sff_router_output                   6
+#define def_k_sff_confidence_output               7
+#define def_k_sff_z                               8
+#define def_k_sff_u                               9
+#define def_k_sff_pi                             10
+#define def_k_sff_scenarios                      11
+#define def_k_sff_horizon                        12
+#define def_k_sff_dimension                      13
+#define def_k_sff_phase                          14
+#define def_k_sff_log_pi                         15
+#define def_k_sff_log_u                          16
+#define def_k_sff_variables                      17
+#define def_k_sff_forward_validity               18
+#define def_k_sff_generator_weights              19
+#define def_k_sff_router_weights                 20
+#define def_k_sff_confidence_weights             21
+#define def_k_sff_generator_weights_count        22
+#define def_k_sff_router_weights_count           23
+#define def_k_sff_confidence_weights_count       24
+//---
+#define def_k_ScenarioResponsibilities          283
+#define def_k_sr_target                           0
+#define def_k_sr_z                                1
+#define def_k_sr_u                                2
+#define def_k_sr_pi                               3
+#define def_k_sr_responsibilities                 4
+#define def_k_sr_generator_gradient               5
+#define def_k_sr_router_gradient                  6
+#define def_k_sr_confidence_gradient              7
+#define def_k_sr_scenarios                        8
+#define def_k_sr_topk                             9
+#define def_k_sr_horizon                         10
+#define def_k_sr_dimension                       11
+#define def_k_sr_scores                          12
+#define def_k_sr_sparse                          13
+#define def_k_sr_indexes                         14
+#define def_k_sr_phase                           15
+#define def_k_sr_variables                       16
+#define def_k_sr_prototypes                      17
+#define def_k_sr_hard_loss                       18
+#define def_k_sr_batch_control                   19
+#define def_k_sr_huber_delta                     20
+#define def_k_sr_target_source                   21
+#define def_k_sr_forward_validity                22
+#define def_k_sr_diagnostic_partials             23
+#define def_k_sr_epoch_diagnostics               24
+#define def_k_sr_observation_by_scenario         25
+#define def_k_sr_diagnostic_scratch              26
+#define def_k_sr_usage                           27
+#define def_k_sr_inactive                        28
+//---
+#define def_k_ScenarioCodebookEMA               284
+#define def_k_sce_target                          0
+#define def_k_sce_prototypes                      1
+#define def_k_sce_ema_sums                        2
+#define def_k_sce_ema_counts                      3
+#define def_k_sce_usage                           4
+#define def_k_sce_inactive                        5
+#define def_k_sce_assignment                      6
+#define def_k_sce_scenarios                       7
+#define def_k_sce_dimension                       8
+#define def_k_sce_decay                           9
+#define def_k_sce_inactivity_age                 10
+#define def_k_sce_seed                            11
+#define def_k_sce_recovery_age                    12
+#define def_k_sce_recovery                        13
+#define def_k_sce_phase                           14
+#define def_k_sce_horizon                         15
+#define def_k_sce_variables                       16
+#define def_k_sce_responsibilities                17
+//---
+#define def_k_ScenarioGradientNormalize         285
+#define def_k_sgn_generator_gradient              0
+#define def_k_sgn_generator_input_gradient        1
+#define def_k_sgn_router_input_gradient           2
+#define def_k_sgn_confidence_input_gradient       3
+#define def_k_sgn_input_gradient                  4
+#define def_k_sgn_responsibilities                5
+#define def_k_sgn_scenarios                       6
+#define def_k_sgn_horizon                         7
+#define def_k_sgn_dimension                       8
+#define def_k_sgn_phase                           9
+#define def_k_sgn_confidence_gradient            10
+#define def_k_sgn_variables                      11
+#define def_k_sgn_batch_control                  12
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

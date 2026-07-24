@@ -938,7 +938,9 @@ bool CNeuronSpikeActivation::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
       ReturnFalse;
-   if(!cHV.Clear())
+   if(!cHV.getOutput().Fill(0.0f))
+      ReturnFalse;
+   if(!cHV.getGradient().Fill(0.0f))
       ReturnFalse;
 //---
    return true;
@@ -7218,6 +7220,9 @@ bool CNeuronMSRes::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
       ReturnFalse;
+   //--- cFlow is reconstructed from the serialized layer list.  It must use
+   //--- the parent context while CLayer creates each nested OpenCL neuron.
+   cFlow.SetOpenCL(OpenCL);
    if(!cFlow.Load(file_handle))
       ReturnFalse;
 //---
