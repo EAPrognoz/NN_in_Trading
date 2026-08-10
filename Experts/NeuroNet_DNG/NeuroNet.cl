@@ -14714,6 +14714,382 @@ __kernel void CogDriverForecastDeltaNorm(__global const float* plan,
    plan_delta_norm[h] = sqrt(sum / (float)dimension);
   }
 //+------------------------------------------------------------------+
+//| Generic RAG retrieval pipeline; every extent is runtime supplied |
+//+------------------------------------------------------------------+
+__kernel void RAGScore(__global const float *embedding,
+                       __global const float *centroids,
+                       __global const float *used,
+                       __global float *scores,
+                       const int scenario_count,
+                       const int embedding_dimension)
+  {
+   const int scenario=get_global_id(0);
+   if(scenario>=scenario_count || embedding_dimension<=0)
+      return;
+   if(used[scenario]<=0.5f) { scores[scenario]=MIN_VALUE; return; }
+   float dot=0.0f, left=0.0f, right=0.0f;
+   for(int d=0;d<embedding_dimension;d++)
+     {
+      float a=IsNaNOrInf(embedding[d],0.0f);
+      float b=IsNaNOrInf(centroids[scenario*embedding_dimension+d],0.0f);
+      dot+=a*b; left+=a*a; right+=b*b;
+     }
+   scores[scenario]=(left>1.0e-12f && right>1.0e-12f ? dot/sqrt(left*right) : MIN_VALUE);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+inline int RAGBefore(const float2 left,const float2 right)
+  {
+   return (left.y>right.y || (left.y==right.y && left.x<right.x));
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+inline void RAGSortDescending(__local float2 candidates[],const int lane,const int block_size)
+  {
+   for(int width=2;width<=block_size;width<<=1)
+      for(int stride=width>>1;stride>0;stride>>=1)
+        {
+         const int partner=lane^stride;
+         if(partner>lane)
+           {
+            const int descending=((lane&width)==0);
+            const int before=RAGBefore(candidates[lane],candidates[partner]);
+            if((descending && !before) || (!descending && before))
+              {
+               const float2 swap=candidates[lane];
+               candidates[lane]=candidates[partner];
+               candidates[partner]=swap;
+              }
+           }
+         BarrierLoc;
+        }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void RAGPartial(__global const float *scores,
+                         __global float2 *partial,
+                         const int scenario_count,
+                         const int block_size,
+                         const int top_k)
+  {
+   const int lane=get_local_id(0);
+   const int block=get_group_id(0);
+   const int scenario=block*block_size+lane;
+   __local float2 candidates[LOCAL_ARRAY_SIZE];
+   if(block_size<=0 || block_size>LOCAL_ARRAY_SIZE || (block_size&(block_size-1))!=0 ||
+      top_k<=0 || top_k>block_size)
+      return;
+   const float score=(scenario<scenario_count ? scores[scenario] : MIN_VALUE);
+   candidates[lane]=(score>MIN_VALUE ? (float2)((float)scenario,score) : (float2)(-1.0f,MIN_VALUE));
+   BarrierLoc;
+   RAGSortDescending(candidates,lane,block_size);
+   if(lane<top_k)
+      partial[block*top_k+lane]=candidates[lane];
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void RAGMerge(__global const float2 *source,
+                       __global float2 *destination,
+                       const int candidate_count,
+                       const int block_size,
+                       const int top_k)
+  {
+   const int lane=get_local_id(0);
+   const int block=get_group_id(0);
+   const int candidate_id=block*block_size+lane;
+   __local float2 candidates[LOCAL_ARRAY_SIZE];
+   if(block_size<=0 || block_size>LOCAL_ARRAY_SIZE || (block_size&(block_size-1))!=0 ||
+      top_k<=0 || top_k>block_size)
+      return;
+   const float2 candidate=(candidate_id<candidate_count ? source[candidate_id] : (float2)(-1.0f,MIN_VALUE));
+   candidates[lane]=((int)candidate.x>=0 && candidate.y>MIN_VALUE ? candidate : (float2)(-1.0f,MIN_VALUE));
+   BarrierLoc;
+   RAGSortDescending(candidates,lane,block_size);
+   if(lane<top_k)
+      destination[block*top_k+lane]=candidates[lane];
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void RAGGather(__global const float2 *top,
+                        __global const float *actions,
+                        __global float *tokens,
+                        const int scenario_count,
+                        const int action_count,
+                        const int action_dimension,
+                        const int token_width,
+                        const int top_k,
+                        __global const float *action_used,
+                        __global const float *action_mean_reward,
+                        __global const float *action_hit_count,
+                        __global float *absolute_relevance)
+  {
+   const int token=get_global_id(0);
+   const int total=top_k*action_count;
+   if(token>=total || action_count<=0 || action_dimension<=0 || token_width!=action_dimension+2) return;
+   if(token==0)
+     {
+      float best_score=MIN_VALUE;
+      int has_action=0;
+      for(int candidate_rank=0;candidate_rank<top_k;candidate_rank++)
+        {
+         const int candidate_scenario=(int)top[candidate_rank].x;
+         if(candidate_scenario<0 || candidate_scenario>=scenario_count || top[candidate_rank].y<=MIN_VALUE)
+            continue;
+         for(int candidate_action=0;candidate_action<action_count;candidate_action++)
+           {
+            const int candidate_slot=candidate_scenario*action_count+candidate_action;
+            if(action_used[candidate_slot]>0.5f && action_hit_count[candidate_slot]>0.0f)
+              {
+               best_score=fmax(best_score,IsNaNOrInf(top[candidate_rank].y,MIN_VALUE));
+               has_action=1;
+               break;
+              }
+           }
+        }
+      absolute_relevance[0]=(has_action ? IsNaNOrInf(best_score,0.0f) : 0.0f);
+     }
+   const int rank=token/action_count, action=token-rank*action_count;
+   const int scenario=(int)top[rank].x;
+   const int width=token_width;
+   const int out=token*width;
+   if(scenario<0 || scenario>=scenario_count || top[rank].y<=MIN_VALUE)
+     {
+      for(int d=0;d<width;d++)
+         tokens[out+d]=0.0f;
+      return;
+     }
+   const int slot=scenario*action_count+action;
+   const int valid=(action_used[slot]>0.5f && action_hit_count[slot]>0.0f);
+   if(!valid)
+     {
+      for(int d=0;d<width;d++)
+         tokens[out+d]=0.0f;
+      return;
+     }
+   const float raw_relevance=exp(clamp(IsNaNOrInf(top[rank].y,MIN_VALUE),-16.0f,16.0f))*
+                             log(1.0f+fmax(IsNaNOrInf(action_hit_count[slot],0.0f),0.0f));
+   float relevance_sum=0.0f;
+   for(int candidate_rank=0;candidate_rank<top_k;candidate_rank++)
+     {
+      const int candidate_scenario=(int)top[candidate_rank].x;
+      if(candidate_scenario<0 || candidate_scenario>=scenario_count || top[candidate_rank].y<=MIN_VALUE)
+         continue;
+      for(int candidate_action=0;candidate_action<action_count;candidate_action++)
+        {
+         const int candidate_slot=candidate_scenario*action_count+candidate_action;
+         if(action_used[candidate_slot]<=0.5f || action_hit_count[candidate_slot]<=0.0f)
+            continue;
+         relevance_sum+=exp(clamp(IsNaNOrInf(top[candidate_rank].y,MIN_VALUE),-16.0f,16.0f))*
+                        log(1.0f+fmax(IsNaNOrInf(action_hit_count[candidate_slot],0.0f),0.0f));
+        }
+     }
+   const float weighted_relevance=(relevance_sum>1.0e-20f ? raw_relevance/relevance_sum : 0.0f);
+   if(weighted_relevance<=0.0f)
+     {
+      for(int d=0;d<width;d++)
+         tokens[out+d]=0.0f;
+      return;
+     }
+   for(int d=0;d<action_dimension;d++)
+      tokens[out+d]=IsNaNOrInf(actions[slot*action_dimension+d],0.0f);
+   tokens[out+action_dimension]=weighted_relevance;
+   tokens[out+action_dimension+1]=IsNaNOrInf(action_mean_reward[slot],0.0f);
+  }
+//+------------------------------------------------------------------+
+//| Actor-owned differentiable rejection gate. Memory remains raw.  |
+//+------------------------------------------------------------------+
+__kernel void RAGTokenGate(__global const float *tokens,
+                           __global float *gated_tokens,
+                           __global const float *absolute_relevance,
+                           __global const float *threshold_weights,
+                           __global float *branch_activity,
+                           const int token_count,
+                           const int token_width,
+                           const float scale)
+  {
+   if(get_global_id(0)>0 || token_count<=0 || token_width<2)
+      return;
+   int has_tokens=0;
+   for(int token=0;token<token_count;token++)
+     {
+      const float weighted_relevance=
+         IsNaNOrInf(tokens[token*token_width+token_width-2],0.0f);
+      if(weighted_relevance>0.0f)
+        {
+         has_tokens=1;
+         break;
+        }
+     }
+   if(!has_tokens)
+     {
+      for(int i=0;i<token_count*token_width;i++)
+         gated_tokens[i]=0.0f;
+      branch_activity[0]=0.0f;
+      return;
+     }
+   const float threshold=IsNaNOrInf(threshold_weights[1],0.0f);
+   const float score=IsNaNOrInf(absolute_relevance[0],0.0f);
+   const float z=clamp(scale*(score-threshold),-40.0f,40.0f);
+   const float sigmoid=1.0f/(1.0f+exp(-z));
+   for(int i=0;i<token_count*token_width;i++)
+      gated_tokens[i]=IsNaNOrInf(tokens[i]*sigmoid,0.0f);
+   branch_activity[0]=sigmoid;
+  }
+//+------------------------------------------------------------------+
+//| Accumulate only the threshold derivative; memory has no gradient|
+//+------------------------------------------------------------------+
+__kernel void RAGTokenGateGrad(__global const float *tokens,
+                               __global const float *gated_gradient,
+                               __global const float *absolute_relevance,
+                               __global const float *threshold_weights,
+                               __global float *threshold_gradient,
+                               __global const float *branch_activity_gradient,
+                               const int token_count,
+                               const int token_width,
+                               const float scale)
+  {
+   if(get_global_id(0)>0 || token_count<=0 || token_width<2)
+      return;
+   const float activity_gradient=IsNaNOrInf(branch_activity_gradient[0],0.0f);
+   int has_tokens=0;
+   for(int token=0;token<token_count;token++)
+      if(IsNaNOrInf(tokens[token*token_width+token_width-2],0.0f)>0.0f)
+        {
+         has_tokens=1;
+         break;
+        }
+   if(!has_tokens)
+     {
+      threshold_gradient[0]=0.0f;
+      return;
+     }
+   const float threshold=IsNaNOrInf(threshold_weights[1],0.0f);
+   const float score=IsNaNOrInf(absolute_relevance[0],0.0f);
+   const float z=clamp(scale*(score-threshold),-40.0f,40.0f);
+   const float g=1.0f/(1.0f+exp(-z));
+   float token_gradient=0.0f;
+   for(int token=0;token<token_count;token++)
+     {
+      const int offset=token*token_width;
+      for(int d=0;d<token_width;d++)
+         token_gradient+=IsNaNOrInf(gated_gradient[offset+d],0.0f)*
+                         IsNaNOrInf(tokens[offset+d],0.0f);
+     }
+   const float gradient=(token_gradient+activity_gradient)*(-scale*g*(1.0f-g));
+   threshold_gradient[0]=clamp(IsNaNOrInf(gradient,0.0f),-MAX_GRAD,MAX_GRAD);
+  }
+//+------------------------------------------------------------------+
+//| Generic bounded-memory nearest-pair reduction.  One work-group  |
+//| independently reduces one row of candidates; output is float4   |
+//| {squared_distance,left,right,valid}.                            |
+//+------------------------------------------------------------------+
+inline void RAGNearestPairIndex(const int pair,const int count,int *left,int *right)
+  {
+   if(pair<0 || count<2)
+     {
+      *left=-1;
+      *right=-1;
+      return;
+     }
+   const long target=(long)pair;
+   int low=0;
+   int high=count-1;
+   // Find the last triangular row prefix not greater than target.  Exact
+   // 64-bit intermediates keep the mapping stable at count==65536.
+   while(low+1<high)
+     {
+      const int middle=low+(high-low)/2;
+      const long before=((long)middle*(2L*(long)count-(long)middle-1L))/2L;
+      if(before<=target)
+         low=middle;
+      else
+         high=middle;
+     }
+   const long row_start=((long)low*(2L*(long)count-(long)low-1L))/2L;
+   const long column=(long)low+1L+(target-row_start);
+   *left=(column<(long)count ? low : -1);
+   *right=(column<(long)count ? (int)column : -1);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+inline int RAGNearestBefore(const float4 left,const float4 right)
+  {
+   // Validity is part of the ordering.  A valid distance saturated to
+   // MAXFLOAT must still beat the invalid MAXFLOAT sentinel.
+   if(left.w!=right.w)
+      return left.w>right.w;
+   if(left.w<=0.0f)
+      return 0;
+   if(left.x!=right.x)
+      return left.x<right.x;
+   if(left.y!=right.y)
+      return left.y<right.y;
+   return left.z<right.z;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+__kernel void RAGNearestPair(__global const float *centroids,
+                             __global const float *used,
+                             __global float4 *result,
+                             const int candidate_count,
+                             const int dimension,
+                             const int batch_count)
+  {
+   const int lane=get_local_id(0);
+   const int batch=get_group_id(0);
+   const int lanes=get_local_size(0);
+   __local float4 best[LOCAL_ARRAY_SIZE];
+   float4 current=(float4)(MAXFLOAT,-1.0f,-1.0f,0.0f);
+   if(candidate_count>1 && dimension>0 && batch>=0 && batch<batch_count &&
+      lanes>0 && lanes<=LOCAL_ARRAY_SIZE)
+     {
+      // candidate_count<=65536: divide the even factor before multiplying so
+      // the documented maximum (2,147,450,880 pairs) stays in signed int.
+      const int pairs=((candidate_count&1)==0 ?
+                       (candidate_count/2)*(candidate_count-1) :
+                       candidate_count*((candidate_count-1)/2));
+      const int base=batch*candidate_count;
+      for(int pair=lane;pair<pairs;pair+=lanes)
+        {
+         int left=-1,right=-1;
+         RAGNearestPairIndex(pair,candidate_count,&left,&right);
+         if(left<0 || right<0 || used[base+left]<=0.5f || used[base+right]<=0.5f)
+            continue;
+         float distance=0.0f;
+         const int lbase=(base+left)*dimension;
+         const int rbase=(base+right)*dimension;
+          for(int d=0;d<dimension;d++)
+            {
+             const float delta=IsNaNOrInf(centroids[lbase+d]-centroids[rbase+d],MAXFLOAT);
+             // Match the CPU fallback's explicit float rounding and prevent
+             // contraction from changing the nearest-pair ordering.
+             volatile float squared=delta*delta;
+             distance=distance+squared;
+            }
+         const float4 candidate=(float4)(IsNaNOrInf(distance,MAXFLOAT),(float)left,(float)right,1.0f);
+         if(RAGNearestBefore(candidate,current))
+            current=candidate;
+        }
+     }
+   best[lane]=current;
+   BarrierLoc;
+   for(int stride=lanes>>1;stride>0;stride>>=1)
+     {
+      if(lane<stride && RAGNearestBefore(best[lane+stride],best[lane]))
+         best[lane]=best[lane+stride];
+      BarrierLoc;
+     }
+   if(lane==0 && batch>=0 && batch<batch_count)
+      result[batch]=best[0];
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 __kernel void CogDriverForecastGradientRMS(__global const float* gradient,
@@ -15360,7 +15736,6 @@ __kernel void ScenarioResponsibilities(__global float *target,
                                        const int phase,
                                        const int variables,
                                        __global const float *prototypes,
-                                       __global float *hard_loss,
                                        __global float *batch_control,
                                        const float huber_delta,
                                        __global const float *target_source,
@@ -15370,7 +15745,9 @@ __kernel void ScenarioResponsibilities(__global float *target,
                                        __global const float *observation_by_scenario,
                                        __global float *diagnostic_scratch,
                                        __global const float *usage,
-                                       __global const float *inactive)
+                                       __global const float *inactive,
+                                       __global float *recovery_events,
+                                       __global float *age_zero_events)
   {
    if(variables <= 0 || scenarios <= 0 || top_k <= 0 || top_k > scenarios ||
       horizon <= 0 || dimension <= 0 || dimension * variables > SCENARIO_LOCAL_CAP)
@@ -15404,7 +15781,6 @@ __kernel void ScenarioResponsibilities(__global float *target,
          for(int scenario = 0; scenario < scenarios; scenario++)
             forecast_valid = min(forecast_valid, forward_validity[scenario]);
          batch_control[0] = (joint_valid > 0.5f && forecast_valid > 0.5f ? 1.0f : 0.0f);
-         batch_control[1] = -1.0f;
         }
       return;
      }
@@ -15444,11 +15820,12 @@ __kernel void ScenarioResponsibilities(__global float *target,
       if(ld == 0 && lv == 0)
         {
          const bool valid = (batch_control[0] > 0.5f);
-         scores[k] = (valid ? IsNaNOrInf(log(max(IsNaNOrInf(pi[k], 0.0f), 1.0e-12f)) - joint_laplace,
-                                         MIN_VALUE) : MIN_VALUE);
-//--- Select the nearest forecast Z_k in the same full-future latent space.
-//--- Codebook EMA receives this scenario label and updates its matching Delta-Z prototype.
-         hard_loss[k] = (valid ? IsNaNOrInf(joint_trajectory, MAX_VALUE) : MAX_VALUE);
+//--- The likelihood is accumulated across the whole joint trajectory. Scale
+//--- its complete log-posterior by the root coordinate count so the
+//--- sparse TopK posterior remains representable for all selected scenarios.
+         const float score_scale = sqrt(max((float)variables * (float)horizon * (float)dimension, 1.0f));
+         scores[k] = (valid ? IsNaNOrInf((log(max(IsNaNOrInf(pi[k], 0.0f), 1.0e-12f)) - joint_laplace) /
+                                         score_scale, MIN_VALUE) : MIN_VALUE);
          diagnostic_partials[k] = (valid ? IsNaNOrInf(joint_trajectory, 0.0f) : 0.0f);
          diagnostic_partials[scenarios + k] = (valid ? IsNaNOrInf(joint_confidence, 0.0f) : 0.0f);
          diagnostic_partials[2 * scenarios + k] = (valid ? IsNaNOrInf(joint_latent, 0.0f) : 0.0f);
@@ -15457,31 +15834,24 @@ __kernel void ScenarioResponsibilities(__global float *target,
      }
    if(phase == 2)
      {
-      const int scenario = get_global_id(0);
-      if(scenario >= scenarios)
-         return;
-      if(batch_control[0] <= 0.5f)
-        {
-         responsibilities[scenario] = 0.0f;
-         router_gradient[scenario] = 0.0f;
-         return;
-        }
-      float responsibility = 0.0f;
-      for(int selected = 0; selected < top_k; selected++)
-         if((int)indexes[selected] == scenario)
-            responsibility = IsNaNOrInf(sparse[selected], 0.0f);
-      responsibilities[scenario] = responsibility;
-      //--- Update kernels add their gradient.  Use the library convention
-      //--- target-output, i.e. posterior responsibility minus router Pi.
-      router_gradient[scenario] = responsibility - IsNaNOrInf(pi[scenario], 0.0f);
-      return;
-     }
-   if(phase == 3)
-     {
       if(d >= dimension || v >= variables || k >= scenarios)
          return;
-      const float responsibility = (batch_control[0] > 0.5f ?
-                                    IsNaNOrInf(responsibilities[k], 0.0f) : 0.0f);
+      float responsibility = 0.0f;
+      if(batch_control[0] > 0.5f)
+         for(int selected = 0; selected < top_k; selected++)
+            if((int)indexes[selected] == k)
+              {
+               responsibility = IsNaNOrInf(sparse[selected], 0.0f);
+               break;
+              }
+      if(d == 0 && v == 0)
+        {
+         responsibilities[k] = responsibility;
+         //--- Update kernels add their gradient.  Use the library convention
+         //--- target-output, i.e. posterior responsibility minus router Pi.
+         router_gradient[k] = (batch_control[0] > 0.5f ?
+                               responsibility - IsNaNOrInf(pi[k], 0.0f) : 0.0f);
+        }
       for(int h = 0; h < horizon; h++)
         {
          const int confidence_shift = (k * variables + v) * horizon + h;
@@ -15509,24 +15879,7 @@ __kernel void ScenarioResponsibilities(__global float *target,
         }
       return;
      }
-   if(phase == 4)
-     {
-      const int scenario = get_local_id(0);
-      if(scenario >= scenarios)
-         return;
-      const float minimum = LocalMin(hard_loss[scenario], 0, Temp);
-      if(scenario == 0)
-        {
-         int assignment = -1;
-         if(batch_control[0] > 0.5f)
-            for(int candidate = 0; candidate < scenarios; candidate++)
-               if(hard_loss[candidate] == minimum)
-                 { assignment = candidate; break; }
-        batch_control[1] = (float)assignment;
-       }
-      return;
-     }
-   if(phase == 5)
+   if(phase == 3)
      {
       const int scenario = get_local_id(0);
       if(scenario >= scenarios)
@@ -15558,14 +15911,19 @@ __kernel void ScenarioResponsibilities(__global float *target,
         }
       return;
      }
-   if(phase == 6)
+   if(phase == 4)
      {
       if(get_global_id(0) == 0)
-         for(int i = 0; i < 11; i++)
+         for(int i = 0; i < 12; i++)
             epoch_diagnostics[i] = 0.0f;
+      if(get_global_id(0) < scenarios)
+        {
+         recovery_events[get_global_id(0)] = 0.0f;
+         age_zero_events[get_global_id(0)] = 0.0f;
+        }
       return;
      }
-   if(phase == 7)
+   if(phase == 5)
      {
       const int pair = get_global_id(2);
       const int pairs = scenarios * (scenarios - 1) / 2;
@@ -15598,7 +15956,7 @@ __kernel void ScenarioResponsibilities(__global float *target,
                                          max((float)(variables * horizon * dimension), 1.0f));
       return;
      }
-   if(phase == 8)
+   if(phase == 6)
      {
       const int lane = get_local_id(0);
       const int pairs = scenarios * (scenarios - 1) / 2;
@@ -15619,6 +15977,11 @@ __kernel void ScenarioResponsibilities(__global float *target,
                                       0, Temp);
       if(lane == 0)
          epoch_diagnostics[9] = (pairs > 0 ? IsNaNOrInf(pair_sum / (float)pairs, 0.0f) : 0.0f);
+      BarrierLoc
+      const float recovered_sum = LocalSum(lane < scenarios ? IsNaNOrInf(recovery_events[lane], 0.0f) : 0.0f,
+                                           0, Temp);
+      if(lane == 0)
+         epoch_diagnostics[11] = IsNaNOrInf(recovered_sum, 0.0f);
       return;
      }
   }
@@ -15642,7 +16005,9 @@ __kernel void ScenarioCodebookEMA(__global const float *target,
                                   const int phase,
                                   const int horizon,
                                   const int variables,
-                                  __global const float *responsibilities)
+                                  __global const float *responsibilities,
+                                  __global float *recovery_events,
+                                  __global float *age_zero_events)
   {
    if(phase == 0)
      {
@@ -15659,9 +16024,14 @@ __kernel void ScenarioCodebookEMA(__global const float *target,
       const float age = (hit > 0.0f ? 0.0f : IsNaNOrInf(inactivity_age[k], 0.0f) + 1.0f);
       const bool recover = (hit == 0.0f && age >= (float)recovery_age);
       recovery[k] = (recover ? 1.0f : 0.0f);
+      if(recover)
+         recovery_events[k] = IsNaNOrInf(recovery_events[k], 0.0f) + 1.0f;
       ema_counts[k] = (recover ? 1.0f : count);
       usage[k] = IsNaNOrInf(usage[k], 0.0f) + hit;
-      inactivity_age[k] = (recover ? 0.0f : age);
+      const float final_age = (recover ? 0.0f : age);
+      inactivity_age[k] = final_age;
+      if(final_age == 0.0f)
+         age_zero_events[k] = IsNaNOrInf(age_zero_events[k], 0.0f) + 1.0f;
       inactive[k] = (!recover && count < 1.0e-4f ? 1.0f : 0.0f);
       return;
      }

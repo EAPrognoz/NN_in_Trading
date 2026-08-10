@@ -1,19 +1,19 @@
 //+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
-//|                         ORION forecast training infrastructure  |
+//|                          ORION forecast training infrastructure  |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-// Reuse CogDriver indicators, data preparation and the canonical encoder
-// description. CogDriver sources remain read-only.
+//| Reuse CogDriver indicators, data preparation and the canonical   |
+//| description. CogDriver sources remain read-only.                 |
 //+------------------------------------------------------------------+
 #include "..\CogDriver\Trajectory.mqh"
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-#define ORION_FORMAT_VERSION     6
+#define ORION_FORMAT_VERSION     7
 #define ORION_MARKET_FILE        "ORIONMkt.nnw"
 #define ORION_TARGET_FILE        "ORIONTrg.nnw"
 #define ORION_MANIFEST_FILE      "ORIONForecast.manifest"
@@ -23,11 +23,12 @@
 #define ORION_AC_MANIFEST_FILE   "ORIONActorCritic.manifest"
 #define ORION_AC_FORMAT_VERSION  12
 //+------------------------------------------------------------------+
-// ORION builds transitions directly from historical windows and does not use
-// a replay buffer. Device tensors contain one transition; descriptor.batch
-// preserves the common library optimizer contract and does not shape tensors.
-// A narrow local adapter. It exposes an already-public layer object from the
-// protected CNet container; no CNet behaviour is duplicated or changed.
+//| ORION builds transitions directly from historical windows        |
+//| and does not use a replay buffer. Device tensors contain         |
+//| one transition; descriptor.batch preserves the common library    |
+//| optimizer contract and does not shape tensors. A narrow local    |
+//| adapter. It exposes an already-public layer object from the      |
+//| protected CNet container; no CNet behaviour is duplicated or     |
 //+------------------------------------------------------------------+
 class CORIONNet : public CNet
   {
@@ -64,9 +65,9 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-// A transient, non-owning layer view lets the library transpose consume an
-// existing CBufferFloat.  It never owns ORIONFuture and therefore never
-// copies it to host or changes its lifetime.
+//| A transient, non-owning layer view lets the library transpose    |
+//| consume existing CBufferFloat. It never owns ORIONFuture and     |
+//| therefore never copies it to host or changes its lifetime.       |
 //+------------------------------------------------------------------+
 class CORIONBufferView : public CNeuronBaseOCL
   {
@@ -85,8 +86,9 @@ public:
       Output = NULL;
      }
   };
-// Device-only composition adapter.  All operations below reuse existing
-// NeuroNet_DNG kernels; no host mirror is read while assembling a batch.
+//+------------------------------------------------------------------+
+//| Device-only composition adapter, all operations reuse existing   |
+//| NeuroNet_DNG kernels, no host mirror read during batch assembly  |
 //+------------------------------------------------------------------+
 class CORIONDeviceOps : public CNeuronBaseOCL
   {
@@ -166,6 +168,7 @@ CBufferFloat         ORIONLatentNegativeMarket;
 //---
 ulong                ORIONInvalidBatches = 0;
 ulong                ORIONBatches = 0;
+ulong                ORIONResponsibilityMicroseconds = 0;
 uint                 ORIONCompletedEpochs = 0;
 ulong                ORIONLastSignature = 0;
 bool                 ORIONReady = false;
@@ -180,6 +183,30 @@ CBufferFloat         ORIONFrozenInactive;
 CBufferFloat         ORIONFrozenInactivityAge;
 bool                 ORIONFrozenBaselineReady = false;
 CORIONDeviceOps      ORIONDevice;
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+uint ForecastRecoveryAge(void)
+  {
+   if(ORIONRecoverySmoke)
+      return MathMax(1, int(ORIONRecoverySmokeAge));
+   const int seconds = PeriodSeconds(TimeFrame);
+   if(seconds <= 0)
+      return 6240;
+//--- 52 five-day trading weeks: one calendar-equivalent year on H1.
+   return (uint)MathMax(1.0, MathRound(6240.0 * PeriodSeconds(PERIOD_H1) / seconds));
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool ConfigureForecastRecoveryAge(void)
+  {
+   if(!ORIONForecast || !ORIONForecast.SetRecoveryAge(ForecastRecoveryAge()))
+      ReturnFalse;
+   PrintFormat("ORION %s recovery_age=%u bars", (ORIONRecoverySmoke ? "smoke" : "forecast"),
+               ORIONForecast.RecoveryAge());
+   return true;
+  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -393,6 +420,19 @@ bool ORIONCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
    if(!target.Add(descr))
       DeleteObjAndFalse(descr);
 //---
+   descr = new CLayerDescription();
+   if(!descr)
+      ReturnFalse;
+   descr.type = defNeuronPeriodNorm;
+   descr.count = NForecast;
+   descr.window = EmbeddingSize;
+   descr.variables = BarDescr;
+   descr.activation = None;
+   descr.optimization = ADAM;
+   descr.batch = BatchSize;
+   if(!target.Add(descr))
+      DeleteObjAndFalse(descr);
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -431,6 +471,8 @@ bool ORIONCreateNetworks(void)
       Print("ORION init: forecast layer=FAIL");
       ReturnFalse;
      }
+   if(!ConfigureForecastRecoveryAge())
+      ReturnFalse;
    ORIONTarget.TrainMode(false);
    ORIONMarket.TrainMode(true);
    return true;
@@ -494,7 +536,15 @@ bool ORIONValidateShapes(const bool training = true)
       buffer = (layer ? layer.getOutput() : NULL);
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
-         PrintFormat("ORION shape: target latent expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
+         PrintFormat("ORION shape: target final Conv expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
+                     (buffer ? buffer.Total() : -1));
+         ReturnFalse;
+        }
+      layer = ORIONTarget.Layer(-1);
+      buffer = (layer ? layer.getOutput() : NULL);
+      if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
+        {
+         PrintFormat("ORION shape: target output PeriodNorm expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
                      (buffer ? buffer.Total() : -1));
          ReturnFalse;
         }
@@ -578,7 +628,7 @@ ulong ORIONHashFile(ulong hash, const string file_name)
    return hash;
   }
 //+------------------------------------------------------------------+
-// Exact signature of the unified Market/Scenario inference graph.
+//| Exact signature of the unified Market/Scenario inference graph.      |
 //+------------------------------------------------------------------+
 ulong ORIONForecastSignature(void)
   {
@@ -750,7 +800,7 @@ bool ORIONPrepareLatentTarget(CBufferFloat *market_latent)
    ORIONFutureView.Unbind();
    if(!transposed)
       ReturnFalse;
-   CNeuronBaseOCL *future_latent = ORIONTarget.Layer(4);
+   CNeuronBaseOCL *future_latent = ORIONTarget.Layer(-1);
    if(!ORIONTarget.FeedForwardLayer(ORIONFutureTranspose.AsObject()))
       ReturnFalse;
    if(!future_latent || future_latent.getOutput().Total() != (BarDescr * NForecast * EmbeddingSize) ||
@@ -817,6 +867,99 @@ double ORIONProbeDrift(const double &before[], const double &after[])
    return MathSqrt(square_sum / double((BarDescr * EmbeddingSize)));
   }
 //+------------------------------------------------------------------+
+string FormatScenarioCounts(const uint &counts[])
+  {
+   string result = "[";
+   for(int i = 0; i < ArraySize(counts); i++)
+      result += (i > 0 ? "," : "") + IntegerToString((int)counts[i]);
+  return result + "]";
+  }
+//+------------------------------------------------------------------+
+//| Smoke-only responsibility audit; all tensor reads are host-side  |
+//+------------------------------------------------------------------+
+bool ORIONCollectRecoverySmoke(ulong &hits[], double &responsibility_sum[], double &scale_sum[],
+                               double &absolute_sum[], double &absolute_over_scale_sum[])
+  {
+   if(!ORIONForecast || ArraySize(hits) != NScenarios || ArraySize(responsibility_sum) != NScenarios ||
+      ArraySize(scale_sum) != NScenarios || ArraySize(absolute_sum) != NScenarios ||
+      ArraySize(absolute_over_scale_sum) != NScenarios)
+      ReturnFalse;
+   CBufferFloat *responsibilities = ORIONForecast.GetResponsibilities();
+   CBufferFloat *confidence = ORIONForecast.GetConfidence();
+   CBufferFloat *target = ORIONForecast.GetTarget();
+   CBufferFloat *forecast = ORIONForecast.getOutput();
+   const int target_total = BarDescr * NForecast * EmbeddingSize;
+   const int confidence_total = NScenarios * BarDescr * NForecast;
+   if(!responsibilities || !confidence || !target || !forecast || responsibilities.Total() != NScenarios ||
+      confidence.Total() != confidence_total || target.Total() != target_total ||
+      forecast.Total() != NScenarios * target_total || !responsibilities.BufferRead() || !confidence.BufferRead() ||
+      !target.BufferRead() || !forecast.BufferRead())
+      ReturnFalse;
+   for(uint scenario = 0; scenario < NScenarios; scenario++)
+     {
+      const double responsibility = responsibilities[scenario];
+      if(!MathIsValidNumber(responsibility) || responsibility < 0.0)
+         ReturnFalse;
+      if(responsibility > 0.0)
+         hits[scenario]++;
+      responsibility_sum[scenario] += responsibility;
+      if(responsibility <= 0.0)
+         continue;
+      for(int coordinate = 0; coordinate < target_total; coordinate++)
+        {
+         const int token = coordinate / EmbeddingSize;
+         const double scale = MathMax(0.001, MathMin(10.0, confidence[int(scenario) * BarDescr * NForecast + token]));
+         const double absolute_error = MathAbs(target[coordinate] - forecast[int(scenario) * target_total + coordinate]);
+         if(!MathIsValidNumber(scale) || !MathIsValidNumber(absolute_error))
+            ReturnFalse;
+         scale_sum[scenario] += responsibility * scale;
+         absolute_sum[scenario] += responsibility * absolute_error;
+         absolute_over_scale_sum[scenario] += responsibility * absolute_error / scale;
+        }
+     }
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool ORIONLogRecoverySmoke(const ulong &hits[], const double &responsibility_sum[],
+                           const double &scale_sum[], const double &absolute_sum[],
+                           const double &absolute_over_scale_sum[],
+                           const uint &recovered[], const uint &age_zero[])
+  {
+   if(!ORIONForecast || ArraySize(hits) != NScenarios || ArraySize(responsibility_sum) != NScenarios ||
+      ArraySize(scale_sum) != NScenarios || ArraySize(absolute_sum) != NScenarios ||
+      ArraySize(absolute_over_scale_sum) != NScenarios ||
+      ArraySize(recovered) != NScenarios || ArraySize(age_zero) != NScenarios)
+      ReturnFalse;
+   CScenarioCodebook *codebook = ORIONForecast.GetCodebook();
+   if(!codebook)
+      ReturnFalse;
+   CBufferFloat *ages = codebook.GetInactivityAge();
+   CBufferFloat *counts = codebook.GetEMACounts();
+   CBufferFloat *usage = codebook.GetUsage();
+   CBufferFloat *inactive = codebook.GetInactive();
+   if(!ages || !counts || !usage || !inactive || ages.Total() != NScenarios || counts.Total() != NScenarios ||
+      usage.Total() != NScenarios || inactive.Total() != NScenarios || !ages.BufferRead() || !counts.BufferRead() ||
+      !usage.BufferRead() || !inactive.BufferRead())
+      ReturnFalse;
+   for(uint scenario = 0; scenario < NScenarios; scenario++)
+     {
+      if(!MathIsValidNumber(ages[scenario]) || !MathIsValidNumber(counts[scenario]) ||
+         !MathIsValidNumber(usage[scenario]) || !MathIsValidNumber(inactive[scenario]))
+         ReturnFalse;
+      const double denominator = responsibility_sum[scenario] * double(BarDescr * NForecast * EmbeddingSize);
+      const double mean_scale = (denominator > 0.0 ? scale_sum[scenario] / denominator : 0.0);
+      const double mean_absolute = (denominator > 0.0 ? absolute_sum[scenario] / denominator : 0.0);
+      const double mean_absolute_over_scale = (denominator > 0.0 ? absolute_over_scale_sum[scenario] / denominator : 0.0);
+      PrintFormat("ORION smoke state=%d hits=%I64u age_zero=%u responsibility_sum=%.8f mean_U=%.8f mean_abs_error=%.8f mean_abs_over_U=%.8f final_age=%.0f ema_count=%.8f usage=%.8f inactive=%d recovered=%u",
+                  scenario, hits[scenario], age_zero[scenario], responsibility_sum[scenario], mean_scale, mean_absolute,
+                  mean_absolute_over_scale, ages[scenario], counts[scenario], usage[scenario],
+                  int(MathRound(inactive[scenario])), recovered[scenario]);
+     }
+   return true;
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool ORIONTrainBatch(const int position)
@@ -839,6 +982,7 @@ bool ORIONTrainBatch(const int position)
       ReturnFalse;
    if(!ORIONPrepareLatentTarget(market_latent))
       ReturnFalse;
+   const ulong responsibility_started = GetMicrosecondCount();
    if(!ORIONForecast.BuildResponsibilities(GetPointer(ORIONLatentTarget), GetPointer(ORIONLatentDelta)))
      {
       //--- Commit only a completed device validation.  Infrastructure failures leave
@@ -847,22 +991,24 @@ bool ORIONTrainBatch(const int position)
          PrintFormat("%s -> %d invalid diagnostic commit failed", __FUNCTION__, __LINE__);
       ReturnFalse;
      }
+   const ulong responsibility_elapsed = GetMicrosecondCount() - responsibility_started;
    if(!ORIONForecast.CommitBatchDiagnostics())
       ReturnFalse;
 //--- The unified CNet updates ScenarioForecast and all preceding Market layers.
    if(!ORIONMarket.backPropGradient((CBufferFloat*)NULL, (CBufferFloat*)NULL, -1, true))
       ReturnFalse;
+   ORIONResponsibilityMicroseconds += responsibility_elapsed;
    return true;
   }
 //+------------------------------------------------------------------+
-//| Current-epoch progress uses the existing 11-float device summary |
+//| Current-epoch progress uses the existing 12-float device summary |
 //+------------------------------------------------------------------+
 void ORIONShowForecastProgress(const double percent, const ulong failed_batches)
   {
    double lmix, router, trajectory, confidence, latent, observation;
-   double valid, invalid, entropy, distance, inactive;
+   double valid, invalid, entropy, distance, inactive, recovered;
    if(ORIONForecast && ORIONForecast.ReadEpochDiagnostics(lmix, router, trajectory, confidence,
-         latent, observation, valid, invalid, entropy, distance, inactive) && valid > 0.0)
+         latent, observation, valid, invalid, entropy, distance, inactive, recovered) && valid > 0.0)
      {
       Comment(StringFormat("ORION Forecast %6.2f%% L_mix %.8f latent %.8f invalid(current epoch) %I64u",
                            percent, lmix / valid, latent / valid, failed_batches));
@@ -914,10 +1060,28 @@ void TrainORIONForecast(void)
      { PrintFormat("%s -> %d fixed probe unavailable", __FUNCTION__, __LINE__); return; }
    uint ticks = GetTickCount();
    bool stop = false;
-   for(uint pass = 0; pass < uint(MathMax(Epochs, 0)) && !IsStopped() && !stop; pass++)
+   const uint passes = (ORIONRecoverySmoke ? 1 : uint(MathMax(Epochs, 0)));
+   const ulong smoke_limit = (ORIONRecoverySmoke ? ulong(MathMax(1, int(ORIONRecoverySmokeBatches))) : 0);
+   for(uint pass = 0; pass < passes && !IsStopped() && !stop; pass++)
      {
       const uint epoch = ORIONCompletedEpochs;
       ulong epoch_failures = 0;
+      ulong smoke_batches = 0;
+      ulong smoke_hits[];
+      double smoke_responsibility_sum[];
+      double smoke_scale_sum[];
+      double smoke_absolute_sum[];
+      double smoke_absolute_over_scale_sum[];
+      if(ORIONRecoverySmoke &&
+         (ArrayResize(smoke_hits, NScenarios) != NScenarios || ArrayResize(smoke_responsibility_sum, NScenarios) != NScenarios ||
+          ArrayResize(smoke_scale_sum, NScenarios) != NScenarios || ArrayResize(smoke_absolute_sum, NScenarios) != NScenarios ||
+          ArrayResize(smoke_absolute_over_scale_sum, NScenarios) != NScenarios))
+        { PrintFormat("%s -> %d smoke counter allocation failed", __FUNCTION__, __LINE__); break; }
+      ArrayInitialize(smoke_hits, 0);
+      ArrayInitialize(smoke_responsibility_sum, 0.0);
+      ArrayInitialize(smoke_scale_sum, 0.0);
+      ArrayInitialize(smoke_absolute_sum, 0.0);
+      ArrayInitialize(smoke_absolute_over_scale_sum, 0.0);
       if(!ORIONMarket.Clear() || !ORIONTarget.Clear())
         { PrintFormat("%s -> %d clear failed", __FUNCTION__, __LINE__); break; }
       ORIONTarget.TrainMode(false);
@@ -926,6 +1090,7 @@ void TrainORIONForecast(void)
         { PrintFormat("%s -> %d fixed probe forward failed", __FUNCTION__, __LINE__); stop = true; break; }
       if(!ORIONForecast.ResetEpochDiagnostics())
         { PrintFormat("%s -> %d diagnostic reset failed", __FUNCTION__, __LINE__); stop = true; break; }
+      ORIONResponsibilityMicroseconds = 0;
       for(int position = start - HistoryBars - NForecast - 1; position >= end && !IsStopped() && !stop; position--)
         {
          if(!ORIONTrainBatch(position))
@@ -940,6 +1105,15 @@ void TrainORIONForecast(void)
               }
             continue;
            }
+         if(ORIONRecoverySmoke)
+           {
+            if(!ORIONCollectRecoverySmoke(smoke_hits, smoke_responsibility_sum, smoke_scale_sum,
+                                          smoke_absolute_sum, smoke_absolute_over_scale_sum))
+              { PrintFormat("%s -> %d smoke responsibility read failed", __FUNCTION__, __LINE__); stop = true; break; }
+            smoke_batches++;
+            if(smoke_batches >= smoke_limit)
+               break;
+           }
          if(GetTickCount() - ticks > 500)
            {
             const double percent = (double(pass) + 1.0 - double(position - end) / MathMax(start - end - HistoryBars - NForecast, 1)) * 100.0 / Epochs;
@@ -948,14 +1122,28 @@ void TrainORIONForecast(void)
            }
         }
       double lmix, lrouter, ltrajectory, lconfidence, latent, observation;
-      double valid_value, invalid_value, entropy, distance, inactive_value;
+      double valid_value, invalid_value, entropy, distance, inactive_value, recovered_value;
       if(!ORIONForecast.BuildEpochCodebookDiagnostics() ||
          !ORIONForecast.ReadEpochDiagnostics(lmix, lrouter, ltrajectory, lconfidence, latent, observation,
-                                             valid_value, invalid_value, entropy, distance, inactive_value))
+                                             valid_value, invalid_value, entropy, distance, inactive_value, recovered_value))
         { PrintFormat("%s -> %d diagnostic read failed", __FUNCTION__, __LINE__); stop = true; break; }
       const ulong valid = (ulong)MathRound(valid_value);
       const ulong invalid = (ulong)MathRound(invalid_value);
       const uint inactive = (uint)MathRound(inactive_value);
+      const uint recovered = (uint)MathRound(recovered_value);
+      uint recovered_by_scenario[];
+      uint age_zero_by_scenario[];
+      if(!ORIONForecast.ReadEpochRecoveryEvents(recovered_by_scenario))
+        { PrintFormat("%s -> %d recovery-event read failed", __FUNCTION__, __LINE__); stop = true; break; }
+      if(!ORIONForecast.ReadEpochAgeZeroEvents(age_zero_by_scenario))
+        { PrintFormat("%s -> %d age-zero-event read failed", __FUNCTION__, __LINE__); stop = true; break; }
+      ulong recovery_sum = 0;
+      for(int i = 0; i < ArraySize(recovered_by_scenario); i++)
+         recovery_sum += recovered_by_scenario[i];
+      if(recovery_sum != (ulong)recovered)
+        { PrintFormat("%s -> %d recovery-event mismatch total=%I64u diagnostics=%u", __FUNCTION__, __LINE__, recovery_sum, recovered); stop = true; break; }
+      if(ORIONRecoverySmoke && valid != smoke_batches)
+        { PrintFormat("%s -> %d smoke valid mismatch valid=%I64u collected=%I64u", __FUNCTION__, __LINE__, valid, smoke_batches); stop = true; break; }
       ORIONBatches += valid;
       ORIONInvalidBatches += invalid;
       if(valid == 0)
@@ -965,12 +1153,20 @@ void TrainORIONForecast(void)
       if(!ORIONProbeNet(ORIONMarket, GetPointer(ORIONProbeState), latent_after, true))
         { PrintFormat("%s -> %d Market epoch probe failed", __FUNCTION__, __LINE__); stop = true; break; }
       const double latent_drift = ORIONProbeDrift(latent_before, latent_after);
-      PrintFormat("ORION epoch=%d batches=%I64u L_mix=%.8f L_router=%.8f L_trajectory=%.8f L_confidence=%.8f latent_error=%.8f usage_entropy=%.8f pairwise_codebook=%.8f invalid=%I64u latent_drift=%.8f inactive=%u",
-                  epoch + 1, valid, lmix / valid, lrouter / valid, ltrajectory / valid, lconfidence / valid,
-                  latent / valid, entropy, distance, ORIONInvalidBatches,
-                  latent_drift, inactive);
-      if(!ORIONSaveCheckpoint(epoch + 1))
+      PrintFormat("ORION epoch=%d batches=%I64u L_mix=%.8f L_router=%.8f L_trajectory=%.8f L_confidence=%.8f NLL_confidence=%.8f usage_entropy=%.8f pairwise_codebook=%.8f invalid=%I64u latent_drift=%.8f inactive=%u recovered=%u recovered_by_scenario=%s responsibility_ms=%.3f",
+                  epoch + 1, valid, lmix / valid, lrouter / valid, ltrajectory / valid, latent / valid,
+                  lconfidence / valid, entropy, distance, ORIONInvalidBatches,
+                  latent_drift, inactive, recovered, FormatScenarioCounts(recovered_by_scenario),
+                  double(ORIONResponsibilityMicroseconds) / (1000.0 * double(valid)));
+      if(ORIONRecoverySmoke && !ORIONLogRecoverySmoke(smoke_hits, smoke_responsibility_sum, smoke_scale_sum,
+                                                        smoke_absolute_sum, smoke_absolute_over_scale_sum,
+                                                        recovered_by_scenario, age_zero_by_scenario))
+        { PrintFormat("%s -> %d smoke state log failed", __FUNCTION__, __LINE__); stop = true; break; }
+      if(!ORIONRecoverySmoke && !ORIONSaveCheckpoint(epoch + 1))
         { PrintFormat("%s -> %d checkpoint failed", __FUNCTION__, __LINE__); stop = true; break; }
+      if(ORIONRecoverySmoke)
+         PrintFormat("ORION smoke complete valid=%I64u recovery_age=%u checkpoint=SKIPPED", valid,
+                     ORIONForecast.RecoveryAge());
       ORIONCompletedEpochs = epoch + 1;
      }
    Comment("");
@@ -1167,6 +1363,8 @@ bool ORIONLoadForecastInference(void)
       Print("ORION inference: forecast layer=FAIL");
       ReturnFalse;
      }
+   if(!ConfigureForecastRecoveryAge())
+      ReturnFalse;
    if(ORIONForecast.GetTopK() != TopK)
      {
       PrintFormat("ORION inference: TopK expected=%d actual=%d", TopK, ORIONForecast.GetTopK());
@@ -1217,6 +1415,8 @@ bool ORIONLoadForecastTraining(void)
    ORIONTarget.SetOpenCL(ORIONMarket.GetOpenCL());
    ORIONForecast = (CNeuronScenarioForecast*)ORIONMarket.Layer(-1);
    if(!ORIONForecast || ORIONForecast.Type() != defNeuronScenarioForecast)
+      ReturnFalse;
+   if(!ConfigureForecastRecoveryAge())
       ReturnFalse;
 //--- These are transient training tensors and are intentionally absent from
 //--- *.nnw. Recreate them before the common shape audit.

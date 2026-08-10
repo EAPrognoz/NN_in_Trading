@@ -512,6 +512,7 @@ bool CLayer::CreateElement(int index)
    CNeuronGDformer* gdformer = NULL;
    CNeuronMomADTTM* momad_ttm = NULL;
    CNeuronMomADMPI* momad_mpi = NULL;
+   CNeuronVLADriverRAGMPI* vladriver_rag_mpi = NULL;
    CNeuronUncAD_MSD* uncad_msd = NULL;
    CNeuronUncAD_MUE* uncad_mue = NULL;
    CNeuronUncAD_UGP* uncad_ugp = NULL;
@@ -524,6 +525,7 @@ bool CLayer::CreateElement(int index)
    CNeuronCogDriverForecastToken* cogdriver_token = NULL;
    CNeuronScenarioForecast* scenario_forecast = NULL;
    CNeuronScenarioCrossAttention* scenario_cross = NULL;
+   CNeuronRAGMemory* rag_memory = NULL;
 //---
    uint windows[] = {1, 1, 1};
    uint mfe_windows[] = {3, 3};
@@ -3878,6 +3880,14 @@ bool CLayer::CreateElement(int index)
             m_data[index] = scenario_cross;
             return true;
             break;
+         case defNeuronRAGMemory:
+            rag_memory = new CNeuronRAGMemory;
+            if(!rag_memory)
+               ReturnFalse;
+            rag_memory.AttachOpenCL(OpenCL);
+            m_data[index] = rag_memory;
+            return true;
+            break;
          case defNeuronReGENTADBackbone:
             regen_backbone = new CNeuronReGENTADBackbone;
             if(!regen_backbone)
@@ -3954,6 +3964,17 @@ bool CLayer::CreateElement(int index)
                return true;
               }
             DeleteObj(momad_mpi);
+            break;
+         case defNeuronVLADriverRAGMPI:
+            vladriver_rag_mpi = new CNeuronVLADriverRAGMPI;
+            if(!vladriver_rag_mpi)
+               ReturnFalse;
+            if(vladriver_rag_mpi.Init(iOutputs, index, OpenCL, 2, 2, 2, 2, 2, 1, 1, 1, 1, 2, ADAM, 1))
+              {
+               m_data[index] = vladriver_rag_mpi;
+               return true;
+              }
+            DeleteObj(vladriver_rag_mpi);
             break;
          default:
             result = false;
@@ -4535,7 +4556,7 @@ bool CNet::Create(CArrayObj *Description)
    next = Description.At(1);
    if(next.type == defNeuron || next.type >= defNeuronBaseOCL)
      {
-      if(!OpenCLInit())
+      if(!opencl && !OpenCLInit())
         {
          DeleteObj(opencl);
          bOwnOpenCL=false;
@@ -4829,6 +4850,7 @@ bool CNet::Create(CArrayObj *Description)
          CNeuronGDformer* gdformer = NULL;
          CNeuronMomADTTM* momad_ttm = NULL;
          CNeuronMomADMPI* momad_mpi = NULL;
+         CNeuronVLADriverRAGMPI* vladriver_rag_mpi = NULL;
          CNeuronUncAD_MUE* uncad_mue = NULL;
          CNeuronUncAD_UGP* uncad_ugp = NULL;
          CNeuronUncAD_UGPL* uncad_ugpl = NULL;
@@ -4840,6 +4862,7 @@ bool CNet::Create(CArrayObj *Description)
          CNeuronCogDriverForecastToken* cogdriver_token = NULL;
          CNeuronScenarioForecast* scenario_forecast = NULL;
          CNeuronScenarioCrossAttention* scenario_cross = NULL;
+         CNeuronRAGMemory* rag_memory = NULL;
          //---
          switch(desc.type)
            {
@@ -10092,6 +10115,27 @@ bool CNet::Create(CArrayObj *Description)
                   DeleteObjAndFalse(momad_mpi);
                  }
                break;
+            case defNeuronVLADriverRAGMPI:
+               if(desc.units.Size() < 3)
+                  DeleteObjAndFalse(temp);
+               vladriver_rag_mpi = new CNeuronVLADriverRAGMPI();
+               if(!vladriver_rag_mpi)
+                  DeleteObjAndFalse(temp);
+               if(!vladriver_rag_mpi.Init(outputs, 0, opencl, desc.window, desc.units[0],
+                                           desc.units[1], desc.units[2], desc.count,
+                                           uint(desc.probability), desc.step, desc.window_out,
+                                           desc.layers, desc.variables,
+                                           desc.optimization, desc.batch))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(vladriver_rag_mpi);
+                 }
+               if(!temp.Add(vladriver_rag_mpi))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(vladriver_rag_mpi);
+                 }
+               break;
             case defNeuronUncAD_MUE:
                uncad_mue = new CNeuronUncAD_MUE();
                if(!uncad_mue)
@@ -10222,6 +10266,21 @@ bool CNet::Create(CArrayObj *Description)
                  {
                   DeleteObj(temp);
                   DeleteObjAndFalse(scenario_cross);
+                 }
+               break;
+            case defNeuronRAGMemory:
+               rag_memory = new CNeuronRAGMemory();
+               if(!rag_memory)
+                  DeleteObjAndFalse(temp);
+               if(!rag_memory.Init(outputs,0,opencl,desc))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(rag_memory);
+                 }
+               if(!temp.Add(rag_memory))
+                 {
+                  DeleteObj(temp);
+                  DeleteObjAndFalse(rag_memory);
                  }
                break;
             case defNeuronUncAD_UGP:
@@ -14478,6 +14537,29 @@ bool CNet::GetLayerOutput(uint layer, CBufferFloat *&result)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Return the existing device output; caller does not own it.      |
+//+------------------------------------------------------------------+
+bool CNet::GetLayerOutputDevice(uint layer, CBufferFloat *&result)
+  {
+   result = NULL;
+   if(!layers || layers.Total() <= (int)layer)
+      ReturnFalse;
+   CLayer *Layer = layers.At(layer);
+   if(!Layer || Layer.Total() <= 0)
+      ReturnFalse;
+   CNeuronBaseOCL *temp = Layer.At(0);
+   if(!temp)
+      ReturnFalse;
+   result = temp.getOutput();
+   if(!result || result.GetIndex() == INVALID_HANDLE || result.GetOpenCL() != opencl)
+     {
+      result = NULL;
+      ReturnFalse;
+     }
+//--- The returned pointer stays owned by the layer/net.
+   return true;
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNet::GetLayerOutput(uint layer, vector<float> &result)
@@ -14494,6 +14576,52 @@ bool CNet::GetLayerOutput(uint layer, vector<float> &result)
       ReturnFalse;
 //---
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Bind a library-owned immutable RAG snapshot to a RAG-MPI layer.  |
+//| This is deliberately typed: consumers cannot reach arbitrary     |
+//| internal layers or pass a token buffer from another OpenCL context.|
+//+------------------------------------------------------------------+
+bool CNet::BindRAGMemory(const uint layer,CNeuronRAGMemory *memory)
+  {
+   if(memory==NULL || layers==NULL || opencl==NULL || layer>=(uint)layers.Total())
+      return false;
+   CLayer *target=layers.At(layer);
+   if(target==NULL)
+      return false;
+   CNeuronBaseOCL *base=target.At(0);
+   if(base==NULL || base.Type()!=defNeuronVLADriverRAGMPI)
+      return false;
+   CNeuronVLADriverRAGMPI *mpi=base;
+   if(memory.GetOpenCL()!=opencl || memory.TokenCount()!=mpi.RAGTokenCount() ||
+      memory.TokenWidth()!=mpi.RAGTokenWidth())
+      return false;
+   if(memory.TokenWidth()==0 || memory.TokenCount()>uint(INT_MAX)/memory.TokenWidth())
+      return false;
+   CBufferFloat *tokens=memory.Tokens();
+   CBufferFloat *absolute_relevance=memory.AbsoluteRelevance();
+   if(tokens==NULL || tokens.GetOpenCL()!=opencl ||
+      tokens.Total()!=int(memory.TokenCount()*memory.TokenWidth()) ||
+      absolute_relevance==NULL || absolute_relevance.GetOpenCL()!=opencl ||
+      absolute_relevance.Total()!=1)
+      return false;
+   return mpi.SetRAGTokens(tokens,absolute_relevance,memory.TokenWidth());
+  }
+//+------------------------------------------------------------------+
+//| Detach RAG pointers before replacing their library-owned COW set.|
+//+------------------------------------------------------------------+
+bool CNet::UnbindRAGMemory(const uint layer)
+  {
+   if(layers==NULL || layer>=(uint)layers.Total())
+      return false;
+   CLayer *target=layers.At(layer);
+   if(target==NULL)
+      return false;
+   CNeuronBaseOCL *base=target.At(0);
+   if(base==NULL || base.Type()!=defNeuronVLADriverRAGMPI)
+      return false;
+   CNeuronVLADriverRAGMPI *mpi=base;
+   return mpi.SetRAGTokens(NULL,NULL,mpi.RAGTokenWidth());
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -15154,22 +15282,32 @@ bool CNet::backPropGradient(CBufferFloat *SecondInput = NULL, CBufferFloat *Seco
    for(int layerNum = LastLayer - 1; layerNum >= 0 && !IsStopped(); layerNum--)
      {
       CLayer *nextLayer = currentLayer;
-      currentLayer = layers.At(layerNum);
-      if(CheckPointer(currentLayer) == POINTER_INVALID)
-         ReturnFalse;
-      neuron = currentLayer.At(0);
-      if(!neuron || !neuron.CalcHiddenGradients(nextLayer.At(0), SecondInput, SecondGradient))
-         ReturnFalse;
+       currentLayer = layers.At(layerNum);
+       if(CheckPointer(currentLayer) == POINTER_INVALID)
+          ReturnFalse;
+       neuron = currentLayer.At(0);
+       if(!neuron || !nextLayer.At(0))
+          ReturnFalse;
+       if(!neuron.CalcHiddenGradients(nextLayer.At(0), SecondInput, SecondGradient))
+         {
+          PrintFormat("CNet backprop CalcHiddenGradients failed layer=%d neuron=%d", layerNum, neuron.Type());
+          ReturnFalse;
+         }
      }
 //---
    CLayer *prevLayer = layers.At(LastLayer);
    for(int layerNum = LastLayer; layerNum > 0 && !IsStopped(); layerNum--)
      {
-      currentLayer = prevLayer;
-      prevLayer = layers.At(layerNum - 1);
-      neuron = currentLayer.At(0);
-      if(!neuron.UpdateInputWeights(prevLayer.At(0), SecondInput))
-         ReturnFalse;
+       currentLayer = prevLayer;
+       prevLayer = layers.At(layerNum - 1);
+       neuron = currentLayer.At(0);
+       if(!neuron || !prevLayer.At(0))
+          ReturnFalse;
+       if(!neuron.UpdateInputWeights(prevLayer.At(0), SecondInput))
+         {
+          PrintFormat("CNet backprop UpdateInputWeights failed layer=%d neuron=%d", layerNum, neuron.Type());
+          ReturnFalse;
+         }
      }
 //---
    if(!load_weights)
@@ -16629,7 +16767,7 @@ bool CNet::OpenCLInit(void)
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(286);
+   opencl.SetKernelsCount(294);
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")
@@ -16916,6 +17054,13 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_ScenarioResponsibilities, "ScenarioResponsibilities")
    CreateKernel(def_k_ScenarioCodebookEMA, "ScenarioCodebookEMA")
    CreateKernel(def_k_ScenarioGradientNormalize, "ScenarioGradientNormalize")
+   CreateKernel(def_k_RAGScore, "RAGScore")
+   CreateKernel(def_k_RAGPartial, "RAGPartial")
+   CreateKernel(def_k_RAGMerge, "RAGMerge")
+   CreateKernel(def_k_RAGGather, "RAGGather")
+   CreateKernel(def_k_RAGNearestPair, "RAGNearestPair")
+   CreateKernel(def_k_RAGTokenGate, "RAGTokenGate")
+   CreateKernel(def_k_RAGTokenGateGrad, "RAGTokenGateGrad")
 //---
    return true;
   }

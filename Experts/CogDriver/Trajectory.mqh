@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
 //|                                                   Copyright DNG® |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -43,11 +43,11 @@ int            iStateRawForecastLayer = 5;
 int            iStateTokenLayer = 6;
 //---
 #define        HistoryBars             5
-#define        BarDescr                9             //Elements for 1 bar description
-#define        AccountDescr            13            //Account description
-#define        NActions                6             //Number of possible Actions
-#define        NRewards                1             //Number of rewards
-#define        NForecast               12            //Number of forecast
+#define        BarDescr                9               //Elements for 1 bar description
+#define        AccountDescr            13              //Account description
+#define        NActions                6               //Number of possible Actions
+#define        NRewards                1               //Number of rewards
+#define        NForecast               12              //Number of forecast
 #define        EtalonBalance           1e4
 #define        BatchSize               1e+5
 #define        EmbeddingSize           16
@@ -66,7 +66,7 @@ int            iStateTokenLayer = 6;
 #define        NHeads                  4
 #define        NExperts                5
 #define        NScenarios              21
-#define        TopK                    3
+#define        TopK                    5
 #define        Quantiles               8
 #define        StackSize               24*21
 #define        Blocks                  24
@@ -502,7 +502,7 @@ bool CreateDescriptions(CArrayObj *&actor,
      {
       uint temp[] = {3,                      // Inputs window
                      EmbeddingSize,          // Key Dimension
-                     ForecastTokenDim,        // Cross window
+                     ForecastTokenDim,       // Cross window
                      EmbeddingSize           // Embedding size
                     };
       if(ArrayCopy(descr.windows, temp) < (int)temp.Size())
@@ -1138,7 +1138,7 @@ double CheckAction(CBufferFloat *action, double balance, uint start_position)
            }
          double p = (Rates[i - 1].open - Rates[i].open) * point_cost;
          profit -= p;
-         reward -= p  * MathPow(DiscFactor, float(i - start_position));
+         reward -= p * MathPow(DiscFactor, float(i - start_position));
          if(-profit >= balance)
            {
             reward -= 1000;

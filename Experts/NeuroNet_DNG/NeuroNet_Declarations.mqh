@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                      ProjectName |
 //|                                      Copyright 2020, CompanyName |
 //|                                       http://www.companyname.net |
@@ -301,6 +301,7 @@ public:
 //|                                                                  |
 //+------------------------------------------------------------------+
 class CBufferFloat;
+class CNeuronRAGMemory;
 //+------------------------------------------------------------------+
 ///\class CNet
 /// The main class of the neural network. Contains basic methods for the functioning of a neural network.
@@ -346,7 +347,10 @@ public:
    virtual int             Type(void)   const   {  return defNet;   }///< Identificator of class.@return Type of class
    virtual bool            TrainMode(bool flag);                     ///< Set Training Mode Flag
    virtual bool            GetLayerOutput(uint layer, CBufferFloat *&result); ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
+   virtual bool            GetLayerOutputDevice(uint layer, CBufferFloat *&result); ///< Return a non-owning existing OpenCL output buffer; the layer/net retains its lifetime.
    virtual bool            GetLayerOutput(uint layer, vector<float> &result); ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
+   bool                    BindRAGMemory(const uint layer,CNeuronRAGMemory *memory); ///< Bind a compatible library-owned RAG token snapshot to a VLADriver RAG-MPI layer.
+   bool                    UnbindRAGMemory(const uint layer); ///< Detach a RAG snapshot before its COW buffers are replaced.
    //---
    virtual void            SetOpenCL(COpenCLMy *obj);
    virtual COpenCLMy*      GetOpenCL(void)   {  return opencl; }
@@ -420,7 +424,7 @@ public:
    virtual bool      BufferFree(void);                      ///< Method for deleting buffer from GPU
    virtual bool      BufferRead(void);                      ///< Method for reading buffer data from GPU
    virtual bool      BufferWrite(void);                     ///< Method for writing buffer data to GPU
-   virtual bool      BufferSet(int index) {  if(!OpenCL.BufferFree(m_myIndex)) ReturnFalse; m_myIndex = index; return true; } ///< Change buffer index number @param index New index
+   virtual bool      BufferSet(int index) {  if(!OpenCL || (m_myIndex>=0 && !OpenCL.BufferFree(m_myIndex))) ReturnFalse; m_myIndex = index; return true; } ///< Change buffer index number @param index New index
    template<typename T>
    int               GetData(vector<T> &values);             ///< Read data from buffer to vector @param[out] values Vector to read data
    template<typename T>
@@ -12467,6 +12471,261 @@ public:
    virtual CNeuronBaseOCL* GetSimilarity(void)  { return cSimilarity.AsObject(); }
   };
 //+------------------------------------------------------------------+
+//| Immutable scenario/action centroid memory for RAG inference.    |
+//+------------------------------------------------------------------+
+union URAGFloatBits
+  {
+   float             value;
+   uint              bits;
+  };
+
+struct SRAGTerminalOutcome
+  {
+   float             relative_return;
+   float             maxDrawdown;
+   float             costs;
+   float             riskUsage;
+   float             duration;
+   float             reward;
+  };
+
+struct SRAGActionCentroid
+  {
+   bool              used;
+   uint              scenarioId;
+   ulong             hit_count;
+   float             mean_reward;
+   float             centroid[];
+   SRAGTerminalOutcome mean_terminal;
+  };
+
+struct SRAGScenarioCentroid
+  {
+   bool              used;
+   uint              scenarioId;
+   ulong             hit_count;
+   float             centroid[];
+   SRAGActionCentroid actions[];
+  };
+
+// Completed facts are staged on the host until the explicit publication
+// boundary.  They never expose the internal centroid snapshot to an Expert.
+struct SRAGCompletedRecord
+  {
+   float             scenarioEmbedding[];
+   float             action[];
+   SRAGTerminalOutcome terminal;
+  };
+
+// A pending fact is causal host state only.  The Expert supplies execution
+// identities and the terminal outcome; the library never queries trade state.
+struct SRAGPendingEvent
+  {
+   bool              confirmed;
+   ulong             deal;
+   ulong             position;
+   float             action[];
+  };
+
+struct SRAGPendingFact
+  {
+   ulong             id;
+   float             scenarioEmbedding[];
+   SRAGPendingEvent  events[];
+  };
+
+// Complete immutable device image.  CNeuronRAGMemory builds a candidate first
+// and replaces the active pointer only after every buffer is valid.
+class CRAGInferenceSet : public CObject
+  {
+public:
+   COpenCLMy         *opencl;
+   CBufferFloat      *centroids;
+   CBufferFloat      *used;
+   CBufferFloat      *scores;
+   CBufferFloat      *partial;
+   CBufferFloat      *merge;
+   CBufferFloat      *top;
+   CBufferFloat      *actions;
+   CBufferFloat      *actionUsed;
+   CBufferFloat      *actionMeanReward;
+   CBufferFloat      *actionHitCount;
+   CBufferFloat      *absoluteRelevance;
+   CBufferFloat      *tokens;
+   ulong              fingerprint;
+
+                     CRAGInferenceSet(void);
+                    ~CRAGInferenceSet(void);
+  };
+
+class CNeuronRAGMemory : public CNeuronBaseOCL
+  {
+protected:
+   uint              iScenarioEmbedding;
+   uint              iActionDimension;
+   uint              iTokenWidth;
+   uint              iScenarioCapacity;
+   uint              iActionCapacity;
+   uint              iTopK;
+   uint              iOnlineMemorySize;
+   uint              iScenarioCount;
+   uint              iFormatVersion;
+   SRAGScenarioCentroid scenarios[];
+   SRAGCompletedRecord pending_records[];
+   SRAGPendingFact   pending_facts[];
+   CRAGInferenceSet  *m_inference;
+   // Reused by bounded-memory publication.  BufferInit releases a device
+   // allocation only when its shape changes; same-shape rounds become uploads.
+   CBufferFloat      cNearestCentroids;
+   CBufferFloat      cNearestUsed;
+   CBufferFloat      cNearestResult;
+   ulong              iPublicationGeneration;
+   ulong              iNextPendingId;
+
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   bool              Configure(CLayerDescription &description);
+   bool              InitializeAction(SRAGActionCentroid &action,const uint scenario_id) const;
+   bool              InitializeScenario(SRAGScenarioCentroid &scenario,const uint scenario_id) const;
+   void              ClearTerminal(SRAGTerminalOutcome &terminal) const;
+   bool              CopyAction(const SRAGActionCentroid &source,SRAGActionCentroid &destination) const;
+   bool              CopyScenario(const SRAGScenarioCentroid &source,SRAGScenarioCentroid &destination) const;
+   bool              CopyScenarioFlexible(const SRAGScenarioCentroid &source,
+                                            SRAGScenarioCentroid &destination) const;
+   bool              AppendActionCandidate(const uint scenario_id,SRAGScenarioCentroid &scenario,
+                                             const SRAGActionCentroid &incoming) const;
+   bool              CompactActionCandidates(SRAGScenarioCentroid &scenario) const;
+   bool              ConsolidateActionCandidates(SRAGScenarioCentroid &candidate_snapshot[]);
+   bool              NormalizeL2(const float &source[],float &destination[]) const;
+   float             SquaredDistance(const float &left[],const float &right[]) const;
+   bool              ValidAction(const float &action[]) const;
+   bool              ValidTerminal(const SRAGTerminalOutcome &terminal) const;
+   void              MergeTerminal(SRAGTerminalOutcome &destination,const ulong destination_hits,
+                                     const SRAGTerminalOutcome &source,const ulong source_hits) const;
+   int               FirstFreeScenario() const;
+   int               FirstFreeAction(const uint scenario_id) const;
+   bool              RebindScenarioActions(SRAGScenarioCentroid &scenario,const uint destination_scenario_id) const;
+   bool              MergeActionCandidates(const uint scenario_id,SRAGActionCentroid &destination,
+                                             const SRAGActionCentroid &source) const;
+   bool              FindNearestActionPair(const uint scenario_id,const SRAGActionCentroid &action_candidates[],
+                                            int &destination,int &source);
+   bool              PairCountSafe(const uint candidate_count,int &pair_count) const;
+   bool              FindNearestPairsGPU(const float &candidate_centroids[],const float &candidate_used[],
+                                          const uint candidate_count,const uint dimension,const uint batch_count,
+                                          int &destinations[],int &sources[]);
+   bool              FindNearestPairGPU(const float &candidate_centroids[],const float &candidate_used[],
+                                         const uint candidate_count,const uint dimension,const uint batch_count,
+                                          int &destination,int &source);
+   bool              MergeScenarioCandidates(SRAGScenarioCentroid &destination,
+                                               const SRAGScenarioCentroid &source);
+   bool              FindNearestScenarioPair(const SRAGScenarioCentroid &scenario_candidates[],
+                                               int &destination,int &source);
+   bool              StageScenarioCandidates(const uint source_scenario_id,const float &scenario_embedding[],
+                                               const float &action[],const SRAGTerminalOutcome &terminal,
+                                               SRAGScenarioCentroid &scenario_candidates[]);
+   bool              ValidateSnapshot(const SRAGScenarioCentroid &snapshot[],const uint scenario_count,
+                                        const uint scenario_embedding,const uint action_dimension,
+                                        const uint scenario_capacity,const uint action_capacity) const;
+   bool              CommitSnapshot(const SRAGScenarioCentroid &snapshot[],const uint scenario_count);
+   bool              CopyCompletedRecord(const SRAGCompletedRecord &source,SRAGCompletedRecord &destination) const;
+   bool              CopyPendingEvent(const SRAGPendingEvent &source,SRAGPendingEvent &destination) const;
+   bool              CopyPendingFact(const SRAGPendingFact &source,SRAGPendingFact &destination) const;
+   int               FindPendingFact(const ulong pending_id) const;
+   bool              BuildRemainingPendingFacts(const int excluded,SRAGPendingFact &remaining[]) const;
+   bool              CopySnapshot(const SRAGScenarioCentroid &source[],SRAGScenarioCentroid &destination[]) const;
+   bool              ApplyCompletedRecordToSnapshot(SRAGScenarioCentroid &candidate_snapshot[],
+                                                      uint &candidate_count,const uint source_scenario_id,
+                                                      const float &scenario_embedding[],const float &action[],
+                                                      const SRAGTerminalOutcome &terminal);
+   bool              BuildInferenceSet(const SRAGScenarioCentroid &snapshot[],const ulong fingerprint,
+                                        CRAGInferenceSet *&result) const;
+   ulong             HashValue(const ulong hash,const ulong value) const;
+   ulong             HashFloatBits(const ulong hash,const float value) const;
+   ulong             SnapshotFingerprint(const SRAGScenarioCentroid &snapshot[],const uint scenario_count) const;
+   bool              WritePublishedSnapshot(const int file_handle,const ulong fingerprint) const;
+   bool              ReadPublishedSnapshot(const int file_handle,SRAGScenarioCentroid &snapshot[],
+                                             uint &scenario_count,ulong &fingerprint) const;
+   bool              HasBytes(const int file_handle,const ulong bytes) const;
+   bool              WriteUInt(const int file_handle,const uint value) const;
+   bool              WriteULong(const int file_handle,const ulong value) const;
+   bool              WriteFloat(const int file_handle,const float value) const;
+   bool              ReadUInt(const int file_handle,uint &value) const;
+   bool              ReadULong(const int file_handle,ulong &value) const;
+   bool              ReadFloat(const int file_handle,float &value) const;
+   bool              SnapshotPayloadBytes(const uint scenario_embedding,const uint action_dimension,
+                                           const uint scenario_capacity,const uint action_capacity,
+                                           ulong &bytes) const;
+
+public:
+                     CNeuronRAGMemory(void);
+                     CNeuronRAGMemory(CLayerDescription &description);
+                    ~CNeuronRAGMemory(void);
+   bool              Init(uint numOutputs,uint myIndex,COpenCLMy *open_cl,
+                           CLayerDescription &description);
+   bool              SetOnlineMemorySize(const uint value);
+   uint              OnlineMemorySize(void) const { return iOnlineMemorySize; }
+   uint              ScenarioCount(void) const { return iScenarioCount; }
+   uint              ScenarioCapacity(void) const { return iScenarioCapacity; }
+   uint              ActionCapacity(void) const { return iActionCapacity; }
+   uint              TopK(void) const { return iTopK; }
+   uint              TokenCount(void) const { return iTopK*iActionCapacity; }
+   uint              TokenWidth(void) const { return iTokenWidth; }
+   COpenCLMy        *GetOpenCL(void) const { return OpenCL; }
+   // Canonical six-component execution descriptor normalisation.  The
+   // caller supplies every domain scale; this layer never reads terminal,
+   // account, symbol or trade state.
+   bool              NormalizeActionDescriptor(const float &source[],const double equity,
+                                                const double risk_budget,const double point_cost,
+                                                const double point,const double volatility,
+                                                const double volatility_range,
+                                                const double maximum_take_profit,
+                                                const double maximum_stop_loss,
+                                                float &destination[]) const;
+   // Converts raw completed-episode facts into the bounded memory contract.
+   // Duration and its scale are numeric facts supplied by the caller.
+   void              NormalizeTerminalOutcome(const double reward,const double max_drawdown,
+                                              const double costs,const double risk_usage,
+                                              const double duration,const double starting_equity,
+                                              const double risk_budget,const double duration_scale,
+                                              SRAGTerminalOutcome &result) const;
+   bool              AddCompletedScenario(const uint source_scenario_id,const float &scenario_embedding[],
+                                            const float &action[],const SRAGTerminalOutcome &terminal);
+   bool              BindInferenceSnapshot(const string path);
+   bool              BindNullInference(void);
+   bool              Retrieve(CNet *scenario_model,const uint layer); ///< Retrieve from a model-owned device output without exposing its buffer to an Expert.
+   bool              Retrieve(CBufferFloat *scenario_embedding);
+   CBufferFloat     *Tokens(void) const { return (m_inference==NULL ? NULL : m_inference.tokens); }
+   CBufferFloat     *AbsoluteRelevance(void) const { return (m_inference==NULL ? NULL : m_inference.absoluteRelevance); }
+   bool              ReadScenarioEmbedding(CBufferFloat *source,float &destination[],
+                                             uint &replaced) const;
+   bool              AddCompletedRecord(const float &scenario_embedding[],const float &action[],
+                                           const SRAGTerminalOutcome &terminal);
+   uint              PendingRecordCount(void) const { return (uint)ArraySize(pending_records); }
+   ulong             OpenPending(const float &scenario_embedding[],const float &action[]);
+   bool              ConfirmPendingExecution(const ulong pending_id,const ulong deal,const ulong position);
+   bool              CorrectPending(const ulong pending_id,const float &action[]);
+   bool              ConfirmPendingCorrection(const ulong pending_id,const ulong position);
+   bool              CancelPendingCorrection(const ulong pending_id);
+   bool              ClosePending(const ulong pending_id,const SRAGTerminalOutcome &terminal);
+   bool              CancelPending(const ulong pending_id);
+   bool              Publish(const bool episode_closed=false);
+   bool              SavePublishedSnapshot(const string path) const;
+   bool              LoadPublishedSnapshot(const string path);
+   bool              ScenarioCentroid(const uint scenario_id,float &destination[]) const;
+   bool              ActionCentroid(const uint scenario_id,const uint action_id,float &destination[]) const;
+   ulong             ScenarioHitCount(const uint scenario_id) const;
+   ulong             ActionHitCount(const uint scenario_id,const uint action_id) const;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   virtual CLayerDescription* GetLayerInfo(void) override;
+   virtual int       Type(void) const override { return defNeuronRAGMemory; }
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override { CNeuronBaseOCL::TrainMode(false); }
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source,float tau) override { return true; }
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 class CNeuronGDformerBackbone :  public CNeuronReGENTADBackbone
@@ -12581,6 +12840,70 @@ public:
    virtual int       Type(void) override const  {  return defNeuronMomADMPI; }
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+  };
+//+------------------------------------------------------------------+
+//| VLADriver sequential market/RAG MPI extension                    |
+//+------------------------------------------------------------------+
+class CNeuronVLADriverRAGMPI : public CNeuronMomADMPI
+  {
+protected:
+   CBufferFloat      *pRAGTokens;
+   CBufferFloat      *pRAGAbsoluteRelevance;
+   uint               iRAGTokenCount;
+   uint               iRAGTokenWidth;
+   //--- Public second input is a frozen ScenarioEmbedding.  These two
+   //--- neurons are Actor-owned and expand it into the MPI market K/V tokens.
+   uint               iMarketEmbeddingSize;
+   CNeuronBaseOCL     cMarketEmbedding;
+   CNeuronBaseOCL     cMarketProjection;
+   CNeuronBaseOCL     cMarketState;
+   //--- One-input convolution supplies a single non-normalized trainable bias.
+   //--- Its bias is the Actor-owned null-scenario threshold; the fixed input is zero.
+   CNeuronConvOCL     cNullScenarioThreshold;
+   CNeuronBaseOCL     cNullThresholdInput;
+   CNeuronCrossAttention cPolicyRAG;
+   CBufferFloat       cGatedRAGTokens;
+   CBufferFloat       cRAGBranchActivity;
+   CBufferFloat       cRAGBranchActivityGradient;
+   CBufferFloat       cRAGBranchDelta;
+   CBufferFloat       cRAGBranchOutput;
+   CBufferFloat       cRAGResidualGradient;
+   CBufferFloat       cRAGGradient;
+//---
+   virtual bool      RAGTokenGate(void);
+   virtual bool      RAGTokenGateGradient(void);
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None) override;
+
+public:
+                     CNeuronVLADriverRAGMPI(void) : pRAGTokens(NULL), pRAGAbsoluteRelevance(NULL), iRAGTokenCount(0), iRAGTokenWidth(0), iMarketEmbeddingSize(0) {};
+                    ~CNeuronVLADriverRAGMPI(void) {};
+//---
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint latent_dim, uint candidates, uint market_dim,
+                          uint market_units, uint stack_size, uint topK,
+                          uint heads, uint key_dimension,
+                          uint rag_token_count, uint rag_token_width,
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
+//---
+   virtual int       Type(void) override const { return defNeuronVLADriverRAGMPI; }
+   bool              SetRAGTokens(CBufferFloat *tokens,CBufferFloat *absolute_relevance,
+                                   const uint token_width);
+   CBufferFloat      *GetRAGTokens(void) const { return pRAGTokens; }
+   uint              RAGTokenCount(void) const { return iRAGTokenCount; }
+   uint              RAGTokenWidth(void) const { return iRAGTokenWidth; }
+//---
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+//---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
@@ -13091,7 +13414,7 @@ protected:
    uint              iTopK;
    uint              iHorizon;
    uint              iDimension;
-   uint              iLastAssignment;
+   uint              iRecoveryAge;
    bool              bLastTargetAccepted;
    bool              bLastControlValid;
    //---
@@ -13111,9 +13434,10 @@ protected:
    CBufferFloat      cLogProbabilities;
    CBufferFloat      cResponsibilities;
    CBufferFloat      cTarget;
-   CBufferFloat      cHardLoss;
    CBufferFloat      cBatchControl;
    CBufferFloat      cRecovery;
+   CBufferFloat      cRecoveryEvents;
+   CBufferFloat      cAgeZeroEvents;
    CBufferFloat      cForwardValidity;
    CBufferFloat      cDiagnosticPartials;
    CBufferFloat      cEpochDiagnostics;
@@ -13130,8 +13454,8 @@ protected:
    bool              UpdateCodebook(CBufferFloat *delta_target,float decay = 0.99f);
 
 public:
-                     CNeuronScenarioForecast(void) : iVariables(0), iScenarios(0), iTopK(0), iHorizon(0), iDimension(0),
-                     iLastAssignment(0), bLastTargetAccepted(false), bLastControlValid(false) {};
+                     CNeuronScenarioForecast(void) : iVariables(0), iScenarios(0), iTopK(0), iHorizon(0), iDimension(0), iRecoveryAge(256),
+                     bLastTargetAccepted(false), bLastControlValid(false) {};
                     ~CNeuronScenarioForecast(void) {};
    //---
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
@@ -13149,7 +13473,10 @@ public:
                                           double &latent_error, double &observation_error,
                                           double &valid_batches, double &invalid_batches,
                                           double &usage_entropy, double &pairwise_codebook,
-                                          double &inactive_count);
+                                          double &inactive_count, double &recovered);
+   bool              ReadEpochRecoveryEvents(uint &events[]);
+   bool              ReadEpochAgeZeroEvents(uint &events[]);
+   bool              SetRecoveryAge(const uint age);
    //---
    virtual int       Type(void) override const { return defNeuronScenarioForecast; }
    virtual bool      Save(const int file_handle) override;
@@ -13165,6 +13492,7 @@ public:
    uint              GetTopK(void) const { return iTopK; }
    uint              Horizon(void) const { return iHorizon; }
    uint              Dimension(void) const { return iDimension; }
+   uint              RecoveryAge(void) const { return iRecoveryAge; }
    //---
    CBufferFloat      *GetZ(void) { return getOutput(); }
    CBufferFloat      *GetU(void) { return GetPointer(cConfidence); }
@@ -13177,6 +13505,8 @@ public:
    CNeuronConvOCL    *GetGenerator(void) { return GetPointer(cGenerator); }
    CNeuronConvOCL    *GetRouter(void) { return GetPointer(cRouter); }
    CNeuronConvOCL    *GetConfidenceHead(void) { return GetPointer(cConfidenceHead); }
+   CBufferFloat      *GetConfidence(void) { return GetPointer(cConfidence); }
+   CBufferFloat      *GetTarget(void) { return GetPointer(cTarget); }
    CNeuronSoftMaxOCL *GetRouterSoftmax(void) { return GetPointer(cRouterSoftmax); }
    CNeuronSparseSoftMax *GetTopKSelector(void) { return GetPointer(cTopKSelector); }
    //---
@@ -13184,7 +13514,6 @@ public:
    bool              ExportDetached(CBufferFloat *z, CBufferFloat *u, CBufferFloat *log_u,
                                     CBufferFloat *pi, CBufferFloat *log_pi);
    uint              TrainableWeights(void);
-   uint              LastAssignment(void) const { return iLastAssignment; }
    bool              LastTargetAccepted(void) const { return bLastTargetAccepted; }
    bool              LastBatchControlValid(void) const { return bLastControlValid; }
    uint              ActiveTrajectories(void);

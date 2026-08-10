@@ -480,6 +480,8 @@ union uaLongChar
 #define  defNeuronCogDriverForecastToken 0x8117
 #define  defNeuronScenarioForecast      0x8118
 #define  defNeuronScenarioCrossAttention 0x8119
+#define  defNeuronRAGMemory               0x811A
+#define  defNeuronVLADriverRAGMPI          0x811B
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -2733,17 +2735,18 @@ union uaLongChar
 #define def_k_sr_phase                           15
 #define def_k_sr_variables                       16
 #define def_k_sr_prototypes                      17
-#define def_k_sr_hard_loss                       18
-#define def_k_sr_batch_control                   19
-#define def_k_sr_huber_delta                     20
-#define def_k_sr_target_source                   21
-#define def_k_sr_forward_validity                22
-#define def_k_sr_diagnostic_partials             23
-#define def_k_sr_epoch_diagnostics               24
-#define def_k_sr_observation_by_scenario         25
-#define def_k_sr_diagnostic_scratch              26
-#define def_k_sr_usage                           27
-#define def_k_sr_inactive                        28
+#define def_k_sr_batch_control                   18
+#define def_k_sr_huber_delta                     19
+#define def_k_sr_target_source                   20
+#define def_k_sr_forward_validity                21
+#define def_k_sr_diagnostic_partials             22
+#define def_k_sr_epoch_diagnostics               23
+#define def_k_sr_observation_by_scenario         24
+#define def_k_sr_diagnostic_scratch              25
+#define def_k_sr_usage                           26
+#define def_k_sr_inactive                        27
+#define def_k_sr_recovery_events                 28
+#define def_k_sr_age_zero_events                 29
 //---
 #define def_k_ScenarioCodebookEMA               284
 #define def_k_sce_target                          0
@@ -2752,7 +2755,7 @@ union uaLongChar
 #define def_k_sce_ema_counts                      3
 #define def_k_sce_usage                           4
 #define def_k_sce_inactive                        5
-#define def_k_sce_assignment                      6
+#define def_k_sce_batch_control                   6
 #define def_k_sce_scenarios                       7
 #define def_k_sce_dimension                       8
 #define def_k_sce_decay                           9
@@ -2764,6 +2767,8 @@ union uaLongChar
 #define def_k_sce_horizon                         15
 #define def_k_sce_variables                       16
 #define def_k_sce_responsibilities                17
+#define def_k_sce_recovery_events                 18
+#define def_k_sce_age_zero_events                 19
 //---
 #define def_k_ScenarioGradientNormalize         285
 #define def_k_sgn_generator_gradient              0
@@ -2774,6 +2779,69 @@ union uaLongChar
 #define def_k_sgn_responsibilities                5
 #define def_k_sgn_scenarios                       6
 #define def_k_sgn_horizon                         7
+//--- Generic RAG retrieval pipeline. All dimensions are runtime arguments.
+#define RAG_TOPK_LOCAL_WIDTH                      64
+#define RAG_TOPK_MAX                              (RAG_TOPK_LOCAL_WIDTH / 2)
+// ScenarioID is transported in float2.x by the GPU TopK pipeline.
+#define RAG_FLOAT_INDEX_LIMIT                     16777216
+#define def_k_RAGScore                           287
+#define def_k_rags_embedding                       0
+#define def_k_rags_centroids                       1
+#define def_k_rags_used                            2
+#define def_k_rags_scores                          3
+#define def_k_rags_scenario_count                  4
+#define def_k_rags_embedding_dimension             5
+#define def_k_RAGPartial                         288
+#define def_k_ragp_scores                          0
+#define def_k_ragp_partial                         1
+#define def_k_ragp_scenario_count                  2
+#define def_k_ragp_block_size                      3
+#define def_k_ragp_top_k                           4
+#define def_k_RAGMerge                           289
+#define def_k_ragm_source                          0
+#define def_k_ragm_destination                     1
+#define def_k_ragm_candidate_count                 2
+#define def_k_ragm_block_size                      3
+#define def_k_ragm_top_k                           4
+#define def_k_RAGGather                          290
+#define def_k_ragg_top                             0
+#define def_k_ragg_actions                         1
+#define def_k_ragg_tokens                          2
+#define def_k_ragg_scenario_count                  3
+#define def_k_ragg_action_count                    4
+#define def_k_ragg_action_dimension                5
+#define def_k_ragg_token_width                     6
+#define def_k_ragg_top_k                           7
+#define def_k_ragg_action_used                     8
+#define def_k_ragg_action_mean_reward              9
+#define def_k_ragg_action_hit_count               10
+#define def_k_ragg_absolute_relevance             11
+#define def_k_RAGNearestPair                      291
+#define def_k_ragn_centroids                       0
+#define def_k_ragn_used                            1
+#define def_k_ragn_result                          2
+#define def_k_ragn_candidate_count                 3
+#define def_k_ragn_dimension                       4
+#define def_k_ragn_batch_count                     5
+#define def_k_RAGTokenGate                        292
+#define def_k_ragtg_tokens                         0
+#define def_k_ragtg_gated_tokens                   1
+#define def_k_ragtg_absolute_relevance             2
+#define def_k_ragtg_threshold_weights              3
+#define def_k_ragtg_branch_activity                4
+#define def_k_ragtg_token_count                    5
+#define def_k_ragtg_token_width                    6
+#define def_k_ragtg_scale                          7
+#define def_k_RAGTokenGateGrad                    293
+#define def_k_ragtgg_tokens                        0
+#define def_k_ragtgg_gated_gradient                1
+#define def_k_ragtgg_absolute_relevance            2
+#define def_k_ragtgg_threshold_weights             3
+#define def_k_ragtgg_threshold_gradient            4
+#define def_k_ragtgg_branch_activity_gradient      5
+#define def_k_ragtgg_token_count                   6
+#define def_k_ragtgg_token_width                   7
+#define def_k_ragtgg_scale                         8
 #define def_k_sgn_dimension                       8
 #define def_k_sgn_phase                           9
 #define def_k_sgn_confidence_gradient            10
@@ -2820,3 +2888,4 @@ enum ENUM_OPTIMIZATION
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
+

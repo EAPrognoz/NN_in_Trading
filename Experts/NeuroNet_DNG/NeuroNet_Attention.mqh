@@ -1,4 +1,9 @@
-﻿#ifndef NEURONET_BUILDING_FACADE
+//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
+#ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
@@ -4469,9 +4474,15 @@ bool CNeuronCrossAttention::calcInputGradients(CNeuronBaseOCL* prevLayer, CBuffe
    if(SecondGradient.GetIndex() >= 0)
      {
       CBufferFloat *inside = cContext.getGradient();
-      if(inside.GetIndex() != SecondGradient.GetIndex())
-         inside.BufferSet(SecondGradient.GetIndex());
-      if(!calcInputGradients(prevLayer, cContext))
+      // SecondGradient принадлежит вызывающему коду.
+      // cContext подключает его только на время текущего backward.
+      if(!cContext.SetGradient(SecondGradient, false))
+         ReturnFalse;
+      const bool calculated = calcInputGradients(prevLayer, cContext);
+      // Восстанавливаем собственный градиент cContext до уничтожения
+      // временного SecondGradient.
+      const bool restored = cContext.SetGradient(inside, false);
+      if(!restored || !calculated)
          ReturnFalse;
      }
    else
@@ -28090,3 +28101,4 @@ void CNeuronDictionaryCrossAtt::SetOpenCL(COpenCLMy *obj)
    if(!!OpenCL && cLevels.Neurons() > 0)
       bufLogSumExp = OpenCL.AddBuffer(sizeof(float) * cLevels.Neurons(), CL_MEM_READ_WRITE);
   }
+//+------------------------------------------------------------------+

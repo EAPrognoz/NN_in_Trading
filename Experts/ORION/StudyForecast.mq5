@@ -17,6 +17,9 @@
 input datetime Start  = D'2024.01.01';
 input datetime End    = D'2026.01.01';
 input int      Epochs = 100;
+input bool     ORIONRecoverySmoke = false;
+input uint     ORIONRecoverySmokeBatches = 2000;
+input uint     ORIONRecoverySmokeAge = 512;
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

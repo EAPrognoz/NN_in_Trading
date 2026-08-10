@@ -12,6 +12,7 @@
 #include "NeuroNet_RecurrentState.mqh"
 #include "NeuroNet_SpikeFlow.mqh"
 #include "NeuroNet_Attention.mqh"
+#include "NeuroNet_RAGMemory.mqh"
 #include "NeuroNet_GraphSparse.mqh"
 #include "NeuroNet_AgentsRL.mqh"
 #include "NeuroNet_TimeSeries.mqh"

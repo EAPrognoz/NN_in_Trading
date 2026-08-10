@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                      ProjectName |
 //|                                      Copyright 2020, CompanyName |
 //|                                       http://www.companyname.net |
@@ -19312,10 +19312,13 @@ bool CNeuronMomADMPI::Load(const int file_handle)
   {
    if(!CNeuronCrossAttention::Load(file_handle))
       ReturnFalse;
-   if(!LoadInsideLayer(file_handle, cStack.AsObject()) ||
-      !LoadInsideLayer(file_handle, cTTM.AsObject()) ||
-      !LoadInsideLayer(file_handle, cPolicyMarket.AsObject()) ||
-      !LoadInsideLayer(file_handle, cTTMHistory.AsObject()))
+   if(!LoadInsideLayer(file_handle, cStack.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cTTM.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cPolicyMarket.AsObject()))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, cTTMHistory.AsObject()))
       ReturnFalse;
    if(cStack.GetDimension() != iWindow ||
       cTTM.Neurons() != int(iWindow) ||
@@ -19400,6 +19403,586 @@ bool CNeuronMomADMPI::Clear(void)
       !cTTMHistory.Clear())
       ReturnFalse;
 //---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//| VLADriver RAG MPI extension                                      |
+//+------------------------------------------------------------------+
+#define RAG_MPI_SERIALIZATION_VERSION 5
+#define RAG_NULL_GATE_SCALE 12.0f
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                                  uint latent_dim, uint candidates, uint market_dim,
+                                  uint market_units, uint stack_size, uint topK,
+                                  uint heads, uint key_dimension,
+                                  uint rag_token_count, uint rag_token_width,
+                                  ENUM_OPTIMIZATION optimization_type, uint batch)
+  {
+   pRAGTokens = NULL;
+   pRAGAbsoluteRelevance = NULL;
+   iRAGTokenCount = rag_token_count;
+   iRAGTokenWidth = rag_token_width;
+   iMarketEmbeddingSize = market_dim;
+   if(iRAGTokenCount == 0 || iRAGTokenWidth < 2 || iMarketEmbeddingSize == 0)
+      ReturnFalse;
+//--- The external market input is a single frozen ScenarioEmbedding.  The
+//--- inherited MPI still consumes market_units K/V tokens, each latent-wide.
+   if(!CNeuronMomADMPI::Init(numOutputs, myIndex, open_cl, latent_dim, candidates,
+                             latent_dim, market_units, stack_size, topK, heads,
+                             key_dimension, optimization_type, batch))
+      ReturnFalse;
+   if(!cMarketEmbedding.Init(market_units * latent_dim, 4, OpenCL, iMarketEmbeddingSize,
+                             optimization, iBatch))
+      ReturnFalse;
+   if(!cMarketProjection.Init(0, 5, OpenCL, market_units * latent_dim,
+                              optimization, iBatch))
+      ReturnFalse;
+   if(!cMarketState.Init(0, 6, OpenCL, latent_dim, optimization, iBatch))
+      ReturnFalse;
+   if(!cNullThresholdInput.Init(0, 7, OpenCL, 1, optimization, iBatch))
+      ReturnFalse;
+   if(!cNullScenarioThreshold.Init(0, 8, OpenCL, 1, 1, 1, 1, optimization, iBatch))
+      ReturnFalse;
+   if(!cPolicyRAG.Init(0, 9, OpenCL, latent_dim, key_dimension, heads, 1,
+                       iRAGTokenCount, iRAGTokenWidth, optimization, iBatch))
+      ReturnFalse;
+   if(!cGatedRAGTokens.BufferInit(iRAGTokenCount * iRAGTokenWidth, 0))
+      ReturnFalse;
+   if(!cGatedRAGTokens.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGBranchActivity.BufferInit(1, 0))
+      ReturnFalse;
+   if(!cRAGBranchActivity.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGBranchActivityGradient.BufferInit(1, 0))
+      ReturnFalse;
+   if(!cRAGBranchActivityGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGBranchDelta.BufferInit(iWindow, 0))
+      ReturnFalse;
+   if(!cRAGBranchDelta.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGBranchOutput.BufferInit(iWindow, 0))
+      ReturnFalse;
+   if(!cRAGBranchOutput.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGResidualGradient.BufferInit(iWindow, 0))
+      ReturnFalse;
+   if(!cRAGResidualGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGGradient.BufferInit(iRAGTokenCount * iRAGTokenWidth, 0))
+      ReturnFalse;
+   if(!cRAGGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cNullThresholdInput.getOutput().Fill(0.0f))
+      ReturnFalse;
+   if(!cNullScenarioThreshold.GetWeightsConv())
+      ReturnFalse;
+   if(cNullScenarioThreshold.GetWeightsConv().Total() < 2)
+      ReturnFalse;
+   if(!cNullScenarioThreshold.GetWeightsConv().Fill(0.0f))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::SetRAGTokens(CBufferFloat *tokens, CBufferFloat *absolute_relevance,
+      const uint token_width)
+  {
+   if(token_width < 2 || token_width != iRAGTokenWidth)
+      ReturnFalse;
+   if(!tokens)
+     {
+      pRAGTokens = NULL;
+      pRAGAbsoluteRelevance = NULL;
+      return true;
+     }
+   if(tokens.Total() != int(iRAGTokenCount * iRAGTokenWidth) ||
+      absolute_relevance == NULL || absolute_relevance.Total() != 1 ||
+      absolute_relevance.GetOpenCL() != OpenCL || tokens.GetOpenCL() != OpenCL ||
+      absolute_relevance.GetIndex() < 0 || tokens.GetIndex() < 0)
+      ReturnFalse;
+   pRAGTokens = tokens;
+   pRAGAbsoluteRelevance = absolute_relevance;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::RAGTokenGate(void)
+  {
+   const int token_total = int(iRAGTokenCount * iRAGTokenWidth);
+   CBufferFloat *threshold_weights = cNullScenarioThreshold.GetWeightsConv();
+   if(!OpenCL || !pRAGTokens || !pRAGAbsoluteRelevance ||
+      iRAGTokenCount == 0 || iRAGTokenWidth < 2 || token_total <= 0 ||
+      pRAGTokens.Total() != token_total || pRAGAbsoluteRelevance.Total() != 1 ||
+      cGatedRAGTokens.Total() != token_total || cRAGBranchActivity.Total() != 1 ||
+      !threshold_weights || threshold_weights.Total() < 2)
+      ReturnFalse;
+   if(pRAGTokens.GetOpenCL() != OpenCL || pRAGAbsoluteRelevance.GetOpenCL() != OpenCL ||
+      cGatedRAGTokens.GetOpenCL() != OpenCL || cRAGBranchActivity.GetOpenCL() != OpenCL ||
+      threshold_weights.GetOpenCL() != OpenCL)
+      ReturnFalse;
+   if(pRAGTokens.GetIndex() < 0 || pRAGAbsoluteRelevance.GetIndex() < 0 ||
+      cGatedRAGTokens.GetIndex() < 0 || cRAGBranchActivity.GetIndex() < 0 ||
+      threshold_weights.GetIndex() < 0)
+      ReturnFalse;
+//---
+   uint gate_offset[] = {0};
+   uint gate_global[] = {1};
+   const int kernel = def_k_RAGTokenGate;
+   ResetLastError();
+   setBuffer(kernel, def_k_ragtg_tokens, pRAGTokens.GetIndex())
+   setBuffer(kernel, def_k_ragtg_gated_tokens, cGatedRAGTokens.GetIndex())
+   setBuffer(kernel, def_k_ragtg_absolute_relevance, pRAGAbsoluteRelevance.GetIndex())
+   setBuffer(kernel, def_k_ragtg_threshold_weights, threshold_weights.GetIndex())
+   setBuffer(kernel, def_k_ragtg_branch_activity, cRAGBranchActivity.GetIndex())
+   setArgument(kernel, def_k_ragtg_token_count, int(iRAGTokenCount))
+   setArgument(kernel, def_k_ragtg_token_width, int(iRAGTokenWidth))
+   setArgument(kernel, def_k_ragtg_scale, RAG_NULL_GATE_SCALE)
+   kernelExecute(kernel, gate_offset, gate_global)
+#ifdef  _DEBUG
+   if(!cGatedRAGTokens.BufferRead())
+      ReturnFalse;
+   if(!cRAGBranchActivity.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::RAGTokenGateGradient(void)
+  {
+   const int token_total = int(iRAGTokenCount * iRAGTokenWidth);
+   CBufferFloat *threshold_weights = cNullScenarioThreshold.GetWeightsConv();
+   CBufferFloat *threshold_gradient = cNullScenarioThreshold.getGradient();
+   if(!OpenCL || !pRAGTokens || !pRAGAbsoluteRelevance ||
+      iRAGTokenCount == 0 || iRAGTokenWidth < 2 || token_total <= 0 ||
+      pRAGTokens.Total() != token_total || pRAGAbsoluteRelevance.Total() != 1 ||
+      cRAGGradient.Total() != token_total || cRAGBranchActivityGradient.Total() != 1 ||
+      !threshold_weights || threshold_weights.Total() < 2 ||
+      !threshold_gradient || threshold_gradient.Total() != 1)
+      ReturnFalse;
+   if(pRAGTokens.GetOpenCL() != OpenCL || pRAGAbsoluteRelevance.GetOpenCL() != OpenCL ||
+      cRAGGradient.GetOpenCL() != OpenCL || cRAGBranchActivityGradient.GetOpenCL() != OpenCL ||
+      threshold_weights.GetOpenCL() != OpenCL || threshold_gradient.GetOpenCL() != OpenCL)
+      ReturnFalse;
+   if(pRAGTokens.GetIndex() < 0 || pRAGAbsoluteRelevance.GetIndex() < 0 ||
+      cRAGGradient.GetIndex() < 0 || cRAGBranchActivityGradient.GetIndex() < 0 ||
+      threshold_weights.GetIndex() < 0 || threshold_gradient.GetIndex() < 0)
+      ReturnFalse;
+//---
+   uint gate_offset[] = {0};
+   uint gate_global[] = {1};
+   const int kernel = def_k_RAGTokenGateGrad;
+   ResetLastError();
+   setBuffer(kernel, def_k_ragtgg_tokens, pRAGTokens.GetIndex())
+   setBuffer(kernel, def_k_ragtgg_gated_gradient, cRAGGradient.GetIndex())
+   setBuffer(kernel, def_k_ragtgg_absolute_relevance, pRAGAbsoluteRelevance.GetIndex())
+   setBuffer(kernel, def_k_ragtgg_threshold_weights, threshold_weights.GetIndex())
+   setBuffer(kernel, def_k_ragtgg_threshold_gradient, threshold_gradient.GetIndex())
+   setBuffer(kernel, def_k_ragtgg_branch_activity_gradient, cRAGBranchActivityGradient.GetIndex())
+   setArgument(kernel, def_k_ragtgg_token_count, int(iRAGTokenCount))
+   setArgument(kernel, def_k_ragtgg_token_width, int(iRAGTokenWidth))
+   setArgument(kernel, def_k_ragtgg_scale, RAG_NULL_GATE_SCALE)
+   kernelExecute(kernel, gate_offset, gate_global)
+#ifdef  _DEBUG
+   if(!threshold_gradient.BufferRead())
+      ReturnFalse;
+#endif
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
+  {
+   if(!OpenCL || !NeuronOCL || !SecondInput ||
+      SecondInput.Total() != int(iMarketEmbeddingSize))
+      ReturnFalse;
+   if(SecondInput.GetOpenCL() != OpenCL || SecondInput.GetIndex() < 0)
+      ReturnFalse;
+//--- Copy on the device rather than bind: the encoder owns SecondInput and stays frozen.
+   CBufferFloat *market_embedding = cMarketEmbedding.getOutput();
+   if(!market_embedding || market_embedding.Total() != SecondInput.Total() ||
+      market_embedding.GetOpenCL() != OpenCL || market_embedding.GetIndex() < 0)
+      ReturnFalse;
+   if(market_embedding != SecondInput)
+     {
+       if(cMarketEmbedding.Neurons() > SecondInput.Total())
+          ReturnFalse;
+       if(!Concat(SecondInput, SecondInput, market_embedding, 1, 0,
+                  cMarketEmbedding.Neurons()))
+         ReturnFalse;
+     }
+   if(!cMarketProjection.FeedForward(cMarketEmbedding.AsObject()))
+      ReturnFalse;
+   CBufferFloat *market = cMarketProjection.getOutput();
+   if(!market || market.Total() != int(iWindow_K * iUnits_K) ||
+      market.GetOpenCL() != OpenCL || market.GetIndex() < 0)
+      ReturnFalse;
+//--- push the previous MPI scenario before overwriting Output
+   if(!cStack.FeedForward(GetPointer(this)))
+      ReturnFalse;
+//--- TTM builds the weighted scenario from the strategy pool and recent scenarios
+   if(!cTTM.FeedForward(NeuronOCL, cStack.getOutput()))
+      ReturnFalse;
+//--- D_cur = actions stack attends to market
+   if(!cPolicyMarket.FeedForward(cStack.AsObject(), market))
+      ReturnFalse;
+//--- Q_hist = TTM scenario attends to the current action-aware history
+   if(!cTTMHistory.FeedForward(cTTM.AsObject(), cPolicyMarket.getOutput()))
+      ReturnFalse;
+//---
+   CNeuronBaseOCL *final_query = cTTMHistory.AsObject();
+   if(!!pRAGTokens)
+     {
+      if(!RAGTokenGate())
+         ReturnFalse;
+      if(!cPolicyRAG.FeedForward(cTTMHistory.AsObject(), GetPointer(cGatedRAGTokens)))
+         ReturnFalse;
+      if(!Different(cPolicyRAG.getOutput(), cTTMHistory.getOutput(),
+                    GetPointer(cRAGBranchDelta), iWindow))
+         ReturnFalse;
+      if(!ScalarToVector(GetPointer(cRAGBranchActivity), GetPointer(cRAGBranchDelta),
+                         GetPointer(cRAGBranchOutput), iWindow))
+         ReturnFalse;
+      if(!SumAndNormalize(cTTMHistory.getOutput(), GetPointer(cRAGBranchOutput),
+                          cMarketState.getOutput(), iWindow, false, 0, 0, 0, 1.0f))
+         ReturnFalse;
+      final_query = cMarketState.AsObject();
+     }
+//--- parent cross-attention is the final MPI market refine block
+   if(!CNeuronCrossAttention::feedForward(final_query, market))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+      CBufferFloat *SecondInput, CBufferFloat *SecondGradient,
+      ENUM_ACTIVATION SecondActivation = None)
+  {
+   if(!OpenCL || !NeuronOCL || !SecondInput ||
+      SecondInput.Total() != int(iMarketEmbeddingSize))
+      ReturnFalse;
+   if(SecondInput.GetOpenCL() != OpenCL || SecondInput.GetIndex() < 0)
+      ReturnFalse;
+//--- The StateEncoder is frozen while Actor learns this projection.  A caller
+//--- may still supply its gradient buffer, but it must never receive Actor
+//--- gradients through this second-input boundary.
+   if(SecondGradient)
+     {
+       if(SecondGradient.Total() != SecondInput.Total())
+          ReturnFalse;
+       if(SecondGradient.GetOpenCL() != OpenCL || SecondGradient.GetIndex() < 0)
+          ReturnFalse;
+       if(!SecondGradient.Fill(0))
+          ReturnFalse;
+      }
+//--- final MPI market-refine gradients
+   CBufferFloat *market = cMarketProjection.getOutput();
+   CBufferFloat *market_gradient = cMarketProjection.getGradient();
+   if(!market || !market_gradient || market.Total() != int(iWindow_K * iUnits_K) ||
+      market_gradient.Total() != market.Total() || market.GetOpenCL() != OpenCL ||
+      market_gradient.GetOpenCL() != OpenCL || market.GetIndex() < 0 ||
+      market_gradient.GetIndex() < 0)
+      ReturnFalse;
+   if(!market_gradient.Fill(0))
+      ReturnFalse;
+   CNeuronBaseOCL *final_query = (!!pRAGTokens ? cMarketState.AsObject() : cTTMHistory.AsObject());
+   if(!CNeuronCrossAttention::calcInputGradients(final_query, market, market_gradient, None))
+      ReturnFalse;
+//--- RAG is immediately before the final market-refine block
+   if(!!pRAGTokens)
+     {
+       if(cMarketState.getGradient().Total() != int(iWindow) ||
+          cMarketState.getGradient().GetOpenCL() != OpenCL ||
+          cMarketState.getGradient().GetIndex() < 0)
+          ReturnFalse;
+       if(!cTTMHistory.getGradient().Fill(0))
+          ReturnFalse;
+       if(!cRAGGradient.Fill(0))
+          ReturnFalse;
+       if(!cRAGBranchActivityGradient.Fill(0))
+          ReturnFalse;
+       if(!cRAGResidualGradient.Fill(0))
+          ReturnFalse;
+       if(!cNullScenarioThreshold.getGradient().Fill(0))
+          ReturnFalse;
+       if(!ScalarToVectorGrad(GetPointer(cRAGBranchActivity),
+                              GetPointer(cRAGBranchActivityGradient),
+                              GetPointer(cRAGBranchDelta), cPolicyRAG.getGradient(),
+                              cMarketState.getGradient(), iWindow))
+          ReturnFalse;
+       if(!Different(cMarketState.getGradient(), cPolicyRAG.getGradient(),
+                     GetPointer(cRAGResidualGradient), iWindow))
+          ReturnFalse;
+       if(!cTTMHistory.CalcHiddenGradients(cPolicyRAG.AsObject(),
+                                           GetPointer(cGatedRAGTokens),
+                                           GetPointer(cRAGGradient), None))
+          ReturnFalse;
+       if(!SumAndNormalize(cTTMHistory.getGradient(), GetPointer(cRAGResidualGradient),
+                           cTTMHistory.getGradient(), iWindow, false, 0, 0, 0, 1.0f))
+          ReturnFalse;
+       if(!RAGTokenGateGradient())
+          ReturnFalse;
+      }
+//--- TTM-history gradients: Q_ttm and D_cur
+   if(!cTTM.CalcHiddenGradients(cTTMHistory.AsObject(), cPolicyMarket.getOutput(),
+                                cPolicyMarket.getGradient(), None))
+      ReturnFalse;
+//--- TTM gradients to the strategy pool. The stack branch is intentionally stop-gradient.
+   if(!NeuronOCL.CalcHiddenGradients(cTTM.AsObject(), cStack.getOutput(), NULL, None))
+      ReturnFalse;
+//--- policy-market gradients are needed for its weights and the projected market gradient
+   CBufferFloat policyMarketGradient;
+   if(!policyMarketGradient.BufferInit(market.Total(), 0))
+      ReturnFalse;
+   if(!policyMarketGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cStack.CalcHiddenGradients(cPolicyMarket.AsObject(), market,
+                                  GetPointer(policyMarketGradient), None))
+      ReturnFalse;
+   if(cStack.getGradient().Total() > 0)
+      if(!cStack.getGradient().Fill(0))
+         ReturnFalse;
+   if(!SumAndNormalize(market_gradient, GetPointer(policyMarketGradient), market_gradient,
+                       int(iWindow_K), false, 0, 0, 0, 1.0f))
+      ReturnFalse;
+//--- Actor projection learns; the external StateEncoder boundary remains frozen
+   if(!cMarketEmbedding.CalcHiddenGradients(cMarketProjection.AsObject()))
+      ReturnFalse;
+//---
+   return true;
+  }
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::updateInputWeights(CNeuronBaseOCL *NeuronOCL,
+      CBufferFloat *SecondInput)
+  {
+   if(!OpenCL || !NeuronOCL || !SecondInput ||
+      SecondInput.Total() != int(iMarketEmbeddingSize) ||
+      SecondInput.GetOpenCL() != OpenCL || SecondInput.GetIndex() < 0)
+      ReturnFalse;
+   CBufferFloat *market = cMarketProjection.getOutput();
+   if(!market || market.Total() != int(iWindow_K * iUnits_K) ||
+      market.GetOpenCL() != OpenCL || market.GetIndex() < 0)
+      ReturnFalse;
+//--- final market-refine weights use the actual post-RAG query
+   CNeuronBaseOCL *final_query = (!!pRAGTokens ? cMarketState.AsObject() : cTTMHistory.AsObject());
+   if(!CNeuronCrossAttention::updateInputWeights(final_query, market))
+      ReturnFalse;
+//--- RAG attention consumes TTM history, not the final market-refined state
+   if(!!pRAGTokens)
+     {
+       if(iRAGTokenWidth < 2 || !pRAGAbsoluteRelevance ||
+          pRAGTokens.Total() != int(iRAGTokenCount * iRAGTokenWidth) ||
+          cGatedRAGTokens.Total() != pRAGTokens.Total() ||
+          pRAGTokens.GetOpenCL() != OpenCL || pRAGAbsoluteRelevance.GetOpenCL() != OpenCL ||
+          cGatedRAGTokens.GetOpenCL() != OpenCL || pRAGTokens.GetIndex() < 0 ||
+          pRAGAbsoluteRelevance.GetIndex() < 0 || cGatedRAGTokens.GetIndex() < 0)
+          ReturnFalse;
+       if(!cPolicyRAG.UpdateInputWeights(cTTMHistory.AsObject(), GetPointer(cGatedRAGTokens)))
+          ReturnFalse;
+       if(!cNullScenarioThreshold.UpdateInputWeights(cNullThresholdInput.AsObject()))
+          ReturnFalse;
+      }
+//--- inherited MPI prefix weights
+   if(!cTTMHistory.UpdateInputWeights(cTTM.AsObject(), cPolicyMarket.getOutput()))
+      ReturnFalse;
+   if(!cPolicyMarket.UpdateInputWeights(cStack.AsObject(), market))
+      ReturnFalse;
+   if(!cMarketProjection.UpdateInputWeights(cMarketEmbedding.AsObject()))
+      ReturnFalse;
+   return true;
+  }
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::Save(const int file_handle)
+  {
+   if(iMarketEmbeddingSize == 0 || iRAGTokenCount == 0 || iRAGTokenWidth < 2)
+      ReturnFalse;
+   if(!CNeuronMomADMPI::Save(file_handle))
+      ReturnFalse;
+   if(FileWriteInteger(file_handle, RAG_MPI_SERIALIZATION_VERSION, INT_VALUE) < INT_VALUE)
+      ReturnFalse;
+   if(FileWriteInteger(file_handle, int(iMarketEmbeddingSize), INT_VALUE) < INT_VALUE)
+      ReturnFalse;
+   if(FileWriteInteger(file_handle, int(iRAGTokenCount), INT_VALUE) < INT_VALUE)
+      ReturnFalse;
+   if(FileWriteInteger(file_handle, int(iRAGTokenWidth), INT_VALUE) < INT_VALUE)
+      ReturnFalse;
+   if(!cMarketEmbedding.Save(file_handle))
+      ReturnFalse;
+   if(!cMarketProjection.Save(file_handle))
+      ReturnFalse;
+   if(!cNullScenarioThreshold.Save(file_handle))
+      ReturnFalse;
+   if(!cPolicyRAG.Save(file_handle))
+      ReturnFalse;
+   return true;
+  }
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::Load(const int file_handle)
+  {
+   if(!CNeuronMomADMPI::Load(file_handle))
+      ReturnFalse;
+   if(FileReadInteger(file_handle, INT_VALUE) != RAG_MPI_SERIALIZATION_VERSION)
+      ReturnFalse;
+   iMarketEmbeddingSize = uint(FileReadInteger(file_handle, INT_VALUE));
+   iRAGTokenCount = uint(FileReadInteger(file_handle, INT_VALUE));
+   iRAGTokenWidth = uint(FileReadInteger(file_handle, INT_VALUE));
+   if(iMarketEmbeddingSize == 0 || iRAGTokenCount == 0 || iRAGTokenWidth < 2)
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, GetPointer(cMarketEmbedding)))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, GetPointer(cMarketProjection)))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, GetPointer(cNullScenarioThreshold)))
+      ReturnFalse;
+   if(!LoadInsideLayer(file_handle, GetPointer(cPolicyRAG)))
+      ReturnFalse;
+   CBufferFloat *threshold_weights = cNullScenarioThreshold.GetWeightsConv();
+   if(cMarketEmbedding.Neurons() != int(iMarketEmbeddingSize) ||
+      cMarketProjection.Neurons() != int(iWindow_K * iUnits_K) ||
+      cNullScenarioThreshold.Neurons() != 1 || !threshold_weights ||
+      threshold_weights.Total() < 2 || cPolicyRAG.Neurons() != Neurons())
+      ReturnFalse;
+   if(!cMarketState.Init(0, 6, OpenCL, uint(Neurons()), optimization, iBatch))
+      ReturnFalse;
+   if(!cNullThresholdInput.Init(0, 7, OpenCL, 1, optimization, iBatch))
+      ReturnFalse;
+   if(!cNullThresholdInput.getOutput().Fill(0.0f))
+      ReturnFalse;
+   if(!cGatedRAGTokens.BufferInit(iRAGTokenCount * iRAGTokenWidth, 0))
+      ReturnFalse;
+   if(!cGatedRAGTokens.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGBranchActivity.BufferInit(1, 0))
+      ReturnFalse;
+   if(!cRAGBranchActivity.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGBranchActivityGradient.BufferInit(1, 0))
+      ReturnFalse;
+   if(!cRAGBranchActivityGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGBranchDelta.BufferInit(uint(Neurons()), 0))
+      ReturnFalse;
+   if(!cRAGBranchDelta.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGBranchOutput.BufferInit(uint(Neurons()), 0))
+      ReturnFalse;
+   if(!cRAGBranchOutput.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGResidualGradient.BufferInit(uint(Neurons()), 0))
+      ReturnFalse;
+   if(!cRAGResidualGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   if(!cRAGGradient.BufferInit(iRAGTokenCount * iRAGTokenWidth, 0))
+      ReturnFalse;
+   if(!cRAGGradient.BufferCreate(OpenCL))
+      ReturnFalse;
+   pRAGTokens = NULL;
+   pRAGAbsoluteRelevance = NULL;
+   return true;
+  }
+//+------------------------------------------------------------------+
+void CNeuronVLADriverRAGMPI::SetOpenCL(COpenCLMy *obj)
+  {
+   CNeuronMomADMPI::SetOpenCL(obj);
+   cMarketEmbedding.SetOpenCL(OpenCL);
+   cMarketProjection.SetOpenCL(OpenCL);
+   cMarketState.SetOpenCL(OpenCL);
+   cNullScenarioThreshold.SetOpenCL(OpenCL);
+   cNullThresholdInput.SetOpenCL(OpenCL);
+   cPolicyRAG.SetOpenCL(OpenCL);
+   if(cGatedRAGTokens.Total() > 0)
+      cGatedRAGTokens.BufferCreate(OpenCL);
+   if(cRAGBranchActivity.Total() > 0)
+      cRAGBranchActivity.BufferCreate(OpenCL);
+   if(cRAGBranchActivityGradient.Total() > 0)
+      cRAGBranchActivityGradient.BufferCreate(OpenCL);
+   if(cRAGBranchDelta.Total() > 0)
+      cRAGBranchDelta.BufferCreate(OpenCL);
+   if(cRAGBranchOutput.Total() > 0)
+      cRAGBranchOutput.BufferCreate(OpenCL);
+   if(cRAGResidualGradient.Total() > 0)
+      cRAGResidualGradient.BufferCreate(OpenCL);
+   if(cRAGGradient.Total() > 0)
+      cRAGGradient.BufferCreate(OpenCL);
+   pRAGTokens = NULL;
+   pRAGAbsoluteRelevance = NULL;
+  }
+//+------------------------------------------------------------------+
+void CNeuronVLADriverRAGMPI::TrainMode(bool flag)
+  {
+   CNeuronMomADMPI::TrainMode(flag);
+   cMarketEmbedding.TrainMode(flag);
+   cMarketProjection.TrainMode(flag);
+   cMarketState.TrainMode(flag);
+   cNullScenarioThreshold.TrainMode(flag);
+   cNullThresholdInput.TrainMode(false);
+   cPolicyRAG.TrainMode(flag);
+  }
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!source || source.Type() != Type())
+      ReturnFalse;
+   CNeuronVLADriverRAGMPI *src = source;
+   if(!CNeuronMomADMPI::WeightsUpdate(source, tau))
+      ReturnFalse;
+   dWeightsUpdate(cMarketEmbedding, src, tau);
+   dWeightsUpdate(cMarketProjection, src, tau);
+   dWeightsUpdate(cNullScenarioThreshold, src, tau);
+   dWeightsUpdate(cPolicyRAG, src, tau);
+   return true;
+  }
+//+------------------------------------------------------------------+
+bool CNeuronVLADriverRAGMPI::Clear(void)
+  {
+   if(!CNeuronMomADMPI::Clear())
+      ReturnFalse;
+   if(!cMarketEmbedding.Clear())
+      ReturnFalse;
+   if(!cMarketProjection.Clear())
+      ReturnFalse;
+   if(!cMarketState.Clear())
+      ReturnFalse;
+   if(!cNullScenarioThreshold.Clear())
+      ReturnFalse;
+   if(!cNullThresholdInput.Clear())
+      ReturnFalse;
+   if(!cPolicyRAG.Clear())
+      ReturnFalse;
+   if(cGatedRAGTokens.Total() > 0)
+      if(!cGatedRAGTokens.Fill(0))
+         ReturnFalse;
+   if(cRAGBranchActivity.Total() > 0)
+      if(!cRAGBranchActivity.Fill(0))
+         ReturnFalse;
+   if(cRAGBranchActivityGradient.Total() > 0)
+      if(!cRAGBranchActivityGradient.Fill(0))
+         ReturnFalse;
+   if(cRAGBranchDelta.Total() > 0)
+      if(!cRAGBranchDelta.Fill(0))
+         ReturnFalse;
+   if(cRAGBranchOutput.Total() > 0)
+      if(!cRAGBranchOutput.Fill(0))
+         ReturnFalse;
+   if(cRAGResidualGradient.Total() > 0)
+      if(!cRAGResidualGradient.Fill(0))
+         ReturnFalse;
+   if(cRAGGradient.Total() > 0)
+      if(!cRAGGradient.Fill(0))
+         ReturnFalse;
    return true;
   }
 //+------------------------------------------------------------------+
@@ -22883,7 +23466,6 @@ bool CNeuronScenarioForecast::Init(uint numOutputs, uint myIndex, COpenCLMy *ope
    iTopK = top_k;
    iHorizon = horizon;
    iDimension = dimension;
-   iLastAssignment = 0;
    bLastTargetAccepted = false;
    bLastControlValid = false;
    ORION_FORECAST_INIT_STAGE(CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, iScenarios * iVariables * iHorizon * iDimension, optimization_type, batch), "base output");
@@ -22897,12 +23479,13 @@ bool CNeuronScenarioForecast::Init(uint numOutputs, uint myIndex, COpenCLMy *ope
    ORION_FORECAST_INIT_STAGE(cResponsibilities.BufferCreate(OpenCL), "responsibilities BufferCreate");
    ORION_FORECAST_INIT_STAGE(cTarget.BufferInit(iVariables * iHorizon * iDimension, 0), "target BufferInit");
    ORION_FORECAST_INIT_STAGE(cTarget.BufferCreate(OpenCL), "target BufferCreate");
-   ORION_FORECAST_INIT_STAGE(cHardLoss.BufferInit(iScenarios, 0) && cHardLoss.BufferCreate(OpenCL), "hard-loss buffer");
-   ORION_FORECAST_INIT_STAGE(cBatchControl.BufferInit(2, 0) && cBatchControl.BufferCreate(OpenCL), "batch-control buffer");
+   ORION_FORECAST_INIT_STAGE(cBatchControl.BufferInit(1, 0) && cBatchControl.BufferCreate(OpenCL), "batch-control buffer");
    ORION_FORECAST_INIT_STAGE(cRecovery.BufferInit(iScenarios, 0) && cRecovery.BufferCreate(OpenCL), "recovery buffer");
+   ORION_FORECAST_INIT_STAGE(cRecoveryEvents.BufferInit(iScenarios, 0) && cRecoveryEvents.BufferCreate(OpenCL), "recovery-events buffer");
+   ORION_FORECAST_INIT_STAGE(cAgeZeroEvents.BufferInit(iScenarios, 0) && cAgeZeroEvents.BufferCreate(OpenCL), "age-zero-events buffer");
    ORION_FORECAST_INIT_STAGE(cForwardValidity.BufferInit(iScenarios, 0) && cForwardValidity.BufferCreate(OpenCL), "forward-validity buffer");
    ORION_FORECAST_INIT_STAGE(cDiagnosticPartials.BufferInit(3 * iScenarios, 0) && cDiagnosticPartials.BufferCreate(OpenCL), "diagnostic-partials buffer");
-   ORION_FORECAST_INIT_STAGE(cEpochDiagnostics.BufferInit(11, 0) && cEpochDiagnostics.BufferCreate(OpenCL), "epoch-diagnostics buffer");
+   ORION_FORECAST_INIT_STAGE(cEpochDiagnostics.BufferInit(12, 0) && cEpochDiagnostics.BufferCreate(OpenCL), "epoch-diagnostics buffer");
    ORION_FORECAST_INIT_STAGE(cDiagnosticScratch.BufferInit((iScenarios * (iScenarios - 1) / 2 > iScenarios ? iScenarios * (iScenarios - 1) / 2 : iScenarios), 0) && cDiagnosticScratch.BufferCreate(OpenCL), "diagnostic-scratch buffer");
    ORION_FORECAST_INIT_STAGE(cCodebook.Init(iScenarios, iVariables * iHorizon * iDimension, OpenCL), "codebook");
    ORION_FORECAST_INIT_STAGE(cGeneratorInput.Init(0, myIndex + 1, OpenCL, iScenarios * iVariables * iHorizon * 2 * iDimension, optimization, iBatch), "generator input");
@@ -23005,7 +23588,6 @@ bool CNeuronScenarioForecast::BindResponsibilitiesKernel(CBufferFloat *target_so
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_indexes, cTopKSelector.GetIndexes().GetIndex()) &&
            OpenCL.SetArgument(kernel, def_k_sr_variables, (int)iVariables) &&
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_prototypes, cCodebook.GetPrototypes().GetIndex()) &&
-           OpenCL.SetArgumentBuffer(kernel, def_k_sr_hard_loss, cHardLoss.GetIndex()) &&
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_batch_control, cBatchControl.GetIndex()) &&
            OpenCL.SetArgument(kernel, def_k_sr_huber_delta, (float)1.0f) &&
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_target_source, target_source.GetIndex()) &&
@@ -23015,23 +23597,25 @@ bool CNeuronScenarioForecast::BindResponsibilitiesKernel(CBufferFloat *target_so
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_observation_by_scenario, observation_by_scenario.GetIndex()) &&
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_diagnostic_scratch, cDiagnosticScratch.GetIndex()) &&
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_usage, cCodebook.GetUsage().GetIndex()) &&
-           OpenCL.SetArgumentBuffer(kernel, def_k_sr_inactive, cCodebook.GetInactive().GetIndex()));
+           OpenCL.SetArgumentBuffer(kernel, def_k_sr_inactive, cCodebook.GetInactive().GetIndex()) &&
+           OpenCL.SetArgumentBuffer(kernel, def_k_sr_recovery_events, cRecoveryEvents.GetIndex()) &&
+           OpenCL.SetArgumentBuffer(kernel, def_k_sr_age_zero_events, cAgeZeroEvents.GetIndex()));
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronScenarioForecast::BuildResponsibilities(CBufferFloat *target)
   {
-   return BuildResponsibilities(target,target);
+   return BuildResponsibilities(target, target);
   }
 //+------------------------------------------------------------------+
 //| Full future latent trains Z/U/Pi; delta latent updates Codebook |
 //+------------------------------------------------------------------+
-bool CNeuronScenarioForecast::BuildResponsibilities(CBufferFloat *target,CBufferFloat *delta_target)
+bool CNeuronScenarioForecast::BuildResponsibilities(CBufferFloat *target, CBufferFloat *delta_target)
   {
    bLastTargetAccepted = false;
    bLastControlValid = false;
-   const int target_total=int(iVariables * iHorizon * iDimension);
+   const int target_total = int(iVariables * iHorizon * iDimension);
    if(!OpenCL || !target || !delta_target || target.Total() < target_total ||
       delta_target.Total() < target_total || target.GetIndex() < 0 || delta_target.GetIndex() < 0)
       ReturnFalse;
@@ -23049,23 +23633,9 @@ bool CNeuronScenarioForecast::BuildResponsibilities(CBufferFloat *target,CBuffer
    kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
    if(!cTopKSelector.FeedForward(cResponsibilityScores.AsObject()))
       ReturnFalse;
-//--- device-only TopK mask and dense router gradient
-   global_work_size[0] = iScenarios;
-   global_work_size[1] = 1;
-   global_work_size[2] = 1;
+//--- fused device-only TopK responsibility, router and trajectory gradients
    setArgument(kernel, def_k_sr_phase, (int)2)
-   kernelExecute(kernel, global_work_offset, global_work_size)
-//--- raw trajectory/confidence gradients, grouped jointly by scenario
-   global_work_size[0] = iDimension;
-   global_work_size[1] = iVariables;
-   global_work_size[2] = iScenarios;
-   setArgument(kernel, def_k_sr_phase, (int)3)
    kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
-//--- deterministic joint hard assignment on device
-   uint assignment_offset[1] = {0};
-   uint assignment_size[1] = {iScenarios};
-   setArgument(kernel, def_k_sr_phase, (int)4)
-   kernelExecuteLoc(kernel, assignment_offset, assignment_size, assignment_size)
 //--- normalize active latent/confidence branches without host tensor reads
    const int normalize = def_k_ScenarioGradientNormalize;
    setBuffer(normalize, def_k_sgn_generator_gradient, cGenerator.getGradientIndex())
@@ -23088,10 +23658,7 @@ bool CNeuronScenarioForecast::BuildResponsibilities(CBufferFloat *target,CBuffer
    if(!cBatchControl.BufferRead())
       ReturnFalse;
    bLastControlValid = true;
-   const int assignment = (int)MathRound(cBatchControl[1]);
-   bLastTargetAccepted = (cBatchControl[0] > 0.5f && assignment >= 0 && assignment < int(iScenarios));
-   if(bLastTargetAccepted)
-      iLastAssignment = (uint)assignment;
+   bLastTargetAccepted = (cBatchControl[0] > 0.5f);
    return bLastTargetAccepted;
   }
 //+------------------------------------------------------------------+
@@ -23103,9 +23670,9 @@ bool CNeuronScenarioForecast::ResetEpochDiagnostics(void)
       !BindResponsibilitiesKernel(GetPointer(cTarget), GetPointer(cDiagnosticPartials)))
       return false;
    const int kernel = def_k_ScenarioResponsibilities;
-   setArgument(kernel, def_k_sr_phase, (int)6)
+   setArgument(kernel, def_k_sr_phase, (int)4)
    uint offset[1] = {0};
-   uint global[1] = {1};
+   uint global[1] = {iScenarios};
    kernelExecute(kernel, offset, global)
    return true;
   }
@@ -23115,10 +23682,10 @@ bool CNeuronScenarioForecast::ResetEpochDiagnostics(void)
 bool CNeuronScenarioForecast::CommitBatchDiagnostics(void)
   {
    if(!ValidateLaunchConfiguration(OpenCL, iScenarios, iHorizon, iDimension, iVariables) ||
-      !BindResponsibilitiesKernel(GetPointer(cTarget), GetPointer(cHardLoss)))
-      return false;
+      !BindResponsibilitiesKernel(GetPointer(cTarget), GetPointer(cDiagnosticPartials)))
+      ReturnFalse;
    const int kernel = def_k_ScenarioResponsibilities;
-   setArgument(kernel, def_k_sr_phase, (int)5)
+   setArgument(kernel, def_k_sr_phase, (int)3)
    uint offset[1] = {0};
    uint global[1] = {iScenarios};
    uint local[1] = {iScenarios};
@@ -23132,18 +23699,18 @@ bool CNeuronScenarioForecast::BuildEpochCodebookDiagnostics(void)
   {
    if(!ValidateLaunchConfiguration(OpenCL, iScenarios, iHorizon, iDimension, iVariables) ||
       !BindResponsibilitiesKernel(GetPointer(cTarget), GetPointer(cDiagnosticPartials)))
-      return false;
+      ReturnFalse;
    const int kernel = def_k_ScenarioResponsibilities;
    const uint pairs = iScenarios * (iScenarios - 1) / 2;
    if(pairs > 0)
      {
-      setArgument(kernel, def_k_sr_phase, (int)7)
+      setArgument(kernel, def_k_sr_phase, (int)5)
       uint offset[3] = {0, 0, 0};
       uint global[3] = {iDimension, iVariables, pairs};
       uint local[3] = {iDimension, iVariables, 1};
       kernelExecuteLoc(kernel, offset, global, local)
      }
-   setArgument(kernel, def_k_sr_phase, (int)8)
+   setArgument(kernel, def_k_sr_phase, (int)6)
    uint reduce_offset[1] = {0};
    uint reduce_size[1] = {(pairs > iScenarios ? pairs : iScenarios)};
    kernelExecuteLoc(kernel, reduce_offset, reduce_size, reduce_size)
@@ -23157,13 +23724,13 @@ bool CNeuronScenarioForecast::ReadEpochDiagnostics(double &mix_loss, double &rou
       double &latent_error, double &observation_error,
       double &valid_batches, double &invalid_batches,
       double &usage_entropy, double &pairwise_codebook,
-      double &inactive_count)
+      double &inactive_count, double &recovered)
   {
-   if(cEpochDiagnostics.Total() != 11 || !cEpochDiagnostics.BufferRead())
-      return false;
-   for(int i = 0; i < 11; i++)
+   if(cEpochDiagnostics.Total() != 12 || !cEpochDiagnostics.BufferRead())
+      ReturnFalse;
+   for(int i = 0; i < 12; i++)
       if(!MathIsValidNumber(cEpochDiagnostics[i]))
-         return false;
+         ReturnFalse;
    mix_loss = cEpochDiagnostics[0];
    router_loss = cEpochDiagnostics[1];
    trajectory_loss = cEpochDiagnostics[2];
@@ -23175,14 +23742,61 @@ bool CNeuronScenarioForecast::ReadEpochDiagnostics(double &mix_loss, double &rou
    usage_entropy = cEpochDiagnostics[8];
    pairwise_codebook = cEpochDiagnostics[9];
    inactive_count = cEpochDiagnostics[10];
+   recovered = cEpochDiagnostics[11];
    return true;
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool CNeuronScenarioForecast::UpdateCodebook(CBufferFloat *delta_target,float decay)
+bool CNeuronScenarioForecast::ReadEpochRecoveryEvents(uint &events[])
   {
-   if(!OpenCL || !delta_target || delta_target.Total() < int(iVariables*iHorizon*iDimension) ||
+   if(cRecoveryEvents.Total() != int(iScenarios) || !cRecoveryEvents.BufferRead())
+      ReturnFalse;
+   if(ArrayResize(events, int(iScenarios)) != int(iScenarios))
+      ReturnFalse;
+   for(uint i = 0; i < iScenarios; i++)
+     {
+      const double value = cRecoveryEvents[i];
+      if(!MathIsValidNumber(value) || value < 0.0 || value > 4294967295.0)
+         ReturnFalse;
+      events[i] = (uint)MathRound(value);
+     }
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioForecast::ReadEpochAgeZeroEvents(uint &events[])
+  {
+   if(cAgeZeroEvents.Total() != int(iScenarios) || !cAgeZeroEvents.BufferRead())
+      ReturnFalse;
+   if(ArrayResize(events, int(iScenarios)) != int(iScenarios))
+      ReturnFalse;
+   for(uint i = 0; i < iScenarios; i++)
+     {
+      const double value = cAgeZeroEvents[i];
+      if(!MathIsValidNumber(value) || value < 0.0 || value > 4294967295.0)
+         ReturnFalse;
+      events[i] = (uint)MathRound(value);
+     }
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioForecast::SetRecoveryAge(const uint age)
+  {
+   if(age == 0)
+      ReturnFalse;
+   iRecoveryAge = age;
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioForecast::UpdateCodebook(CBufferFloat *delta_target, float decay)
+  {
+   if(!OpenCL || !delta_target || delta_target.Total() < int(iVariables * iHorizon * iDimension) ||
       delta_target.GetIndex() < 0 || decay < 0 || decay >= 1)
       ReturnFalse;
    uint global_work_offset[3] = {0, 0, 0};
@@ -23194,18 +23808,20 @@ bool CNeuronScenarioForecast::UpdateCodebook(CBufferFloat *delta_target,float de
    setBuffer(kernel, def_k_sce_ema_counts, cCodebook.GetEMACounts().GetIndex())
    setBuffer(kernel, def_k_sce_usage, cCodebook.GetUsage().GetIndex())
    setBuffer(kernel, def_k_sce_inactive, cCodebook.GetInactive().GetIndex())
-   setBuffer(kernel, def_k_sce_assignment, cBatchControl.GetIndex())
+   setBuffer(kernel, def_k_sce_batch_control, cBatchControl.GetIndex())
    setBuffer(kernel, def_k_sce_responsibilities, cResponsibilities.GetIndex())
    setArgument(kernel, def_k_sce_scenarios, (int)iScenarios)
    setArgument(kernel, def_k_sce_dimension, (int)iDimension)
    setArgument(kernel, def_k_sce_decay, decay)
    setBuffer(kernel, def_k_sce_inactivity_age, cCodebook.GetInactivityAge().GetIndex())
    setArgument(kernel, def_k_sce_seed, (int)MathRand())
-   setArgument(kernel, def_k_sce_recovery_age, (int)256)
+   setArgument(kernel, def_k_sce_recovery_age, (int)iRecoveryAge)
    setBuffer(kernel, def_k_sce_recovery, cRecovery.GetIndex())
    setArgument(kernel, def_k_sce_phase, (int)0)
    setArgument(kernel, def_k_sce_horizon, (int)iHorizon)
    setArgument(kernel, def_k_sce_variables, (int)iVariables)
+   setBuffer(kernel, def_k_sce_recovery_events, cRecoveryEvents.GetIndex())
+   setBuffer(kernel, def_k_sce_age_zero_events, cAgeZeroEvents.GetIndex())
    kernelExecute(kernel, global_work_offset, global_work_size)
    global_work_size[0] = iDimension;
    global_work_size[1] = iVariables;
@@ -23222,9 +23838,11 @@ bool CNeuronScenarioForecast::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL || NeuronOCL.Neurons() != int(iVariables * iDimension))
       ReturnFalse;
-   if(!cGeneratorInput.CalcHiddenGradients(cGenerator.AsObject()) ||
-      !cRouterInput.CalcHiddenGradients(cRouter.AsObject()) ||
-      !cConfidenceInput.CalcHiddenGradients(cConfidenceHead.AsObject()))
+   if(!cGeneratorInput.CalcHiddenGradients(cGenerator.AsObject()))
+      ReturnFalse;
+   if(!cRouterInput.CalcHiddenGradients(cRouter.AsObject()))
+      ReturnFalse;
+   if(!cConfidenceInput.CalcHiddenGradients(cConfidenceHead.AsObject()))
       ReturnFalse;
    uint global_work_offset[3] = {0, 0, 0};
    const uint lanes = (uint)MathMin((long)64, MathMin(OpenCL.GetMaxLocalSize(0), (long)(iScenarios * iHorizon)));
@@ -23255,10 +23873,14 @@ bool CNeuronScenarioForecast::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 bool CNeuronScenarioForecast::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || !bLastTargetAccepted)
-      return false;
-   return (cGenerator.UpdateInputWeights(cGeneratorInput.AsObject()) &&
-           cRouter.UpdateInputWeights(cRouterInput.AsObject()) &&
-           cConfidenceHead.UpdateInputWeights(cConfidenceInput.AsObject()));
+      ReturnFalse;
+   if(!cGenerator.UpdateInputWeights(cGeneratorInput.AsObject()))
+      ReturnFalse;
+   if(!cRouter.UpdateInputWeights(cRouterInput.AsObject()))
+      ReturnFalse;
+   if(!cConfidenceHead.UpdateInputWeights(cConfidenceInput.AsObject()))
+      ReturnFalse;
+   return true;
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -23272,7 +23894,7 @@ bool CNeuronScenarioForecast::Save(const int file_handle)
    dFileWriteUInt(file_handle, iTopK);
    dFileWriteUInt(file_handle, iHorizon);
    dFileWriteUInt(file_handle, iDimension);
-   dFileWriteUInt(file_handle, iLastAssignment);
+   dFileWriteUInt(file_handle, 0);
    dFileWriteUInt(file_handle, (uint)bLastTargetAccepted);
    return (cCodebook.Save(file_handle) && cConfidence.Save(file_handle) && cLogConfidence.Save(file_handle) &&
            cLogProbabilities.Save(file_handle) && cResponsibilities.Save(file_handle) && cTarget.Save(file_handle) &&
@@ -23292,7 +23914,8 @@ bool CNeuronScenarioForecast::Load(const int file_handle)
    dFileReadUInt(file_handle, iTopK);
    dFileReadUInt(file_handle, iHorizon);
    dFileReadUInt(file_handle, iDimension);
-   dFileReadUInt(file_handle, iLastAssignment);
+   uint legacy_assignment = 0;
+   dFileReadUInt(file_handle, legacy_assignment);
    uint accepted = 0;
    dFileReadUInt(file_handle, accepted);
    bLastTargetAccepted = (accepted != 0);
@@ -23319,9 +23942,9 @@ bool CNeuronScenarioForecast::Load(const int file_handle)
       !LoadInsideLayer(file_handle, cResponsibilityScores.AsObject()) ||
       !LoadInsideLayer(file_handle, cTopKSelector.AsObject()))
       ReturnFalse;
-   if(!cHardLoss.BufferInit(iScenarios, 0) || !cBatchControl.BufferInit(2, 0) ||
-      !cRecovery.BufferInit(iScenarios, 0) || !cForwardValidity.BufferInit(iScenarios, 0) ||
-      !cDiagnosticPartials.BufferInit(3 * iScenarios, 0) || !cEpochDiagnostics.BufferInit(11, 0) ||
+   if(!cBatchControl.BufferInit(1, 0) || !cRecovery.BufferInit(iScenarios, 0) ||
+      !cRecoveryEvents.BufferInit(iScenarios, 0) || !cAgeZeroEvents.BufferInit(iScenarios, 0) || !cForwardValidity.BufferInit(iScenarios, 0) ||
+      !cDiagnosticPartials.BufferInit(3 * iScenarios, 0) || !cEpochDiagnostics.BufferInit(12, 0) ||
       !cDiagnosticScratch.BufferInit((iScenarios * (iScenarios - 1) / 2 > iScenarios ?
                                       iScenarios * (iScenarios - 1) / 2 : iScenarios), 0))
       ReturnFalse;
@@ -23349,9 +23972,10 @@ void CNeuronScenarioForecast::SetOpenCL(COpenCLMy *obj)
    cLogProbabilities.BufferCreate(OpenCL);
    cResponsibilities.BufferCreate(OpenCL);
    cTarget.BufferCreate(OpenCL);
-   cHardLoss.BufferCreate(OpenCL);
    cBatchControl.BufferCreate(OpenCL);
    cRecovery.BufferCreate(OpenCL);
+   cRecoveryEvents.BufferCreate(OpenCL);
+   cAgeZeroEvents.BufferCreate(OpenCL);
    cForwardValidity.BufferCreate(OpenCL);
    cDiagnosticPartials.BufferCreate(OpenCL);
    cEpochDiagnostics.BufferCreate(OpenCL);
@@ -23472,8 +24096,8 @@ bool CNeuronScenarioForecast::Clear(void)
            cConfidenceInput.Clear() && cGenerator.Clear() && cRouter.Clear() && cConfidenceHead.Clear() &&
            cConfidence.Fill(1.0f) && cLogConfidence.Fill(MathLog(1.000001f)) &&
            cLogProbabilities.Fill(MathLog(1.0f / MathMax(iScenarios, 1))) &&
-           cResponsibilities.Fill(0) && cTarget.Fill(0) && cHardLoss.Fill(0) &&
-           cBatchControl.Fill(0) && cRecovery.Fill(0) && cForwardValidity.Fill(0) &&
+           cResponsibilities.Fill(0) && cTarget.Fill(0) && cBatchControl.Fill(0) &&
+           cRecovery.Fill(0) && cRecoveryEvents.Fill(0) && cAgeZeroEvents.Fill(0) && cForwardValidity.Fill(0) &&
            cDiagnosticPartials.Fill(0) && cEpochDiagnostics.Fill(0) && cDiagnosticScratch.Fill(0));
   }
 //+------------------------------------------------------------------+
@@ -23555,13 +24179,13 @@ bool CNeuronScenarioCrossAttention::InitHolders(uint myIndex,
    if(!cHeadGate.Init(0, index++, OpenCL, iQueries * iScenarios * iDimension, optimization_type, batch))
       ReturnFalse;
    if(!cHeadGateTranspose.Init(0, index++, OpenCL, iScenarios, iQueries, iDimension,
-                                optimization_type, batch))
+                               optimization_type, batch))
       ReturnFalse;
    if(!cOutputProjection.Init(0, index++, OpenCL, iScenarios * iDimension, iScenarios * iDimension,
-                               iDimension, iQueries, 1, optimization_type, batch))
+                              iDimension, iQueries, 1, optimization_type, batch))
       ReturnFalse;
    if(!cQueryResidual.Init(0, index++, OpenCL, iScenarios * iDimension, iScenarios * iDimension,
-                            iDimension, iQueries, 1, optimization_type, batch))
+                           iDimension, iQueries, 1, optimization_type, batch))
       ReturnFalse;
    if(!cMHAOutput.Init(0, index++, OpenCL, iQueries * iDimension, optimization_type, batch))
       ReturnFalse;
@@ -23571,25 +24195,25 @@ bool CNeuronScenarioCrossAttention::InitHolders(uint myIndex,
    if(!bCritic)
      {
       if(!cHistoryStack.Init(0, index++, OpenCL, iStackSize, mpi_dimension, 1, optimization_type, batch))
-        { PrintFormat("ScenarioCross Init: history_stack S=%u D=%u",iStackSize,mpi_dimension); ReturnFalse; }
+        { PrintFormat("ScenarioCross Init: history_stack S=%u D=%u", iStackSize, mpi_dimension); ReturnFalse; }
       if(!cHistoryTTM.Init(0, index++, OpenCL, mpi_dimension, iScenarios, iStackSize,
                            iTopK, optimization_type, batch))
-        { PrintFormat("ScenarioCross Init: history_ttm K=%u S=%u D=%u",iScenarios,iStackSize,mpi_dimension); ReturnFalse; }
+        { PrintFormat("ScenarioCross Init: history_ttm K=%u S=%u D=%u", iScenarios, iStackSize, mpi_dimension); ReturnFalse; }
       //--- Flash attention receives preprojected Key/Value pairs.  Unlike the
       //--- generic cross-attention kernel it tiles an arbitrary token sequence
       //--- through a local group bounded by the device capability.
       if(!cHistoryTokenProjection.Init(0, index++, OpenCL, iDimension, iDimension, 2 * mpi_dimension, tokens,
                                        optimization_type, batch))
-        { PrintFormat("ScenarioCross Init: history_tokens T=%u D=%u",tokens,mpi_dimension); ReturnFalse; }
+        { PrintFormat("ScenarioCross Init: history_tokens T=%u D=%u", tokens, mpi_dimension); ReturnFalse; }
       if(!cHistoryMarket.Init(0, index++, OpenCL, mpi_key, mpi_heads, false, iStackSize, tokens,
                               optimization_type, batch))
-        { PrintFormat("ScenarioCross Init: history_market Q=%u K=%u D=%u",iStackSize,tokens,mpi_dimension); ReturnFalse; }
+        { PrintFormat("ScenarioCross Init: history_market Q=%u K=%u D=%u", iStackSize, tokens, mpi_dimension); ReturnFalse; }
       if(!cHistoryContext.Init(0, index++, OpenCL, mpi_dimension, mpi_key, mpi_heads, 1,
                                mpi_dimension, iStackSize, optimization_type, batch))
-        { PrintFormat("ScenarioCross Init: history_context S=%u D=%u",iStackSize,mpi_dimension); ReturnFalse; }
+        { PrintFormat("ScenarioCross Init: history_context S=%u D=%u", iStackSize, mpi_dimension); ReturnFalse; }
       if(!cScenarioHistory.Init(0, index++, OpenCL, mpi_dimension, mpi_key, mpi_heads, iScenarios,
                                 mpi_dimension, 1, optimization_type, batch))
-        { PrintFormat("ScenarioCross Init: scenario_refine K=%u D=%u",iScenarios,mpi_dimension); ReturnFalse; }
+        { PrintFormat("ScenarioCross Init: scenario_refine K=%u D=%u", iScenarios, mpi_dimension); ReturnFalse; }
      }
    cQueryGradient.SetActivationFunction(None);
    cWz.SetActivationFunction(None);
@@ -23661,9 +24285,10 @@ bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
                          iQueries * iDimension))
          ReturnFalse;
      }
-   else if(!ScalarToVector(forecast.GetPi(), cAttentionTranspose.getOutput(), cHeadGate.getOutput(),
-                           iQueries * iDimension))
-      ReturnFalse;
+   else
+      if(!ScalarToVector(forecast.GetPi(), cAttentionTranspose.getOutput(), cHeadGate.getOutput(),
+                         iQueries * iDimension))
+         ReturnFalse;
    if(!cHeadGateTranspose.FeedForward(cHeadGate.AsObject()))
       ReturnFalse;
    if(!cOutputProjection.FeedForward(cHeadGateTranspose.AsObject()))
@@ -23706,7 +24331,7 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
                          iQueries * iDimension))
          ReturnFalse;
       if(!cAttentionTranspose.CalcHiddenGradients(cScenarioHistory.AsObject(), cHistoryContext.getOutput(),
-                                                   cHistoryContext.getGradient(), None))
+            cHistoryContext.getGradient(), None))
          ReturnFalse;
       if(!cHistoryTTM.CalcHiddenGradients(cHistoryContext.AsObject(), cHistoryMarket.getOutput(),
                                           cHistoryMarket.getGradient(), None))
@@ -23714,14 +24339,15 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
       if(!cAttentionTranspose.CalcHiddenGradients(cHistoryTTM.AsObject(), cHistoryStack.getOutput(), NULL, None))
          ReturnFalse;
       if(!cHistoryStack.CalcHiddenGradients(cHistoryMarket.AsObject(), cHistoryTokenProjection.getOutput(),
-                                             cHistoryTokenProjection.getGradient(), None))
+                                            cHistoryTokenProjection.getGradient(), None))
          ReturnFalse;
       if(!cTokenPE.CalcHiddenGradients(cHistoryTokenProjection.AsObject()))
          ReturnFalse;
      }
-   else if(!ScalarToVector(forecast.GetPi(), cHeadGate.getGradient(), cAttentionTranspose.getGradient(),
-                           iQueries * iDimension))
-      ReturnFalse;
+   else
+      if(!ScalarToVector(forecast.GetPi(), cHeadGate.getGradient(), cAttentionTranspose.getGradient(),
+                         iQueries * iDimension))
+         ReturnFalse;
    if(!cAttention.CalcHiddenGradients(cAttentionTranspose.AsObject()))
       ReturnFalse;
    if(!cQueryGradient.CalcHiddenGradients(cQueryResidual.AsObject()))
@@ -23896,9 +24522,9 @@ bool CNeuronScenarioCrossAttention::Load(const int file_handle, COpenCLMy *open_
       ReturnFalse;
    if(!open_cl)
       ReturnFalse;
-   //--- Load() reconstructs bCritic and all nested holders.  Rebinding before
-   //--- that point would touch default-constructed actor-only holders.
-   OpenCL=open_cl;
+//--- Load() reconstructs bCritic and all nested holders.  Rebinding before
+//--- that point would touch default-constructed actor-only holders.
+   OpenCL = open_cl;
    if(!Load(file_handle))
       ReturnFalse;
    return true;
