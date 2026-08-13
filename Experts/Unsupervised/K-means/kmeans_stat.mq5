@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                  kmeans_stat.mq5 |
-//|                                              Copyright 2022, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| kmeans_stat.mq5 |
+//| Copyright 2022, DNG |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2022, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -37,7 +37,7 @@ input int                  SlowPeriod  =  26;            //Slow
 input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CSymbolInfo         *Symb;
 MqlRates            Rates[];
@@ -127,7 +127,9 @@ void OnChartEvent(const int id,
       Stat();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S ta t implementation.                                         |
 //+------------------------------------------------------------------+
 void Stat(void)
   {
@@ -190,6 +192,7 @@ void Stat(void)
    int total = bars - (int)HistoryBars - 480;
    double data[], fractals[];
    if(ArrayResize(data, total * 8 * HistoryBars) <= 0 ||
+//| ArrayResizeimplementation.                                   |
       ArrayResize(fractals, total * 3) <= 0)
      {
       ExpertRemove();
@@ -286,3 +289,4 @@ void Stat(void)
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
+

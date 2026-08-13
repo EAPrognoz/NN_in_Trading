@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
-//|                                                      ProjectName |
-//|                                      Copyright 2020, CompanyName |
-//|                                       http://www.companyname.net |
+//| ProjectName |
+//| Copyright 2020, CompanyName |
+//| http://www.companyname.net |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_DECLARATIONS_MQH
 #ifndef NEURONET_DEFINITIONS_MQH
@@ -14,7 +14,7 @@
 #include "NeuroNet_Definitions.mqh"
 #endif // NEURONET_DEFINITIONS_MQH
 //+------------------------------------------------------------------+
-//| NeuroNet class declarations in original dependency order
+//| NeuroNet class declarations in original dependency order |
 //+------------------------------------------------------------------+
 class CConnection : public CObject
   {
@@ -103,6 +103,7 @@ public:
    virtual bool      updateInputWeights(CObject *&SourceObject);     ///< Dispatch method for defining the subroutine for updating weights.@param SourceObject Pointer to previos layer.
    //---
    virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
+   // Loads .
    virtual bool      Load(int const file_handle)///< Load method @param[in] file_handle handle of file @return logical result of operation
      {
       activation = (ENUM_ACTIVATION)FileReadInteger(file_handle, INT_VALUE);
@@ -159,7 +160,7 @@ public:
    ulong             GetBufferSize(const int buffer_index) const;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CLayer: public CArrayObj
   {
@@ -298,7 +299,7 @@ public:
    virtual bool      operator= (CLayerDescription *source)  { return Copy(source); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CBufferFloat;
 class CNeuronRAGMemory;
@@ -591,6 +592,7 @@ public:
    virtual bool      SetGradient(CBufferFloat *buffer, bool delete_prev = true);
    virtual bool      SetOutput(CBufferFloat *buffer, bool delete_prev = true);
    virtual bool      SetGradientIndex(int index)   {  return Gradient.BufferSet(index);   }  ///< Method for change index of gradient buffer.@param[in] New index of buffer
+   // Gets WeightsIndex.
    virtual int       getWeightsIndex(void)         const
      {
       if(!Weights)
@@ -729,7 +731,7 @@ public:
    virtual uint      GetUnits(void) const { return Output.Total() / (iWindowOut * iVariables); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronConvSAMOCL    :  public CNeuronConvOCL
   {
@@ -861,6 +863,7 @@ public:
    //---
    CObject*          operator[](const int i) const               { return(m_data[i]); }
    //---
+   // Creates or initializes Element.
    virtual bool      CreateElement(const int index)
      {
       if(index < 0)
@@ -875,6 +878,7 @@ public:
       return(CheckPointer(m_data[index]) != POINTER_INVALID);
      }
    //---
+   // Sets OpenCL.
    virtual bool      SetOpenCL(COpenCLMy *open_cl)
      {
       if(!open_cl)
@@ -1048,7 +1052,7 @@ public:
    virtual CBufferFloat   *getWeights(void) override { return BatchOptions; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronLSTMOCL : public CNeuronBaseOCL
   {
@@ -1091,13 +1095,13 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #ifndef class_vae
 #include "..\Unsupervised\AE\VAE.mqh"
 #endif
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSoftMaxOCL    :  public CNeuronBaseOCL
   {
@@ -1129,7 +1133,7 @@ public:
    virtual uint      Heads(void) const {  return iHeads; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFQF : protected CNeuronBaseOCL
   {
@@ -1169,7 +1173,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMLMHSparseAttention  : public CNeuronMLMHAttentionOCL
   {
@@ -1193,7 +1197,7 @@ public:
    virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiModel : public CNeuronBaseOCL
   {
@@ -1222,7 +1226,7 @@ public:
    virtual int       Type(void)        const                      {  return defNeuronMultiModels;                  }///< Identificator of class.@return Type of class
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronConcatenate   :  public CNeuronBaseOCL
   {
@@ -1253,7 +1257,7 @@ public:
    virtual CBufferFloat   *getConcatWeights(void)        {  return ConcWeights;     }                 ///< Get pointer of gradient buffer @return Pointer to object
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSoftActorCritic  :  public CNeuronFQF
   {
@@ -1289,7 +1293,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronEmbeddingOCL  :  public CNeuronBaseOCL
   {
@@ -1329,7 +1333,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPositionEncoder  :  public CNeuronBaseOCL
   {
@@ -1354,7 +1358,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTransposeOCL : public CNeuronBaseOCL
   {
@@ -1382,7 +1386,7 @@ public:
    virtual uint      GetCount(void) const { return iCount; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMH2AttentionOCL       :  public CNeuronBaseOCL
   {
@@ -1425,7 +1429,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCGConvOCL  :  public CNeuronBaseOCL
   {
@@ -1457,7 +1461,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMFTOCL  : public CNeuronMLMHAttentionOCL
   {
@@ -1493,7 +1497,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronXCiTOCL  : public CNeuronMLMHAttentionOCL
   {
@@ -1536,7 +1540,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDOTOCL     :  public CNeuronBaseOCL
   {
@@ -1585,7 +1589,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFAQOCL  : public CNeuronBaseOCL
   {
@@ -1620,7 +1624,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCrossAttention : public CNeuronMH2AttentionOCL
   {
@@ -1656,7 +1660,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGTE : public CNeuronBaseOCL
   {
@@ -1702,7 +1706,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CResidualConv  :  public CNeuronBaseOCL
   {
@@ -1736,7 +1740,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CCCMREncoder   :  public CNeuronBaseOCL
   {
@@ -1770,7 +1774,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCrossXCiTOCL  :  public CNeuronXCiTOCL
   {
@@ -1805,7 +1809,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCCMROCL    :  public CNeuronBaseOCL
   {
@@ -1843,7 +1847,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronNODEOCL     :  public CNeuronBaseOCL
   {
@@ -1889,7 +1893,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronConformer  :  public CNeuronBaseOCL
   {
@@ -1936,7 +1940,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRevINDenormOCL   :  public CNeuronBatchNormOCL
   {
@@ -1963,7 +1967,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override  {  return true;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronClientOCL  :  public CNeuronBaseOCL
   {
@@ -2000,7 +2004,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronLearnabledPE  :  public CNeuronBaseOCL
   {
@@ -2026,6 +2030,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
    virtual CBufferFloat* GetPE(void)   const { return cPositionEncoder.getOutput(); }
+   // Implements AddPEGradient.
    virtual bool      AddPEGradient(CBufferFloat *grad)
      {
       if(!grad ||
@@ -2036,7 +2041,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUShapeAttention  :  public CNeuronBaseOCL
   {
@@ -2065,7 +2070,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPatching   :  public CNeuronBaseOCL
   {
@@ -2098,7 +2103,7 @@ public:
    //---
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTiDEOCL :  public CNeuronBaseOCL
   {
@@ -2137,7 +2142,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronLegendreWavelets :  public CNeuronConvOCL
   {
@@ -2152,7 +2157,7 @@ public:
    virtual int       Type(void)   const   {  return defNeuronLegendreWavelets;   }///< Identificator of class.@return Type of class
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFEDW : public CNeuronBaseOCL
   {
@@ -2189,7 +2194,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFITSOCL :  public CNeuronBaseOCL
   {
@@ -2241,7 +2246,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFreDFOCL   :  public CNeuronBaseOCL
   {
@@ -2285,7 +2290,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronComplexMLMHAttention :  public CNeuronMLMHAttentionOCL
   {
@@ -2306,7 +2311,7 @@ public:
    virtual int       Type(void)   const   {  return defNeuronComplexMLMHAttentionOCL;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronATFNetOCL  :  public CNeuronBaseOCL
   {
@@ -2373,7 +2378,7 @@ public:
    virtual CBufferFloat   *getWeights(void);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronS3   :  public CNeuronBaseOCL
   {
@@ -2408,7 +2413,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMLMHAttentionMLKV :  public CNeuronMLMHAttentionOCL
   {
@@ -2439,7 +2444,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMLCrossAttentionMLKV :  public CNeuronMLMHAttentionMLKV
   {
@@ -2475,7 +2480,7 @@ public:
    virtual uint      GetSecondBufferSize(void)  {  return (iWindowKV * iUnitsKV); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCSCMOCL :  public CNeuronBaseOCL
   {
@@ -2510,7 +2515,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSPyrAttentionOCL :  public CNeuronBaseOCL
   {
@@ -2552,7 +2557,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPLROCL  :  public CNeuronBaseOCL
   {
@@ -2580,7 +2585,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTPMEncoder :  public CNeuronLSTMOCL
   {
@@ -2614,7 +2619,7 @@ public:
    //virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTPM :  public CNeuronLSTMOCL
   {
@@ -2647,7 +2652,7 @@ public:
    //virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTNNEncoder  :  public CNeuronMLMHAttentionMLKV
   {
@@ -2665,7 +2670,7 @@ public:
    virtual int       Type(void)   override const   {  return defNeuronSTNNEncoder;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTNNDecoder   :  public CNeuronMLCrossAttentionMLKV
   {
@@ -2693,7 +2698,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSparseTSF  :  public CNeuronBaseOCL
   {
@@ -2722,7 +2727,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTEMPOOCL   :  public CNeuronBaseOCL
   {
@@ -2801,7 +2806,7 @@ public:
    virtual CBufferFloat   *getWeights(void)  override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMVMHAttentionMLKV :  public CNeuronMLMHAttentionOCL
   {
@@ -2837,7 +2842,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMVCrossAttentionMLKV :  public CNeuronMVMHAttentionMLKV
   {
@@ -2871,7 +2876,7 @@ public:
    virtual CBufferFloat* getWeights(void);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronInjectTST  :  public CNeuronBaseOCL
   {
@@ -2907,7 +2912,7 @@ public:
    virtual CBufferFloat   *getWeights(void)  override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSSMOCL  :  public CNeuronBaseOCL
   {
@@ -2942,7 +2947,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMambaOCL   :  public CNeuronBaseOCL
   {
@@ -2978,7 +2983,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMambaBlockOCL :  public   CNeuronBaseOCL
   {
@@ -3009,7 +3014,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTrajLLMOCL :  public CNeuronBaseOCL
   {
@@ -3057,7 +3062,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUniTraj    :  public CNeuronBaseOCL
   {
@@ -3113,7 +3118,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHiVTAAEncoder : public CNeuronMVMHAttentionMLKV
   {
@@ -3132,7 +3137,7 @@ public:
    virtual int       Type(void)   const   {  return defNeuronHiVTAAEncoder;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTransposeRCDOCL  :  public CNeuronTransposeOCL
   {
@@ -3151,7 +3156,7 @@ public:
 
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHiVTOCL    :  public CNeuronBaseOCL
   {
@@ -3201,7 +3206,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPointNetOCL   :  public CNeuronBaseOCL
   {
@@ -3242,7 +3247,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPointNet2Local   :  public CNeuronConvOCL
   {
@@ -3281,7 +3286,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPointNet2OCL   :  public CNeuronPointNetOCL
   {
@@ -3312,7 +3317,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPointFormer   :  public CNeuronPointNet2OCL
   {
@@ -3349,7 +3354,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSceneSpecific :  public CNeuronMLCrossAttentionMLKV
   {
@@ -3380,7 +3385,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMLMHSceneConditionAttention  :  public CNeuronMLMHAttentionMLKV
   {
@@ -3408,7 +3413,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHyperDet   :  public CNeuronPointNet2OCL
   {
@@ -3445,7 +3450,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSEFormer   :    public CNeuronPointNet2OCL
   {
@@ -3495,7 +3500,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSPFormer   : public CNeuronBaseOCL
   {
@@ -3569,7 +3574,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMAFT   : public CNeuronBaseOCL
   {
@@ -3647,7 +3652,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGRES :  public CNeuronMAFT
   {
@@ -3687,7 +3692,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGEGWA   :  public CNeuronUShapeAttention
   {
@@ -3727,7 +3732,7 @@ public:
    virtual void      AddNeckGradient(const bool flag) {  bAddNeckGradient = flag; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronLPC  :  public CNeuronMLCrossAttentionMLKV
   {
@@ -3758,7 +3763,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronOCM  :  public CNeuronBaseOCL
   {
@@ -3823,7 +3828,7 @@ public:
    virtual uint      GetContextWindow(void)     const { return iContWindow; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRefMask    :  public CNeuronBaseOCL
   {
@@ -3862,7 +3867,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRelativeSelfAttention   :  public CNeuronBaseOCL
   {
@@ -3915,7 +3920,7 @@ public:
    virtual uint      GetUnits(void) const { return iUnits; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRMAT :  public CNeuronBaseOCL
   {
@@ -3944,16 +3949,19 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override;
    //---
+   // Gets Window.
    virtual uint      GetWindow(void) const
      {
       CNeuronRelativeSelfAttention* neuron = cLayers[0];
       return (!neuron ? 0 : neuron.GetWindow());
      }
+   // Gets Units.
    virtual uint      GetUnits(void) const
      {
       CNeuronRelativeSelfAttention* neuron = cLayers[0];
       return (!neuron ? 0 : neuron.GetUnits());
      }
+   // Implements TrainMode.
    virtual void      TrainMode(bool flag) override
      {
       bTrain = flag;
@@ -3966,6 +3974,7 @@ public:
         }
      }
    //---
+   // Sets Gradient.
    virtual bool      SetGradient(CBufferFloat *buffer, bool delete_prev = true)
      {
       CNeuronBaseOCL *last = cLayers[-1];
@@ -3975,6 +3984,7 @@ public:
          ReturnFalse;
       return true;
      }
+   // Sets Output.
    virtual bool      SetOutput(CBufferFloat *buffer, bool delete_prev = true)
      {
       CNeuronBaseOCL *last = cLayers[-1];
@@ -3986,7 +3996,7 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMHAttentionPooling  :  public   CNeuronBaseOCL
   {
@@ -4018,7 +4028,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMotifs    :  public CNeuronBaseOCL
   {
@@ -4048,7 +4058,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiScaleAttention :  public CNeuronBaseOCL
   {
@@ -4082,7 +4092,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMolformer  :  public CNeuronRMAT
   {
@@ -4099,7 +4109,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronMolformer; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRelativeCrossAttention   :  public CNeuronRelativeSelfAttention
   {
@@ -4136,7 +4146,7 @@ public:
    virtual uint      GetUnitsKV(void) const { return iUnitsKV; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMotifEncoder  :  public CNeuronRMAT
   {
@@ -4152,7 +4162,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronMotifEncoder; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPropertyAwareAttention    :  public CNeuronRMAT
   {
@@ -4175,7 +4185,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronPropertyAwareAttention; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAMCT    :  public CNeuronBaseOCL
   {
@@ -4210,7 +4220,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronNAFS :  public CNeuronBaseOCL
   {
@@ -4248,7 +4258,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronBatchNormWithNoise  :  public CNeuronBatchNormOCL
   {
@@ -4264,7 +4274,7 @@ public:
    virtual int       Type(void)        const                      {  return defNeuronBatchNormWithNoise;    }///< Identificator of class.@return Type of class
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDiffusion  : public CNeuronUShapeAttention
   {
@@ -4293,7 +4303,7 @@ public:
    virtual void      TrainMode(bool flag)                         {  bTrain = flag; cAddNoise.TrainMode(bTrain); } ///< Set Training Mode Flag
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHyperProjection   :  public CNeuronBaseOCL
   {
@@ -4319,7 +4329,7 @@ public:
    virtual bool      Load(int const file_handle);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHyperboloids  :  public CNeuronBaseOCL
   {
@@ -4358,7 +4368,7 @@ public:
    virtual void      TrainMode(bool flag);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHypDiff :  public CNeuronRMAT
   {
@@ -4373,11 +4383,13 @@ public:
    //---
    virtual int       Type(void) override   const   {  return defNeuronHypDiff; }
    //---
+   // Gets Window.
    virtual uint      GetWindow(void) const override
      {
       CNeuronRMAT* neuron = cLayers[1];
       return (!neuron ? 0 : neuron.GetWindow() - 1);
      }
+   // Gets Units.
    virtual uint      GetUnits(void) const override
      {
       CNeuronRMAT* neuron = cLayers[1];
@@ -4385,7 +4397,7 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronBaseSAMOCL  :  public CNeuronBaseOCL
   {
@@ -4415,7 +4427,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPSBlock :  public CNeuronConvSAMOCL
   {
@@ -4443,7 +4455,7 @@ public:
    //virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPSformer   :  public CNeuronBaseSAMOCL
   {
@@ -4473,7 +4485,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMarketObserver   :  public CNeuronRMAT
   {
@@ -4488,7 +4500,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronMarketObserver; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRLAgent :  public   CNeuronRMAT
   {
@@ -4504,7 +4516,7 @@ public:
    virtual int       Type(void)   const   override {  return defNeuronRLAgent;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronControlAgent  :  public CNeuronRMAT
   {
@@ -4528,7 +4540,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronControlAgent; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMASA    :  public CNeuronBaseSAMOCL
   {
@@ -4570,7 +4582,7 @@ public:
    virtual bool      SetNormLayer(int NormLayer, CNeuronBatchNormOCL *normLayer);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPLRMultiAgentsOCL  :  public CNeuronPLROCL
   {
@@ -4598,7 +4610,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCrossSectionalAnalysis :  public CNeuronMVMHAttentionMLKV
   {
@@ -4627,7 +4639,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTransposeVRCOCL  :  public CNeuronTransposeOCL
   {
@@ -4655,7 +4667,7 @@ public:
    virtual uint      GetVariables(void) const { return iWindow; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTemporalAnalysis :  public CNeuronCrossSectionalAnalysis
   {
@@ -4682,7 +4694,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPortfolioGenerator  :  public CNeuronBaseOCL
   {
@@ -4719,7 +4731,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMASAAT  :  public CNeuronPortfolioGenerator
   {
@@ -4731,9 +4743,11 @@ protected:
    CNeuronTemporalAnalysis          cTemporalAnalysis;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)  override
      { return        feedForward(NeuronOCL); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
+   // Calculates InputGradients.
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
      { return        calcInputGradients(NeuronOCL); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
@@ -4756,7 +4770,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMHConvOCL  :  public CNeuronConvOCL
   {
@@ -4779,7 +4793,7 @@ public:
    virtual bool      Load(int const file_handle) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMHFeedForward   :  public CNeuronBaseOCL
   {
@@ -4806,6 +4820,7 @@ public:
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
+   // Sets Gradient.
    virtual bool      SetGradient(CBufferFloat *buffer, bool delete_prev = true)
      {
       CNeuronBaseOCL *last = GetPointer(acConvolutions[acConvolutions.Size() - 1]);
@@ -4815,6 +4830,7 @@ public:
          ReturnFalse;
       return true;
      }
+   // Sets Output.
    virtual bool      SetOutput(CBufferFloat *buffer, bool delete_prev = true)
      {
       CNeuronBaseOCL *last = GetPointer(acConvolutions[acConvolutions.Size() - 1]);
@@ -4827,7 +4843,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDMHAttention  :  public CNeuronRMAT
   {
@@ -4842,7 +4858,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronDMHAttention; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCrossDMHAttention   :  public CNeuronRMAT
   {
@@ -4868,7 +4884,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronCrossDMHAttention; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronLegendreWaveletsHL :  public CNeuronConvOCL
   {
@@ -4887,7 +4903,7 @@ public:
    virtual uint      GetUnits(void)  const {return (Neurons() / (iVariables * iWindowOut)); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDecouplingFlow   :  public   CNeuronLegendreWaveletsHL
   {
@@ -4913,7 +4929,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDilatedCasualConv   :  public CNeuronRMAT
   {
@@ -4929,7 +4945,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronDilatedCasualConv; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultitaskStockformer   :  public CNeuronBaseOCL
   {
@@ -4969,7 +4985,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMemory  :  public CNeuronRelativeCrossAttention
   {
@@ -4980,9 +4996,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override  { return feedForward(NeuronOCL); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+   // Calculates InputGradients.
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
      { return        calcInputGradients(NeuronOCL); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
      { return        updateInputWeights(NeuronOCL); }
 
@@ -5006,7 +5024,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFinMem   :  public CNeuronRelativeCrossAttention
   {
@@ -5044,7 +5062,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronLowLevelReflection :   public CNeuronMemory
   {
@@ -5077,7 +5095,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHighLevelReflection :  public CNeuronMemory
   {
@@ -5116,7 +5134,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMoreLessEqual :  public CNeuronBaseOCL
   {
@@ -5130,7 +5148,7 @@ public:
                     ~CNeuronMoreLessEqual(void) {};
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFinAgent   :  public CNeuronRelativeCrossAttention
   {
@@ -5169,7 +5187,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMemoryDistil  :  public CNeuronMemory
   {
@@ -5204,7 +5222,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFinConAgent   :  public CNeuronRelativeCrossAttention
   {
@@ -5217,9 +5235,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override  { return feedForward(NeuronOCL); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+   // Calculates InputGradients.
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
      { return        calcInputGradients(NeuronOCL); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
      { return        updateInputWeights(NeuronOCL); }
 
@@ -5243,7 +5263,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFinConManager   :  public CNeuronFinConAgent
   {
@@ -5283,7 +5303,7 @@ public:
    virtual void      TrainMode(bool flag);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMacroHFTHyperAgent  :  public CNeuronSoftMaxOCL
   {
@@ -5318,7 +5338,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMacroHFT   :  public CNeuronBaseOCL
   {
@@ -5352,7 +5372,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMacroHFTvsRiskManager  :  public CResidualConv
   {
@@ -5389,7 +5409,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiScaleRelativeSelfAttention   :  public CNeuronRelativeSelfAttention
   {
@@ -5404,7 +5424,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronMultiScaleRelativeSelfAttention; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiScaleRelativeCrossAttention   :  public CNeuronRelativeCrossAttention
   {
@@ -5418,7 +5438,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronMultiScaleRelativeCrossAttention; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRecursiveAttention  :  public CNeuronMultiScaleRelativeCrossAttention
   {
@@ -5460,7 +5480,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronLinerAttention   :  public CNeuronBaseOCL
   {
@@ -5498,7 +5518,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHidformerTSAgent    :  public CResidualConv
   {
@@ -5535,7 +5555,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHidformerFreqAgent    :  public CResidualConv
   {
@@ -5573,7 +5593,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHidformer  :  public CNeuronBaseOCL
   {
@@ -5608,7 +5628,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronResNeXtBottleneck :  public CNeuronConvOCL
   {
@@ -5642,7 +5662,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronResNeXtResidual:  public CNeuronConvOCL
   {
@@ -5673,7 +5693,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronResNeXtBlock :  public CNeuronBaseOCL
   {
@@ -5704,7 +5724,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuron2DSSMOCL  :  public CNeuronBaseOCL
   {
@@ -5748,7 +5768,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronChimera    :  public CNeuronBaseOCL
   {
@@ -5781,7 +5801,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMoT  :  public CNeuronMHAttentionPooling
   {
@@ -5813,7 +5833,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronChimeraPlus    :  public CNeuronChimera
   {
@@ -5845,7 +5865,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHypridDecoder :  public CNeuronHidformer
   {
@@ -5876,7 +5896,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAttraos :  public CNeuronBaseOCL
   {
@@ -5921,7 +5941,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTopKGates  :  public CNeuronSoftMaxOCL
   {
@@ -5958,7 +5978,7 @@ public:
    virtual uint      GetUnits(void) const { return cProjection.GetUnits(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMoE  :  public CNeuronBaseOCL
   {
@@ -5988,11 +6008,12 @@ public:
    //virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
+   // Implements TrainMode.
    virtual void      TrainMode(bool flag)
      {  bTrain = flag;  cGates.TrainMode(bTrain); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronChanelMask :  public CNeuronBaseOCL
   {
@@ -6027,7 +6048,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDUET :  public CNeuronTransposeOCL
   {
@@ -6071,11 +6092,12 @@ public:
    //virtual bool       WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
+   // Implements TrainMode.
    virtual void      TrainMode(bool flag)
      {  bTrain = flag; cExperts.TrainMode(bTrain); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiWindowsConvOCL    :  public CNeuronConvOCL
   {
@@ -6100,6 +6122,7 @@ public:
    //---
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
+   // Gets Window.
    virtual int       GetWindow(uint index)
      {
       if(index >= aiWindows.Size())
@@ -6109,7 +6132,7 @@ public:
    virtual uint      GetUnits(void) const override { return CNeuronConvOCL::GetUnits() / aiWindows.Size(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAdaBN   :  public CNeuronMoE
   {
@@ -6124,7 +6147,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronAdaBN; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronComplexConvOCL    :  public CNeuronConvOCL
   {
@@ -6146,7 +6169,7 @@ public:
    virtual int       Type(void)   const   {  return defNeuronComplexConvOCL;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronComplexMVMHMaskAttention :  public CNeuronBaseOCL
   {
@@ -6189,7 +6212,7 @@ public:
    virtual void               SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCATCH   :  public CNeuronTransposeOCL
   {
@@ -6239,7 +6262,7 @@ public:
    virtual void               SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSkillsEncoder   :  public CNeuronSoftMaxOCL
   {
@@ -6271,7 +6294,7 @@ public:
    virtual void               SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHiSSDLowLevelControler:  public CNeuronConvOCL
   {
@@ -6315,7 +6338,7 @@ public:
    virtual void               SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCGLSTMOCL : public CNeuronBaseOCL
   {
@@ -6347,7 +6370,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMHProbAttention :  public CResidualConv
   {
@@ -6395,7 +6418,7 @@ public:
    virtual void               SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTSPositionEncoder   :  public CNeuronBaseOCL
   {
@@ -6432,7 +6455,7 @@ public:
    virtual uint               GetUnits(void) const { return cProjection.GetUnits(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CMamba4CastEmbeding :   public CNeuronBaseOCL
   {
@@ -6463,7 +6486,7 @@ public:
    virtual void               SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiWindowsConvWPadOCL    :  public CNeuronConvOCL
   {
@@ -6494,7 +6517,7 @@ public:
    virtual uint      GetUnits(void) const { return Neurons() / (iVariables * GetWindowsSize() * iWindowOut); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronConcatDiff:  public CNeuronBaseOCL
   {
@@ -6520,7 +6543,7 @@ public:
    virtual bool      Load(int const file_handle) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMantisPatching   :  public CNeuronTransposeOCL
   {
@@ -6553,7 +6576,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMantisAttentionUnit :  public CNeuronSoftMaxOCL
   {
@@ -6583,7 +6606,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTimeFoundPatching   :  public CNeuronConvOCL
   {
@@ -6619,7 +6642,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTimeFoundTransformerUnit  :  public CNeuronCrossDMHAttention
   {
@@ -6627,12 +6650,15 @@ protected:
    CNeuronMVMHAttentionMLKV   cSelfAttention;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
      { return        feedForward(NeuronOCL); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
+   // Calculates InputGradients.
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
      { return        calcInputGradients(NeuronOCL); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
      { return        updateInputWeights(NeuronOCL); }
 
@@ -6653,7 +6679,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSwiGLUOCL  :  public   CNeuronBaseOCL
   {
@@ -6688,7 +6714,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMaskMultiWinConv    :  public CNeuronConvOCL
   {
@@ -6717,7 +6743,7 @@ public:
    virtual bool      Load(int const file_handle) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTimeMoESparseExperts   :  public CNeuronBaseOCL
   {
@@ -6755,19 +6781,22 @@ public:
    virtual uint      GetUnits(void) const       { return cSharedIn.GetUnits(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTimeMoEAttention   :  public CNeuronCrossDMHAttention
   {
 protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
      { return        feedForward(NeuronOCL); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
+   // Calculates InputGradients.
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
      { return        calcInputGradients(NeuronOCL); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
      { return        updateInputWeights(NeuronOCL); }
 
@@ -6785,7 +6814,7 @@ public:
    virtual int       Type(void) override   const   {  return defNeuronTimeMoEAttention; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAdaptConv    :  public CNeuronConvOCL
   {
@@ -6816,7 +6845,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRoPE  :  public CNeuronPositionEncoder
   {
@@ -6841,7 +6870,7 @@ public:
    virtual int       Type(void) override const {  return defNeuronRoPE; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CParams  :  public   CNeuronBaseOCL
   {
@@ -6874,7 +6903,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronK2VAEEncoder   :  public CNeuronBaseOCL
   {
@@ -6947,7 +6976,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronInterpolationAttention :  public CNeuronBaseOCL
   {
@@ -6989,7 +7018,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAGCN    :  public CNeuronBaseOCL
   {
@@ -7036,7 +7065,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGinARCell  :  public CNeuronBaseOCL
   {
@@ -7075,7 +7104,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGinAR   :  public CNeuronSwiGLUOCL
   {
@@ -7115,7 +7144,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPeriodNorm :  public CNeuronBaseOCL
   {
@@ -7149,7 +7178,7 @@ public:
    virtual uint      GetUnits(void) const { return iCount; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAdaptSpatialNorm :  public CNeuronBaseOCL
   {
@@ -7191,7 +7220,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSCNNEncoder   :  public CNeuronTransposeOCL
   {
@@ -7232,7 +7261,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSCNN    :  public   CNeuronBaseOCL
   {
@@ -7263,7 +7292,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAttentNorm :  public CNeuronBaseOCL
   {
@@ -7308,7 +7337,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {  activation = None; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSAttentNorm :  public CNeuronTransposeOCL
   {
@@ -7347,7 +7376,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {  activation = None; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPolynomialRegression   :  public CNeuronBaseOCL
   {
@@ -7382,7 +7411,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSSCNNEncoder   :  public CNeuronTransposeOCL
   {
@@ -7430,7 +7459,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSSCNN    :  public   CNeuronSCNN
   {
@@ -7450,7 +7479,7 @@ public:
    virtual int       Type(void) override const  {  return defNeuronSSCNN; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CCircleParams  :  public CNeuronBaseOCL
   {
@@ -7487,7 +7516,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTQMHA   :  public CNeuronCrossAttention
   {
@@ -7518,7 +7547,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CChebPolinom   :  public CNeuronBaseOCL
   {
@@ -7545,7 +7574,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHimNetGrapConv   :  public CNeuronTransposeRCDOCL
   {
@@ -7573,7 +7602,7 @@ public:
    virtual uint      GetChebK(void) const { return iCount; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHimNetGCRU    :  public CNeuronBaseOCL
   {
@@ -7624,7 +7653,7 @@ public:
    virtual uint      GetChebK(void) const { return cZ_R.GetChebK(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHimNetTempEncoder   : public CNeuronBaseOCL
   {
@@ -7671,7 +7700,7 @@ public:
    virtual bool      SetGradient(CBufferFloat *buffer, bool delete_prev = true);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHimNetSpatEncoder   :     public CNeuronBaseOCL
   {
@@ -7715,7 +7744,7 @@ public:
    virtual bool      SetGradient(CBufferFloat *buffer, bool delete_prev = true);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHimNetEncoder    :  public CNeuronBaseOCL
   {
@@ -7757,7 +7786,7 @@ public:
   };
 
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronHimNetDecoder    :  public CNeuronBaseOCL
   {
@@ -7796,7 +7825,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSNSMHAttention   :  public CNeuronConvOCL
   {
@@ -7835,7 +7864,7 @@ public:
    virtual CBufferFloat* GetIndexes(void) { return cNeighbors.getOutput(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFastGConv   :     public CNeuronBaseOCL
   {
@@ -7895,7 +7924,7 @@ public:
    virtual uint      GetWindow(void) const { return (uint)Neurons() / GetCount(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSAGDFN  :  public CNeuronTransposeOCL
   {
@@ -7931,7 +7960,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpatialEmbedding   :     public CNeuronBaseOCL
   {
@@ -7963,7 +7992,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTempEmbedding    : public CNeuronBaseOCL
   {
@@ -8008,7 +8037,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGlobalLocalAttention   :  public CNeuronMHFeedForward
   {
@@ -8047,7 +8076,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronExtralonger   :  public CNeuronMHAttentionPooling
   {
@@ -8089,7 +8118,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGraphons   :  public CNeuronBaseOCL
   {
@@ -8122,7 +8151,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGraphAttention   :  public CNeuronBaseOCL
   {
@@ -8157,7 +8186,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSparseSoftMax    :  public CNeuronSoftMaxOCL
   {
@@ -8184,7 +8213,7 @@ public:
    virtual uint      DimensionOut(void) const {  return uint(Neurons() / iHeads); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSparseGraphAttention   :  public CNeuronBaseOCL
   {
@@ -8219,7 +8248,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGlobLocGraphAtt  :  public CNeuronMHAttentionPooling
   {
@@ -8251,7 +8280,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronExtralongerGraph   :  public CNeuronExtralonger
   {
@@ -8269,7 +8298,7 @@ public:
    virtual int       Type(void)   const   {  return defNeuronExtralongerGraph;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeConv  :  public CNeuronBaseOCL
   {
@@ -8307,7 +8336,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGateLineAttention  :  public CNeuronSpikeConv
   {
@@ -8349,7 +8378,7 @@ public:
    virtual uint      GetVariables(void) const { return iVariables; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeSparseAttention   :  public CNeuronSpikeConv
   {
@@ -8382,7 +8411,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMoEConv   :  public CNeuronBaseOCL
   {
@@ -8413,7 +8442,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikingBrain  :  public CNeuronBaseOCL
   {
@@ -8448,7 +8477,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeActivation  :  public CNeuronBaseOCL
   {
@@ -8483,7 +8512,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeResNeXtBottleneck :  public CNeuronSpikeActivation
   {
@@ -8516,7 +8545,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeResNeXtResidual :  public CNeuronSpikeResNeXtBottleneck
   {
@@ -8532,7 +8561,7 @@ public:
    virtual int       Type(void)   override const   {  return defNeuronSpikeResNeXtResidual;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeResNeXtBlock   :  public CNeuronSpikeActivation
   {
@@ -8570,7 +8599,7 @@ public:
    virtual uint      GetUnitsOut(void) const { return caTranspose[1].GetWindow(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSSAM    :  public CNeuronSpikeActivation
   {
@@ -8613,7 +8642,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSSAMResNeXtBlock   :  public CNeuronSpikeResNeXtBlock
   {
@@ -8646,7 +8675,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTFS    :  public   CNeuronBaseOCL
   {
@@ -8685,7 +8714,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeConvGRU  :  public CNeuronSpikeActivation
   {
@@ -8725,7 +8754,7 @@ public:
    virtual uint      GetUnits(void) const { return cHt.GetUnits(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAddToStack :  public CNeuronBaseOCL
   {
@@ -8758,7 +8787,7 @@ public:
    virtual uint      GetVariables(void) const { return iVariables; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronStackCorrelation :  public CNeuronBaseOCL
   {
@@ -8790,7 +8819,7 @@ public:
    virtual uint      GetVariables(void) const { return cStack.GetVariables(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTEFlowNetEncoder   :  public CNeuronSpikeConvGRU
   {
@@ -8827,7 +8856,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTEFlowNetResidualBlock :  public CNeuronBaseOCL
   {
@@ -8859,7 +8888,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTEFlowNetDecoder   :  public CNeuronSpikeActivation
   {
@@ -8895,7 +8924,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTEFlowNet  :  public CNeuronSTEFlowNetDecoder
   {
@@ -8930,7 +8959,7 @@ public:
 
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiScaleStackCorrelation :  public CNeuronStackCorrelation
   {
@@ -8965,7 +8994,7 @@ public:
 
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeConvGRU2D  :  public CNeuronSpikeConvGRU
   {
@@ -9001,7 +9030,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronRAFT :  public CNeuronSpikeActivation
   {
@@ -9039,7 +9068,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultScalStackCorrelBySegments :  public CNeuronAddToStack
   {
@@ -9072,7 +9101,7 @@ public:
    virtual uint      SetSegmentSize(void) const { return cCorrelation.GetStackSize(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTMAMFE  :  public CNeuronConvOCL
   {
@@ -9102,7 +9131,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTMAMPA  :  public CNeuronBaseOCL
   {
@@ -9133,7 +9162,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronTMA  :  public CNeuronRAFT
   {
@@ -9163,7 +9192,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeSTConvGRU  :  public CNeuronSpikeActivation
   {
@@ -9211,7 +9240,7 @@ public:
    virtual uint      GetUnits(void) const { return cOt.GetUnits(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFERENet :  public CNeuronSpikeConvGRU
   {
@@ -9243,7 +9272,7 @@ public:
    virtual CNeuronBaseOCL* operator[](const int index) const { return GetLayer(index); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFGDModule  :  public CNeuronBaseOCL
   {
@@ -9287,7 +9316,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronEVMGRFlowNet  :  public CNeuronSpikeActivation
   {
@@ -9320,7 +9349,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeConvBlock   :  public CNeuronBatchNormOCL
   {
@@ -9359,7 +9388,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMSRes   :  public CNeuronBaseOCL
   {
@@ -9395,7 +9424,7 @@ public:
    virtual CBufferFloat   *getWeights(void) override { return (!!cFlow[-1] ? cFlow[-1].getWeights() : NULL); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeQKAttention :  public CNeuronBaseOCL
   {
@@ -9433,7 +9462,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSDSA :  public CNeuronMSRes
   {
@@ -9464,7 +9493,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSDformerUBlock   :   public CNeuronSpikeConvBlock
   {
@@ -9498,7 +9527,7 @@ public:
    virtual CBufferFloat*   GetStack(void);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSDformerFlow   :   public CNeuronSDformerUBlock
   {
@@ -9529,7 +9558,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikePatchStak   :  public CNeuronAddToStack
   {
@@ -9561,7 +9590,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpike2DSSMOCL  :  public CNeuronBaseOCL
   {
@@ -9611,7 +9640,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeMamba2D   :  public CNeuronSpikeConvBlock
   {
@@ -9645,7 +9674,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeSTSSM   :  public CNeuronSpikeConvBlock
   {
@@ -9679,7 +9708,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronESTMEncoder   :  public CNeuronSpikeConvBlock
   {
@@ -9711,7 +9740,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCreateFlow :  public CNeuronSpikePatchStak
   {
@@ -9743,7 +9772,7 @@ public:
    virtual CNeuronBaseOCL* GetState(void) { return cState.AsObject(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronBiDirectCorrelation :  public CNeuronTMAMFE
   {
@@ -9777,7 +9806,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSATMA  :  public CNeuronBaseOCL
   {
@@ -9810,7 +9839,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value)  override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronBAT :  public CNeuronSpikeConvBlock
   {
@@ -9848,7 +9877,7 @@ public:
    virtual CBufferFloat   *getWeights(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeSCM   :  public CNeuronSpikeConvBlock
   {
@@ -9883,7 +9912,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeDepthWiseConv  :  public CNeuronSpikeConvBlock
   {
@@ -9917,7 +9946,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeFAM   :  public CNeuronBatchNormOCL
   {
@@ -9960,7 +9989,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeMDC   :  public CNeuronBatchNormOCL
   {
@@ -10000,7 +10029,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMDS   :  public CNeuronBaseOCL
   {
@@ -10040,7 +10069,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeADM : public CNeuronMDS
   {
@@ -10077,7 +10106,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronBATvADM :  public CNeuronBAT
   {
@@ -10093,7 +10122,7 @@ public:
    virtual int       Type(void)   override const   {  return defNeuronBATvADM;   }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCDCSelfCorrector :  public CNeuronBatchNormOCL
   {
@@ -10128,7 +10157,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeCDC  :  public CNeuronSpikeConvBlock
   {
@@ -10164,7 +10193,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeEEMFLow  :   public CNeuronSpikeCDC
   {
@@ -10205,7 +10234,7 @@ public:
    virtual CBufferFloat   *getWeights(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiScaleExcitation   :  public CNeuronBaseOCL
   {
@@ -10237,7 +10266,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiScaleDifference :  public CNeuronSpikeConvBlock
   {
@@ -10273,7 +10302,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCorrelationEncoder  :  public CNeuronSpikeConvBlock
   {
@@ -10310,7 +10339,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronEDCFlow :  public CNeuronSpikeConvBlock
   {
@@ -10351,7 +10380,7 @@ public:
    virtual CBufferFloat   *getWeights(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCreateICEFlow :  public CNeuronCreateFlow
   {
@@ -10380,7 +10409,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeMFE  :  public CNeuronSpikeConvBlock
   {
@@ -10410,7 +10439,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeMHCrossAttention :  public CNeuronMSRes
   {
@@ -10458,7 +10487,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeMixFusion   :  public CNeuronSpikeConvBlock
   {
@@ -10493,7 +10522,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTFlow :  public CNeuronSpikeConvBlock
   {
@@ -10542,7 +10571,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPSSE :  public CNeuronAddToStack
   {
@@ -10592,7 +10621,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeDepthWiseResidual :  public CNeuronSpikeDepthWiseConv
   {
@@ -10624,7 +10653,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeSuperKernelBlock  :  public CNeuronMSRes
   {
@@ -10656,7 +10685,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeGMA   :  public CNeuronBaseOCL
   {
@@ -10696,7 +10725,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronETROF   :  public   CNeuronAddToStack
   {
@@ -10735,7 +10764,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPSSEFlow   :  public CNeuronSpikeSuperKernelBlock
   {
@@ -10769,7 +10798,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeUSR   :  public CNeuronSpikeADM
   {
@@ -10801,7 +10830,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronInitialFlow   :  public CNeuronBaseOCL
   {
@@ -10837,7 +10866,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSpikeSMR   :  public CNeuronMSRes
   {
@@ -10876,7 +10905,7 @@ public:
    virtual CBufferFloat* GetHidden() const { return cConvGRU.getOutput(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronEVAFlow :  public   CNeuronSpikeSMR
   {
@@ -10887,9 +10916,11 @@ protected:
    CLayer               cDecoder;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
      { return        feedForward(NeuronOCL); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second) override
      { return        updateInputWeights(NeuronOCL); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
@@ -10919,7 +10950,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronResFlowHTR :  public   CNeuronMSRes
   {
@@ -10959,7 +10990,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronResFlow :  public CNeuronSpikeSuperKernelBlock
   {
@@ -10999,7 +11030,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronConfGateTailAwareMoE   :  public CNeuronBaseOCL
   {
@@ -11041,7 +11072,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronResFlowLattice :  public CNeuronResFlow
   {
@@ -11076,7 +11107,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CFieldAwareParams    :  public CNeuronBaseOCL
   {
@@ -11115,7 +11146,7 @@ public:
    virtual uint      GetFields(void) const { return iFields; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFieldAwareConv   :  public CNeuronBaseOCL
   {
@@ -11148,7 +11179,7 @@ public:
    virtual uint      GetFilters(void) const { return Neurons() / GetFields(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMHFAT :  public CNeuronMSRes
   {
@@ -11190,7 +11221,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMHCrossFAT :  public CNeuronMHFAT
   {
@@ -11222,7 +11253,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFieldPatternEmbedding    :  public CNeuronBaseOCL
   {
@@ -11257,7 +11288,7 @@ public:
    virtual CBufferFloat   *getWeights(void) override { return (!!cScore[-2] ? ((CNeuronConvOCL*)cScore[-2]).GetWeightsConv() : NULL); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronAutoToken  :  public CNeuronBaseOCL
   {
@@ -11296,7 +11327,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMultiMixAttention   :  public CNeuronBaseOCL
   {
@@ -11331,7 +11362,7 @@ public:
    virtual uint      GetDimension(void) { return Neurons() / GetUnits(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSparseMoEConv  :  public CNeuronBaseOCL
   {
@@ -11365,7 +11396,7 @@ public:
    virtual CBufferFloat   *getWeights(void) override { return cParams.getWeights(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMTmixAttBlock :  public CNeuronBaseOCL
   {
@@ -11399,7 +11430,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CCrossMHFlashAttention   :  public CNeuronBaseOCL
   {
@@ -11436,7 +11467,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMixFeedForward :  public CNeuronBaseOCL
   {
@@ -11470,7 +11501,7 @@ public:
    virtual CBufferFloat   *getWeights(void) override { return (!!cSceneMoE[-1] ? cSceneMoE[-1].getWeights() : NULL); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronOneTrans   :  public CNeuronMixFeedForward
   {
@@ -11507,7 +11538,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMHTHCrossAttention :  public CNeuronMTmixAttBlock
   {
@@ -11557,7 +11588,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSTCA :  public CNeuronSpikeConvBlock
   {
@@ -11594,7 +11625,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronWeightGenerator :  public CNeuronConvOCL
   {
@@ -11623,7 +11654,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPCGR :  public CNeuronTransposeRCDOCL
   {
@@ -11671,7 +11702,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronADS :  public CNeuronSpikeConvBlock
   {
@@ -11708,7 +11739,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPerTokenFFN   :  public CNeuronFieldAwareConv
   {
@@ -11740,7 +11771,7 @@ public:
    virtual uint      GetWindow(void) const override { return cProj.GetWindow(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronScenariosToken :  public CNeuronFieldPatternEmbedding
   {
@@ -11771,7 +11802,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUnifiedTokenizer :  public CNeuronFieldPatternEmbedding
   {
@@ -11802,7 +11833,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDomainAwareAttention :  public CNeuronPerTokenFFN
   {
@@ -11850,7 +11881,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronFeatureSelfIteration   :  public CNeuronDomainAwareAttention
   {
@@ -11858,6 +11889,7 @@ protected:
    CNeuronAddToStack          cStack;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override
      { return        feedForward(NeuronOCL); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer, CBufferFloat *SecondInput,
@@ -11866,6 +11898,7 @@ protected:
      { return        calcInputGradients(prevLayer); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   // Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override
      { return        updateInputWeights(NeuronOCL); }
 
@@ -11891,7 +11924,7 @@ public:
    virtual CNeuronAddToStack*   GetStack(void) { return cStack.AsObject(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDomainFused  :  public CNeuronPerTokenFFN
   {
@@ -11925,7 +11958,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMDL :  public CNeuronPerTokenFFN
   {
@@ -11961,7 +11994,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUniMixerTokenizer   :  public CNeuronFieldAwareConv
   {
@@ -11991,7 +12024,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronPerTokenSwiGLU   :  public CNeuronPerTokenFFN
   {
@@ -12021,7 +12054,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUniMixer  :  public CNeuronPerTokenSwiGLU
   {
@@ -12055,7 +12088,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSiameseNorm   : public CNeuronBaseOCL
   {
@@ -12099,7 +12132,7 @@ public:
    virtual uint      GetFields(void) const { return cMixer.GetFields(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUniMixerBlock :  public CNeuronPerTokenSwiGLU
   {
@@ -12136,7 +12169,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronINFNetScenarios  :  public CNeuronBaseOCL
   {
@@ -12171,7 +12204,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronINFNetHUBSequence  :   public CNeuronSpikeConvBlock
   {
@@ -12205,7 +12238,7 @@ public:
    virtual void      TrainMode(bool flag) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronINFNetBlock :  public CNeuronPerTokenSwiGLU
   {
@@ -12252,7 +12285,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronSequenceTokenizer :  public CNeuronBaseOCL
   {
@@ -12283,7 +12316,7 @@ public:
    virtual CNeuronBatchNormOCL*    GetNorm(void) { return cNorm.AsObject(); }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDifferenceTokenizer :  public CNeuronBaseOCL
   {
@@ -12317,7 +12350,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronReGENTADBackbone :  public CNeuronBaseOCL
   {
@@ -12353,7 +12386,7 @@ public:
    virtual CNeuronBatchNormOCL*    GetNorm(void);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronReGENTADHead  :  public CNeuronRevINDenormOCL
   {
@@ -12386,7 +12419,7 @@ public:
    virtual bool      SetNorm(CNeuronBatchNormOCL* norm);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronReGENTAD   :  public CNeuronBaseOCL
   {
@@ -12420,7 +12453,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronDictionaryCrossAtt   :  public CNeuronSpikeConvBlock
   {
@@ -12706,6 +12739,7 @@ public:
    bool              ConfirmPendingExecution(const ulong pending_id,const ulong deal,const ulong position);
    bool              CorrectPending(const ulong pending_id,const float &action[]);
    bool              ConfirmPendingCorrection(const ulong pending_id,const ulong position);
+   bool              ConfirmPendingCorrection(const ulong pending_id,const ulong deal,const ulong position);
    bool              CancelPendingCorrection(const ulong pending_id);
    bool              ClosePending(const ulong pending_id,const SRAGTerminalOutcome &terminal);
    bool              CancelPending(const ulong pending_id);
@@ -12726,7 +12760,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGDformerBackbone :  public CNeuronReGENTADBackbone
   {
@@ -12748,7 +12782,7 @@ public:
    virtual int       Type(void) override const  {  return defNeuronGDformerBackbone; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronGDformer   :  public CNeuronReGENTAD
   {
@@ -12762,7 +12796,7 @@ public:
    virtual int       Type(void) override const  {  return defNeuronGDformer; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMomADTTM   :  public CNeuronBaseOCL
   {
@@ -12807,7 +12841,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMomADMPI  :  public CNeuronCrossAttention
   {
@@ -12910,7 +12944,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUncAD_MSD  :  public CNeuronBaseOCL
   {
@@ -12939,7 +12973,7 @@ public:
    virtual bool      Load(int const file_handle) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCogDriverData  :  public CNeuronSpikeConvBlock
   {
@@ -12988,7 +13022,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCogDriverRankTCM  :  public CNeuronBaseOCL
   {
@@ -13067,7 +13101,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCogDriverForecastHead  :  public CNeuronMLMHAttentionOCL
   {
@@ -13132,7 +13166,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronCogDriverForecastToken  :  public CNeuronBaseOCL
   {
@@ -13165,7 +13199,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUncAD_MUE  :  public CNeuronSpikeConvBlock
   {
@@ -13199,7 +13233,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUncAD_UGP  :  public CNeuronSpikeMHCrossAttention
   {
@@ -13233,7 +13267,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUncAD_UGPL :  public CNeuronSpikeMHCrossAttention
   {
@@ -13268,7 +13302,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronUncAD : public CNeuronSpikeConvBlock
   {
@@ -13335,7 +13369,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNeuronMomAD : public CNeuronUncAD
   {
@@ -13370,7 +13404,7 @@ public:
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CScenarioCodebook : public CObject
   {
@@ -13605,3 +13639,4 @@ public:
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
+

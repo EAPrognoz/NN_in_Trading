@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                        Study.mq5 |
 //|                                                   Copyright DNG® |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -6,31 +6,20 @@
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-#define Study
 #define Critic
 #include "Trajectory.mqh"
 //+------------------------------------------------------------------+
-//| Input parameters                                                 |
+//| Input parameters                                            |
 //+------------------------------------------------------------------+
-input int                  Iterations     = 100000;
 input int                  Batch          = 10;
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-STrajectory          Buffer[];
 CNet                 cEncoder;
 CNet                 cTask;
 CNet                 cActor;
 CNet                 cProbability;
 CNet                 cDirector;
 CNet                 cCritic;
-//---
 float                dError;
 datetime             dtStudied;
-//---
 CBufferFloat         bState;
 CBufferFloat         bTime;
 CBufferFloat         bAccount;
@@ -42,18 +31,16 @@ vector<float>        STD_Actor;
 vector<float>        STD_Goal;
 COpenCLMy            *OpenCL;
 //+------------------------------------------------------------------+
-//| Expert initialization function                                   |
+//| Expert initialization function                              |
 //+------------------------------------------------------------------+
-int OnInit()
   {
-//---
    ResetLastError();
    if(!LoadTotalBase())
      {
       PrintFormat("Error of load study data: %d", GetLastError());
       return INIT_FAILED;
      }
-//--- load models
+// Load Models.
    float temp;
    CArrayObj *encoder = new CArrayObj();
    CArrayObj *task = new CArrayObj();
@@ -161,7 +148,6 @@ int OnInit()
    delete probability;
    delete director;
    delete critic;
-//---
    cEncoder.TrainMode(true);
    cTask.TrainMode(true);
    cActor.TrainMode(true);
@@ -174,42 +160,35 @@ int OnInit()
    cDirector.SetOpenCL(cActor.GetOpenCL());
    cCritic.SetOpenCL(cActor.GetOpenCL());
    OpenCL=cActor.GetOpenCL();
-//---
    cActor.getResults(Result);
    if(Result.Total() != NActions)
      {
       PrintFormat("The scope of the actor does not match the actions count (%d <> %d)", NActions, Result.Total());
       return INIT_FAILED;
      }
-//---
    cEncoder.GetLayerOutput(0, Result);
    if(Result.Total() != (HistoryBars * BarDescr))
      {
       PrintFormat("Input size of Encoder doesn't match state description (%d <> %d)", Result.Total(), (HistoryBars * BarDescr));
       return INIT_FAILED;
      }
-//---
    if(!bGradient.BufferInit(MathMax(AccountDescr, NActions), 0) ||
       !bGradient.BufferCreate(cActor.GetOpenCL()))
      {
       PrintFormat("Error of create buffers: %d", GetLastError());
       return INIT_FAILED;
      }
-//---
    if(!EventChartCustom(ChartID(), 1, 0, 0, "Init"))
      {
       PrintFormat("Error of create study event: %d", GetLastError());
       return INIT_FAILED;
      }
-//---
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| Expert deinitialization function                            |
 //+------------------------------------------------------------------+
-void OnDeinit(const int reason)
   {
-//---
    if(!(reason == REASON_INITFAILED || reason == REASON_RECOMPILE))
      {
       cEncoder.Save(FileName + "Enc.nnw", 0, 0, 0, TimeCurrent(), true);
@@ -222,31 +201,24 @@ void OnDeinit(const int reason)
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| ChartEvent function                                              |
+//| ChartEvent function                                         |
 //+------------------------------------------------------------------+
-void OnChartEvent(const int id,
                   const long &lparam,
                   const double &dparam,
                   const string &sparam)
   {
-//---
    if(id == 1001)
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train function                                                   |
+//| Train function                                              |
 //+------------------------------------------------------------------+
-void Train(void)
   {
-//---
    vector<float> probability = vector<float>::Full(Buffer.Size(), 1.0f / Buffer.Size());
-//---
    vector<float> result, target, state;
    matrix<float> fstate = matrix<float>::Zeros(1, NForecast * BarDescr);
    bool Stop = false;
-//---
    uint ticks = GetTickCount();
-//---
    for(int iter = 0; (iter < Iterations && !IsStopped() && !Stop); iter += Batch)
      {
       int tr = SampleTrajectory(probability);
@@ -273,13 +245,13 @@ void Train(void)
       for(int i = start; i < MathMin(Buffer[tr].Total, start + Batch); i++)
         {
          if(!state.Assign(Buffer[tr].States[i].state) ||
+            // Implements MathAbs.
             MathAbs(state).Sum() == 0 ||
             !bState.AssignArray(state))
            {
             iter -= Batch + start - i;
             break;
            }
-         //---
          bTime.Clear();
          double time = (double)Buffer[tr].States[i].account[7];
          double x = time / (double)(D'2024.01.01' - D'2023.01.01');
@@ -292,7 +264,7 @@ void Train(void)
          bTime.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
          if(bTime.GetIndex() >= 0)
             bTime.BufferWrite();
-         //--- Account
+         // Account.
          float PrevBalance = Buffer[tr].States[MathMax(i - 1, 0)].account[0];
          float PrevEquity = Buffer[tr].States[MathMax(i - 1, 0)].account[1];
          float profit = float(bState[0] / _Point * (result[0] - result[3]));
@@ -308,7 +280,7 @@ void Train(void)
          bAccount.AddArray(GetPointer(bTime));
          if(bAccount.GetIndex() >= 0)
             bAccount.BufferWrite();
-         //--- Feed Forward
+         // Feed Forward.
          if(!cEncoder.feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CBufferFloat*)NULL))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -333,11 +305,12 @@ void Train(void)
             Stop = true;
             break;
            }
-         //--- Look for target
+         // Look for target.
          target = vector<float>::Zeros(NActions);
          bActions.AssignArray(target);
          if(!state.Assign(Buffer[tr].States[i + NForecast].state) ||
             !state.Resize(NForecast * BarDescr) ||
+            // Implements MathAbs.
             MathAbs(state).Sum() == 0)
            {
             iter -= Batch + start - i;
@@ -359,7 +332,7 @@ void Train(void)
                break;
               }
            }
-         //--- State Encoder
+         // State Encoder.
          Result.AssignArray(fstate);
          if(!cEncoder.backProp(Result, (CBufferFloat*)NULL, NULL))
            {
@@ -367,7 +340,6 @@ void Train(void)
             Stop = true;
             break;
            }
-         //---
          target = fstate.Col(0).CumSum();
          if(result[0] > result[3])
            {
@@ -491,14 +463,14 @@ void Train(void)
                  }
               }
            }
-         //--- Actor Policy
+         // Actor Policy.
          if(!cActor.backProp(GetPointer(bActions), (CNet*)GetPointer(cTask), -1))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             Stop = true;
             break;
            }
-         //--- Critic
+         // Critic.
          if(!cCritic.feedForward(GetPointer(bActions), 1, false, (CNet*)GetPointer(cEncoder), LatentLayer))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -516,7 +488,7 @@ void Train(void)
             Stop = true;
             break;
            }
-         //--- Director
+         // Director.
          Result.Clear();
          if((MathRand() / 32767.0) > 0.5)
             Result.Add(1);
@@ -537,7 +509,7 @@ void Train(void)
             Stop = true;
             break;
            }
-         //--- Agents
+         // Agents.
          target = result;
          if(target[0] > 0)
             target[0] = 1;
@@ -559,7 +531,7 @@ void Train(void)
             Stop = true;
             break;
            }
-         //--- Probability
+         // Probability.
          target = vector<float>::Zeros(NActions / 3);
          vector<float> trend = fstate.Col(0).CumSum();
          ulong argmax = MathAbs(trend).ArgMax();
@@ -577,7 +549,6 @@ void Train(void)
             Stop = true;
             break;
            }
-         //---
          if(GetTickCount() - ticks > 500)
            {
             double percent = double(iter + i - start) * 100.0 / (Iterations);
@@ -593,7 +564,6 @@ void Train(void)
         }
      }
    Comment("");
-//---
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Encoder", cEncoder.getRecentAverageError());
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Task", cTask.getRecentAverageError());
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Actor", cActor.getRecentAverageError());
@@ -601,6 +571,6 @@ void Train(void)
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Director", cDirector.getRecentAverageError());
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Critic", cCritic.getRecentAverageError());
    ExpertRemove();
-//---
   }
 //+------------------------------------------------------------------+
+

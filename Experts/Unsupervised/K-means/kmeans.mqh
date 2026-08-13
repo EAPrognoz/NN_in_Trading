@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                       kmeans.mqh |
-//|                                              Copyright 2022, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| kmeans.mqh |
+//| Copyright 2022, DNG |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2022, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -52,7 +52,7 @@
 #define def_k_kmsm_softmax       1
 #define def_k_kmsm_total_k       2
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 COpenCLMy *OpenCLCreate(string programm)
   {
@@ -111,7 +111,7 @@ COpenCLMy *OpenCLCreate(string programm)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CKmeans  : public CObject
   {
@@ -150,11 +150,12 @@ public:
    virtual int       Type(void)  { return defUnsupervisedKmeans; }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 void CKmeans::CKmeans(void)   :  m_iClusters(2),
    m_iVectorSize(1),
    m_dLoss(-1),
+//| Implements m_bTrained                                        |
    m_bTrained(false)
   {
    c_aMeans = new CBufferFloat();
@@ -163,7 +164,7 @@ void CKmeans::CKmeans(void)   :  m_iClusters(2),
    c_OpenCL = NULL;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 void CKmeans::~CKmeans(void)
   {
@@ -183,7 +184,9 @@ void CKmeans::~CKmeans(void)
       delete c_aProbability;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S et Op en CL implementation.                                  |
 //+------------------------------------------------------------------+
 bool CKmeans::SetOpenCL(COpenCLMy *context)
   {
@@ -192,7 +195,9 @@ bool CKmeans::SetOpenCL(COpenCLMy *context)
    return (c_OpenCL == context);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | I ni t implementation.                                         |
 //+------------------------------------------------------------------+
 bool CKmeans::Init(COpenCLMy *context, int clusters, int vector_size)
   {
@@ -217,7 +222,9 @@ bool CKmeans::Init(COpenCLMy *context, int clusters, int vector_size)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S tu dy implementation.                                        |
 //+------------------------------------------------------------------+
 bool CKmeans::Study(CBufferFloat *data, bool init_means = true)
   {
@@ -358,7 +365,9 @@ bool CKmeans::Study(CBufferFloat *data, bool init_means = true)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C lu st er in g implementation.                                |
 //+------------------------------------------------------------------+
 bool CKmeans::Clustering(CBufferFloat *data)
   {
@@ -453,7 +462,9 @@ bool CKmeans::Clustering(CBufferFloat *data)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | G et Lo ss implementation.                                     |
 //+------------------------------------------------------------------+
 double CKmeans::GetLoss(CBufferFloat *data)
   {
@@ -504,7 +515,9 @@ double CKmeans::GetLoss(CBufferFloat *data)
    return m_dLoss;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S ta ti st ic implementation.                                  |
 //+------------------------------------------------------------------+
 bool CKmeans::Statistic(CBufferFloat *data, CBufferFloat *targets)
   {
@@ -548,7 +561,7 @@ bool CKmeans::Statistic(CBufferFloat *data, CBufferFloat *targets)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CBufferFloat *CKmeans::GetProbability(CBufferFloat *data)
   {
@@ -582,7 +595,9 @@ CBufferFloat *CKmeans::GetProbability(CBufferFloat *data)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S av e implementation.                                         |
 //+------------------------------------------------------------------+
 bool CKmeans::Save(const int file_handle)
   {
@@ -610,7 +625,9 @@ bool CKmeans::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa d implementation.                                         |
 //+------------------------------------------------------------------+
 bool CKmeans::Load(const int file_handle)
   {
@@ -654,7 +671,7 @@ bool CKmeans::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CBufferFloat *CKmeans::SoftMax(CBufferFloat *data)
   {
@@ -735,3 +752,4 @@ CBufferFloat *CKmeans::SoftMax(CBufferFloat *data)
    return c_aSoftMax;
   }
 //+------------------------------------------------------------------+
+

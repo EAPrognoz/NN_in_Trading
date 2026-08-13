@@ -1,14 +1,9 @@
 //+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//| Study.mq5                                                        |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 #define Study
 #define StudyOnline
 //+------------------------------------------------------------------+
@@ -22,16 +17,11 @@ input double               MaxBalance     = 150;
 input bool                 LoadBaseMemorySnapshot = true;
 input string               BaseMemorySnapshotPath = "VLADriverBaseMemory.snapshot";
 #include "Trajectory.mqh"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CNet                 cActor;
 CNet                 cCritic;
 CNet                 cStateEncoder;
-//---
 
 datetime             dtStudied;
-//---
 CBufferFloat         bState;
 CBufferFloat         bContext;
 CBufferFloat         bTime;
@@ -39,7 +29,7 @@ CBufferFloat         bGradient;
 CBufferFloat         *Result;
 CBufferFloat         *Action;
 
-//--- The library owns snapshot, records, consolidation and GPU retrieval.
+// The library owns snapshot, records, consolidation and GPU retrieval.
 CNeuronRAGMemory      RAGMemory;
 bool                 OfflineHasLastStoredAction = false;
 float                OfflineLastStoredAction[NActions];
@@ -176,7 +166,8 @@ bool DetachOfflineRAGMemory(void)
    ReturnFalse;
   }
 //+------------------------------------------------------------------+
-//| Publish only records that were consumed into an immutable snapshot|
+//| Publish only records that were consumed into an immutable        |
+//| snapshot                                                         |
 //+------------------------------------------------------------------+
 bool PublishOfflineMemory(const bool episode_closed = false)
   {
@@ -219,9 +210,8 @@ bool PublishOfflineMemory(const bool episode_closed = false)
 //+------------------------------------------------------------------+
 int OnInit()
   {
-//---
    ResetLastError();
-//--- load models
+// Load Models.
    float temp;
    if(!cStateEncoder.Load(FileName + "StEnc.nnw", temp, temp, temp, dtStudied, true))
      {
@@ -261,7 +251,6 @@ int OnInit()
      }
    DeleteObj(actor)
    DeleteObj(critic)
-//---
    cActor.TrainMode(true);
    cCritic.TrainMode(true);
    cStateEncoder.TrainMode(false);
@@ -282,29 +271,22 @@ int OnInit()
    if(!bGradient.BufferInit(EmbeddingSize, 0.0f) ||
       !bGradient.BufferCreate(opencl))
       return INIT_FAILED;
-//---
    if(!Symb.Name(_Symbol) || !Symb.Refresh())
       return INIT_FAILED;
-//---
    if(!RSI.Create(Symb.Name(), TimeFrame, RSIPeriod, RSIPrice))
       return INIT_FAILED;
-//---
    if(!CCI.Create(Symb.Name(), TimeFrame, CCIPeriod, CCIPrice))
       return INIT_FAILED;
-//---
    if(!ATR.Create(Symb.Name(), TimeFrame, ATRPeriod))
       return INIT_FAILED;
-//---
    if(!MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice))
       return INIT_FAILED;
-//---
    cActor.GetLayerOutput(0, Result);
    if(Result.Total() != AccountDescr)
      {
       PrintFormat("Input size of Actor doesn't match context description (%d <> %d)", Result.Total(), AccountDescr);
       return INIT_FAILED;
      }
-//---
    cStateEncoder.GetLayerOutput(0, Result);
    if(Result.Total() != (HistoryBars * BarDescr))
      {
@@ -317,20 +299,17 @@ int OnInit()
       PrintFormat("StateEncoder RankTCM layer doesn't match Critic context (%d <> %d)", Result.Total(), (BarDescr * EmbeddingSize));
       return INIT_FAILED;
      }
-//---
    cStateEncoder.GetLayerOutput(StateScenarioLayer, Result);
    if(Result.Total() != EmbeddingSize)
      {
       PrintFormat("StateEncoder token layer doesn't match pooled scenario embedding (%d <> %d)", Result.Total(), EmbeddingSize);
       return INIT_FAILED;
      }
-//---
    if(!EventChartCustom(ChartID(), 1, 0, 0, "Init"))
      {
       PrintFormat("Error of create study event: %d", GetLastError());
       return INIT_FAILED;
      }
-//---
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
@@ -338,7 +317,6 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-//---
    if(reason != REASON_INITFAILED && !PublishOfflineMemory(true))
       Print("Error of publish Base Memory snapshot");
    PrintOfflineRAGDiagnostics();
@@ -360,7 +338,6 @@ void OnChartEvent(const int id,
                   const double &dparam,
                   const string &sparam)
   {
-//---
    switch(id)
      {
       case 1001:
@@ -391,7 +368,6 @@ void Train(void)
       ExpertRemove();
       return;
      }
-//---
    if(!RSI.BufferResize(bars) || !CCI.BufferResize(bars) ||
       !ATR.BufferResize(bars) || !MACD.BufferResize(bars))
      {
@@ -399,7 +375,6 @@ void Train(void)
       ExpertRemove();
       return;
      }
-//---
    int count = -1;
    bool calculated = false;
    do
@@ -423,7 +398,6 @@ void Train(void)
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
-//---
    if(!ArraySetAsSeries(Rates, true))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -437,12 +411,9 @@ void Train(void)
       ExpertRemove();
       return;
      }
-//---
    vector<float> result, target, neg_target;
    bool Stop = false;
-//---
    uint ticks = GetTickCount();
-//---
    for(int epoch = 0; (epoch < Epochs && !IsStopped() && !Stop); epoch ++)
      {
       if(!cActor.Clear() ||
@@ -469,7 +440,7 @@ void Train(void)
             ExpertRemove();
             return;
            }
-         //--- Feed Forward
+         // Feed Forward.
          if(!cStateEncoder.feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CBufferFloat*)NULL))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -502,7 +473,7 @@ void Train(void)
 #ifdef _DEBUG
          cCritic.getResults(res);
 #endif
-         //--- Study
+         // Study.
          cActor.getResults(Action);
          double balance = account[0] * EtalonBalance;
          const uint terminal_position = uint(posit - NForecast + 1);
@@ -604,7 +575,6 @@ void Train(void)
                        }
                     }
               }
-         //---
          Result.Clear();
          if(!Result.Add(float(reward)))
            {
@@ -618,7 +588,7 @@ void Train(void)
             Stop = true;
             break;
            }
-         //--- Oracul
+         // Oracul.
          if(!Action.AssignArray(target_action))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -679,7 +649,6 @@ void Train(void)
             Stop = true;
             break;
            }
-         //---
          if(GetTickCount() - ticks > 500)
            {
             double percent = (epoch + 1.0 - double(posit - end) / (start - end - HistoryBars - NForecast)) / Epochs * 100.0;
@@ -698,10 +667,9 @@ void Train(void)
          PrintFormat("%s -> %d offline memory publication failed", __FUNCTION__, __LINE__);
      }
    Comment("");
-//---
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Actor", cActor.getRecentAverageError());
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Critic", cCritic.getRecentAverageError());
    ExpertRemove();
-//---
   }
 //+------------------------------------------------------------------+
+

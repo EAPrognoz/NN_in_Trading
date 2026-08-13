@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #define StudyOnline
@@ -42,7 +42,7 @@ input int                  SlowPeriod     =  26;            //Slow
 input int                  SignalPeriod   =  9;             //Signal
 input ENUM_APPLIED_PRICE   MACDPrice      =  PRICE_CLOSE;   //Applied price
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet                 cEncoder;
 CNet                 cSTFS;
@@ -81,9 +81,13 @@ int OnInit()
    CArrayObj *critic = new CArrayObj();
    if(!CreateDescriptions(encoder, stfs, actor, critic))
      {
+      // Implements DeleteObj.
       DeleteObj(encoder)
+      // Implements DeleteObj.
       DeleteObj(stfs)
+      // Implements DeleteObj.
       DeleteObj(actor)
+      // Implements DeleteObj.
       DeleteObj(critic)
       return INIT_FAILED;
      }
@@ -92,9 +96,13 @@ int OnInit()
       Print("Create new State Encoder");
       if(!cEncoder.Create(encoder))
         {
+         // Implements DeleteObj.
          DeleteObj(encoder)
+         // Implements DeleteObj.
          DeleteObj(stfs)
+         // Implements DeleteObj.
          DeleteObj(actor)
+         // Implements DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -104,9 +112,13 @@ int OnInit()
       Print("Create new STFS");
       if(!cSTFS.Create(stfs))
         {
+         // Implements DeleteObj.
          DeleteObj(encoder)
+         // Implements DeleteObj.
          DeleteObj(stfs)
+         // Implements DeleteObj.
          DeleteObj(actor)
+         // Implements DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -116,9 +128,13 @@ int OnInit()
       Print("Create new Actor");
       if(!cActor.Create(actor))
         {
+         // Implements DeleteObj.
          DeleteObj(encoder)
+         // Implements DeleteObj.
          DeleteObj(stfs)
+         // Implements DeleteObj.
          DeleteObj(actor)
+         // Implements DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -431,7 +447,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes Buffers.                                |
 //+------------------------------------------------------------------+
 bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time, CBufferFloat* forecast)
   {
@@ -504,7 +522,9 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements SampleAccount.                                      |
 //+------------------------------------------------------------------+
 const vector<float> SampleAccount(CBufferFloat *state, datetime time)
   {
@@ -549,6 +569,7 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time)
          profit += state.At(i * BarDescr) / Symb.TickSize() * Symb.TickValue();
          if(((buy_lot > 0 && profit < 0) ||
              (sell_lot > 0 && profit > 0))
+            // Implements MathAbs.
             && MathAbs(profit * (buy_lot - sell_lot)) > balance / 2)
            {
             pos_open = i;
@@ -582,7 +603,9 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CheckAction.          |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action, double equity, uint start_position)
   {
@@ -698,7 +721,9 @@ double CheckAction(CBufferFloat *action, double equity, uint start_position)
    return reward;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements OraculAction.                                       |
 //+------------------------------------------------------------------+
 vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
   {
@@ -832,3 +857,4 @@ vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
    return result;
   }
 //+------------------------------------------------------------------+
+

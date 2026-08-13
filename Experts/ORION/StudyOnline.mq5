@@ -1,26 +1,16 @@
 //+------------------------------------------------------------------+
-//|                                                  StudyOnline.mq5 |
-//|           ORION live direct-transition twin Actor-Critic trainer |
+//| StudyOnline.mq5                                                  |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 #define StudyOnline
 #include "Trajectory.mqh"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 input int   UpdatePolicy  = ActorUpdate;
 input int   UpdateTargets = TargetUpdate;
 input float Tau           = tau;
 input int   CheckpointTransitions = 256;
 input double MinBalance = 50.0;
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CORIONNet Actor, TargetActor, Q1, Q2, TargetQ1, TargetQ2;
 CBufferFloat State, TimeState, Account, Action, CriticInput, TargetCriticInput, ScalarTarget;
 CBufferFloat PreviousAccount;
@@ -32,7 +22,7 @@ bool PolicyCheckpointPending = false;
 bool PolicyCheckpointSafe = true;
 bool ORIONOnlineInitialized = false;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Creates and manages object lifecycle for ClearPreviousTransit... |
 //+------------------------------------------------------------------+
 bool ClearPreviousTransition(void)
   {
@@ -44,7 +34,7 @@ bool ClearPreviousTransition(void)
    return ORIONMarket.Clear();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements StorePrevious.                                        |
 //+------------------------------------------------------------------+
 bool StorePrevious(void)
   {
@@ -52,8 +42,7 @@ bool StorePrevious(void)
            (PreviousAccount.GetIndex() < 0 || PreviousAccount.BufferWrite()));
   }
 //+------------------------------------------------------------------+
-//| Target objects are runtime-only.  They start as exact copies of |
-//| their online counterparts and are never serialized separately.  |
+//| Target objects are runtime-only. They start as exact copies o... |
 //+------------------------------------------------------------------+
 bool LoadOnlineTargets(void)
   {
@@ -72,13 +61,16 @@ bool LoadOnlineTargets(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements TrainPreviousTransition.                              |
 //+------------------------------------------------------------------+
 bool TrainPreviousTransition(const bool terminal)
   {
 //--- The live Forecast is at s_next.  Online reward is one step, so TD
 //--- bootstrap uses runtime-only target objects initialized from live files.
    double q1_target = 0, q2_target = 0;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!terminal)
      {
       if(!TargetActor.feedForward(GetPointer(Account), 1, false, GetPointer(ORIONMarket), -1))
@@ -98,6 +90,9 @@ bool TrainPreviousTransition(const bool terminal)
       CBufferFloat *qt1 = NULL, *qt2 = NULL;
       TargetQ1.getResults(qt1);
       TargetQ2.getResults(qt2);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!qt1 || !qt2 || qt1.Total() != 1 || qt2.Total() != 1)
         {
          DeleteObj(qt1);
@@ -111,8 +106,9 @@ bool TrainPreviousTransition(const bool terminal)
    double observed = (PreviousEquity - AccountInfoDouble(ACCOUNT_EQUITY) +
                       PreviousBalance - AccountInfoDouble(ACCOUNT_BALANCE)) * PreviousBalance / EtalonBalance +
                      PreviousMarginPenalty;
-//--- Match offline ORION: missing a move is penalized at one executable
-//--- minimum lot, never at a balance-derived virtual position.
+//+------------------------------------------------------------------+
+//| Match offline ORION: missing a move is penalized at one execu... |
+//+------------------------------------------------------------------+
    if(MathMax(double(Account[4]), double(Account[5])) < Symb.LotsMin())
      {
       const double point_cost = Symb.TickValue() / Symb.TickSize();
@@ -155,7 +151,7 @@ bool TrainPreviousTransition(const bool terminal)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Function OnInit.                                                 |
 //+------------------------------------------------------------------+
 int OnInit(void)
   {
@@ -180,7 +176,7 @@ int OnInit(void)
    return INIT_SUCCEEDED;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Function OnDeinit.                                               |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
@@ -193,12 +189,15 @@ void OnDeinit(const int reason)
    ORIONForecast = NULL;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Function OnTick.                                                 |
 //+------------------------------------------------------------------+
 void OnTick(void)
   {
    if(!IsNewBar())
       return;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONRefreshLiveMarket(GetPointer(State), GetPointer(TimeState)))
      {
       PrintFormat("%s -> %d market", __FUNCTION__, __LINE__);
@@ -206,8 +205,9 @@ void OnTick(void)
          ExpertRemove();
       return;
      }
-//--- Sequential current inference when possible. Training restoration below
-//--- clears/reruns explicit states, so sequence boundaries remain deliberate.
+//+------------------------------------------------------------------+
+//| clears/reruns explicit states, so sequence boundaries remain ... |
+//+------------------------------------------------------------------+
    if(!ORIONForwardForecastState(GetPointer(State)))
      {
       PrintFormat("%s -> %d forecast", __FUNCTION__, __LINE__);
@@ -216,6 +216,9 @@ void OnTick(void)
       return;
      }
    double buy_value = 0, sell_value = 0;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONBuildLiveAccount(PreviousBalance, PreviousEquity, Rates[0].time, GetPointer(Account), buy_value, sell_value))
      {
       PrintFormat("%s -> %d account", __FUNCTION__, __LINE__);
@@ -226,9 +229,15 @@ void OnTick(void)
 //--- A rejected order is recoverable.  Loss of the configured minimum
 //--- deposit is the only financial terminal state for online training.
    const bool terminal = (AccountInfoDouble(ACCOUNT_BALANCE) <= MinBalance);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(HavePrevious)
      {
       PolicyCheckpointSafe = false;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!TrainPreviousTransition(terminal))
         {
          PrintFormat("%s -> %d train: terminal recurrent-state failure", __FUNCTION__, __LINE__);
@@ -239,8 +248,14 @@ void OnTick(void)
       PolicyCheckpointSafe = true;
       PolicyCheckpointPending = true;
       Transition++;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(CheckpointTransitions > 0 && Transition % (ulong)CheckpointTransitions == 0)
         {
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
          if(!ORIONSavePolicySet(Actor, Q1, Q2))
            {
             PrintFormat("%s -> %d checkpoint failed", __FUNCTION__, __LINE__);
@@ -253,6 +268,9 @@ void OnTick(void)
       //--- Training ended at previous state. A terminal transition has no next
       //--- action, hence it must not rerun the current policy state.
       if(!terminal && (!CreateBuffers(0, GetPointer(State), GetPointer(TimeState), (CBufferFloat*)NULL) ||
+//+------------------------------------------------------------------+
+//| Function ORIONForwardForecastState.                              |
+//+------------------------------------------------------------------+
                        !ORIONForwardForecastState(GetPointer(State))))
         {
          PrintFormat("%s -> %d restore: terminal recurrent-state failure", __FUNCTION__, __LINE__);
@@ -261,6 +279,9 @@ void OnTick(void)
          return;
         }
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(terminal)
      {
       PrintFormat("ORION online terminal: balance=%.2f min_balance=%.2f", AccountInfoDouble(ACCOUNT_BALANCE), MinBalance);
@@ -269,6 +290,9 @@ void OnTick(void)
       return;
      }
    if(!Actor.feedForward(GetPointer(Account), 1, false, GetPointer(ORIONMarket), -1) ||
+//+------------------------------------------------------------------+
+//| Function ReadAction.                                             |
+//+------------------------------------------------------------------+
       !ReadAction(Actor, GetPointer(Action)) || !ORIONValidateAction(GetPointer(Action)))
      {
       PrintFormat("%s -> %d action", __FUNCTION__, __LINE__);
@@ -278,6 +302,9 @@ void OnTick(void)
      }
    double margin_penalty = 0;
    bool market_closed = false;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONExecuteAction(GetPointer(Action), buy_value, sell_value, margin_penalty, market_closed))
      {
       PrintFormat("%s -> %d execute: terminal partial-trade risk", __FUNCTION__, __LINE__);
@@ -285,6 +312,9 @@ void OnTick(void)
       ExpertRemove();
       return;
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(market_closed)
      {
       Print("ORION online execution deferred: market closed");
@@ -297,6 +327,9 @@ void OnTick(void)
      }
    if(margin_penalty < 0)
       PrintFormat("ORION online insufficient margin: penalty=%.2f", margin_penalty);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!StorePrevious())
      {
       PrintFormat("%s -> %d metadata: terminal post-trade failure", __FUNCTION__, __LINE__);
@@ -310,3 +343,4 @@ void OnTick(void)
    HavePrevious = true;
   }
 //+------------------------------------------------------------------+
+

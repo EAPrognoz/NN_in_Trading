@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   MyTreeNode.mqh |
-//|                                              Copyright 2022, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| MyTreeNode.mqh |
+//| Copyright 2022, DNG |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2022, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -45,21 +45,19 @@ public:
    virtual bool      CreateElement(const int index);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| m d Su pp or t implementation                               |
 //+------------------------------------------------------------------+
-CMyTreeNode::CMyTreeNode() :  m_iIndex(ULONG_MAX),
                               m_dSupport(0)
   {
    Clear();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
-CMyTreeNode::~CMyTreeNode()
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 float CMyTreeNode::GetConfidence(void)
   {
@@ -71,7 +69,7 @@ float CMyTreeNode::GetConfidence(void)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 float CMyTreeNode::GetConfidence(const ulong ID)
   {
@@ -82,9 +80,8 @@ float CMyTreeNode::GetConfidence(const ulong ID)
    return temp.GetConfidence();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
-CMyTreeNode *CMyTreeNode::GetNext(const ulong ID)
   {
    if(m_data_total <= 0)
       return NULL;
@@ -104,7 +101,7 @@ CMyTreeNode *CMyTreeNode::GetNext(const ulong ID)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::DeleteNode(const ulong ID)
   {
@@ -125,9 +122,8 @@ bool CMyTreeNode::DeleteNode(const ulong ID)
    return false;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
-CMyTreeNode *CMyTreeNode::AddNode(const ulong ID, float support = 0)
   {
    CMyTreeNode *node = new CMyTreeNode();
    if(!node)
@@ -145,7 +141,7 @@ CMyTreeNode *CMyTreeNode::AddNode(const ulong ID, float support = 0)
    return node;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 uint CMyTreeNode::GetDepth(void)
   {
@@ -155,7 +151,7 @@ uint CMyTreeNode::GetDepth(void)
    return parent.GetDepth() + 1;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::Mining(vectorf &supports, matrixf &paths, const ulong ID, float min_conf)
   {
@@ -205,7 +201,7 @@ bool CMyTreeNode::Mining(vectorf &supports, matrixf &paths, const ulong ID, floa
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::CreateElement(const int index)
   {
@@ -220,7 +216,7 @@ bool CMyTreeNode::CreateElement(const int index)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::Save(const int file_handle)
   {
@@ -234,7 +230,7 @@ bool CMyTreeNode::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::Load(const int file_handle)
   {
@@ -259,3 +255,4 @@ bool CMyTreeNode::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
+

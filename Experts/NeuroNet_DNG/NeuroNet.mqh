@@ -1,4 +1,4 @@
-﻿#ifndef NEURONET_MQH
+#ifndef NEURONET_MQH
 #define NEURONET_MQH
 #define NEURONET_BUILDING_FACADE
 /// \file
@@ -19,3 +19,4 @@
 #include "NeuroNet_Misc.mqh"
 #undef NEURONET_BUILDING_FACADE
 #endif // NEURONET_MQH
+

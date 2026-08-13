@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                 Net_SAC_DICE.mqh |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Net_SAC_DICE.mqh |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -11,11 +11,11 @@
 //+------------------------------------------------------------------+
 #include "..\RL\FQF.mqh"
 //---
-#define defSACDICE             0x7795   ///<Neuron Net 
+#define defSACDICE             0x7795   ///<Neuron Net
 #define LogProbMultiplier      1.0e-5f
 
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNet_SAC_D_DICE  : protected CNet
   {
@@ -67,13 +67,14 @@ public:
    bool              Load(string file_name, bool common = true);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet_SAC_D_DICE::CNet_SAC_D_DICE(void) :  fLoss1(0),
                                           fLoss2(0),
                                           fCAGrad_C(0.5f),
                                           iCAGrad_Iters(15),
                                           iUpdateDelay(100),
+                                          // Implements iUpdateDelayCount.
                                           iUpdateDelayCount(100)
   {
    fLambda = vector<float>::Full(1, 1.0e-5f);
@@ -83,7 +84,9 @@ CNet_SAC_D_DICE::CNet_SAC_D_DICE(void) :  fLoss1(0),
    fQWeights = vector<float>::Ones(1);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes .                                       |
 //+------------------------------------------------------------------+
 bool CNet_SAC_D_DICE::Create(CArrayObj *actor, CArrayObj *critic, CArrayObj *zeta, CArrayObj *nu, int latent_layer = -1)
   {
@@ -148,7 +151,7 @@ bool CNet_SAC_D_DICE::Create(CArrayObj *actor, CArrayObj *critic, CArrayObj *zet
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CNet_SAC_D_DICE::Study(CArrayFloat *State,
                             CArrayFloat *SecondInput,
@@ -385,7 +388,9 @@ bool CNet_SAC_D_DICE::Study(CArrayFloat *State,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Gets LogProbability.                                           |
 //+------------------------------------------------------------------+
 vector<float> CNet_SAC_D_DICE::GetLogProbability(CBufferFloat *Actions)
   {
@@ -399,7 +404,9 @@ vector<float> CNet_SAC_D_DICE::GetLogProbability(CBufferFloat *Actions)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Saves .                                                        |
 //+------------------------------------------------------------------+
 bool CNet_SAC_D_DICE::Save(string file_name, bool common = true)
   {
@@ -443,7 +450,9 @@ bool CNet_SAC_D_DICE::Save(string file_name, bool common = true)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads .                                                        |
 //+------------------------------------------------------------------+
 bool CNet_SAC_D_DICE::Load(string file_name, bool common = true)
   {
@@ -515,7 +524,9 @@ bool CNet_SAC_D_DICE::Load(string file_name, bool common = true)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CAGrad.               |
 //+------------------------------------------------------------------+
 vector<float> CNet_SAC_D_DICE::CAGrad(vector<float> &grad)
   {
@@ -569,7 +580,9 @@ vector<float> CNet_SAC_D_DICE::CAGrad(vector<float> &grad)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements TargetsUpdate.                                      |
 //+------------------------------------------------------------------+
 bool CNet_SAC_D_DICE::TargetsUpdate(float tau)
   {
@@ -584,3 +597,4 @@ bool CNet_SAC_D_DICE::TargetsUpdate(float tau)
    return true;
   }
 //+------------------------------------------------------------------+
+

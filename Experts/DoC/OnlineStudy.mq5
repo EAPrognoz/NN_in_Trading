@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                     Research.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Research.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -38,7 +38,7 @@ input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input int                  StudyIters  =  5;             //Iterations to Study
 input int                  StudyPeriod =  120;           //Bars between Studies
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 SState               sState;
 STrajectory          Base;
@@ -474,7 +474,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CAGrad.               |
 //+------------------------------------------------------------------+
 vector<float> CAGrad(vector<float> &grad)
   {
@@ -528,3 +530,4 @@ vector<float> CAGrad(vector<float> &grad)
    return result;
   }
 //+------------------------------------------------------------------+
+

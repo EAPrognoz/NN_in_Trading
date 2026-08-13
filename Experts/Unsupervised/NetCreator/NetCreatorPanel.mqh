@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                              NetCreatorPanel.mqh |
 //|                                                   Copyright DNG® |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -1693,3 +1693,4 @@ bool CNetCreatorPanel::OnEndEditProbability(void)
    return m_edProbability.Text(DoubleToString(fmax(0, fmin(1, value)), 2));
   }
 //+------------------------------------------------------------------+
+

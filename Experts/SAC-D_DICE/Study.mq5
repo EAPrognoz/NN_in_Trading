@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define StudyExpert
 #include "Trajectory.mqh"
@@ -17,7 +17,7 @@
 input int                  Iterations     = 100000;
 input float                Tau            = 0.001f;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet_SAC_D_DICE      Net;
@@ -182,6 +182,7 @@ void Train(void)
          for(ulong r = 0; r < rewards.Size(); r++)
             rewards[r] -= Buffer[tr].States[i + 1].rewards[r] * DiscFactor;
          if(!Net.Study(GetPointer(bState), GetPointer(bAccount), GetPointer(bActions), rewards,
+                       // Gets Pointer.
                        GetPointer(bNextState), GetPointer(bNextAccount), DiscFactor, Tau))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -210,3 +211,4 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
+

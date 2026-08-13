@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                    AsocRules.mqh |
-//|                                              Copyright 2022, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| AsocRules.mqh |
+//| Copyright 2022, DNG |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2022, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -44,19 +44,23 @@ public:
    virtual bool      Load(const string file_name);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C As so cR ul es implementation.                               |
 //+------------------------------------------------------------------+
 CAssocRules::CAssocRules()   :  m_iSections(10)
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CAssocRules::~CAssocRules()
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | N ew Pa th implementation.                                     |
 //+------------------------------------------------------------------+
 bool CAssocRules::NewPath(CMyTreeNode *root, matrixf &path)
   {
@@ -81,7 +85,9 @@ bool CAssocRules::NewPath(CMyTreeNode *root, matrixf &path)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C re at eR ul es implementation.                               |
 //+------------------------------------------------------------------+
 bool CAssocRules::CreateRules(matrixf &data, vectorf &buy, vectorf &sell, int sections = 10, float min_sup = 0.03f, float min_conf = 0.3f)
   {
@@ -122,7 +128,9 @@ bool CAssocRules::CreateRules(matrixf &data, vectorf &buy, vectorf &sell, int se
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | P re pa er Da ta implementation.                               |
 //+------------------------------------------------------------------+
 bool CAssocRules::PrepaerData(matrixf & data, matrixf & bin_data, vectorf & buy, vectorf & sell, const int sections = 10, const float min_sup = 0.03f)
   {
@@ -152,7 +160,9 @@ bool CAssocRules::PrepaerData(matrixf & data, matrixf & bin_data, vectorf & buy,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | P ro ba bi li ty implementation.                               |
 //+------------------------------------------------------------------+
 float CAssocRules::Probability(CMyTreeNode * root, vectorf & data, matrixf & positions)
   {
@@ -176,7 +186,9 @@ float CAssocRules::Probability(CMyTreeNode * root, vectorf & data, matrixf & pos
    return temp.GetConfidence();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C re at eP at h implementation.                                |
 //+------------------------------------------------------------------+
 matrixf CAssocRules::CreatePath(vectorf & bin_data, matrixf & positions)
   {
@@ -202,7 +214,7 @@ matrixf CAssocRules::CreatePath(vectorf & bin_data, matrixf & positions)
    return path;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CMyTreeNode *CAssocRules::CheckPath(CMyTreeNode * root, vectorf & path)
   {
@@ -218,7 +230,9 @@ CMyTreeNode *CAssocRules::CheckPath(CMyTreeNode * root, vectorf & path)
    return node;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C re at eP os it io ns implementation.                         |
 //+------------------------------------------------------------------+
 matrixf CAssocRules::CreatePositions(vectorf &support, const float min_sup = 0.03f)
   {
@@ -249,7 +263,9 @@ matrixf CAssocRules::CreatePositions(vectorf &support, const float min_sup = 0.0
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | G ro ws Tr ee implementation.                                  |
 //+------------------------------------------------------------------+
 bool CAssocRules::GrowsTree(CMyTreeNode * root, matrixf & bin_data, matrixf &positions)
   {
@@ -267,7 +283,9 @@ bool CAssocRules::GrowsTree(CMyTreeNode * root, matrixf & bin_data, matrixf &pos
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | P ro ba bi li ty implementation.                               |
 //+------------------------------------------------------------------+
 bool CAssocRules::Probability(vectorf &data, float &buy, float &sell)
   {
@@ -276,7 +294,9 @@ bool CAssocRules::Probability(vectorf &data, float &buy, float &sell)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S av e implementation.                                         |
 //+------------------------------------------------------------------+
 bool CAssocRules::Save(const string file_name)
   {
@@ -289,7 +309,9 @@ bool CAssocRules::Save(const string file_name)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa d implementation.                                         |
 //+------------------------------------------------------------------+
 bool CAssocRules::Load(const string file_name)
   {
@@ -302,7 +324,9 @@ bool CAssocRules::Load(const string file_name)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S av e implementation.                                         |
 //+------------------------------------------------------------------+
 bool CAssocRules::Save(const int file_handle)
   {
@@ -333,7 +357,9 @@ bool CAssocRules::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa d implementation.                                         |
 //+------------------------------------------------------------------+
 bool CAssocRules::Load(const int file_handle)
   {
@@ -360,3 +386,4 @@ bool CAssocRules::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
+

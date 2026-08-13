@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   NetCreator.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| NetCreator.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #include "NetCreatorPanel.mqh"
 CNetCreatorPanel Panel;
@@ -53,3 +53,4 @@ void OnChartEvent(const int id,
    Panel.ChartEvent(id, lparam, dparam, sparam);
   }
 //+------------------------------------------------------------------+
+

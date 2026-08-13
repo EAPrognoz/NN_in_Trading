@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #define StudyOnline
@@ -42,7 +42,7 @@ input int                  SlowPeriod     =  26;            //Slow
 input int                  SignalPeriod   =  9;             //Signal
 input ENUM_APPLIED_PRICE   MACDPrice      =  PRICE_CLOSE;   //Applied price
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet                 cEncoder;
 CNet                 caForecast[3];
@@ -183,7 +183,7 @@ int OnInit()
    cEncoder.SetOpenCL(opencl);
    for(uint i = 0; i < caForecast.Size(); i++)
       caForecast[i].SetOpenCL(opencl);
-   
+
 //---
    if(!Symb.Name(_Symbol) || !Symb.Refresh())
       return INIT_FAILED;
@@ -433,7 +433,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes Buffers.                                |
 //+------------------------------------------------------------------+
 bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time, CBufferFloat* forecast)
   {
@@ -506,7 +508,9 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements SampleAccount.                                      |
 //+------------------------------------------------------------------+
 const vector<float> SampleAccount(CBufferFloat *state, datetime time)
   {
@@ -575,7 +579,9 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CheckAction.          |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action, CBufferFloat *forecast, double equity)
   {
@@ -655,3 +661,4 @@ double CheckAction(CBufferFloat *action, CBufferFloat *forecast, double equity)
    return profit;
   }
 //+------------------------------------------------------------------+
+

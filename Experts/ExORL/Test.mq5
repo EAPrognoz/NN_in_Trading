@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                     Research.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Research.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -36,7 +36,7 @@ input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 SState               sState;
 STrajectory          Base;
@@ -319,4 +319,4 @@ void OnTick()
       ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//+------------------------------------------------------------------+
+

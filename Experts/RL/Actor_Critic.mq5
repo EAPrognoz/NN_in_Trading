@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                 Actor_Critic.mq5 |
-//|                                              Copyright 2022, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Actor_Critic.mq5 |
+//| Copyright 2022, DNG |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2022, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -13,7 +13,7 @@
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define ACTOR           Symb.Name()+"_"+EnumToString((ENUM_TIMEFRAMES)Period())+"_REINFORCE"
 #define CRITIC          Symb.Name()+"_"+EnumToString((ENUM_TIMEFRAMES)Period())+"_Q-learning"
@@ -45,7 +45,7 @@ input int                  SlowPeriod  =  26;            //Slow
 input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CSymbolInfo         Symb;
 MqlRates            Rates[];
@@ -149,7 +149,9 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | T ra in implementation.                                        |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -353,7 +355,9 @@ void Train(void)
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | G et Ac ti on implementation.                                  |
 //+------------------------------------------------------------------+
 int GetAction(CBufferFloat* probability)
   {
@@ -373,3 +377,4 @@ int GetAction(CBufferFloat* probability)
    return -1;
   }
 //+------------------------------------------------------------------+
+

@@ -1,6 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                  ORION direct-transition twin Actor-Critic study |
+//| Study.mq5                                                        |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -8,18 +7,12 @@
 
 #define Study
 #include "Trajectory.mqh"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 input datetime Start         = D'2024.01.01';
 input datetime End           = D'2026.01.01';
 input int      Iterations    = 1000000;
 input int      EpisodeBars   = 2 * StackSize;
 input double   MinBalance    = 50.0;
 input int      UpdatePolicy  = 5;
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CORIONNet Actor;
 CORIONNet Q1;
 CORIONNet Q2;
@@ -41,14 +34,14 @@ double TeacherRewardSum = 0;
 ulong PolicyTransitions = 0;
 ulong PolicySkippedInvalid = 0;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Loads OrCreateORIONPolicies.                                     |
 //+------------------------------------------------------------------+
 bool LoadOrCreateORIONPolicies(void)
   {
    return ORIONLoadOrCreatePolicySet(Actor, Q1, Q2, true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves ORIONPolicies.                                             |
 //+------------------------------------------------------------------+
 bool SaveORIONPolicies(void)
   {
@@ -57,7 +50,7 @@ bool SaveORIONPolicies(void)
    return ORIONSavePolicySet(Actor, Q1, Q2);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements PrepareHistory.                                       |
 //+------------------------------------------------------------------+
 bool PrepareHistory(int &first_position, int &last_position)
   {
@@ -93,7 +86,7 @@ bool PrepareHistory(int &first_position, int &last_position)
    return (last_position > first_position);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements PolicyBackward.                                       |
 //+------------------------------------------------------------------+
 bool PolicyBackward(void)
   {
@@ -102,7 +95,7 @@ bool PolicyBackward(void)
    return PolicyBackward(Actor, Q1, GetPointer(ActorObjective), GetPointer(ORIONMarket), -1);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements TrainTransition.                                      |
 //+------------------------------------------------------------------+
 bool TrainTransition(const int position, const int iteration, bool &terminal)
   {
@@ -123,6 +116,7 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
                   sell_lot, double(CurrentAction[4]), double(CurrentAction[5]));
    double reward = 0;
    if(!AdvanceAccount(GetPointer(Account), GetPointer(CurrentAction), position, MinBalance,
+                      // Gets Pointer.
                       GetPointer(NextAccount), reward, terminal))
      { Print("TrainTransition stage=advance_account"); ReturnFalse; }
    const double target_value = reward;
@@ -147,6 +141,9 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
      { Print("TrainTransition stage=q1_forward"); ReturnFalse; }
    if(!Q2.feedForward(GetPointer(CriticInput), 1, false, GetPointer(ORIONMarket), -1))
      { Print("TrainTransition stage=q2_forward"); ReturnFalse; }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(trace_td)
      {
       CNeuronBaseOCL *q1_layer = Q1.Layer(3);
@@ -166,8 +163,14 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
 //--- move Actor back into the executable action manifold.
    const bool executable_action = (IsExecutableOrder(buy_lot, CurrentAction[1], CurrentAction[2]) ||
                                    IsExecutableOrder(sell_lot, CurrentAction[4], CurrentAction[5]));
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(iteration > 0 && UpdatePolicy > 0 && iteration % UpdatePolicy == 0)
      {
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(executable_action)
         {
          if(!PolicyBackward())
@@ -186,6 +189,9 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
    double teacher_reward = 0;
    if(!BuildTeacherAction(position, GetPointer(Account), GetPointer(TeacherAction), teacher_reward))
      { Print("TrainTransition stage=teacher_action"); ReturnFalse; }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(teacher_reward > 0)
      {
       if(trace_td)
@@ -217,6 +223,9 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
    double random_reward = 0;
    if(!BuildRandomAction(position, GetPointer(Account), GetPointer(RandomAction), random_reward))
      { Print("TrainTransition stage=random_action"); ReturnFalse; }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(random_reward > 0)
      {
       if(!Actor.backProp(GetPointer(RandomAction), GetPointer(ORIONMarket), -1))
@@ -239,7 +248,7 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements TrainORIONActorCritic.                                |
 //+------------------------------------------------------------------+
 void TrainORIONActorCritic(void)
   {
@@ -260,6 +269,9 @@ void TrainORIONActorCritic(void)
    PolicySkippedInvalid = 0;
    for(int iteration = 0; iteration < Iterations && !IsStopped(); iteration++)
      {
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(episode == 0)
         {
          if(!ORIONForwardForecast(position, GetPointer(State), GetPointer(TimeState)))
@@ -270,6 +282,9 @@ void TrainORIONActorCritic(void)
             break;
         }
       bool terminal = false;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!TrainTransition(position, iteration, terminal))
         {
          failed_iteration = iteration;
@@ -282,12 +297,18 @@ void TrainORIONActorCritic(void)
         { failed_iteration = iteration; failed_position = position; break; }
       position--;
       episode++;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(position < first || terminal || episode >= MathMax(1, EpisodeBars))
         {
          if(position < first)
             position = last;
          episode = 0;
         }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(GetTickCount() - shown > 500)
         {
          const double q1_rmse = MathSqrt(MathMax(0.0, double(Q1.getRecentAverageError()))) / MathMax(EtalonBalance, 1.0);
@@ -301,6 +322,9 @@ void TrainORIONActorCritic(void)
         }
      }
    Comment("");
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(completed_iterations != Iterations)
      {
       if(failed_iteration >= 0)
@@ -317,12 +341,15 @@ void TrainORIONActorCritic(void)
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Function OnInit.                                                 |
 //+------------------------------------------------------------------+
 int OnInit()
   {
    ResetLastError();
    if(!ORIONInitIndicators() || !ORIONLoadForecastInference() || !LoadOrCreateORIONPolicies() ||
+//+------------------------------------------------------------------+
+//| Function ORIONVerifyFrozenForecastExact.                         |
+//+------------------------------------------------------------------+
       !ORIONVerifyFrozenForecastExact())
      {
       PrintFormat("ORION Actor-Critic initialization failed at line %d error=%d", __LINE__, GetLastError());
@@ -331,7 +358,7 @@ int OnInit()
    return (EventChartCustom(ChartID(), 1, 0, 0, "Init") ? INIT_SUCCEEDED : INIT_FAILED);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Function OnDeinit.                                               |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
@@ -342,7 +369,7 @@ void OnDeinit(const int reason)
    ORIONForecast = NULL;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Chart event callback.                                            |
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
   {
@@ -350,3 +377,4 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
       TrainORIONActorCritic();
   }
 //+------------------------------------------------------------------+
+

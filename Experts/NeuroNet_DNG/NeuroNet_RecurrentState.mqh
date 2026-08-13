@@ -1,4 +1,4 @@
-﻿#ifndef NEURONET_BUILDING_FACADE
+#ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
@@ -2200,3 +2200,4 @@ void CMamba4CastEmbeding::SetOpenCL(COpenCLMy * obj)
    cNorm.SetOpenCL(OpenCL);
    cProjectionWithTE.SetOpenCL(OpenCL);
   }
+

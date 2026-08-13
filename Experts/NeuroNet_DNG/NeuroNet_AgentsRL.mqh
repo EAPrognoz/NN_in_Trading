@@ -1,4 +1,4 @@
-﻿#ifndef NEURONET_BUILDING_FACADE
+#ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
@@ -4679,3 +4679,4 @@ void CNeuronHiSSDLowLevelControler::SetOpenCL(COpenCLMy * obj)
    for(uint i = 0; i < cActionDecoder.Size(); i++)
       cActionDecoder[i].SetOpenCL(OpenCL);
   }
+

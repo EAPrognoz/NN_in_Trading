@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #define StudyOnline
@@ -21,7 +21,7 @@ input double               MinBalance     = 50;
 input double               MaxBalance     = 150;
 #include "Trajectory.mqh"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet                 cActor;
 CNet                 cCritic;
@@ -55,7 +55,9 @@ int OnInit()
    CArrayObj *critic = new CArrayObj();
    if(!CreateDescriptions(actor, critic))
      {
+      // Implements DeleteObj.
       DeleteObj(actor)
+      // Implements DeleteObj.
       DeleteObj(critic)
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return INIT_FAILED;
@@ -66,7 +68,9 @@ int OnInit()
       if(!cActor.Create(actor))
         {
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
+         // Implements DeleteObj.
          DeleteObj(actor)
+         // Implements DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -366,3 +370,4 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
+

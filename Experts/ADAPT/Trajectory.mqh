@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
 //|                                                   Copyright DNG® |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -13,7 +13,6 @@
 //|   2     -  Penalty for no open positions                         |
 //+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
-//---
 #define        HistoryBars             1             //Depth of history
 #define        GPTBars                 100           //Analitic Depth of history
 #define        PrecoderBars            10            //Forecast Depth
@@ -36,21 +35,15 @@
 #define        STE_Multiplier          1.0f/2
 #define        STE_Noise_Multiplier    1.0f/10        // λ определяет влияние ошибки прогнозирования шума
 #define        STD_Delta_Multiplier    1.0f/20        // коэффициент шума ω
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-struct SState
   {
    float             state[HistoryBars * BarDescr];
    float             account[AccountDescr - 4];
    float             action[NActions];
    float             rewards[NRewards];
-   //---
                      SState(void);
-   //---
    bool              Save(int file_handle);
    bool              Load(int file_handle);
-   //--- overloading
+   // Overloading.
    void              operator=(const SState &obj)
      {
       ArrayCopy(state, obj.state);
@@ -59,9 +52,6 @@ struct SState
       ArrayCopy(rewards, obj.rewards);
      }
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 SState::SState(void)
   {
    ArrayInitialize(state, 0);
@@ -69,28 +59,22 @@ SState::SState(void)
    ArrayInitialize(action, 0);
    ArrayInitialize(rewards, 0);
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
       return false;
-//---
    int total = ArraySize(state);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       return false;
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, state[i]) < sizeof(float))
          return false;
-//---
    total = ArraySize(account);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       return false;
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, account[i]) < sizeof(float))
          return false;
-//---
    total = ArraySize(action);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       return false;
@@ -103,99 +87,74 @@ bool SState::Save(int file_handle)
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, rewards[i]) < sizeof(float))
          return false;
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
       return false;
    if(FileIsEnding(file_handle))
       return false;
-//---
    int total = FileReadInteger(file_handle);
    if(total != ArraySize(state))
       return false;
-//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          return false;
       state[i] = FileReadFloat(file_handle);
      }
-//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(account))
       return false;
-//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          return false;
       account[i] = FileReadFloat(file_handle);
      }
-//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(action))
       return false;
-//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          return false;
       action[i] = FileReadFloat(file_handle);
      }
-//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(rewards))
       return false;
-//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          return false;
       rewards[i] = FileReadFloat(file_handle);
      }
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-struct STrajectory
   {
    SState            States[Buffer_Size];
    int               Total;
    float             DiscountFactor;
    bool              CumCounted;
-   //---
                      STrajectory(void);
-   //---
    bool              Add(SState &state);
    void              CumRevards(void);
-   //---
    bool              Save(int file_handle);
    bool              Load(int file_handle);
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
+   // Implements DiscountFactor.
    DiscountFactor(DiscFactor),
+   // Creates and manages object lifecycle for CumCounted.
    CumCounted(false)
   {
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool STrajectory::Save(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
       return false;
-//---
    if(!CumCounted)
       CumRevards();
    if(FileWriteInteger(file_handle, Total) < sizeof(int))
@@ -205,57 +164,39 @@ bool STrajectory::Save(int file_handle)
    for(int i = 0; i < Total; i++)
       if(!States[i].Save(file_handle))
          return false;
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool STrajectory::Load(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
       return false;
-//---
    Total = FileReadInteger(file_handle);
    if(FileIsEnding(file_handle) || Total >= ArraySize(States))
       return false;
    DiscountFactor = FileReadFloat(file_handle);
    CumCounted = true;
-//---
    for(int i = 0; i < Total; i++)
       if(!States[i].Load(file_handle))
          return false;
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {
    if(CumCounted)
       return;
-//---
    for(int i = Total - 2; i >= 0; i--)
       for(int r = 0; r < NRewards; r++)
          States[i].rewards[r] += States[i + 1].rewards[r] * DiscountFactor;
    CumCounted = true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool STrajectory::Add(SState &state)
   {
    if(Total + 1 >= ArraySize(States))
       return false;
    States[Total] = state;
    Total++;
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool SaveTotalBase(void)
   {
    int total = ArraySize(Buffer);
@@ -278,12 +219,8 @@ bool SaveTotalBase(void)
         }
    FileFlush(handle);
    FileClose(handle);
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
    int handle = FileOpen(FileName + ".bd", FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
@@ -307,17 +244,11 @@ bool LoadTotalBase(void)
          return false;
         }
    FileClose(handle);
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *state_encoder)
   {
-//---
    CLayerDescription *descr;
-//---
    if(!actor)
      {
       actor = new CArrayObj();
@@ -336,9 +267,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       if(!state_encoder)
          return false;
      }
-//--- Endpoints Encoder
+// Endpoints Encoder.
    end_encoder.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -350,7 +281,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronConcatenate;
@@ -364,9 +295,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//--- State Encoder
+// State Encoder.
    state_encoder.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -378,7 +309,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronConcatenate;
@@ -392,9 +323,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//--- Actor
+// Actor.
    actor.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -406,7 +337,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronConcatenate;
@@ -420,7 +351,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//--- layer 2
+// layer 2.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -432,7 +363,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//--- layer 3
+// layer 3.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -444,7 +375,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//--- layer 4
+// layer 4.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronVAEOCL;
@@ -455,17 +386,11 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayObj *probability)
   {
-//---
    CLayerDescription *descr;
-//---
    if(!encoder)
      {
       encoder = new CArrayObj();
@@ -484,9 +409,9 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       if(!probability)
          return false;
      }
-//--- Encoder
+// Encoder.
    encoder.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -498,7 +423,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBatchNormOCL;
@@ -511,7 +436,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 2
+// layer 2.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronEmbeddingOCL;
@@ -526,7 +451,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 3
+// layer 3.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronPEOCL;
@@ -539,7 +464,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
      }
    for(int l = 0; l < Lenc; l++)
      {
-      //--- layer 4
+      // layer 4.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronTransposeOCL;
@@ -550,7 +475,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      //--- layer 5
+      // layer 5.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronMH2AttentionOCL;
@@ -564,7 +489,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      //--- layer 6
+      // layer 6.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronMLMHAttentionOCL;
@@ -579,7 +504,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      //--- layer 7
+      // layer 7.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronTransposeOCL;
@@ -590,7 +515,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      //--- layer 8
+      // layer 8.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronMH2AttentionOCL;
@@ -605,7 +530,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      //--- layer 9
+      // layer 9.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronMLMHAttentionOCL;
@@ -621,9 +546,9 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          return false;
         }
      }
-//--- Endpoints
+// Endpoints.
    endpoints.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -635,7 +560,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -647,7 +572,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 2
+// layer 2.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronSoftMaxOCL;
@@ -660,7 +585,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 3
+// layer 3.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -672,12 +597,12 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- Probability
+// Probability.
    probability.Clear();
-//--- Input layer
+// Input layer.
    if(!probability.Add(endpoints.At(0)))
       return false;
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronConcatenate;
@@ -691,7 +616,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 2
+// layer 2.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -703,7 +628,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 3
+// layer 3.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -715,7 +640,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//--- layer 4
+// layer 4.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronSoftMaxOCL;
@@ -728,25 +653,17 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-//---
    return true;
   }
 #ifndef Study
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
    static datetime last_bar = 0;
    if(last_bar >= iTime(Symb.Name(), TimeFrame, 0))
       return false;
-//---
    last_bar = iTime(Symb.Name(), TimeFrame, 0);
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
    int total = PositionsTotal();
@@ -759,17 +676,12 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
          continue;
       result = (Trade.PositionClose(PositionGetInteger(POSITION_TICKET)) && result);
      }
-//---
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
    int total = PositionsTotal();
    bool result = true;
-//---
    for(int i = 0; i < total; i++)
      {
       if(PositionGetSymbol(i) != Symb.Name())
@@ -809,17 +721,12 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
       if(modify)
          result = (Trade.PositionModify(PositionGetInteger(POSITION_TICKET), psl, ptp) && result);
      }
-//---
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
    if(value <= 0)
       return true;
-//---
    for(int i = 0; (i < PositionsTotal() && value > 0); i++)
      {
       if(PositionGetSymbol(i) != Symb.Name())
@@ -841,13 +748,9 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
             value = 0;
         }
      }
-//---
    return (value <= 0);
   }
 #endif
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
   {
    ulong total = buffer.Size();
@@ -861,7 +764,6 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
          result[i] = -FLT_MAX;
      }
    float max_reward = result.Max();
-//---
    vector<float> sorted = result;
    bool sort = true;
    int iter = 0;
@@ -878,7 +780,6 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
            }
       iter++;
      }
-//---
    float min = result.Min() - 0.1f * MathAbs(max_reward);
    if(max_reward > min)
      {
@@ -892,21 +793,17 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
       result.Fill(1);
    result = result / result.Sum();
    result = result.CumSum();
-//---
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 int SampleTrajectory(vector<float> &probability)
   {
-//--- check
+// check.
    ulong total = probability.Size();
    if(total <= 0)
       return -1;
-//--- randomize
+// randomize.
    float rnd = float(MathRand() / 32767.0);
-//--- search
+// search.
    if(rnd <= probability[0] || total == 1)
       return 0;
    if(rnd > probability[total - 2])
@@ -922,13 +819,9 @@ int SampleTrajectory(vector<float> &probability)
       while(probability[result - 1] >= rnd)
          result--;
      }
-//--- return result
+// return result.
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-class CDeal       :  public CObject
   {
 public:
    datetime             OpenTime;
@@ -939,34 +832,32 @@ public:
    double               StopLos;
    double               TakeProfit;
    double               point;
-   //---
                      CDeal(void);
                     ~CDeal(void) {};
-   //---
    vector<float>        Action(datetime current, double ask, double bid, int period_seconds);
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
+   // Creates and manages object lifecycle for CloseTime.
    CloseTime(0),
+   // Implements Type.
    Type(POSITION_TYPE_BUY),
+   // Implements Volume.
    Volume(0),
+   // Implements OpenPrice.
    OpenPrice(0),
+   // Implements StopLos.
    StopLos(0),
+   // Implements TakeProfit.
    TakeProfit(0),
+   // Implements point.
    point(1e-5)
   {
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 vector<float> CDeal::Action(datetime current, double ask, double bid, int period_seconds)
   {
    vector<float> result = vector<float>::Zeros(NActions);
    if((OpenTime - period_seconds) > current || CloseTime <= current)
       return result;
-//---
    switch(Type)
      {
       case POSITION_TYPE_BUY:
@@ -984,26 +875,17 @@ vector<float> CDeal::Action(datetime current, double ask, double bid, int period
             result[5] = float((StopLos - bid) / (MaxSL * point));
          break;
      }
-//---
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-class CDeals
   {
 protected:
    CArrayObj         Deals;
 public:
                      CDeals(void) { Deals.Clear(); }
                     ~CDeals(void) { Deals.Clear(); }
-   //---
    bool              LoadDeals(string file_name, string symbol, double point);
    vector<float>     Action(datetime current, double ask, double bid, int period_seconds);
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool CDeals::LoadDeals(string file_name, string symbol, double point)
   {
    if(file_name == NULL || !FileIsExist(file_name, FILE_COMMON))
@@ -1016,7 +898,6 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
       symbol = _Symbol;
       point = _Point;
      }
-//---
    ResetLastError();
    int handle = FileOpen(file_name, FILE_READ | FILE_ANSI | FILE_CSV | FILE_COMMON, short(';'), CP_ACP);
    if(handle == INVALID_HANDLE)
@@ -1041,7 +922,6 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
       s = FileReadString(handle);
       if(StringFind(deal_symbol, symbol, 0) < 0)
          continue;
-      //---
       ResetLastError();
       CDeal *deal = new CDeal();
       if(!deal)
@@ -1082,7 +962,6 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
             deal.StopLos = close_price;
            }
         }
-      //---
       ResetLastError();
       if(!Deals.Add(deal))
         {
@@ -1090,14 +969,9 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
          return false;
         }
      }
-//---
    FileClose(handle);
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 vector<float> CDeals::Action(datetime current, double ask, double bid, int period_seconds)
   {
    vector<float> result = vector<float>::Zeros(NActions);
@@ -1114,7 +988,7 @@ vector<float> CDeals::Action(datetime current, double ask, double bid, int perio
       result[4] = MathMax(result[4], action[4]);
       result[5] = MathMax(result[5], action[5]);
      }
-//---
    return result;
   }
 //+------------------------------------------------------------------+
+

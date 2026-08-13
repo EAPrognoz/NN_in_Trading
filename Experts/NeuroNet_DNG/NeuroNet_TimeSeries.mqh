@@ -10309,7 +10309,7 @@ bool CNeuronComplexConvOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
          setBuffer(kernel, def_k_uwca_matrix_i, NeuronOCL.getOutputIndex())
          setBuffer(kernel, def_k_uwca_matrix_m, FirstMomentumConv.GetIndex())
          setBuffer(kernel, def_k_uwca_matrix_v, SecondMomentumConv.GetIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+   lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(kernel, def_k_uwca_inputs, NeuronOCL.Neurons() / (2 * iVariables))
          setArgument(kernel, def_k_uwca_l, lt)
          setArgument(kernel, def_k_uwca_b1, b1)
@@ -24659,3 +24659,4 @@ bool CNeuronScenarioCrossAttention::Clear(void)
    return true;
   }
 //+------------------------------------------------------------------+
+

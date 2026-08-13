@@ -1,4 +1,4 @@
-﻿#ifndef NEURONET_BUILDING_FACADE
+#ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
@@ -55,9 +55,9 @@ bool CArrayCon::CreateElement(int index)
    return (true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
 //+------------------------------------------------------------------+
-//float CNeuronBase::lr=0.0000001;   // net learning rate
+//| float CNeuronBase::lr=0.0000001;   // net learning rate        |
 float CNeuronBase::alpha = (float)0.8;     // momentum
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -109,7 +109,7 @@ bool CNeuron::updateInputWeights(CLayer *&prevLayer)
    if(CheckPointer(prevLayer) == POINTER_INVALID)
       ReturnFalse;
 //---
-   float lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+   float lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
    int total = prevLayer.Total();
    for(int n = 0; n < total && !IsStopped(); n++)
      {
@@ -122,7 +122,7 @@ bool CNeuron::updateInputWeights(CLayer *&prevLayer)
       else
         {
          con.mt = b1 * con.mt + (1 - b1) * gradient;
-         con.vt = (float)(b2 * con.vt + (1 - b2) * pow(gradient, 2) + 0.00000001);
+         con.vt = (float)(b2 * con.vt + (1 - b2) * MathPow((double)gradient, 2.0) + 0.00000001);
          con.weight += con.deltaWeight = (float)(lt * con.mt / sqrt(con.vt));
         }
      }
@@ -4198,7 +4198,7 @@ bool CNeuronConv::updateInputWeights(CLayer *&prevLayer)
       ReturnFalse;
 //---
    CConnection *con;
-   float lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+   float lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
    for(int n = 0; n < iWindow && !IsStopped(); n++)
      {
       con = Connections.At(n);
@@ -4220,7 +4220,7 @@ bool CNeuronConv::updateInputWeights(CLayer *&prevLayer)
       else
         {
          con.mt = b1 * con.mt + (1 - b1) * delta;
-         con.vt = (float)(b2 * con.vt + (1 - b2) * pow(delta, 2) + 0.00000001);
+         con.vt = (float)(b2 * con.vt + (1 - b2) * MathPow((double)delta, 2.0) + 0.00000001);
          con.weight += con.deltaWeight = (float)(lt * con.mt / sqrt(con.vt));
          t++;
         }
@@ -10482,7 +10482,7 @@ bool CNet::feedForward(CArrayFloat *inputVals, int window = 1, bool tem = true, 
             d = i % window;
             pos = (i - d) / window;
            }
-         neuron.setOutputVal(inputVals.At(i) + (float)(tem ? (d % 2 == 0 ? sin(pos / pow(10000, (2 * d + 1) / (window + 1))) : cos(pos / pow(10000, (2 * d + 1) / (window + 1)))) : 0));
+         neuron.setOutputVal(inputVals.At(i) + (float)(tem ? (d % 2 == 0 ? sin(pos / MathPow(10000.0, (2.0 * d + 1.0) / (window + 1.0))) : cos(pos / MathPow(10000.0, (2.0 * d + 1.0) / (window + 1.0))) ) : 0));
          if(tem)
             inputVals.Update(i, neuron.getOutputVal());
         }
@@ -10503,7 +10503,7 @@ bool CNet::feedForward(CArrayFloat *inputVals, int window = 1, bool tem = true, 
                dim = d % window;
                pos = (d - dim) / window;
               }
-            float value = pos / pow(10000, (2 * dim + 1) / (float)(window + 1));
+            float value = (float)(pos / MathPow(10000.0, (2.0 * dim + 1.0) / (window + 1.0)));
             value = (float)(inputVals.At(d) + (dim % 2 == 0 ? sin(value) : cos(value)));
             if(!inputVals.Update(d, value))
                ReturnFalse;
@@ -12226,7 +12226,7 @@ bool CNeuronBaseOCL::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
          setBuffer(def_k_UpdateWeightsAdam, def_k_uwa_matrix_i, NeuronOCL.getOutputIndex())
          setBuffer(def_k_UpdateWeightsAdam, def_k_uwa_matrix_m, NeuronOCL.getFirstMomentumIndex())
          setBuffer(def_k_UpdateWeightsAdam, def_k_uwa_matrix_v, NeuronOCL.getSecondMomentumIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, (float)t)) / (1 - pow(b1, (float)t)));
+        lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsAdam, def_k_uwa_inputs, NeuronOCL.Neurons())
          setArgument(def_k_UpdateWeightsAdam, def_k_uwa_l, lt)
          setArgument(def_k_UpdateWeightsAdam, def_k_uwa_b1, b1)
@@ -12263,7 +12263,7 @@ bool CNeuronBaseOCL::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
          setBuffer(def_k_UpdateWeightsAdamMini, def_k_wuam_matrix_i, NeuronOCL.getOutputIndex())
          setBuffer(def_k_UpdateWeightsAdamMini, def_k_wuam_matrix_m, NeuronOCL.getFirstMomentumIndex())
          setBuffer(def_k_UpdateWeightsAdamMini, def_k_wuam_matrix_v, NeuronOCL.getSecondMomentumIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, (float)t)) / (1 - pow(b1, (float)t)));
+        lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsAdamMini, def_k_wuam_l, lt)
          setArgument(def_k_UpdateWeightsAdamMini, def_k_wuam_b1, b1)
          setArgument(def_k_UpdateWeightsAdamMini, def_k_wuam_b2, b2)
@@ -13008,7 +13008,7 @@ bool CNeuronConvOCL::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_i, NeuronOCL.getOutputIndex())
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_m, FirstMomentumConv.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_v, SecondMomentumConv.GetIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+         lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_inputs, NeuronOCL.Neurons() / iVariables)
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_l, lt)
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_b1, b1)
@@ -13048,7 +13048,7 @@ bool CNeuronConvOCL::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_i, NeuronOCL.getOutputIndex())
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_m, FirstMomentumConv.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_v, SecondMomentumConv.GetIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+        lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_inputs, NeuronOCL.Neurons() / iVariables)
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_l, lt)
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_b1, b1)
@@ -13110,7 +13110,7 @@ bool CNeuronConvOCL::UpdateInputWeightsBuffer(CBufferFloat *source)
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_i, source.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_m, FirstMomentumConv.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_v, SecondMomentumConv.GetIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+        lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_inputs, inputs)
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_l, lt)
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_b1, b1)
@@ -13148,7 +13148,7 @@ bool CNeuronConvOCL::UpdateInputWeightsBuffer(CBufferFloat *source)
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_i, source.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_m, FirstMomentumConv.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_v, SecondMomentumConv.GetIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+        lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_inputs, inputs)
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_l, lt)
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_b1, b1)
@@ -15970,7 +15970,7 @@ bool CNet::feedForward(CArrayFloat* inputVals, int window = 1, bool tem = true, 
             d = i % window;
             pos = (i - d) / window;
            }
-         neuron.setOutputVal(inputVals.At(i) + (float)(tem ? (d % 2 == 0 ? sin(pos / pow(10000, (2 * d + 1) / (window + 1))) : cos(pos / pow(10000, (2 * d + 1) / (window + 1)))) : 0));
+         neuron.setOutputVal(inputVals.At(i) + (float)(tem ? (d % 2 == 0 ? sin(pos / MathPow(10000.0, (2.0 * d + 1.0) / (window + 1.0))) : cos(pos / MathPow(10000.0, (2.0 * d + 1.0) / (window + 1.0))) ) : 0));
          if(tem)
             inputVals.Update(i, neuron.getOutputVal());
         }
@@ -15991,7 +15991,7 @@ bool CNet::feedForward(CArrayFloat* inputVals, int window = 1, bool tem = true, 
                dim = d % window;
                pos = (d - dim) / window;
               }
-            float value = pos / pow(10000, (2 * dim + 1) / (float)(window + 1));
+            float value = (float)(pos / MathPow(10000.0, (2.0 * dim + 1.0) / (window + 1.0)));
             value = (float)(inputVals.At(d) + (dim % 2 == 0 ? sin(value) : cos(value)));
             if(!inputVals.Update(d, value))
               {
@@ -20091,3 +20091,5 @@ void CNeuronFieldPatternEmbedding::TrainMode(bool flag)
    cCandidates.TrainMode(bTrain);
    cScore.TrainMode(bTrain);
   }
+
+

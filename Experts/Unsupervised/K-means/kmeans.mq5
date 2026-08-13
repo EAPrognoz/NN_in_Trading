@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                       kmeans.mq5 |
-//|                                              Copyright 2021, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| kmeans.mq5 |
+//| Copyright 2021, DNG |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2022, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -36,7 +36,7 @@ input int                  SlowPeriod  =  26;            //Slow
 input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CSymbolInfo         *Symb;
 MqlRates            Rates[];
@@ -126,7 +126,9 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | T ra in implementation.                                        |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -206,3 +208,4 @@ void Train(void)
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
+

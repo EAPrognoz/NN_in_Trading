@@ -1,16 +1,16 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   Trajectory.mqh |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Trajectory.mqh |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
 //| Rewards structure                                                |
-//|   0     -  Delta Balance                                         |
-//|   1     -  Delta Equity ( "-" Drawdown / "+" Profit)             |
-//|   2     -  Penalty for no open positions                         |
+//| 0     -  Delta Balance                                         |
+//| 1     -  Delta Equity ( "-" Drawdown / "+" Profit)             |
+//| 2     -  Penalty for no open positions                         |
 //+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 //---
@@ -34,7 +34,7 @@
 #define        StartTargetIteration    200000
 #define        STE_Multiplier          1.0f/2
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -57,7 +57,9 @@ struct SState
      }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S St at e implementation.                                      |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
@@ -67,7 +69,9 @@ SState::SState(void)
    ArrayInitialize(rewards, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S av e implementation.                                         |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
@@ -104,7 +108,9 @@ bool SState::Save(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa d implementation.                                         |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
@@ -160,7 +166,7 @@ bool SState::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
@@ -178,15 +184,18 @@ struct STrajectory
    bool              Load(int file_handle);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
    DiscountFactor(DiscFactor),
+//| Implements CumCounted                                        |
    CumCounted(false)
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S av e implementation.                                         |
 //+------------------------------------------------------------------+
 bool STrajectory::Save(int file_handle)
   {
@@ -207,7 +216,9 @@ bool STrajectory::Save(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa d implementation.                                         |
 //+------------------------------------------------------------------+
 bool STrajectory::Load(int file_handle)
   {
@@ -227,7 +238,9 @@ bool STrajectory::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C um Re va rd s implementation.                                |
 //+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {
@@ -240,7 +253,9 @@ void STrajectory::CumRevards(void)
    CumCounted = true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | A dd implementation.                                           |
 //+------------------------------------------------------------------+
 bool STrajectory::Add(SState &state)
   {
@@ -252,7 +267,9 @@ bool STrajectory::Add(SState &state)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S av eT ot al Ba se implementation.                            |
 //+------------------------------------------------------------------+
 bool SaveTotalBase(void)
   {
@@ -280,7 +297,9 @@ bool SaveTotalBase(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa dT ot al Ba se implementation.                            |
 //+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
@@ -309,7 +328,9 @@ bool LoadTotalBase(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C re at eD es cr ip ti on s implementation.                    |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *&actor, CArrayObj *&critic)
   {
@@ -561,7 +582,9 @@ bool CreateDescriptions(CArrayObj *&actor, CArrayObj *&critic)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C re at eE nc od er De sc ri pt io ns implementation.          |
 //+------------------------------------------------------------------+
 bool CreateEncoderDescriptions(CArrayObj *&encoder)
   {
@@ -650,7 +673,9 @@ bool CreateEncoderDescriptions(CArrayObj *&encoder)
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | I sN ew Ba r implementation.                                   |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -662,7 +687,9 @@ bool IsNewBar(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C lo se By Di re ct io n implementation.                       |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -680,7 +707,9 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | T ra il Po si ti on implementation.                            |
 //+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
@@ -730,7 +759,9 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C lo se Pa rt ia l implementation.                             |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
@@ -763,7 +794,7 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   }
 #endif
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
   {
@@ -813,7 +844,9 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S am pl eT ra je ct or y implementation.                       |
 //+------------------------------------------------------------------+
 int SampleTrajectory(vector<float> &probability)
   {
@@ -843,7 +876,7 @@ int SampleTrajectory(vector<float> &probability)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
@@ -863,7 +896,7 @@ public:
    vector<float>        Action(datetime current, double ask, double bid, int period_seconds);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
    CloseTime(0),
@@ -872,11 +905,12 @@ void CDeal::CDeal(void) :  OpenTime(0),
    OpenPrice(0),
    StopLos(0),
    TakeProfit(0),
+//| Implements point                                             |
    point(1e-5)
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 vector<float> CDeal::Action(datetime current, double ask, double bid, int period_seconds)
   {
@@ -905,7 +939,7 @@ vector<float> CDeal::Action(datetime current, double ask, double bid, int period
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CDeals
   {
@@ -919,7 +953,9 @@ public:
    vector<float>     Action(datetime current, double ask, double bid, int period_seconds);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa dD ea ls implementation.                                  |
 //+------------------------------------------------------------------+
 bool CDeals::LoadDeals(string file_name, string symbol, double point)
   {
@@ -1013,7 +1049,7 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 vector<float> CDeals::Action(datetime current, double ask, double bid, int period_seconds)
   {
@@ -1035,3 +1071,4 @@ vector<float> CDeals::Action(datetime current, double ask, double bid, int perio
    return result;
   }
 //+------------------------------------------------------------------+
+

@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   StudyActor.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| StudyActor.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -45,7 +45,7 @@ input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet                 Actor;
 CNet                 Critic;
@@ -333,6 +333,7 @@ void OnTick()
       Trade.Sell(sell_lot, Symb.Name(), Symb.Bid(), sell_sl, sell_tp);
 //---
    if(temp.Min() < 0 || MathMax(temp[0], temp[3]) > 1.0f || MathMax(temp[1], temp[4]) > (Symb.Point() * 5000) ||
+      // Implements MathMax.
       MathMax(temp[2], temp[5]) > (Symb.Point() * 2000))
      {
       temp[0] = (float)(Symb.LotsMin() * (1 + MathRand() / 32767.0 * 5));
@@ -346,7 +347,9 @@ void OnTick()
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes Descriptions.                           |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *actor, CArrayObj *critic)
   {
@@ -566,7 +569,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *critic)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Checks NewBar.                                                 |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -578,3 +583,4 @@ bool IsNewBar(void)
    return true;
   }
 //+------------------------------------------------------------------+
+

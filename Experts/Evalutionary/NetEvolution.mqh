@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                 NetEvalution.mqh |
 //|                                                   Copyright DNG® |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -252,3 +252,4 @@ bool CNetEvolution::Save(string file_name, bool common = true)
    return CNetGenetic::SaveModel(file_name, -1, common);
   }
 //+------------------------------------------------------------------+
+

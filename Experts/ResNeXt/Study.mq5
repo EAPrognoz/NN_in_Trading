@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #define Critic
@@ -18,7 +18,7 @@
 input int                  Iterations     = 100000;
 input int                  Batch          = 20;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Actor;
@@ -140,7 +140,9 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train function                                                   |
+//| Train function                                                 |
+//+------------------------------------------------------------------+
+//| | T ra in implementation.                                        |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -225,6 +227,7 @@ void Train(void)
          bActions.AssignArray(target);
          if(!state.Assign(Buffer[tr].States[i + NForecast].state) ||
             !state.Resize(NForecast * BarDescr) ||
+//| MathAbsimplementation.                                       |
             MathAbs(state).Sum() == 0)
            {
             iter -= Batch + start - i;
@@ -406,3 +409,4 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
+

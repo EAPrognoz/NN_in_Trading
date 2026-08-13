@@ -1,24 +1,17 @@
 //+------------------------------------------------------------------+
-//|                                                         Test.mq5 |
-//|                          ORION inference-only trading entrypoint |
+//| Test.mq5                                                         |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 #define StudyOnline
 #include "Trajectory.mqh"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CORIONNet Actor;
 CBufferFloat State, TimeState, Account, Action;
 double PreviousBalance = 0, PreviousEquity = 0;
 bool ORIONTestInitialized = false;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Function OnInit.                                                 |
 //+------------------------------------------------------------------+
 int OnInit(void)
   {
@@ -41,7 +34,7 @@ int OnInit(void)
    return INIT_SUCCEEDED;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Function OnDeinit.                                               |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
@@ -51,7 +44,7 @@ void OnDeinit(const int reason)
    ORIONForecast = NULL;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Function OnTick.                                                 |
 //+------------------------------------------------------------------+
 void OnTick(void)
   {
@@ -71,3 +64,4 @@ void OnTick(void)
    PreviousEquity = AccountInfoDouble(ACCOUNT_EQUITY);
   }
 //+------------------------------------------------------------------+
+

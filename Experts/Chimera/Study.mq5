@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #define Critic
@@ -18,7 +18,7 @@
 input int                  Iterations     = 100000;
 input int                  Batch          = 20;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Actor;
@@ -172,6 +172,7 @@ void Train(void)
       for(int i = start; i < MathMin(Buffer[tr].Total, start + Batch); i++)
         {
          if(!state.Assign(Buffer[tr].States[i].state) ||
+            // Implements MathAbs.
             MathAbs(state).Sum() == 0 ||
             !bState.AssignArray(state))
            {
@@ -225,6 +226,7 @@ void Train(void)
          bActions.AssignArray(target);
          if(!state.Assign(Buffer[tr].States[i + NForecast].state) ||
             !state.Resize(NForecast * BarDescr) ||
+            // Implements MathAbs.
             MathAbs(state).Sum() == 0)
            {
             iter -= Batch + start - i;
@@ -406,3 +408,4 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
+

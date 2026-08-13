@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #define StudyOnline
@@ -23,7 +23,7 @@ input double               MinBalance     = 50;
 input double               MaxBalance     = 150;
 #include "Trajectory.mqh"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet                 cEncoder;
 CNet                 cSTFS;
@@ -62,9 +62,13 @@ int OnInit()
    CArrayObj *critic = new CArrayObj();
    if(!CreateDescriptions(encoder, stfs, actor, critic))
      {
+      // Function implementation for DeleteObj.
       DeleteObj(encoder)
+      // Function implementation for DeleteObj.
       DeleteObj(stfs)
+      // Function implementation for DeleteObj.
       DeleteObj(actor)
+      // Function implementation for DeleteObj.
       DeleteObj(critic)
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return INIT_FAILED;
@@ -75,9 +79,13 @@ int OnInit()
       if(!cEncoder.Create(encoder))
         {
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
+         // Function implementation for DeleteObj.
          DeleteObj(encoder)
+         // Function implementation for DeleteObj.
          DeleteObj(stfs)
+         // Function implementation for DeleteObj.
          DeleteObj(actor)
+         // Function implementation for DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -88,9 +96,13 @@ int OnInit()
       if(!cSTFS.Create(stfs))
         {
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
+         // Function implementation for DeleteObj.
          DeleteObj(encoder)
+         // Function implementation for DeleteObj.
          DeleteObj(stfs)
+         // Function implementation for DeleteObj.
          DeleteObj(actor)
+         // Function implementation for DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -101,9 +113,13 @@ int OnInit()
       if(!cActor.Create(actor))
         {
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
+         // Function implementation for DeleteObj.
          DeleteObj(encoder)
+         // Function implementation for DeleteObj.
          DeleteObj(stfs)
+         // Function implementation for DeleteObj.
          DeleteObj(actor)
+         // Function implementation for DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -210,7 +226,9 @@ void OnChartEvent(const int id,
      }
   }
 //+------------------------------------------------------------------+
-//| Train function                                                   |
+//| Train function                                                 |
+//+------------------------------------------------------------------+
+//| | T ra in implementation.                                        |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -418,7 +436,7 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time, CBufferFloat* forecast)
   {
@@ -491,7 +509,9 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Function implementation for SampleAccount.                     |
 //+------------------------------------------------------------------+
 const vector<float> SampleAccount(CBufferFloat *state, datetime time)
   {
@@ -536,6 +556,7 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time)
          profit += state.At(i * BarDescr) / Symb.TickSize() * Symb.TickValue();
          if(((buy_lot > 0 && profit < 0) ||
              (sell_lot > 0 && profit > 0))
+            // Function implementation for MathAbs.
             && MathAbs(profit * (buy_lot - sell_lot)) > balance / 2)
            {
             pos_open = i;
@@ -569,7 +590,7 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action, double equity, uint start_position)
   {
@@ -685,7 +706,9 @@ double CheckAction(CBufferFloat *action, double equity, uint start_position)
    return reward;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Function implementation for OraculAction.                      |
 //+------------------------------------------------------------------+
 vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
   {
@@ -819,3 +842,4 @@ vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
    return result;
   }
 //+------------------------------------------------------------------+
+

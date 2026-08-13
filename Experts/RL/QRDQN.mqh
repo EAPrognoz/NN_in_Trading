@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                       QR-DQN.mqh |
 //|                                                   Copyright DNG® |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -318,3 +318,4 @@ bool CQRDQN::Load(string file_name, datetime &time, bool common = true)
    return (undefine>0 ? SetActions((uint)undefine) : true);
   }
 //+------------------------------------------------------------------+
+

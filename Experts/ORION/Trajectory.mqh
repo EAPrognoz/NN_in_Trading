@@ -1,18 +1,18 @@
 //+------------------------------------------------------------------+
-//|                                                   Trajectory.mqh |
-//|                          ORION forecast training infrastructure  |
+//| Trajectory.mqh                                                   |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
 //| Reuse CogDriver indicators, data preparation and the canonical   |
-//| description. CogDriver sources remain read-only.                 |
 //+------------------------------------------------------------------+
 #include "..\CogDriver\Trajectory.mqh"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
+#ifndef ORION_FORECAST_STUDY
+#define ORIONRecoverySmoke       false
+#define ORIONRecoverySmokeBatches 2000
+#define ORIONRecoverySmokeAge     512
+#endif
 #define ORION_FORMAT_VERSION     7
 #define ORION_MARKET_FILE        "ORIONMkt.nnw"
 #define ORION_TARGET_FILE        "ORIONTrg.nnw"
@@ -24,15 +24,13 @@
 #define ORION_AC_FORMAT_VERSION  12
 //+------------------------------------------------------------------+
 //| ORION builds transitions directly from historical windows        |
-//| and does not use a replay buffer. Device tensors contain         |
-//| one transition; descriptor.batch preserves the common library    |
-//| optimizer contract and does not shape tensors. A narrow local    |
-//| adapter. It exposes an already-public layer object from the      |
-//| protected CNet container; no CNet behaviour is duplicated or     |
 //+------------------------------------------------------------------+
 class CORIONNet : public CNet
   {
 public:
+//+------------------------------------------------------------------+
+//| Function Layer.                                                  |
+//+------------------------------------------------------------------+
    CNeuronBaseOCL    *Layer(int index)
      {
       if(!layers)
@@ -45,9 +43,9 @@ public:
       CLayer *layer = (CLayer*)layers.At((int)index);
       return (layer ? layer[0] : NULL);
      }
-   //--- Device-resident input path for the detached Target Encoder.  The
-   //--- source is already a library layer, so CNet's host-input Fill() path
-   //--- would only duplicate the buffer and break the device layout contract.
+//+------------------------------------------------------------------+
+//| Device-resident input path for the detached Target Encoder. T... |
+//+------------------------------------------------------------------+
    bool              FeedForwardLayer(CNeuronBaseOCL *source_layer)
      {
       if(!source_layer || !layers || layers.Total() <= 1)
@@ -66,12 +64,13 @@ public:
   };
 //+------------------------------------------------------------------+
 //| A transient, non-owning layer view lets the library transpose    |
-//| consume existing CBufferFloat. It never owns ORIONFuture and     |
-//| therefore never copies it to host or changes its lifetime.       |
 //+------------------------------------------------------------------+
 class CORIONBufferView : public CNeuronBaseOCL
   {
 public:
+//+------------------------------------------------------------------+
+//| Implements Bind.                                                 |
+//+------------------------------------------------------------------+
    bool              Bind(CBufferFloat *source)
      {
       if(!source || source.GetIndex() < 0)
@@ -81,6 +80,9 @@ public:
       Output = source;
       return true;
      }
+//+------------------------------------------------------------------+
+//| Implements Unbind.                                               |
+//+------------------------------------------------------------------+
    void              Unbind(void)
      {
       Output = NULL;
@@ -88,16 +90,21 @@ public:
   };
 //+------------------------------------------------------------------+
 //| Device-only composition adapter, all operations reuse existing   |
-//| NeuroNet_DNG kernels, no host mirror read during batch assembly  |
 //+------------------------------------------------------------------+
 class CORIONDeviceOps : public CNeuronBaseOCL
   {
 public:
+//+------------------------------------------------------------------+
+//| Implements Bind.                                                 |
+//+------------------------------------------------------------------+
    bool              Bind(COpenCLMy *open_cl)
      {
       OpenCL = open_cl;
       return (CheckPointer(OpenCL) != POINTER_INVALID);
      }
+//+------------------------------------------------------------------+
+//| Creates and manages object lifecycle for Copy.                   |
+//+------------------------------------------------------------------+
    bool              Copy(CBufferFloat *source, CBufferFloat *destination, const uint total)
      {
       if(!source || !destination || source.Total() != int(total) ||
@@ -147,9 +154,6 @@ public:
       return DeConcat(first, second, source, first_total, second_total, 1);
      }
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CORIONNet            ORIONMarket;
 CORIONNet            ORIONTarget;
 CNeuronScenarioForecast *ORIONForecast = NULL;
@@ -184,7 +188,7 @@ CBufferFloat         ORIONFrozenInactivityAge;
 bool                 ORIONFrozenBaselineReady = false;
 CORIONDeviceOps      ORIONDevice;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ForecastRecoveryAge.                                  |
 //+------------------------------------------------------------------+
 uint ForecastRecoveryAge(void)
   {
@@ -197,7 +201,7 @@ uint ForecastRecoveryAge(void)
    return (uint)MathMax(1.0, MathRound(6240.0 * PeriodSeconds(PERIOD_H1) / seconds));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Creates and manages object lifecycle for ConfigureForecastRec... |
 //+------------------------------------------------------------------+
 bool ConfigureForecastRecoveryAge(void)
   {
@@ -208,7 +212,7 @@ bool ConfigureForecastRecoveryAge(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONInitTrainingBuffers.                             |
 //+------------------------------------------------------------------+
 bool ORIONInitTrainingBuffers(void)
   {
@@ -230,7 +234,7 @@ bool ORIONInitTrainingBuffers(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONAddBase.                                         |
 //+------------------------------------------------------------------+
 bool ORIONAddBase(CArrayObj *description, const uint count)
   {
@@ -249,7 +253,7 @@ bool ORIONAddBase(CArrayObj *description, const uint count)
    DeleteObjAndFalse(descr);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONNormalizeDescriptionBatch.                       |
 //+------------------------------------------------------------------+
 bool ORIONNormalizeDescriptionBatch(CArrayObj *description)
   {
@@ -266,11 +270,14 @@ bool ORIONNormalizeDescriptionBatch(CArrayObj *description)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONCreateDescriptions.                              |
 //+------------------------------------------------------------------+
 bool ORIONCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
   {
    CArrayObj *legacy_decoder = NULL;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!CreateStateDescriptions(market, legacy_decoder))
      {
       DeleteObj(legacy_decoder);
@@ -279,9 +286,15 @@ bool ORIONCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
    DeleteObj(legacy_decoder);
 //--- Keep exactly CogDriver layers 0..4 (RankTCM is the boundary).
    int layer = market.Total() - 1;
+//+------------------------------------------------------------------+
+//| Function while.                                                  |
+//+------------------------------------------------------------------+
    while(layer >= 0)
      {
       CLayerDescription* descr = market.At(layer);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!descr || descr.type != defNeuronCogDriverRankTCM)
         {
          if(!market.Delete(layer))
@@ -436,11 +449,14 @@ bool ORIONCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONCreateNetworks.                                  |
 //+------------------------------------------------------------------+
 bool ORIONCreateNetworks(void)
   {
    CArrayObj *market = NULL, *target = NULL;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONCreateDescriptions(market, target))
      {
       DeleteObj(market);
@@ -460,12 +476,18 @@ bool ORIONCreateNetworks(void)
 //--- then move its device buffers to the Market context; otherwise a later
 //--- Create invalidates buffers belonging to an earlier network.
    ORIONTarget.SetOpenCL(ORIONMarket.GetOpenCL());
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONInitTrainingBuffers())
      {
       Print("ORION init: training buffers=FAIL");
       ReturnFalse;
      }
    ORIONForecast = (CNeuronScenarioForecast*)ORIONMarket.Layer(-1);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONForecast || ORIONForecast.Type() != defNeuronScenarioForecast)
      {
       Print("ORION init: forecast layer=FAIL");
@@ -478,12 +500,15 @@ bool ORIONCreateNetworks(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONValidateShapes.                                  |
 //+------------------------------------------------------------------+
 bool ORIONValidateShapes(const bool training = true)
   {
    CNeuronBaseOCL *layer = ORIONMarket.Layer(0);
    CBufferFloat *buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!buffer || buffer.Total() != HistoryBars * BarDescr)
      {
       PrintFormat("ORION shape: market input expected=%d actual=%d", HistoryBars * BarDescr,
@@ -492,16 +517,25 @@ bool ORIONValidateShapes(const bool training = true)
      }
    layer = ORIONMarket.Layer(4);
    buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!buffer || buffer.Total() != (BarDescr * EmbeddingSize))
      {
       PrintFormat("ORION shape: market RankTCM expected=%d actual=%d", BarDescr * EmbeddingSize,
                   (buffer ? buffer.Total() : -1));
       ReturnFalse;
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(training)
      {
       layer = ORIONTarget.Layer(0);
       buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("ORION shape: target input expected=%d actual=%d", BarDescr * NForecast,
@@ -510,6 +544,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(1);
       buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("ORION shape: target PeriodNorm expected=%d actual=%d", BarDescr * NForecast,
@@ -518,6 +555,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(2);
       buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("ORION shape: target Conv3 expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -526,6 +566,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(3);
       buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast * 2 * EmbeddingSize))
         {
          PrintFormat("ORION shape: target Conv2 expected=%d actual=%d", BarDescr * NForecast * 2 * EmbeddingSize,
@@ -534,6 +577,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(4);
       buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("ORION shape: target final Conv expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -542,6 +588,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(-1);
       buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("ORION shape: target output PeriodNorm expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -549,6 +598,9 @@ bool ORIONValidateShapes(const bool training = true)
          ReturnFalse;
         }
       buffer = ORIONFutureTranspose.getOutput();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("ORION shape: future transpose expected=%d actual=%d", BarDescr * NForecast,
@@ -558,6 +610,9 @@ bool ORIONValidateShapes(const bool training = true)
      }
    layer = ORIONMarket.Layer(-1);
    buffer = (layer ? layer.getOutput() : NULL);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!buffer || buffer.Total() != NScenarios * BarDescr * NForecast * EmbeddingSize)
      {
       PrintFormat("ORION shape: Scenario Z expected=%d actual=%d", NScenarios * BarDescr * NForecast * EmbeddingSize,
@@ -565,6 +620,9 @@ bool ORIONValidateShapes(const bool training = true)
       ReturnFalse;
      }
    buffer = ORIONForecast.GetU();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!buffer || buffer.Total() != (NScenarios * BarDescr * NForecast))
      {
       PrintFormat("ORION shape: Scenario U expected=%d actual=%d", NScenarios * BarDescr * NForecast,
@@ -572,6 +630,9 @@ bool ORIONValidateShapes(const bool training = true)
       ReturnFalse;
      }
    buffer = ORIONForecast.GetPi();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!buffer || buffer.Total() != NScenarios)
      {
       PrintFormat("ORION shape: Scenario Pi expected=%d actual=%d", NScenarios,
@@ -580,6 +641,9 @@ bool ORIONValidateShapes(const bool training = true)
      }
    if(ORIONForecast.Variables() != BarDescr || ORIONForecast.Scenarios() != NScenarios ||
       ORIONForecast.Horizon() != NForecast || ORIONForecast.Dimension() != EmbeddingSize ||
+//+------------------------------------------------------------------+
+//| Function ActiveTrajectories.                                     |
+//+------------------------------------------------------------------+
       ORIONForecast.ActiveTrajectories() > TopK)
      {
       PrintFormat("ORION shape: Forecast V=%d/%d K=%d/%d H=%d/%d D=%d/%d active=%d/%d",
@@ -591,7 +655,7 @@ bool ORIONValidateShapes(const bool training = true)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONHashUInt.                                        |
 //+------------------------------------------------------------------+
 ulong ORIONHashUInt(ulong hash, const ulong value)
   {
@@ -599,7 +663,7 @@ ulong ORIONHashUInt(ulong hash, const ulong value)
    return hash * ulong(1099511628211);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONHashText.                                        |
 //+------------------------------------------------------------------+
 ulong ORIONHashText(ulong hash, const string text)
   {
@@ -608,7 +672,7 @@ ulong ORIONHashText(ulong hash, const string text)
    return hash;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONHashFile.                                        |
 //+------------------------------------------------------------------+
 ulong ORIONHashFile(ulong hash, const string file_name)
   {
@@ -620,6 +684,7 @@ ulong ORIONHashFile(ulong hash, const string file_name)
      { FileClose(handle); return 0; }
    uchar bytes[];
    if(ArrayResize(bytes, (int)length) != (int)length ||
+       // Read file payload as bytes after successful allocation.
       FileReadArray(handle, bytes, 0, (int)length) != (int)length)
      { FileClose(handle); return 0; }
    FileClose(handle);
@@ -628,7 +693,7 @@ ulong ORIONHashFile(ulong hash, const string file_name)
    return hash;
   }
 //+------------------------------------------------------------------+
-//| Exact signature of the unified Market/Scenario inference graph.      |
+//| Exact signature of the unified Market/Scenario inference grap... |
 //+------------------------------------------------------------------+
 ulong ORIONForecastSignature(void)
   {
@@ -651,7 +716,7 @@ ulong ORIONForecastSignature(void)
    return hash;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONForecastTrainingSignature.                       |
 //+------------------------------------------------------------------+
 ulong ORIONForecastTrainingSignature(const ulong forecast_signature)
   {
@@ -660,7 +725,7 @@ ulong ORIONForecastTrainingSignature(const ulong forecast_signature)
    return ORIONHashFile(forecast_signature, ORION_TARGET_FILE);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONWriteManifest.                                   |
 //+------------------------------------------------------------------+
 bool ORIONWriteManifest(const uint completed_epochs)
   {
@@ -700,7 +765,7 @@ bool ORIONWriteManifest(const uint completed_epochs)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONSaveCheckpoint.                                  |
 //+------------------------------------------------------------------+
 bool ORIONSaveCheckpoint(const uint completed_epochs)
   {
@@ -711,7 +776,7 @@ bool ORIONSaveCheckpoint(const uint completed_epochs)
    return ORIONWriteManifest(completed_epochs);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONInitIndicators.                                  |
 //+------------------------------------------------------------------+
 bool ORIONInitIndicators(void)
   {
@@ -721,13 +786,10 @@ bool ORIONInitIndicators(void)
            ATR.Create(Symb.Name(), TimeFrame, ATRPeriod) &&
            MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice));
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 #ifdef ORION_FORECAST_STUDY
 bool ORIONLoadForecastTraining(void);
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Creates or initializes ORIONForecastStudy.                       |
 //+------------------------------------------------------------------+
 bool CreateORIONForecastStudy(void)
   {
@@ -739,23 +801,35 @@ bool CreateORIONForecastStudy(void)
 //--- A missing, incomplete or incompatible checkpoint falls back to a clean,
 //--- independently randomized Forecast graph.
    bool resumed = ORIONLoadForecastTraining();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!resumed)
      {
       const int load_error = GetLastError();
       ORIONForecast = NULL;
       PrintFormat("ORION init: forecast restore=FAIL error=%d; creating new random model", load_error);
       ResetLastError();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!ORIONCreateNetworks())
         {
          PrintFormat("ORION init: forecast create=FAIL error=%d", GetLastError());
          ReturnFalse;
         }
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONValidateShapes())
      {
       Print("ORION init: shapes=FAIL");
       ReturnFalse;
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONInitIndicators())
      {
       PrintFormat("ORION init: indicators=FAIL error=%d", GetLastError());
@@ -764,6 +838,9 @@ bool CreateORIONForecastStudy(void)
    PrintFormat("ORION init: forecast=%s completed_epochs=%u batches=%I64u invalid=%I64u",
                (resumed ? "RESUMED" : "NEW"), ORIONCompletedEpochs, ORIONBatches, ORIONInvalidBatches);
    ORIONReady = true;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!EventChartCustom(ChartID(), 1, 0, 0, "Init"))
      {
       PrintFormat("ORION init: chart event=FAIL error=%d", GetLastError());
@@ -772,7 +849,7 @@ bool CreateORIONForecastStudy(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ReleaseORIONForecastStudy.                            |
 //+------------------------------------------------------------------+
 void ReleaseORIONForecastStudy(const int reason)
   {
@@ -782,7 +859,7 @@ void ReleaseORIONForecastStudy(const int reason)
    ORIONReady = false;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONPrepareLatentTarget.                             |
 //+------------------------------------------------------------------+
 bool ORIONPrepareLatentTarget(CBufferFloat *market_latent)
   {
@@ -820,7 +897,7 @@ bool ORIONPrepareLatentTarget(CBufferFloat *market_latent)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONProbeNet.                                        |
 //+------------------------------------------------------------------+
 bool ORIONProbeNet(CORIONNet &net, CBufferFloat *probe_state, double &latent[], const bool restore_training)
   {
@@ -852,7 +929,7 @@ bool ORIONProbeNet(CORIONNet &net, CBufferFloat *probe_state, double &latent[], 
    return (result && cleared && restored);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONProbeDrift.                                      |
 //+------------------------------------------------------------------+
 double ORIONProbeDrift(const double &before[], const double &after[])
   {
@@ -866,6 +943,8 @@ double ORIONProbeDrift(const double &before[], const double &after[])
      }
    return MathSqrt(square_sum / double((BarDescr * EmbeddingSize)));
   }
+//+------------------------------------------------------------------+
+//| Implements FormatScenarioCounts.                                 |
 //+------------------------------------------------------------------+
 string FormatScenarioCounts(const uint &counts[])
   {
@@ -919,9 +998,6 @@ bool ORIONCollectRecoverySmoke(ulong &hits[], double &responsibility_sum[], doub
      }
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool ORIONLogRecoverySmoke(const ulong &hits[], const double &responsibility_sum[],
                            const double &scale_sum[], const double &absolute_sum[],
                            const double &absolute_over_scale_sum[],
@@ -960,7 +1036,7 @@ bool ORIONLogRecoverySmoke(const ulong &hits[], const double &responsibility_sum
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONTrainBatch.                                      |
 //+------------------------------------------------------------------+
 bool ORIONTrainBatch(const int position)
   {
@@ -983,6 +1059,9 @@ bool ORIONTrainBatch(const int position)
    if(!ORIONPrepareLatentTarget(market_latent))
       ReturnFalse;
    const ulong responsibility_started = GetMicrosecondCount();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONForecast.BuildResponsibilities(GetPointer(ORIONLatentTarget), GetPointer(ORIONLatentDelta)))
      {
       //--- Commit only a completed device validation.  Infrastructure failures leave
@@ -1001,7 +1080,7 @@ bool ORIONTrainBatch(const int position)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Current-epoch progress uses the existing 12-float device summary |
+//| Current-epoch progress uses the existing 12-float device summ... |
 //+------------------------------------------------------------------+
 void ORIONShowForecastProgress(const double percent, const ulong failed_batches)
   {
@@ -1018,7 +1097,7 @@ void ORIONShowForecastProgress(const double percent, const ulong failed_batches)
                         percent, failed_batches));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements TrainORIONForecast.                                   |
 //+------------------------------------------------------------------+
 void TrainORIONForecast(void)
   {
@@ -1056,6 +1135,7 @@ void TrainORIONForecast(void)
 //--- every future target out of the diagnostic input.
    const int probe_position = MathMax(end - 1, 0);
    if(!CreateBuffers(probe_position + NForecast, GetPointer(ORIONProbeState),
+                     // Gets Pointer.
                      GetPointer(ORIONProbeTime), NULL))
      { PrintFormat("%s -> %d fixed probe unavailable", __FUNCTION__, __LINE__); return; }
    uint ticks = GetTickCount();
@@ -1075,6 +1155,7 @@ void TrainORIONForecast(void)
       if(ORIONRecoverySmoke &&
          (ArrayResize(smoke_hits, NScenarios) != NScenarios || ArrayResize(smoke_responsibility_sum, NScenarios) != NScenarios ||
           ArrayResize(smoke_scale_sum, NScenarios) != NScenarios || ArrayResize(smoke_absolute_sum, NScenarios) != NScenarios ||
+           // All temporary smoke buffers must resize to NScenarios.
           ArrayResize(smoke_absolute_over_scale_sum, NScenarios) != NScenarios))
         { PrintFormat("%s -> %d smoke counter allocation failed", __FUNCTION__, __LINE__); break; }
       ArrayInitialize(smoke_hits, 0);
@@ -1093,10 +1174,16 @@ void TrainORIONForecast(void)
       ORIONResponsibilityMicroseconds = 0;
       for(int position = start - HistoryBars - NForecast - 1; position >= end && !IsStopped() && !stop; position--)
         {
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
          if(!ORIONTrainBatch(position))
            {
             epoch_failures++;
             PrintFormat("ORION invalid batch epoch=%d position=%d line=%d", epoch, position, __LINE__);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
             if(GetTickCount() - ticks > 500)
               {
                const double percent = (double(pass) + 1.0 - double(position - end) / MathMax(start - end - HistoryBars - NForecast, 1)) * 100.0 / Epochs;
@@ -1105,6 +1192,9 @@ void TrainORIONForecast(void)
               }
             continue;
            }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
          if(ORIONRecoverySmoke)
            {
             if(!ORIONCollectRecoverySmoke(smoke_hits, smoke_responsibility_sum, smoke_scale_sum,
@@ -1114,6 +1204,9 @@ void TrainORIONForecast(void)
             if(smoke_batches >= smoke_limit)
                break;
            }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
          if(GetTickCount() - ticks > 500)
            {
             const double percent = (double(pass) + 1.0 - double(position - end) / MathMax(start - end - HistoryBars - NForecast, 1)) * 100.0 / Epochs;
@@ -1170,6 +1263,9 @@ void TrainORIONForecast(void)
       ORIONCompletedEpochs = epoch + 1;
      }
    Comment("");
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!stop)
      {
       //--- Successful forecast stage is sealed for the later Actor-Critic stage.
@@ -1183,7 +1279,7 @@ void TrainORIONForecast(void)
   }
 #endif
 //+------------------------------------------------------------------+
-//| Actor-Critic inference and composition helpers                   |
+//| Actor-Critic inference and composition helpers Implements ORI... |
 //+------------------------------------------------------------------+
 string ORIONManifestValue(const string file_name, const string key)
   {
@@ -1192,9 +1288,15 @@ string ORIONManifestValue(const string file_name, const string key)
       return "";
    const string prefix = key + "=";
    string value = "";
+//+------------------------------------------------------------------+
+//| Function while.                                                  |
+//+------------------------------------------------------------------+
    while(!FileIsEnding(handle))
      {
       const string line = FileReadString(handle);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(StringFind(line, prefix) == 0)
         {
          value = StringSubstr(line, StringLen(prefix));
@@ -1205,7 +1307,7 @@ string ORIONManifestValue(const string file_name, const string key)
    return value;
   }
 //+------------------------------------------------------------------+
-//| Static checkpoint fields which can be checked before CNet::Load. |
+//| Implements ORIONValidateForecastManifestHeader. Static checkp... |
 //+------------------------------------------------------------------+
 bool ORIONValidateForecastManifestHeader(void)
   {
@@ -1228,7 +1330,7 @@ bool ORIONValidateForecastManifestHeader(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONValidateForecastManifest.                        |
 //+------------------------------------------------------------------+
 bool ORIONValidateForecastManifest(const ulong signature, const bool training = false)
   {
@@ -1239,6 +1341,9 @@ bool ORIONValidateForecastManifest(const ulong signature, const bool training = 
 #define ORION_MANIFEST_EQ(KEY,VALUE) if(ORIONManifestValue(ORION_MANIFEST_FILE,KEY)!=(VALUE)) ReturnFalse
    ORION_MANIFEST_EQ("contract_signature", StringFormat("%I64u", ORIONForecast.ContractSignature()));
    ORION_MANIFEST_EQ("forecast_signature", StringFormat("%I64u", signature));
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(training)
      {
       const ulong target_hash = ORIONHashFile(ulong(1469598103934665603), ORION_TARGET_FILE);
@@ -1255,14 +1360,14 @@ bool ORIONValidateForecastManifest(const ulong signature, const bool training = 
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONCaptureFrozenBuffer.                             |
 //+------------------------------------------------------------------+
 bool ORIONCaptureFrozenBuffer(CBufferFloat *source, CBufferFloat &baseline)
   {
    return (source && source.BufferRead() && source.Total() > 0 && baseline.AssignArray(source));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONFrozenBufferEqual.                               |
 //+------------------------------------------------------------------+
 bool ORIONFrozenBufferEqual(CBufferFloat *source, CBufferFloat &baseline)
   {
@@ -1274,7 +1379,7 @@ bool ORIONFrozenBufferEqual(CBufferFloat *source, CBufferFloat &baseline)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONCaptureFrozenForecastBaseline.                   |
 //+------------------------------------------------------------------+
 bool ORIONCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -1303,7 +1408,7 @@ bool ORIONCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast = NULL
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONVerifyFrozenWeightsExact.                        |
 //+------------------------------------------------------------------+
 bool ORIONVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -1322,7 +1427,7 @@ bool ORIONVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast = NULL)
            ORIONFrozenBufferEqual(confidence, ORIONFrozenConfidenceWeights));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONVerifyFrozenCodebookExact.                       |
 //+------------------------------------------------------------------+
 bool ORIONVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -1337,14 +1442,14 @@ bool ORIONVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast = NULL)
            ORIONFrozenBufferEqual(current.GetCodebook().GetInactivityAge(), ORIONFrozenInactivityAge));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONVerifyFrozenForecastExact.                       |
 //+------------------------------------------------------------------+
 bool ORIONVerifyFrozenForecastExact(CNeuronScenarioForecast *forecast = NULL)
   {
    return (ORIONVerifyFrozenWeightsExact(forecast) && ORIONVerifyFrozenCodebookExact(forecast));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONLoadForecastInference.                           |
 //+------------------------------------------------------------------+
 bool ORIONLoadForecastInference(void)
   {
@@ -1352,12 +1457,18 @@ bool ORIONLoadForecastInference(void)
    ORIONForecast = NULL;
    float error = 0, undefine = 0, forecast = 0;
    datetime studied = 0;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONMarket.Load(ORION_MARKET_FILE, error, undefine, forecast, studied, true))
      {
       Print("ORION inference: model load=FAIL");
       ReturnFalse;
      }
    ORIONForecast = (CNeuronScenarioForecast*)ORIONMarket.Layer(-1);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONForecast || ORIONForecast.Type() != defNeuronScenarioForecast)
      {
       Print("ORION inference: forecast layer=FAIL");
@@ -1365,13 +1476,17 @@ bool ORIONLoadForecastInference(void)
      }
    if(!ConfigureForecastRecoveryAge())
       ReturnFalse;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(ORIONForecast.GetTopK() != TopK)
      {
       PrintFormat("ORION inference: TopK expected=%d actual=%d", TopK, ORIONForecast.GetTopK());
       ReturnFalse;
      }
-//--- Target and its future-window buffers are training-only. Inference audits
-//--- only the Market/Forecast path.
+//+------------------------------------------------------------------+
+//| only the Market/Forecast path. Target and its future-window b... |
+//+------------------------------------------------------------------+
    if(!ORIONValidateShapes(false))
      {
       Print("ORION inference: shape audit=FAIL");
@@ -1379,11 +1494,17 @@ bool ORIONLoadForecastInference(void)
      }
    ORIONMarket.TrainMode(false);
    const ulong signature = ORIONForecastSignature();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONValidateForecastManifest(signature))
      {
       Print("ORION inference: manifest=FAIL");
       ReturnFalse;
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!ORIONCaptureFrozenForecastBaseline())
      {
       Print("ORION inference: frozen baseline=FAIL");
@@ -1393,15 +1514,16 @@ bool ORIONLoadForecastInference(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Full forecast-training restore. Target is required here because  |
-//| its fixed random projection defines the detached latent targets. |
+//| Full forecast-training restore. Target is required here becau... |
 //+------------------------------------------------------------------+
 bool ORIONLoadForecastTraining(void)
   {
    if(!FileIsExist(ORION_MANIFEST_FILE, FILE_COMMON) ||
       !FileIsExist(ORION_MARKET_FILE, FILE_COMMON) || !FileIsExist(ORION_TARGET_FILE, FILE_COMMON))
       ReturnFalse;
-//--- Avoid a partial CNet::Load before the fallback random graph is created.
+//+------------------------------------------------------------------+
+//| Avoid a partial CNet::Load before the fallback random graph i... |
+//+------------------------------------------------------------------+
    if(!ORIONValidateForecastManifestHeader())
      {
       Print("ORION restore: manifest static contract=FAIL");
@@ -1439,7 +1561,7 @@ bool ORIONLoadForecastTraining(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONAddCross.                                        |
 //+------------------------------------------------------------------+
 bool ORIONAddCross(CArrayObj *description, const bool critic)
   {
@@ -1462,9 +1584,6 @@ bool ORIONAddCross(CArrayObj *description, const bool critic)
    DeleteObj(descr);
    ReturnFalse;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool ORIONAddConv(CArrayObj *description, const uint count, const uint window, const uint output,
                   const uint variables, const ENUM_ACTIVATION activation)
   {
@@ -1486,7 +1605,7 @@ bool ORIONAddConv(CArrayObj *description, const uint count, const uint window, c
    ReturnFalse;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Creates or initializes ORIONActorCriticDescriptions.             |
 //+------------------------------------------------------------------+
 bool CreateORIONActorCriticDescriptions(CArrayObj *&actor, CArrayObj *&critic)
   {
@@ -1508,7 +1627,7 @@ bool CreateORIONActorCriticDescriptions(CArrayObj *&actor, CArrayObj *&critic)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONValidatePolicyShape.                             |
 //+------------------------------------------------------------------+
 bool ORIONValidatePolicyShape(CORIONNet &net, const bool critic)
   {
@@ -1536,7 +1655,7 @@ bool ORIONValidatePolicyShape(CORIONNet &net, const bool critic)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONForwardForecast.                                 |
 //+------------------------------------------------------------------+
 bool ORIONForwardForecast(const int position, CBufferFloat *state, CBufferFloat *time)
   {
@@ -1549,7 +1668,7 @@ bool ORIONForwardForecast(const int position, CBufferFloat *state, CBufferFloat 
            pi.Total() == NScenarios && z.GetIndex() >= 0 && u.GetIndex() >= 0 && pi.GetIndex() >= 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Builds CriticInput.                                              |
 //+------------------------------------------------------------------+
 bool BuildCriticInput(CBufferFloat *account, CBufferFloat *action, CBufferFloat *combined)
   {
@@ -1563,9 +1682,7 @@ bool BuildCriticInput(CBufferFloat *account, CBufferFloat *action, CBufferFloat 
    return ORIONDevice.Join2(account, AccountDescr, action, NActions, combined);
   }
 //+------------------------------------------------------------------+
-//| ORION-only reward shaping.  CogDriver's CheckAction() remains    |
-//| untouched; a no-trade penalty represents one executable minimum  |
-//| lot instead of the former balance-derived virtual position.      |
+//| Implements EvaluateAction. lot instead of the former balance-... |
 //+------------------------------------------------------------------+
 double EvaluateAction(CBufferFloat *action, const double balance, const uint position)
   {
@@ -1586,14 +1703,15 @@ double EvaluateAction(CBufferFloat *action, const double balance, const uint pos
    return reward * (min_lot / virtual_lot);
   }
 //+------------------------------------------------------------------+
-//| Realized-future teacher.  CreateBuffers writes only the detached |
-//| raw future window here; the live Market/Scenario state is left   |
-//| untouched, so this cannot leak future data into Actor forward.   |
+//| Builds TeacherAction. raw future window here; the live Market... |
 //+------------------------------------------------------------------+
 bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat *action, double &reward)
   {
    reward = 0;
    if(!account || !action || position < 0 || position + HistoryBars + NForecast > int(Rates.Size()) ||
+//+------------------------------------------------------------------+
+//| Function Total.                                                  |
+//+------------------------------------------------------------------+
       account.Total() != AccountDescr)
      {
       PrintFormat("BuildTeacherAction input position=%d rates=%d account=%d action=%d",
@@ -1601,6 +1719,9 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
       ReturnFalse;
      }
    CBufferFloat teacher_state, teacher_time;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!CreateBuffers(position, GetPointer(teacher_state), GetPointer(teacher_time), GetPointer(ORIONFuture)))
      {
       PrintFormat("BuildTeacherAction CreateBuffers position=%d future=%d index=%d",
@@ -1608,33 +1729,51 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
       ReturnFalse;
      }
    vector<float> account_values;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(account.GetData(account_values) != AccountDescr)
      {
       PrintFormat("BuildTeacherAction account data total=%d index=%d", account.Total(), account.GetIndex());
       ReturnFalse;
      }
    const vector<float> teacher = OraculAction(account_values, GetPointer(ORIONFuture));
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(teacher.Size() != NActions)
      {
       PrintFormat("BuildTeacherAction oracle size=%d expected=%d", teacher.Size(), NActions);
       ReturnFalse;
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!action.AssignArray(teacher))
      {
       Print("BuildTeacherAction action AssignArray");
       ReturnFalse;
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(action.GetIndex() < 0 && !action.BufferCreate(ORIONMarket.GetOpenCL()))
      {
       PrintFormat("BuildTeacherAction action BufferCreate total=%d index=%d", action.Total(), action.GetIndex());
       ReturnFalse;
      }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(action.GetIndex() >= 0 && !action.BufferWrite())
      {
       PrintFormat("BuildTeacherAction action BufferWrite total=%d index=%d", action.Total(), action.GetIndex());
       ReturnFalse;
      }
    reward = EvaluateAction(action, MathMax(0.0, double(account_values[0]) * EtalonBalance), (uint)position);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!MathIsValidNumber(reward))
      {
       PrintFormat("BuildTeacherAction reward invalid %.8f", reward);
@@ -1643,7 +1782,7 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
    return true;
   }
 //+------------------------------------------------------------------+
-//| A valid random policy action expands Critic coverage only.       |
+//| A valid random policy action expands Critic coverage only. Bu... |
 //+------------------------------------------------------------------+
 bool BuildRandomAction(const int position, CBufferFloat *account, CBufferFloat *action, double &reward)
   {
@@ -1688,7 +1827,7 @@ bool BuildRandomAction(const int position, CBufferFloat *account, CBufferFloat *
    return MathIsValidNumber(reward);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONClampAction.                                     |
 //+------------------------------------------------------------------+
 bool ORIONClampAction(CBufferFloat *source, CBufferFloat *target)
   {
@@ -1703,7 +1842,7 @@ bool ORIONClampAction(CBufferFloat *source, CBufferFloat *target)
    return (target.GetIndex() < 0 || target.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONWriteACManifest.                                 |
 //+------------------------------------------------------------------+
 bool ORIONWriteACManifest(const ulong forecast_signature)
   {
@@ -1739,7 +1878,7 @@ bool ORIONWriteACManifest(const ulong forecast_signature)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONValidateACManifest.                              |
 //+------------------------------------------------------------------+
 bool ORIONValidateACManifest(const bool required)
   {
@@ -1766,6 +1905,9 @@ bool ORIONValidateACManifest(const bool required)
    ORION_AC_MANIFEST_EQ("q1_hash", StringFormat("%I64u", ORIONHashFile(ulong(1469598103934665603), ORION_Q1_FILE)));
    ORION_AC_MANIFEST_EQ("q2_hash", StringFormat("%I64u", ORIONHashFile(ulong(1469598103934665603), ORION_Q2_FILE)));
 #undef ORION_AC_MANIFEST_EQ
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(ORIONManifestValue(ORION_AC_MANIFEST_FILE, "generation") == "")
      {
       Print("ORION policy manifest: generation is absent");
@@ -1774,7 +1916,7 @@ bool ORIONValidateACManifest(const bool required)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Shared Actor-Critic lifecycle helpers                            |
+//| Implements ORIONLoadPolicyNet. Shared Actor-Critic lifecycle ... |
 //+------------------------------------------------------------------+
 bool ORIONLoadPolicyNet(CORIONNet &net, const string file_name)
   {
@@ -1783,7 +1925,7 @@ bool ORIONLoadPolicyNet(CORIONNet &net, const string file_name)
    return net.Load(file_name, error, undefine, forecast, studied, true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONCreatePolicySet.                                 |
 //+------------------------------------------------------------------+
 bool ORIONCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
   {
@@ -1803,6 +1945,9 @@ bool ORIONCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
       q2.SetOpenCL(ORIONMarket.GetOpenCL());
    DeleteObj(actor_descr);
    DeleteObj(critic_descr);
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(result)
      {
       //--- A CNet temporary OpenCL context must be released before creating the
@@ -1814,9 +1959,6 @@ bool ORIONCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
      }
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool ORIONLoadOrCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2,
                                 const bool allow_create)
   {
@@ -1824,6 +1966,9 @@ bool ORIONLoadOrCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2,
    const bool loaded = (manifest_exists && ORIONValidateACManifest(true) &&
                         ORIONLoadPolicyNet(actor, ORION_ACTOR_FILE) &&
                         ORIONLoadPolicyNet(q1, ORION_Q1_FILE) && ORIONLoadPolicyNet(q2, ORION_Q2_FILE));
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(!loaded)
      {
       if(manifest_exists)
@@ -1843,7 +1988,7 @@ bool ORIONLoadOrCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONSavePolicySet.                                   |
 //+------------------------------------------------------------------+
 bool ORIONSavePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
   {
@@ -1857,7 +2002,7 @@ bool ORIONSavePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
            ORIONWriteACManifest(ORIONLastSignature));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONLoadInferenceActor.                              |
 //+------------------------------------------------------------------+
 bool ORIONLoadInferenceActor(CORIONNet &actor)
   {
@@ -1870,7 +2015,7 @@ bool ORIONLoadInferenceActor(CORIONNet &actor)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ReadAction.                                           |
 //+------------------------------------------------------------------+
 bool ReadAction(CORIONNet &net, CBufferFloat *target)
   {
@@ -1886,7 +2031,7 @@ bool ReadAction(CORIONNet &net, CBufferFloat *target)
    return (output == target && target.Total() == NActions);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONAdvanceAccountTime.                              |
 //+------------------------------------------------------------------+
 bool ORIONAdvanceAccountTime(CBufferFloat *current, const datetime next_time, CBufferFloat *next)
   {
@@ -1912,7 +2057,7 @@ bool ORIONAdvanceAccountTime(CBufferFloat *current, const datetime next_time, CB
    return (next.GetIndex() < 0 || next.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONForwardForecastState.                            |
 //+------------------------------------------------------------------+
 bool ORIONForwardForecastState(CBufferFloat *state)
   {
@@ -1929,9 +2074,6 @@ bool ORIONForwardForecastState(CBufferFloat *state)
       ReturnFalse;
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool ORIONBuildLiveAccount(const double previous_balance, const double previous_equity,
                            const datetime state_time, CBufferFloat *account,
                            double &buy_value, double &sell_value)
@@ -1981,7 +2123,7 @@ bool ORIONBuildLiveAccount(const double previous_balance, const double previous_
    return (account.AssignArray(values) && (account.GetIndex() < 0 || account.BufferWrite()));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONRefreshLiveMarket.                               |
 //+------------------------------------------------------------------+
 bool ORIONRefreshLiveMarket(CBufferFloat *state, CBufferFloat *time_state)
   {
@@ -2004,7 +2146,7 @@ bool ORIONRefreshLiveMarket(CBufferFloat *state, CBufferFloat *time_state)
    return CreateBuffers(0, state, time_state, (CBufferFloat*)NULL);
   }
 //+------------------------------------------------------------------+
-//| One execution contract for historical and live policy actions.   |
+//| Checks ExecutableOrder. One execution contract for historical... |
 //+------------------------------------------------------------------+
 bool IsExecutableOrder(const double lot, const double tp_fraction, const double sl_fraction)
   {
@@ -2013,7 +2155,7 @@ bool IsExecutableOrder(const double lot, const double tp_fraction, const double 
            sl_fraction * MaxSL * Symb.Point() > stops);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements NormalizeLot.                                         |
 //+------------------------------------------------------------------+
 double NormalizeLot(const double lot)
   {
@@ -2022,7 +2164,7 @@ double NormalizeLot(const double lot)
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ORIONValidateAction.                                  |
 //+------------------------------------------------------------------+
 bool ORIONValidateAction(CBufferFloat *action)
   {
@@ -2034,9 +2176,6 @@ bool ORIONValidateAction(CBufferFloat *action)
          ReturnFalse;
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_value, double &margin_penalty,
                         bool &market_closed)
   {
@@ -2062,14 +2201,23 @@ bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_valu
       if((buy_value - lot) >= min_lot)
          ClosePartial(POSITION_TYPE_BUY, buy_value - lot);
       else
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
          if((lot - buy_value) >= min_lot && !Trade.Buy(lot - buy_value, Symb.Name(), Symb.Ask(), sl, tp))
            {
             const uint retcode = Trade.ResultRetcode();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
             if(retcode == TRADE_RETCODE_MARKET_CLOSED)
               {
                market_closed = true;
                return true;
               }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
             if(retcode != 10019)
               {
                PrintFormat("ORION buy execution failed: retcode=%u %s", retcode, Trade.ResultRetcodeDescription());
@@ -2092,14 +2240,23 @@ bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_valu
       if((sell_value - lot) >= min_lot)
          ClosePartial(POSITION_TYPE_SELL, sell_value - lot);
       else
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
          if((lot - sell_value) >= min_lot && !Trade.Sell(lot - sell_value, Symb.Name(), Symb.Bid(), sl, tp))
            {
             const uint retcode = Trade.ResultRetcode();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
             if(retcode == TRADE_RETCODE_MARKET_CLOSED)
               {
                market_closed = true;
                return true;
               }
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
             if(retcode != 10019)
               {
                PrintFormat("ORION sell execution failed: retcode=%u %s", retcode, Trade.ResultRetcodeDescription());
@@ -2111,7 +2268,7 @@ bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_valu
    return true;
   }
 //+------------------------------------------------------------------+
-//| Inference callers do not train from an order rejection.          |
+//| Implements ORIONExecuteAction. Inference callers do not train... |
 //+------------------------------------------------------------------+
 bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_value)
   {
@@ -2120,9 +2277,6 @@ bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_valu
    return ORIONExecuteAction(action, buy_value, sell_value, margin_penalty, market_closed);
   }
 #endif
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool PolicyBackward(CORIONNet &actor, CORIONNet &critic, CBufferFloat *actor_target,
                     CNet *scenario_net, const int scenario_layer)
   {
@@ -2150,7 +2304,6 @@ bool PolicyBackward(CORIONNet &actor, CORIONNet &critic, CBufferFloat *actor_tar
   }
 //+------------------------------------------------------------------+
 //| One historical-bar account transition.  CheckAction remains the  |
-//| reward contract; this function only carries account state.       |
 //+------------------------------------------------------------------+
 bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int position,
                     const double min_balance, CBufferFloat *next, double &reward, bool &terminal)
@@ -2172,6 +2325,9 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    if(!OrderCalcMargin(ORDER_TYPE_BUY, Symb.Name(), 1, Rates[position].open, margin))
       ReturnFalse;
    const double min_lot = Symb.LotsMin();
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
    if(balance <= min_balance || balance < margin * min_lot)
      {
       terminal = true;
@@ -2194,17 +2350,25 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    double next_buy = 0, next_sell = 0;
    double next_buy_profit = 0, next_sell_profit = 0;
    double realized = 0;
-//--- An invalid target liquidates every open position at the current boundary.
+//+------------------------------------------------------------------+
+//| An invalid target liquidates every open position at the curre... |
+//+------------------------------------------------------------------+
    if(!open_buy && !open_sell)
      {
       realized = current_buy_profit + current_sell_profit;
      }
    else
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(open_buy)
         {
          //--- A reverse target closes the Sell; a same-side reduction realizes only its
          //--- proportional carried P/L.  The retained Buy keeps its marked-to-market P/L.
          realized += current_sell_profit;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
          if(current_buy > target_buy && current_buy > 0)
            {
             const double closed = current_buy - target_buy;
@@ -2231,6 +2395,9 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
         {
          //--- Symmetric Sell lifecycle.  The SL-before-TP order matches CheckAction.
          realized += current_buy_profit;
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
          if(current_sell > target_sell && current_sell > 0)
            {
             const double closed = current_sell - target_sell;
@@ -2272,3 +2439,4 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    return (next.GetIndex() < 0 || next.BufferWrite());
   }
 //+------------------------------------------------------------------+
+

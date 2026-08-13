@@ -1,4 +1,4 @@
-﻿#ifndef NEURONET_BUILDING_FACADE
+#ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
@@ -2649,3 +2649,4 @@ void CNeuronMultiScaleExcitation::TrainMode(bool flag)
    CNeuronBaseOCL::TrainMode(flag);
    cExcitation.TrainMode(bTrain);
   }
+

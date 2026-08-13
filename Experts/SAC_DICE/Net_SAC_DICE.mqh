@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                 Net_SAC_DICE.mqh |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Net_SAC_DICE.mqh |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -11,11 +11,11 @@
 //+------------------------------------------------------------------+
 #include "..\RL\FQF.mqh"
 //---
-#define defSACDICE             0x7795   ///<Neuron Net 
+#define defSACDICE             0x7795   ///<Neuron Net
 #define LogProbMultiplier      1.0e-5f
 
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CNet_SAC_DICE  : protected CNet
   {
@@ -52,18 +52,21 @@ public:
    bool              Load(string file_name, bool common = true);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet_SAC_DICE::CNet_SAC_DICE(void)  :  fLambda(1.0e-5f),
                                        fLambda_m(0),
                                        fLambda_v(0),
                                        fLoss1(0),
                                        fLoss2(0),
+                                       // Implements fZeta.
                                        fZeta(0)
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes .                                       |
 //+------------------------------------------------------------------+
 bool CNet_SAC_DICE::Create(CArrayObj *actor, CArrayObj *critic, CArrayObj *zeta, CArrayObj *nu, int latent_layer = -1)
   {
@@ -126,7 +129,7 @@ bool CNet_SAC_DICE::Create(CArrayObj *actor, CArrayObj *critic, CArrayObj *zeta,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CNet_SAC_DICE::Study(CArrayFloat *State,
                           CArrayFloat *SecondInput,
@@ -321,7 +324,9 @@ bool CNet_SAC_DICE::Study(CArrayFloat *State,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Gets LogProbability.                                           |
 //+------------------------------------------------------------------+
 vector<float> CNet_SAC_DICE::GetLogProbability(CBufferFloat *Actions)
   {
@@ -335,7 +340,9 @@ vector<float> CNet_SAC_DICE::GetLogProbability(CBufferFloat *Actions)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Saves .                                                        |
 //+------------------------------------------------------------------+
 bool CNet_SAC_DICE::Save(string file_name, bool common = true)
   {
@@ -374,7 +381,9 @@ bool CNet_SAC_DICE::Save(string file_name, bool common = true)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads .                                                        |
 //+------------------------------------------------------------------+
 bool CNet_SAC_DICE::Load(string file_name, bool common = true)
   {
@@ -433,3 +442,4 @@ bool CNet_SAC_DICE::Load(string file_name, bool common = true)
    return true;
   }
 //+------------------------------------------------------------------+
+

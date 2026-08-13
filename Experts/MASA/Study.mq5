@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #include "Trajectory.mqh"
@@ -16,7 +16,7 @@
 //+------------------------------------------------------------------+
 input int                  Iterations     = 100000;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Actor;
@@ -162,6 +162,7 @@ void Train(void)
          continue;
         }
       if(!state.Assign(Buffer[tr].States[i].state) ||
+         // Implements MathAbs.
          MathAbs(state).Sum() == 0 ||
          !bState.AssignArray(state))
         {
@@ -170,6 +171,7 @@ void Train(void)
         }
       if(!state.Assign(Buffer[tr].States[i+NForecast].state) ||
          !state.Resize(NForecast*BarDescr) ||
+         // Implements MathAbs.
          MathAbs(state).Sum() == 0 ||
          !bForecast.AssignArray(state))
         {
@@ -271,3 +273,4 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
+

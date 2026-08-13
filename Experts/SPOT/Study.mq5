@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #include "Trajectory.mqh"
@@ -19,7 +19,7 @@ input float                Tau            = 0.01f;
 input float                MaxErrorActorStudy   = 0.15f;
 input float                MeanCVAEError  = 1.06f;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Actor;
@@ -513,7 +513,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CAGrad.               |
 //+------------------------------------------------------------------+
 vector<float> CAGrad(vector<float> &grad)
   {
@@ -567,7 +569,9 @@ vector<float> CAGrad(vector<float> &grad)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Gets Targets.                                                  |
 //+------------------------------------------------------------------+
 STarget GetTargets(double quant, vector<float> &embedding, matrix<float> &state_embedding, matrix<float> &rewards, matrix<float> &actions)
   {
@@ -623,3 +627,4 @@ STarget GetTargets(double quant, vector<float> &embedding, matrix<float> &state_
    return result;
   }
 //+------------------------------------------------------------------+
+

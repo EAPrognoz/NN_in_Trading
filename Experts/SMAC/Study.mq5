@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #include "Trajectory.mqh"
@@ -17,7 +17,7 @@
 input int                  Iterations     = 10000;
 input float                Tau            = 0.001f;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Actor;
@@ -406,7 +406,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements KNNReward.                                          |
 //+------------------------------------------------------------------+
 vector<float> KNNReward(ulong k, vector<float> &embedding, matrix<float> &state_embedding, matrix<float> &rewards)
   {
@@ -448,7 +450,9 @@ vector<float> KNNReward(ulong k, vector<float> &embedding, matrix<float> &state_
    return (result);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CAGrad.               |
 //+------------------------------------------------------------------+
 vector<float> CAGrad(vector<float> &grad)
   {
@@ -502,3 +506,4 @@ vector<float> CAGrad(vector<float> &grad)
    return result;
   }
 //+------------------------------------------------------------------+
+

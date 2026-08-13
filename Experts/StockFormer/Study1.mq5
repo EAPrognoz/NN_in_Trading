@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #include "Trajectory.mqh"
@@ -16,7 +16,7 @@
 //+------------------------------------------------------------------+
 input int                  Iterations     = 100000;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 RelateEncoder;
@@ -219,6 +219,7 @@ void Train(void)
         }
       if(!state.Assign(Buffer[tr].States[i + NForecast].state) ||
          !state.Resize((NForecast + 1)*BarDescr) ||
+         // Implements MathAbs.
          MathAbs(state).Sum() == 0)
         {
          iter --;
@@ -262,7 +263,7 @@ void Train(void)
          break;
         }
       for(int i = 0; i < NForecast - 1; i++)
-         target += (predict.Row(i) - predict.Row(i + 1)) / result * 
+         target += (predict.Row(i) - predict.Row(i + 1)) / result *
                               MathPow(DiscFactor, NForecast - i - 1);
       if(!bLong.AssignArray(target))
         {
@@ -306,3 +307,4 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
+

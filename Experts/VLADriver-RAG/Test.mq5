@@ -1,7 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                                         Test.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//| Test.mq5                                                         |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -22,15 +20,10 @@ input int                  Agent = 1;
 input group                "---- Base Memory ----"
 input bool                 LoadBaseMemorySnapshot = true;
 input string               BaseMemorySnapshotPath = "VLADriverBaseMemory.snapshot";
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CNet                 cActor;
 CNet                 cStateEncoder;
-//---
 
 datetime             dtStudied;
-//---
 CBufferFloat         bState;
 CBufferFloat         bContext;
 CBufferFloat         bTime;
@@ -39,7 +32,7 @@ CBufferFloat         *Result;
 double               PrevBalance = 0;
 double               PrevEquity = 0;
 bool                 bFillStack = true;
-//--- Test binds an immutable library-owned RAG image and never mutates it.
+// Test binds an immutable library-owned RAG image and never mutates it.
 CNeuronRAGMemory     RAGMemory;
 bool                 BaseMemoryNullBound = true;
 //+------------------------------------------------------------------+
@@ -49,22 +42,16 @@ int OnInit()
   {
    if(!MQLInfoInteger(MQL_TESTER))
       return INIT_FAILED;
-//---
    BaseMemoryNullBound = true;
-//---
    if(!Symb.Name(_Symbol))
       return INIT_FAILED;
    Symb.Refresh();
-//---
    if(!RSI.Create(Symb.Name(), TimeFrame, RSIPeriod, RSIPrice))
       return INIT_FAILED;
-//---
    if(!CCI.Create(Symb.Name(), TimeFrame, CCIPeriod, CCIPrice))
       return INIT_FAILED;
-//---
    if(!ATR.Create(Symb.Name(), TimeFrame, ATRPeriod))
       return INIT_FAILED;
-//---
    if(!MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice))
       return INIT_FAILED;
    if(!RSI.BufferResize(StackSize + HistoryBars) || !CCI.BufferResize(StackSize + HistoryBars) ||
@@ -73,10 +60,9 @@ int OnInit()
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return INIT_FAILED;
      }
-//---
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
       return INIT_FAILED;
-//--- load models
+// Load Models.
    float temp;
    if(!cStateEncoder.Load(FileName + "StEnc.nnw", temp, temp, temp, dtStudied, true))
      {
@@ -88,37 +74,33 @@ int OnInit()
       Print("Error load pretrained Actor");
       return INIT_FAILED;
      }
-//---
    cActor.TrainMode(false);
    cStateEncoder.TrainMode(false);
    cStateEncoder.SetOpenCL(cActor.GetOpenCL());
    cStateEncoder.Clear();
    CLayerDescription memory_description;
    if(!CreateRAGMemoryDescription(memory_description) ||
-      !RAGMemory.Init(0,0,cActor.GetOpenCL(),memory_description))
+      !RAGMemory.Init(0, 0, cActor.GetOpenCL(), memory_description))
       return INIT_FAILED;
    if(LoadBaseMemorySnapshot && RAGMemory.LoadPublishedSnapshot(BaseMemorySnapshotPath))
       BaseMemoryNullBound = false;
    else
       if(!RAGMemory.BindNullInference())
          return INIT_FAILED;
-   if(!cActor.BindRAGMemory(2,GetPointer(RAGMemory)))
+   if(!cActor.BindRAGMemory(2, GetPointer(RAGMemory)))
       return INIT_FAILED;
-//---
    cActor.getResults(Result);
    if(Result.Total() != NActions)
      {
       PrintFormat("The scope of the actor does not match the actions count (%d <> %d)", NActions, Result.Total());
       return INIT_FAILED;
      }
-//---
    cActor.GetLayerOutput(0, Result);
    if(Result.Total() != AccountDescr)
      {
       PrintFormat("Input size of Actor doesn't match context description (%d <> %d)", Result.Total(), AccountDescr);
       return INIT_FAILED;
      }
-//---
    cStateEncoder.GetLayerOutput(0, Result);
    if(Result.Total() != (HistoryBars * BarDescr))
      {
@@ -131,11 +113,9 @@ int OnInit()
       PrintFormat("StateEncoder scenario layer doesn't match memory embedding (%d <> %d)", Result.Total(), EmbeddingSize);
       return INIT_FAILED;
      }
-//---
    PrevBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PrevEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    bFillStack = true;
-//---
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
@@ -143,7 +123,6 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-//---
    DeleteObj(Result);
    DeleteObj(bAction);
   }
@@ -161,10 +140,8 @@ void OnTick()
         }
       bFillStack = false;
      }
-//---
    if(!IsNewBar())
       return;
-//---
    int bars = CopyRates(Symb.Name(), TimeFrame, iTime(Symb.Name(), TimeFrame, 1), HistoryBars, Rates);
    if(bars < 0)
      {
@@ -176,7 +153,6 @@ void OnTick()
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-//---
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
@@ -185,13 +161,11 @@ void OnTick()
    Symb.RefreshRates();
    bTime.Clear();
    bTime.Reserve(HistoryBars);
-//---
    if(!CreateBuffers(0, GetPointer(bState), GetPointer(bTime), (CBufferFloat*)NULL))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-//---
    double buy_value = 0, sell_value = 0, buy_profit = 0, sell_profit = 0;
    double position_discount = 0;
    double multiplier = 1.0 / (60.0 * 60.0 * 10.0);
@@ -215,7 +189,6 @@ void OnTick()
         }
       position_discount += (current - PositionGetInteger(POSITION_TIME)) * multiplier * MathAbs(profit);
      }
-//---
    vector<float> account = vector<float>::Zeros(AccountDescr);
    account[0] = float(AccountInfoDouble(ACCOUNT_BALANCE) / EtalonBalance);
    account[1] = float((AccountInfoDouble(ACCOUNT_BALANCE) - PrevBalance) / MathMax(PrevBalance, 1.0));
@@ -235,7 +208,6 @@ void OnTick()
    account[11] = (float)MathSin(x != 0 ? 2.0 * M_PI * x : 0);
    x = time / (double)PeriodSeconds(PERIOD_D1);
    account[12] = (float)MathSin(x != 0 ? 2.0 * M_PI * x : 0);
-//---
    if(!bContext.AssignArray(account))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -246,26 +218,22 @@ void OnTick()
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-   if(!RAGMemory.Retrieve(GetPointer(cStateEncoder),StateScenarioLayer))
+   if(!RAGMemory.Retrieve(GetPointer(cStateEncoder), StateScenarioLayer))
      {
       PrintFormat("%s -> %d RAG retrieval failed", __FUNCTION__, __LINE__);
       return;
      }
    if(!cActor.feedForward((CBufferFloat*)GetPointer(bContext), 1, false,
-                          GetPointer(cStateEncoder),StateScenarioLayer))
+                          GetPointer(cStateEncoder), StateScenarioLayer))
      {
       PrintFormat("%s -> %d Actor forward failed", __FUNCTION__, __LINE__);
       return;
      }
-//---
    PrevBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PrevEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-//---
    cActor.getResults(bAction);
-//---
    if(bAction.Total() < NActions)
       bAction.BufferInit(NActions, 0);
-//---
    double min_lot = Symb.LotsMin();
    double step_lot = Symb.LotsStep();
    double stops = (MathMax(Symb.StopsLevel(), 1) + Symb.Spread()) * Symb.Point();
@@ -279,7 +247,7 @@ void OnTick()
       bAction.Update(3, (bAction[3] - bAction[0]));
       bAction.Update(0, 0);
      }
-//--- buy control
+// Buy Control.
    if(bAction[0] < min_lot ||
       (bAction[1] * MaxTP * Symb.Point()) <= 2 * stops ||
       (bAction[2] * MaxSL * Symb.Point()) <= stops
@@ -304,7 +272,7 @@ void OnTick()
                Trade.Buy(buy_lot - buy_value, Symb.Name(), Symb.Ask(), buy_sl, buy_tp);
         }
      }
-//--- sell control
+// Sell Control.
    if(bAction[3] < min_lot ||
       (bAction[4] * MaxTP * Symb.Point()) <= 2 * stops ||
       (bAction[5] * MaxSL * Symb.Point()) <= stops
@@ -340,11 +308,9 @@ bool FillStack(void)
    int bars = CopyRates(Symb.Name(), TimeFrame, 2, start, Rates);
    if(bars < 0)
       ReturnFalse;
-//---
    if(!RSI.BufferResize(bars) || !CCI.BufferResize(bars) ||
       !ATR.BufferResize(bars) || !MACD.BufferResize(bars))
       ReturnFalse;
-//---
    if(RSI.BarsCalculated() < bars ||
       CCI.BarsCalculated() < bars ||
       ATR.BarsCalculated() < bars ||
@@ -354,15 +320,12 @@ bool FillStack(void)
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
-//---
    if(!ArraySetAsSeries(Rates, true))
       ReturnFalse;
    bars -= end + HistoryBars;
    if(bars < 0)
       ReturnFalse;
-//---
    vector<float> result, target, neg_target;
-//---
    uint ticks = GetTickCount();
    uint tester_print = 0;
    if(!cActor.Clear())
@@ -386,21 +349,19 @@ bool FillStack(void)
       account[11] = (float)MathSin(x != 0 ? 2.0 * M_PI * x : 0);
       x = time / (double)PeriodSeconds(PERIOD_D1);
       account[12] = (float)MathSin(x != 0 ? 2.0 * M_PI * x : 0);
-      //---
       if(!bContext.AssignArray(account))
          ReturnFalse;
       if(!cStateEncoder.feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CBufferFloat*)NULL))
          ReturnFalse;
-      if(!RAGMemory.Retrieve(GetPointer(cStateEncoder),StateScenarioLayer))
+      if(!RAGMemory.Retrieve(GetPointer(cStateEncoder), StateScenarioLayer))
         {
          PrintFormat("%s -> %d RAG retrieval failed", __FUNCTION__, __LINE__);
          ReturnFalse;
         }
-      //--- Feed Forward
+      // Feed Forward.
       if(!cActor.feedForward((CBufferFloat*)GetPointer(bContext), 1, false,
-                             GetPointer(cStateEncoder),StateScenarioLayer))
+                             GetPointer(cStateEncoder), StateScenarioLayer))
          ReturnFalse;
-      //---
       if(GetTickCount() - ticks > 500)
         {
          double percent = (1.0 - double(posit - end) / (start - end - HistoryBars - NForecast))  * 100.0;
@@ -419,7 +380,8 @@ bool FillStack(void)
    Comment("");
    if(MQLInfoInteger(MQL_TESTER))
       Print("Fill stack Done");
-//---
    return true;
   }
+//+------------------------------------------------------------------+
+
 //+------------------------------------------------------------------+

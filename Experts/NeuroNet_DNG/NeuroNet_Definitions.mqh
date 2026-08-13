@@ -1,4 +1,4 @@
-﻿#ifndef NEURONET_DEFINITIONS_MQH
+#ifndef NEURONET_DEFINITIONS_MQH
 #define NEURONET_DEFINITIONS_MQH
 /// \file
 /// \brief NeuroNet.mqh
@@ -19,7 +19,7 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| Include standart libraries
+//| Include standart libraries |
 //+------------------------------------------------------------------+
 #include <Arrays\ArrayFloat.mqh>
 #include <Arrays\ArrayInt.mqh>
@@ -576,7 +576,7 @@ union uaLongChar
 ///\defgroup neuron_proof_gr Pooling layer's neuron Gradients Calculation kernels
 /// Describes the gradient calculation process for the Neuron of pooling layer.
 ///@{
-#define  def_k_CalcInputGradientProof 6  ///< Index of the kernel of the Pooling neuron to transfer gradient to previous layer (#CalcInputGradientProof)  
+#define  def_k_CalcInputGradientProof 6  ///< Index of the kernel of the Pooling neuron to transfer gradient to previous layer (#CalcInputGradientProof)
 #define  def_k_cigp_matrix_i      0  ///< Inputs tesor
 #define  def_k_cigp_matrix_g      1  ///< Tensor of gradients at current layer
 #define  def_k_cigp_matrix_o      2  ///< Output tensor
@@ -2850,12 +2850,10 @@ union uaLongChar
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+//| Enum of activation formula used
+//+------------------------------------------------------------------+
+//--- OpenCL program resource.
 #resource "NeuroNet.cl" as string cl_program
-///\defgroup enums ENUM
-///@{
-//+------------------------------------------------------------------+
-/// Enum of activation formula used
-//+------------------------------------------------------------------+
 enum ENUM_ACTIVATION
   {
    None = -1,  ///< Without activation formula
@@ -2888,4 +2886,5 @@ enum ENUM_OPTIMIZATION
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
+
 

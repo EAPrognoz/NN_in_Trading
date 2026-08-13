@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #define StudyOnline
@@ -42,7 +42,7 @@ input int                  SlowPeriod     =  26;            //Slow
 input int                  SignalPeriod   =  9;             //Signal
 input ENUM_APPLIED_PRICE   MACDPrice      =  PRICE_CLOSE;   //Applied price
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet                 cEncoder;
 CNet                 cActor;
@@ -201,7 +201,9 @@ void OnChartEvent(const int id,
      }
   }
 //+------------------------------------------------------------------+
-//| Train function                                                   |
+//| Train function                                                 |
+//+------------------------------------------------------------------+
+//| | T ra in implementation.                                        |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -393,7 +395,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C re at eB uf fe rs implementation.                            |
 //+------------------------------------------------------------------+
 bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time, CBufferFloat* forecast)
   {
@@ -466,7 +470,7 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 const vector<float> SampleAccount(CBufferFloat *state, datetime time)
   {
@@ -535,7 +539,9 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C he ck Ac ti on implementation.                               |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action, double equity, uint start_position)
   {
@@ -651,7 +657,7 @@ double CheckAction(CBufferFloat *action, double equity, uint start_position)
    return reward;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
   {
@@ -785,3 +791,4 @@ vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
    return result;
   }
 //+------------------------------------------------------------------+
+

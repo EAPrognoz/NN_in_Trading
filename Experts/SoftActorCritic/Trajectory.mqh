@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   Trajectory.mqh |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Trajectory.mqh |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #include "..\RL\FQF.mqh"
 //---
@@ -26,7 +26,7 @@
 #define                    MaxReplayBuffer 500
 #define                    LogProbMultiplier 1.0e-5f
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -39,13 +39,15 @@ struct SState
    bool              Save(int file_handle);
    bool              Load(int file_handle);
    //--- overloading
-   void              operator=(const SState &obj)   { ArrayCopy(state, obj.state); 
-                                                      ArrayCopy(account, obj.account); 
-                                                      ArrayCopy(action, obj.action); 
+   void              operator=(const SState &obj)   { ArrayCopy(state, obj.state);
+                                                      ArrayCopy(account, obj.account);
+                                                      ArrayCopy(action, obj.action);
                                                     }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements SState.                                             |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
@@ -53,7 +55,9 @@ SState::SState(void)
    ArrayInitialize(account, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Saves .                                                        |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
@@ -84,7 +88,9 @@ bool SState::Save(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads .                                                        |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
@@ -129,7 +135,7 @@ bool SState::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
@@ -148,16 +154,19 @@ struct STrajectory
    bool              Load(int file_handle);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
    DiscountFactor(DiscFactor),
+   // Creates and manages object lifecycle for CumCounted.
    CumCounted(false)
   {
    ArrayInitialize(Revards, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Saves .                                                        |
 //+------------------------------------------------------------------+
 bool STrajectory::Save(int file_handle)
   {
@@ -179,7 +188,9 @@ bool STrajectory::Save(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads .                                                        |
 //+------------------------------------------------------------------+
 bool STrajectory::Load(int file_handle)
   {
@@ -201,7 +212,9 @@ bool STrajectory::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CumRevards.           |
 //+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {
@@ -213,7 +226,9 @@ void STrajectory::CumRevards(void)
    CumCounted = true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements Add.                                                |
 //+------------------------------------------------------------------+
 bool STrajectory::Add(SState &state, float reward)
   {
@@ -227,7 +242,9 @@ bool STrajectory::Add(SState &state, float reward)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Saves TotalBase.                                               |
 //+------------------------------------------------------------------+
 bool SaveTotalBase(void)
   {
@@ -255,7 +272,9 @@ bool SaveTotalBase(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads TotalBase.                                               |
 //+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
@@ -284,7 +303,9 @@ bool LoadTotalBase(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes Descriptions.                           |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *actor, CArrayObj *critic)
   {
@@ -506,7 +527,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *critic)
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Checks NewBar.                                                 |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -518,7 +541,9 @@ bool IsNewBar(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CloseByDirection.     |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -536,7 +561,9 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements TrailPosition.                                      |
 //+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
@@ -586,7 +613,9 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for ClosePartial.         |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
@@ -619,3 +648,4 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   }
 #endif
 //+------------------------------------------------------------------+
+

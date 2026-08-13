@@ -1,4 +1,4 @@
-﻿#ifndef NEURONET_BUILDING_FACADE
+#ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
@@ -5669,3 +5669,4 @@ void CNeuronGlobLocGraphAtt::TrainMode(bool flag)
    cLocal.TrainMode(flag);
    cConcat.TrainMode(flag);
   }
+

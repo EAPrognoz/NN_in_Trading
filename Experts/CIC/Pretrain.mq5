@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #include "Trajectory.mqh"
@@ -17,7 +17,7 @@
 input int                  Iterations     = 100000;
 input float                Tau            = 0.001f;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Encoder;
@@ -336,6 +336,7 @@ void Train(void)
       //--- Next State
       TargetState.AssignArray(Buffer[tr].States[i + 1].state);
       double cl_op = Buffer[tr].States[i + 1].state[bar];
+      // Implements SymbolInfoDouble.
       double prof_1l = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE_PROFIT) * cl_op /
                        SymbolInfoDouble(_Symbol, SYMBOL_POINT);
       Actor.getResults(Result);
@@ -438,7 +439,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements KNNReward.                                          |
 //+------------------------------------------------------------------+
 float KNNReward(ulong k, vector<float> &embedding, matrix<float> &state_embedding)
   {
@@ -470,3 +473,4 @@ float KNNReward(ulong k, vector<float> &embedding, matrix<float> &state_embeddin
    return (result);
   }
 //+------------------------------------------------------------------+
+

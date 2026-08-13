@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                  StudyOnline.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| StudyOnline.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -21,7 +21,7 @@
 input group                "---- Other ----"
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CNet                 cActor[2];
 CNet                 cCritic[3];
@@ -302,6 +302,7 @@ void OnTick()
          return;
         }
       if((PrevEquity - AccountInfoDouble(ACCOUNT_EQUITY) + PrevBalance - AccountInfoDouble(ACCOUNT_BALANCE)) <= 0 &&
+//| MathAbsimplementation.                                       |
          MathAbs(bState[0]) > Symb.StopsLevel()*Symb.Point())
         {
          double point_cost = Symb.TickValue() / Symb.TickSize();
@@ -478,7 +479,9 @@ void OnTick()
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | F il lS ta ck implementation.                                  |
 //+------------------------------------------------------------------+
 bool FillStack(void)
   {
@@ -575,3 +578,4 @@ bool FillStack(void)
    return true;
   }
 //+------------------------------------------------------------------+
+

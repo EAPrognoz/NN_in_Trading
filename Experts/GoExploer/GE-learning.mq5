@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   GE-lerning.mq5 |
-//|                                              Copyright 2023, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| GE-lerning.mq5 |
+//| Copyright 2023, DNG |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2023, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -40,7 +40,7 @@ input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input bool                 TrainMode = true;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CSymbolInfo          Symb;
 MqlRates             Rates[];
@@ -239,7 +239,9 @@ void OnTick()
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Checks NewBar.                                                 |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -251,7 +253,9 @@ bool IsNewBar(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes Descriptions.                           |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *Description, CArrayObj *Forward)
   {
@@ -425,3 +429,4 @@ bool CreateDescriptions(CArrayObj *Description, CArrayObj *Forward)
    return true;
   }
 //+------------------------------------------------------------------+
+

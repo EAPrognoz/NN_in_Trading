@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                               EVDRL-Learning.mq5 |
-//|                                              Copyright 2023, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| EVDRL-Learning.mq5 |
+//| Copyright 2023, DNG |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2023, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define FileName        Symb.Name()+"_"+EnumToString(TimeFrame)+"_"+StringSubstr(__FILE__,0,StringFind(__FILE__,".",0))
 //+------------------------------------------------------------------+
@@ -44,7 +44,7 @@ input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input bool                 TrainMode = true;
 input bool                 InitNormalization = false;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CSymbolInfo          Symb;
 MqlRates             Rates[];
@@ -136,7 +136,9 @@ void OnDeinit(const int reason)
    StudyNet.Save(FileName + ".nnw", FileName + ".fwe", true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Tester pass callback.                                          |
 //+------------------------------------------------------------------+
 void OnTesterPass()
   {
@@ -210,7 +212,9 @@ void OnTick()
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Checks NewBar.                                                 |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -222,7 +226,9 @@ bool IsNewBar(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes Descriptions.                           |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *Description, CArrayObj *Forward)
   {
@@ -396,3 +402,4 @@ bool CreateDescriptions(CArrayObj *Description, CArrayObj *Forward)
    return true;
   }
 //+------------------------------------------------------------------+
+

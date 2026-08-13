@@ -1822,7 +1822,7 @@ bool CNeuronMLMHAttentionOCL::ConvolutuionUpdateWeights(CBufferFloat* weights, C
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_i, inputs.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_m, momentum1.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_v, momentum2.GetIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+   lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_inputs, inputs.Total())
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_l, lt)
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_b1, b1)
@@ -1850,7 +1850,7 @@ bool CNeuronMLMHAttentionOCL::ConvolutuionUpdateWeights(CBufferFloat* weights, C
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_i, inputs.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_m, momentum1.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdamMini, def_k_wucam_matrix_v, momentum2.GetIndex())
-         lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+         lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_inputs, inputs.Total())
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_l, lt)
          setArgument(def_k_UpdateWeightsConvAdamMini, def_k_wucam_b1, b1)
@@ -7525,7 +7525,7 @@ bool CNeuronComplexMLMHAttention::ConvolutuionUpdateWeights(CBufferFloat* weight
       setBuffer(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_matrix_i, inputs.GetIndex())
       setBuffer(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_matrix_m, momentum1.GetIndex())
       setBuffer(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_matrix_v, momentum2.GetIndex())
-      float lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+   float lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
       setArgument(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_inputs, int(inputs.Total() / 2))
       setArgument(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_l, lt)
       setArgument(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_b1, b1)
@@ -17890,7 +17890,7 @@ bool CNeuronMHConvOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
       ReturnFalse;
    uint global_work_offset[1] = { 0 };
    uint global_work_size[1] = { WeightsConv.Total() };
-   float lt = (float)(lr * sqrt(1 - pow(b2, t)) / (1 - pow(b1, t)));
+   float lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
    ResetLastError();
    const int kernel = def_k_UpdateWeightsMHConvAdam;
    setBuffer(kernel, def_k_uwca_matrix_w, WeightsConv.GetIndex())
@@ -28102,3 +28102,4 @@ void CNeuronDictionaryCrossAtt::SetOpenCL(COpenCLMy *obj)
       bufLogSumExp = OpenCL.AddBuffer(sizeof(float) * cLevels.Neurons(), CL_MEM_READ_WRITE);
   }
 //+------------------------------------------------------------------+
+

@@ -1,20 +1,20 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   Trajectory.mqh |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Trajectory.mqh |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 input group                "---- Indicators ----"
 input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_H1;
@@ -36,7 +36,7 @@ input int                  SlowPeriod  =  26;            //Slow
 input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 int            iLatentLayer = -1;
 //---
@@ -65,7 +65,7 @@ int            iLatentLayer = -1;
 #define        StackSize               24*5
 #define        Blocks                  24
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 CSymbolInfo          Symb;
 CTrade               Trade;
@@ -76,7 +76,7 @@ CiCCI                CCI;
 CiATR                ATR;
 CiMACD               MACD;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -99,7 +99,9 @@ struct SState
      }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S St at e implementation.                                      |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
@@ -109,7 +111,9 @@ SState::SState(void)
    ArrayInitialize(rewards, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | S av e implementation.                                         |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
@@ -146,7 +150,9 @@ bool SState::Save(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa d implementation.                                         |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
@@ -202,7 +208,7 @@ bool SState::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *&actor,
                         CArrayObj *&critic
@@ -408,7 +414,9 @@ bool CreateDescriptions(CArrayObj *&actor,
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | I sN ew Ba r implementation.                                   |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -420,7 +428,9 @@ bool IsNewBar(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C lo se By Di re ct io n implementation.                       |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -438,7 +448,9 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | T ra il Po si ti on implementation.                            |
 //+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
@@ -491,7 +503,9 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C lo se Pa rt ia l implementation.                             |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
@@ -524,7 +538,7 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   }
 #endif
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
@@ -544,7 +558,7 @@ public:
    vector<float>        Action(datetime current, double ask, double bid, int period_seconds);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
    CloseTime(0),
@@ -553,11 +567,12 @@ void CDeal::CDeal(void) :  OpenTime(0),
    OpenPrice(0),
    StopLos(0),
    TakeProfit(0),
+//| Implements point                                             |
    point(1e-5)
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 vector<float> CDeal::Action(datetime current, double ask, double bid, int period_seconds)
   {
@@ -586,7 +601,7 @@ vector<float> CDeal::Action(datetime current, double ask, double bid, int period
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 class CDeals
   {
@@ -600,7 +615,9 @@ public:
    vector<float>     Action(datetime current, double ask, double bid, int period_seconds);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | L oa dD ea ls implementation.                                  |
 //+------------------------------------------------------------------+
 bool CDeals::LoadDeals(string file_name, string symbol, double point)
   {
@@ -694,7 +711,7 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 vector<float> CDeals::Action(datetime current, double ask, double bid, int period_seconds)
   {
@@ -716,7 +733,9 @@ vector<float> CDeals::Action(datetime current, double ask, double bid, int perio
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C re at eB uf fe rs implementation.                            |
 //+------------------------------------------------------------------+
 bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time, CBufferFloat* forecast)
   {
@@ -790,7 +809,7 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max_balance, double min_balance = 0)
   {
@@ -835,6 +854,7 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max
          profit += state.At(i * BarDescr) / Symb.TickSize() * Symb.TickValue();
          if(((buy_lot > 0 && profit < 0) ||
              (sell_lot > 0 && profit > 0))
+            // Function implementation for MathAbs.
             && MathAbs(profit * (buy_lot - sell_lot)) > balance / 2)
            {
             pos_open = i;
@@ -868,7 +888,9 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | C he ck Ac ti on implementation.                               |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action, double balance, uint start_position)
   {
@@ -984,7 +1006,7 @@ double CheckAction(CBufferFloat *action, double balance, uint start_position)
    return reward;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
   {
@@ -1118,3 +1140,4 @@ vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
    return result;
   }
 //+------------------------------------------------------------------+
+

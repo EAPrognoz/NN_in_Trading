@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                     Research.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Research.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -38,7 +38,7 @@ input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 SState               sState;
 CNet                 cEncoder[2];
@@ -382,6 +382,7 @@ void OnTick()
       cCritic[3].getResults(Result);
       reward = Result[0];
       cCritic[5].getResults(Result);
+      // Function implementation for float.
       reward = float((reward + Result[0]) / 2 * DiscFactor +
                      (sState.account[1] - PrevEquity + sState.account[0] - PrevBalance) / EtalonBalance);
       if(PrevBalance < 50)
@@ -527,3 +528,4 @@ void OnTick()
      }
   }
 //+------------------------------------------------------------------+
+

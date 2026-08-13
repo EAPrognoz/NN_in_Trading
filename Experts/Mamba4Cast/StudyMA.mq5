@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #define Critic
@@ -18,7 +18,7 @@
 input int                  Iterations     = 100000;
 input int                  Batch          = 10;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 cEncoder;
@@ -233,6 +233,7 @@ void Train(void)
       for(int i = start; i < MathMin(Buffer[tr].Total, start + Batch); i++)
         {
          if(!hstate.Assign(Buffer[tr].States[i].state) ||
+            // Implements MathAbs.
             MathAbs(hstate).Sum() == 0 ||
             !hstate.Reshape(HistoryBars, BarDescr))
            {
@@ -337,6 +338,7 @@ void Train(void)
          bActions.AssignArray(target);
          if(!state.Assign(Buffer[tr].States[i + NForecast].state) ||
             !state.Resize(NForecast * BarDescr) ||
+            // Implements MathAbs.
             MathAbs(state).Sum() == 0)
            {
             iter -= Batch + start - i;
@@ -530,7 +532,7 @@ void Train(void)
            }
          if(!cDirector.feedForward(GetPointer(bActions), 1, false, (CNet*)GetPointer(cEncoder), LatentLayer)
             || !cDirector.backProp(Result, (CNet*)GetPointer(cEncoder), LatentLayer)
-            //|| !cEncoder.backPropGradient((CBufferFloat*)NULL, (CBufferFloat*)NULL, LatentLayer, true)
+//| | !cEncoder.backPropGradient((CBufferFloat*)NULL, (CBufferFloat*)NULL, LatentLayer, true) |
            )
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -560,3 +562,4 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
+

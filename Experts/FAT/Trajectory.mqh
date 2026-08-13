@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
 //|                                                   Copyright DNG® |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -1226,3 +1226,4 @@ vector<float> CDeals::Action(datetime current, double ask, double bid, int perio
    return result;
   }
 //+------------------------------------------------------------------+
+

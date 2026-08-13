@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Study.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #define Study
 #include "Trajectory.mqh"
@@ -16,7 +16,7 @@
 //+------------------------------------------------------------------+
 input int                  Iterations     = 1000;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Agent;
@@ -193,7 +193,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Gets ProbTrajectories.                                         |
 //+------------------------------------------------------------------+
 vector<float> GetProbTrajectories(STrajectory &buffer[], float &max_reward, float &quanitle, vector<float> &std, double quant, float lanbda)
   {
@@ -245,7 +247,9 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], float &max_reward, floa
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements SampleTrajectory.                                   |
 //+------------------------------------------------------------------+
 int SampleTrajectory(vector<float> &probability)
   {
@@ -271,7 +275,9 @@ int SampleTrajectory(vector<float> &probability)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements Noise.                                              |
 //+------------------------------------------------------------------+
 vector<float> Noise(vector<float> &std, float multiplyer)
   {
@@ -290,3 +296,4 @@ vector<float> Noise(vector<float> &std, float multiplyer)
    return result;
   }
 //+------------------------------------------------------------------+
+

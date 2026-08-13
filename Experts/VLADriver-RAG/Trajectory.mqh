@@ -1,38 +1,31 @@
 //+------------------------------------------------------------------+
-//|                                                   Trajectory.mqh |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
-//+------------------------------------------------------------------+
+//|                          Trajectory.mqh                          |
+//|                       Copyright 2026, DNG                        |
+//|                       https://www.mql5.com                       |
 //+------------------------------------------------------------------+
 //|                                                                  |
+//| Trajectory state, network topology and RAG memory helpers        |
+//| for the VLADriver-RAG Expert Advisor.                            |
 //+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 input group                "---- Indicators ----"
 input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_H1;
-//---
 input group                "---- RSI ----"
 input int                  RSIPeriod   =  14;            //Period
 input ENUM_APPLIED_PRICE   RSIPrice    =  PRICE_CLOSE;   //Applied price
-//---
 input group                "---- CCI ----"
 input int                  CCIPeriod   =  14;            //Period
 input ENUM_APPLIED_PRICE   CCIPrice    =  PRICE_TYPICAL; //Applied price
-//---
 input group                "---- ATR ----"
 input int                  ATRPeriod   =  14;            //Period
-//---
 input group                "---- MACD ----"
 input int                  FastPeriod  =  12;            //Fast
 input int                  SlowPeriod  =  26;            //Slow
 input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
-//---
 input group                "---- RAG runtime ----"
 // Completed records staged before the library publishes a new immutable
 // snapshot. It is collection policy, never part of layer topology.
@@ -40,11 +33,7 @@ input uint                 OnlineMemorySize = 256;
 // Domain facts supplied with completed trading records for normalization.
 input double               MemoryRiskBudgetFraction = 0.01;
 input double               MemoryVolatilityRange = 10.0;
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 int            iLatentLayer = -1;
-//---
 #define        HistoryBars             5
 #define        BarDescr                9               //Elements for 1 bar description
 #define        AccountDescr            13              //Account description
@@ -80,33 +69,23 @@ int            iLatentLayer = -1;
 #define        Quantiles               8
 #define        StackSize               24*NScenarios
 #define        Blocks                  24
-//+------------------------------------------------------------------+
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CSymbolInfo          Symb;
 CTrade               Trade;
 MqlRates             Rates[];
-//---
 CiRSI                RSI;
 CiCCI                CCI;
 CiATR                ATR;
 CiMACD               MACD;
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 struct SState
   {
    float             state[HistoryBars * BarDescr];
    float             account[AccountDescr - 4];
    float             action[NActions];
    float             rewards[NRewards];
-   //---
                      SState(void);
-   //---
    bool              Save(int file_handle);
    bool              Load(int file_handle);
-   //--- overloading
+   // Overloading.
    void              operator=(const SState &obj)
      {
       ArrayCopy(state, obj.state);
@@ -115,8 +94,7 @@ struct SState
       ArrayCopy(rewards, obj.rewards);
      }
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
+//| SState implementation.                                           |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
@@ -125,28 +103,24 @@ SState::SState(void)
    ArrayInitialize(action, 0);
    ArrayInitialize(rewards, 0);
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
+//| Save implementation.                                             |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
       ReturnFalse;
-//---
    int total = ArraySize(state);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       ReturnFalse;
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, state[i]) < sizeof(float))
          ReturnFalse;
-//---
    total = ArraySize(account);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       ReturnFalse;
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, account[i]) < sizeof(float))
          ReturnFalse;
-//---
    total = ArraySize(action);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       ReturnFalse;
@@ -159,11 +133,9 @@ bool SState::Save(int file_handle)
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, rewards[i]) < sizeof(float))
          ReturnFalse;
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
+//| Load implementation.                                             |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
@@ -171,63 +143,52 @@ bool SState::Load(int file_handle)
       ReturnFalse;
    if(FileIsEnding(file_handle))
       ReturnFalse;
-//---
    int total = FileReadInteger(file_handle);
    if(total != ArraySize(state))
       ReturnFalse;
-//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          ReturnFalse;
       state[i] = FileReadFloat(file_handle);
      }
-//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(account))
       ReturnFalse;
-//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          ReturnFalse;
       account[i] = FileReadFloat(file_handle);
      }
-//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(action))
       ReturnFalse;
-//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          ReturnFalse;
       action[i] = MathMin(MathMax(FileReadFloat(file_handle), 0), 1);
      }
-//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(rewards))
       ReturnFalse;
-//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          ReturnFalse;
       rewards[i] = FileReadFloat(file_handle);
      }
-//---
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| CreateStateDescriptions.                                         |
 //+------------------------------------------------------------------+
 bool CreateStateDescriptions(CArrayObj *&encoder,
                              CArrayObj *&decoder
                             )
   {
-//---
    CLayerDescription *descr;
-//---
    if(!encoder)
      {
       encoder = new CArrayObj();
@@ -240,9 +201,9 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
       if(!decoder)
          ReturnFalse;
      }
-//--- State Encoder
+// State Encoder.
    encoder.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBaseOCL;
@@ -251,7 +212,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!encoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBatchNormOCL;
@@ -261,7 +222,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!encoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 2
+// layer 2.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronDropoutOCL;
@@ -271,7 +232,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!encoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 3
+// layer 3.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronCogDriverData;
@@ -288,7 +249,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!encoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 4
+// layer 4.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronCogDriverRankTCM;
@@ -305,7 +266,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!encoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 5
+// layer 5.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronSpikeConv;
@@ -318,7 +279,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!encoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 6
+// layer 6.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBaseOCL;
@@ -328,7 +289,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!encoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 7
+// layer 7.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronSpikeActivation;
@@ -337,9 +298,9 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!encoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- Forecast Decoder
+// Forecast Decoder.
    decoder.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBaseOCL;
@@ -348,7 +309,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!decoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronConvOCL;
@@ -361,7 +322,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!decoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 2
+// layer 2.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronConvOCL;
@@ -374,7 +335,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!decoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 3
+// layer 3.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronConvOCL;
@@ -387,7 +348,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!decoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 4
+// layer 4.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronConvOCL;
@@ -400,7 +361,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!decoder.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 5
+// layer 5.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBatchNormOCL;
@@ -410,19 +371,16 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.optimization = ADAM;
    if(!decoder.Add(descr))
       DeleteObjAndFalse(descr);
-//---
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| CreateDescriptions.                                              |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *&actor,
                         CArrayObj *&critic
                        )
   {
-//---
    CLayerDescription *descr;
-//---
    if(!actor)
      {
       actor = new CArrayObj();
@@ -435,9 +393,9 @@ bool CreateDescriptions(CArrayObj *&actor,
       if(!critic)
          ReturnFalse;
      }
-//--- Actor
+// Actor.
    actor.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBaseOCL;
@@ -447,7 +405,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    if(!actor.Add(descr))
       DeleteObjAndFalse(descr);
    iLatentLayer = 0;
-//--- layer 1: account/position/time candidate projection.
+// layer 1: account/position/time candidate projection.
 //    This learned FC projection turns the compact AccountDescr into the three
 //    primary MPI candidates; market and RAG remain auxiliary contexts.
    if(!(descr = new CLayerDescription()))
@@ -459,7 +417,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!actor.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 2: MPI primary candidates, market second input and bound RAG third input.
+// layer 2: MPI primary candidates, market second input and bound RAG third input.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronVLADriverRAGMPI;
@@ -475,8 +433,8 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.probability = ActorMPITopK;
    descr.step = NHeads;
    descr.window_out = EmbeddingSize / NHeads;
-   // One local action-centroid set is gathered for each selected scenario.
-   // The RAG-memory descriptor below uses the same Top-K, so binding is exact.
+// One local action-centroid set is gathered for each selected scenario.
+// The RAG-memory descriptor below uses the same Top-K, so binding is exact.
    descr.layers = ActorMPITopK * RAGActionCentroids;
    descr.variables = (NActions + 2);
    descr.activation = None;
@@ -485,7 +443,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    if(!actor.Add(descr))
       DeleteObjAndFalse(descr);
    iLatentLayer = 2;
-//--- layer 3
+// layer 3.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronSpikeConvBlock;
@@ -498,7 +456,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!actor.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 4
+// layer 4.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBaseOCL;
@@ -506,7 +464,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!actor.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 5
+// layer 5.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronConvOCL;
@@ -518,9 +476,9 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!actor.Add(descr))
       DeleteObjAndFalse(descr);
-//--- Critic
+// Critic.
    critic.Clear();
-//--- Input layer
+// Input layer.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBaseOCL;
@@ -529,7 +487,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!critic.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 1
+// layer 1.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronMHCrossFAT;
@@ -557,7 +515,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!critic.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 2
+// layer 2.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronSpikeConvBlock;
@@ -570,7 +528,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!critic.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 4
+// layer 4.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronSpikeConvBlock;
@@ -583,7 +541,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!critic.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 5
+// layer 5.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBaseOCL;
@@ -593,7 +551,7 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!critic.Add(descr))
       DeleteObjAndFalse(descr);
-//--- layer 6
+// layer 6.
    if(!(descr = new CLayerDescription()))
       DeleteObjAndFalse(descr);
    descr.type = defNeuronBaseOCL;
@@ -603,45 +561,41 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.optimization = ADAM;
    if(!critic.Add(descr))
       DeleteObjAndFalse(descr);
-//---
    return true;
   }
 //+------------------------------------------------------------------+
-//| Shared RAG-memory layer shape. The memory remains library-owned;|
-//| this helper only supplies the VLADriver architecture contract.   |
+//| Shared RAG-memory layer shape. The memory remains library-owned; |
 //+------------------------------------------------------------------+
+//| Implements CreateRAGMemoryDescription                            |
 bool CreateRAGMemoryDescription(CLayerDescription &descr)
   {
-   descr.type=defNeuronRAGMemory;
-   descr.window=EmbeddingSize;
-   descr.window_out=NActions;
-   descr.count=NActions+2;
-   descr.layers=ActorMPITopK;
-   descr.activation=None;
-   descr.batch=BatchSize;
-   descr.optimization=ADAM;
-   uint scenario_capacity[]={RAGScenarioCentroids};
-   uint action_capacity[]={RAGActionCentroids};
-   if(ArrayCopy(descr.units,scenario_capacity,0,0,scenario_capacity.Size())<int(scenario_capacity.Size()) ||
-      ArrayCopy(descr.heads,action_capacity,0,0,action_capacity.Size())<int(action_capacity.Size()))
+   descr.type = defNeuronRAGMemory;
+   descr.window = EmbeddingSize;
+   descr.window_out = NActions;
+   descr.count = NActions + 2;
+   descr.layers = ActorMPITopK;
+   descr.activation = None;
+   descr.batch = BatchSize;
+   descr.optimization = ADAM;
+   uint scenario_capacity[] = {RAGScenarioCentroids};
+   uint action_capacity[] = {RAGActionCentroids};
+   if(ArrayCopy(descr.units, scenario_capacity, 0, 0, scenario_capacity.Size()) < int(scenario_capacity.Size()) ||
+      ArrayCopy(descr.heads, action_capacity, 0, 0, action_capacity.Size()) < int(action_capacity.Size()))
       ReturnFalse;
    return true;
   }
 #ifndef Study
-//+------------------------------------------------------------------+
-//|                                                                  |
+//| IsNewBar implementation.                                         |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
    static datetime last_bar = 0;
    if(last_bar >= iTime(Symb.Name(), TimeFrame, 0))
       return false;
-//---
    last_bar = iTime(Symb.Name(), TimeFrame, 0);
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
+//| CloseByDirection implementation.                                 |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -655,18 +609,15 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
          continue;
       result = (Trade.PositionClose(PositionGetInteger(POSITION_TICKET)) && result);
      }
-//---
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
+//| TrailPosition implementation.                                    |
 //+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
    int total = PositionsTotal();
    bool result = true;
    datetime time = TimeCurrent() - 5 * PeriodSeconds(TimeFrame);
-//---
    for(int i = 0; i < total; i++)
      {
       if(PositionGetSymbol(i) != Symb.Name())
@@ -708,17 +659,14 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
       if(modify)
          result = (Trade.PositionModify(PositionGetInteger(POSITION_TICKET), psl, ptp) && result);
      }
-//---
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
+//| ClosePartial implementation.                                     |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
    if(value <= 0)
       return true;
-//---
    for(int i = 0; (i < PositionsTotal() && value > 0); i++)
      {
       if(PositionGetSymbol(i) != Symb.Name())
@@ -740,17 +688,16 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
             value = 0;
         }
      }
-//---
    return (value <= 0);
   }
 #endif
+//| Implements CreateBuffers                                         |
 bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time, CBufferFloat* forecast)
   {
    int total_bars = (start_bar + HistoryBars + (!!forecast ? NForecast : 0));
    if(!state || !time || start_bar < 0 ||
       total_bars > int(Rates.Size()))
       ReturnFalse;
-//---
    matrix<float> mState = matrix<float>::Zeros(BarDescr, HistoryBars);
    vector<float> vForecast = vector<float>::Zeros(NForecast * BarDescr);
    time.Clear();
@@ -766,7 +713,6 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
       float sign = (float)MACD.Signal(b + bar);
       if(rsi == EMPTY_VALUE || cci == EMPTY_VALUE || atr == EMPTY_VALUE || macd == EMPTY_VALUE || sign == EMPTY_VALUE)
          ReturnFalse;
-      //---
       mState[0, b] = (float)(Rates[b + bar].close - open);
       mState[1, b] = (float)(Rates[b + bar].high - open);
       mState[2, b] = (float)(Rates[b + bar].low - open);
@@ -786,7 +732,6 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
          ReturnFalse;
    if(!forecast)
       return true;
-//---
    for(int b = 1; b <= (int)NForecast; b++)
      {
       float open = (float)Rates[bar - b].open;
@@ -797,7 +742,6 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
       float sign = (float)MACD.Signal(bar - b);
       if(rsi == EMPTY_VALUE || cci == EMPTY_VALUE || atr == EMPTY_VALUE || macd == EMPTY_VALUE || sign == EMPTY_VALUE)
          ReturnFalse;
-      //---
       int shift = (NForecast - b) * BarDescr;
       vForecast[shift] = (float)(Rates[bar - b].close - open);
       vForecast[shift + 1] = (float)(Rates[bar - b].high - open);
@@ -809,15 +753,10 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
       vForecast[shift + 7] = macd;
       vForecast[shift + 8] = sign;
      }
-//---
    if(!forecast.AssignArray(vForecast))
       ReturnFalse;
-//---
    return true;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 enum ENUM_MEMORY_ACTION_NORMALIZATION_STAGE
   {
    MEMORY_ACTION_NORMALIZATION_OK = 0,
@@ -827,8 +766,8 @@ enum ENUM_MEMORY_ACTION_NORMALIZATION_STAGE
    MEMORY_ACTION_NORMALIZATION_DESCRIPTOR,
    MEMORY_ACTION_NORMALIZATION_ZERO
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
+//| MemoryActionNormalizationStageName implementation.               |
+//| Returns a human-readable name for each normalization stage.      |
 //+------------------------------------------------------------------+
 string MemoryActionNormalizationStageName(const ENUM_MEMORY_ACTION_NORMALIZATION_STAGE stage)
   {
@@ -849,75 +788,69 @@ string MemoryActionNormalizationStageName(const ENUM_MEMORY_ACTION_NORMALIZATION
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| NormalizeMemoryAction (with diagnostics).                        |
 //+------------------------------------------------------------------+
-bool NormalizeMemoryAction(CNeuronRAGMemory &memory,CBufferFloat *action,const uint start_position,
-                           const double equity,float &destination[],
+bool NormalizeMemoryAction(CNeuronRAGMemory &memory, CBufferFloat *action, const uint start_position,
+                           const double equity, float &destination[],
                            ENUM_MEMORY_ACTION_NORMALIZATION_STAGE &stage)
   {
-   stage=MEMORY_ACTION_NORMALIZATION_INPUT;
-   ArrayInitialize(destination,0.0f);
-   if(action==NULL || action.Total()<NActions || ArraySize(destination)<NActions ||
-      equity<=0 || start_position>=Rates.Size())
+   stage = MEMORY_ACTION_NORMALIZATION_INPUT;
+   ArrayInitialize(destination, 0.0f);
+   if(action == NULL || action.Total() < NActions || ArraySize(destination) < NActions ||
+      equity <= 0 || start_position >= Rates.Size())
       ReturnFalse;
-   stage=MEMORY_ACTION_NORMALIZATION_MARKET;
+   stage = MEMORY_ACTION_NORMALIZATION_MARKET;
    if(!Symb.RefreshRates())
       ReturnFalse;
-   const double volatility=ATR.Main(start_position);
-   const double point_cost=Symb.TickValue()/Symb.TickSize();
-   if(point_cost<=0 || Symb.Point()<=0)
+   const double volatility = ATR.Main(start_position);
+   const double point_cost = Symb.TickValue() / Symb.TickSize();
+   if(point_cost <= 0 || Symb.Point() <= 0)
       ReturnFalse;
-   stage=MEMORY_ACTION_NORMALIZATION_VOLATILITY;
-   if(volatility==EMPTY_VALUE || volatility<=0)
+   stage = MEMORY_ACTION_NORMALIZATION_VOLATILITY;
+   if(volatility == EMPTY_VALUE || volatility <= 0)
       ReturnFalse;
    float raw[NActions];
-   for(int i=0;i<NActions;i++)
-      raw[i]=action[i];
-   const double risk_budget=equity*MemoryRiskBudgetFraction;
-   stage=MEMORY_ACTION_NORMALIZATION_DESCRIPTOR;
-   if(!memory.NormalizeActionDescriptor(raw,equity,risk_budget,point_cost,Symb.Point(),
-                                        volatility,MemoryVolatilityRange,MaxTP,MaxSL,destination))
+   for(int i = 0; i < NActions; i++)
+      raw[i] = action[i];
+   const double risk_budget = equity * MemoryRiskBudgetFraction;
+   stage = MEMORY_ACTION_NORMALIZATION_DESCRIPTOR;
+   if(!memory.NormalizeActionDescriptor(raw, equity, risk_budget, point_cost, Symb.Point(),
+                                        volatility, MemoryVolatilityRange, MaxTP, MaxSL, destination))
       ReturnFalse;
-   double action_square=0.0;
-   for(int i=0;i<NActions;i++)
-      action_square+=destination[i]*destination[i];
-   stage=MEMORY_ACTION_NORMALIZATION_ZERO;
-   if(action_square<=DBL_EPSILON)
+   double action_square = 0.0;
+   for(int i = 0; i < NActions; i++)
+      action_square += destination[i] * destination[i];
+   stage = MEMORY_ACTION_NORMALIZATION_ZERO;
+   if(action_square <= DBL_EPSILON)
       ReturnFalse;
-   stage=MEMORY_ACTION_NORMALIZATION_OK;
+   stage = MEMORY_ACTION_NORMALIZATION_OK;
    return true;
   }
 //+------------------------------------------------------------------+
 //| Preserve the existing callers that do not need diagnostics.      |
 //+------------------------------------------------------------------+
-bool NormalizeMemoryAction(CNeuronRAGMemory &memory,CBufferFloat *action,const uint start_position,
-                           const double equity,float &destination[])
+bool NormalizeMemoryAction(CNeuronRAGMemory &memory, CBufferFloat *action, const uint start_position,
+                           const double equity, float &destination[])
   {
    ENUM_MEMORY_ACTION_NORMALIZATION_STAGE stage;
-   return NormalizeMemoryAction(memory,action,start_position,equity,destination,stage);
+   return NormalizeMemoryAction(memory, action, start_position, equity, destination, stage);
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max_balance, double min_balance = 0)
   {
    vector<float> result = vector<float>::Zeros(AccountDescr);
    if(!state)
       return result;
-//---
    double marg = 0;
    if(!Symb.RefreshRates() || !OrderCalcMargin(ORDER_TYPE_BUY, Symb.Name(), 1, Symb.Ask(), marg))
       return result;
    double buy_lot = 0, sell_lot = 0, profit = 0;
    double deal = 0;//MathRand() / (32767 * 0.5) - 1;
    double multiplyer = 1.0 / (60.0 * 60.0 * 10.0);
-//---
    double balance = (max_balance - min_balance) * MathRand() / 32767.0 + min_balance;
    double prev_balance = balance;
    double equity = balance;
    double prev_equity = balance;
    double position_discount = 0;
-//---
    if(deal > 0)
      {
       double lot = balance / (2.0 * marg) * deal;
@@ -933,7 +866,6 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max
         }
       else
          prev_balance += (MathRand() / (2.0 * 32767.0) - 0.25) * balance;
-//---
    if(sell_lot > 0 || buy_lot > 0)
      {
       int pos_open = int(MathRand() / 32767.0 * (state.Total() / BarDescr - 1));
@@ -953,7 +885,6 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max
       prev_equity = equity - state.At(0) / Symb.TickSize() * Symb.TickValue() * (buy_lot - sell_lot);
       position_discount = pos_open * PeriodSeconds(TimeFrame) * multiplyer * MathAbs(profit);
      }
-//---
    result[0] = float(balance / EtalonBalance);
    result[1] = float((balance - prev_balance) / prev_balance);
    result[2] = float(equity / prev_balance);
@@ -971,34 +902,29 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max
    result[11] = float(MathSin(x != 0 ? 2.0 * M_PI * x : 0));
    x = time / (double)PeriodSeconds(PERIOD_D1);
    result[12] = float(MathSin(x != 0 ? 2.0 * M_PI * x : 0));
-//---
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| UpdateTerminalPath.                                              |
 //+------------------------------------------------------------------+
-void UpdateTerminalPath(const double balance,const double profit,const uint bars,
-                        double &peak_equity,double &max_drawdown,uint &duration)
+void UpdateTerminalPath(const double balance, const double profit, const uint bars,
+                        double &peak_equity, double &max_drawdown, uint &duration)
   {
-   const double equity=balance+profit;
-   peak_equity=MathMax(peak_equity,equity);
-   max_drawdown=MathMax(max_drawdown,peak_equity-equity);
-   duration=MathMax(duration,bars);
+   const double equity = balance + profit;
+   peak_equity = MathMax(peak_equity, equity);
+   max_drawdown = MathMax(max_drawdown, peak_equity - equity);
+   duration = MathMax(duration, bars);
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 // The historical simulator is evaluated over the complete position path, not a
 // one-bar balance delta. It reports normalized return, drawdown, costs, risk
 // usage and duration; CheckAction below remains its scalar compatibility view.
-bool EvaluateTerminalOutcome(CNeuronRAGMemory &memory,CBufferFloat *action, double balance,
-                             uint start_position,SRAGTerminalOutcome &outcome)
+bool EvaluateTerminalOutcome(CNeuronRAGMemory &memory, CBufferFloat *action, double balance,
+                             uint start_position, SRAGTerminalOutcome &outcome)
   {
-   const double risk_budget=balance*MemoryRiskBudgetFraction;
-   memory.NormalizeTerminalOutcome(0,0,0,0,0,balance,risk_budget,NForecast,outcome);
+   const double risk_budget = balance * MemoryRiskBudgetFraction;
+   memory.NormalizeTerminalOutcome(0, 0, 0, 0, 0, balance, risk_budget, NForecast, outcome);
    if(!action || start_position >= Rates.Size())
       ReturnFalse;
-//---
    double buy_lot = MathMax(double(action[0] - action[3]), 0);
    double sell_lot = MathMax(double(action[3] - action[0]), 0);
    double marg = 0;
@@ -1010,7 +936,7 @@ bool EvaluateTerminalOutcome(CNeuronRAGMemory &memory,CBufferFloat *action, doub
       double loss = -MathMax(Rates[start_position].high - Rates[start_position].open,
                              Rates[start_position].open - Rates[start_position].low) *
                     point_cost * balance / (2 * marg);
-      memory.NormalizeTerminalOutcome(loss,0,0,0,0,balance,risk_budget,NForecast,outcome);
+      memory.NormalizeTerminalOutcome(loss, 0, 0, 0, 0, balance, risk_budget, NForecast, outcome);
       return true;
      }
    if((marg * MathMax(buy_lot, sell_lot)) >= balance)
@@ -1018,17 +944,16 @@ bool EvaluateTerminalOutcome(CNeuronRAGMemory &memory,CBufferFloat *action, doub
       double loss = -MathMax(Rates[start_position].high - Rates[start_position].open,
                              Rates[start_position].open - Rates[start_position].low) *
                     point_cost * MathMax(buy_lot, sell_lot);
-      memory.NormalizeTerminalOutcome(loss,0,0,0,0,balance,risk_budget,NForecast,outcome);
+      memory.NormalizeTerminalOutcome(loss, 0, 0, 0, 0, balance, risk_budget, NForecast, outcome);
       return true;
      }
    point_cost *= MathAbs(buy_lot - sell_lot);
-//---
    double tp = 0, sl = 0, profit = 0, reward = 0;
-   double peak_equity=balance;
-   double max_drawdown=0;
-   double costs=0;
-   double risk_usage=0;
-   uint duration=0;
+   double peak_equity = balance;
+   double max_drawdown = 0;
+   double costs = 0;
+   double risk_usage = 0;
+   uint duration = 0;
    int stops = MathMax(Symb.StopsLevel(), 10);
    int spread = Symb.Spread();
    if(buy_lot > 0)
@@ -1040,44 +965,43 @@ bool EvaluateTerminalOutcome(CNeuronRAGMemory &memory,CBufferFloat *action, doub
          double loss = -MathMax(Rates[start_position].high - Rates[start_position].open,
                                 Rates[start_position].open - Rates[start_position].low) *
                        point_cost * buy_lot;
-         memory.NormalizeTerminalOutcome(loss,0,0,0,0,balance,risk_budget,NForecast,outcome);
+         memory.NormalizeTerminalOutcome(loss, 0, 0, 0, 0, balance, risk_budget, NForecast, outcome);
          return true;
         }
-       tp = (tp + spread) * Symb.Point() + Rates[start_position].open;
-       sl = Rates[start_position].open - (sl + spread) * Symb.Point();
-       reward = profit = -spread * Symb.Point() * point_cost;
-       costs=spread*Symb.Point()*point_cost;
-       risk_usage=(Rates[start_position].open-sl)*point_cost;
-       for(uint i = start_position; i > 0; i--)
+      tp = (tp + spread) * Symb.Point() + Rates[start_position].open;
+      sl = Rates[start_position].open - (sl + spread) * Symb.Point();
+      reward = profit = -spread * Symb.Point() * point_cost;
+      costs = spread * Symb.Point() * point_cost;
+      risk_usage = (Rates[start_position].open - sl) * point_cost;
+      for(uint i = start_position; i > 0; i--)
         {
          if(sl >= Rates[i].low)
            {
             double p = (Rates[i].open - sl) * point_cost;
-             profit -= p;
-             reward -= p * MathPow(DiscFactor, float(i - start_position));
-             UpdateTerminalPath(balance,profit,start_position-i+1,peak_equity,max_drawdown,duration);
-             break;
+            profit -= p;
+            reward -= p * MathPow(DiscFactor, float(i - start_position));
+            UpdateTerminalPath(balance, profit, start_position - i + 1, peak_equity, max_drawdown, duration);
+            break;
            }
          if(tp <= Rates[i].high)
            {
             double p = (tp - Rates[i].open) * point_cost;
-             profit += p;
-             reward += p * MathPow(DiscFactor, float(i - start_position));
-             UpdateTerminalPath(balance,profit,start_position-i+1,peak_equity,max_drawdown,duration);
-             break;
+            profit += p;
+            reward += p * MathPow(DiscFactor, float(i - start_position));
+            UpdateTerminalPath(balance, profit, start_position - i + 1, peak_equity, max_drawdown, duration);
+            break;
            }
          double p = (Rates[i - 1].open - Rates[i].open) * point_cost;
-          profit += p;
-          reward += p * MathPow(DiscFactor, float(i - start_position));
-          UpdateTerminalPath(balance,profit,start_position-i+1,peak_equity,max_drawdown,duration);
-          if(-profit >= balance)
-            {
-             reward -= 1000;
+         profit += p;
+         reward += p * MathPow(DiscFactor, float(i - start_position));
+         UpdateTerminalPath(balance, profit, start_position - i + 1, peak_equity, max_drawdown, duration);
+         if(-profit >= balance)
+           {
+            reward -= 1000;
             break;
            }
         }
      }
-//---
    if(sell_lot > 0)
      {
       tp = action[4] * MaxTP;
@@ -1087,69 +1011,64 @@ bool EvaluateTerminalOutcome(CNeuronRAGMemory &memory,CBufferFloat *action, doub
          double loss = -MathMax(Rates[start_position].high - Rates[start_position].open,
                                 Rates[start_position].open - Rates[start_position].low) *
                        point_cost * sell_lot;
-         memory.NormalizeTerminalOutcome(loss,0,0,0,0,balance,risk_budget,NForecast,outcome);
+         memory.NormalizeTerminalOutcome(loss, 0, 0, 0, 0, balance, risk_budget, NForecast, outcome);
          return true;
         }
-       tp = Rates[start_position].open - (tp + spread) * Symb.Point();
-       sl = Rates[start_position].open + (sl - spread) * Symb.Point();
-       reward = profit = -spread * Symb.Point() * point_cost;
-       costs=spread*Symb.Point()*point_cost;
-       risk_usage=(sl-Rates[start_position].open)*point_cost;
-       for(uint i = start_position; i > 0; i--)
+      tp = Rates[start_position].open - (tp + spread) * Symb.Point();
+      sl = Rates[start_position].open + (sl - spread) * Symb.Point();
+      reward = profit = -spread * Symb.Point() * point_cost;
+      costs = spread * Symb.Point() * point_cost;
+      risk_usage = (sl - Rates[start_position].open) * point_cost;
+      for(uint i = start_position; i > 0; i--)
         {
          if(sl <= Rates[i].high)
            {
             double p = (sl - Rates[i].open) * point_cost;
-             profit -= p;
-             reward -= p * MathPow(DiscFactor, float(i - start_position));
-             UpdateTerminalPath(balance,profit,start_position-i+1,peak_equity,max_drawdown,duration);
-             break;
+            profit -= p;
+            reward -= p * MathPow(DiscFactor, float(i - start_position));
+            UpdateTerminalPath(balance, profit, start_position - i + 1, peak_equity, max_drawdown, duration);
+            break;
            }
          if(tp >= Rates[i].low)
            {
             double p = (Rates[i].open - tp) * point_cost;
-             profit += p;
-             reward += p * MathPow(DiscFactor, float(i - start_position));
-             UpdateTerminalPath(balance,profit,start_position-i+1,peak_equity,max_drawdown,duration);
-             break;
+            profit += p;
+            reward += p * MathPow(DiscFactor, float(i - start_position));
+            UpdateTerminalPath(balance, profit, start_position - i + 1, peak_equity, max_drawdown, duration);
+            break;
            }
          double p = (Rates[i - 1].open - Rates[i].open) * point_cost;
-          profit -= p;
-          reward -= p * MathPow(DiscFactor, float(i - start_position));
-          UpdateTerminalPath(balance,profit,start_position-i+1,peak_equity,max_drawdown,duration);
-          if(-profit >= balance)
+         profit -= p;
+         reward -= p * MathPow(DiscFactor, float(i - start_position));
+         UpdateTerminalPath(balance, profit, start_position - i + 1, peak_equity, max_drawdown, duration);
+         if(-profit >= balance)
            {
             reward -= 1000;
             break;
            }
         }
      }
-//---
-   memory.NormalizeTerminalOutcome(profit,max_drawdown,costs,risk_usage,duration,
-                                   balance,risk_budget,NForecast,outcome);
+   memory.NormalizeTerminalOutcome(profit, max_drawdown, costs, risk_usage, duration,
+                                   balance, risk_budget, NForecast, outcome);
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| CheckAction.                                                     |
 //+------------------------------------------------------------------+
-double CheckAction(CNeuronRAGMemory &memory,CBufferFloat *action, double balance,
+double CheckAction(CNeuronRAGMemory &memory, CBufferFloat *action, double balance,
                    uint start_position)
   {
    SRAGTerminalOutcome outcome;
-   EvaluateTerminalOutcome(memory,action,balance,start_position,outcome);
+   EvaluateTerminalOutcome(memory, action, balance, start_position, outcome);
    return outcome.reward;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
   {
-//--- Look for target
+// Look for target.
    vector<float> result = vector<float>::Zeros(NActions);
    matrix<float> fstate = matrix<float>::Zeros(NForecast, BarDescr);
    if(!forecat.GetData(fstate))
       return result;
-//---
    vector<float> target = fstate.Col(0).CumSum();
    if(account[4] > account[5])
      {
@@ -1270,9 +1189,8 @@ vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
            }
         }
      }
-//---
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
+
+
+//| End of Trajectory.mqh                                            |

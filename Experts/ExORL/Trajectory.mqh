@@ -1,18 +1,18 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   Trajectory.mqh |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Trajectory.mqh |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
 //| Rewards structure                                                |
-//|   0     -  Delta Balance                                         |
-//|   1     -  Delta Equity ( "-" Drawdown / "+" Profit)             |
-//|   2     -  Penalty for no open positions                         |
-//|   3     -  NNM                                                   |
-//|   4     -  Latent NNM                                                   |
+//| 0     -  Delta Balance                                         |
+//| 1     -  Delta Equity ( "-" Drawdown / "+" Profit)             |
+//| 2     -  Penalty for no open positions                         |
+//| 3     -  NNM                                                   |
+//| 4     -  Latent NNM                                                   |
 //+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 //---
@@ -36,13 +36,14 @@
 #define        iCAGrad_Iters           15
 #define        Quant                   0.001
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 struct STarget
   {
    vector<float>     rewards;
    vector<float>     actions;
 //---
+                     // Implements STarget.
                      STarget(void)
                      {
                         rewards=vector<float>::Zeros(NRewards);
@@ -50,7 +51,7 @@ struct STarget
                      }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -73,7 +74,9 @@ struct SState
      }
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements SState.                                             |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
@@ -83,7 +86,9 @@ SState::SState(void)
    ArrayInitialize(rewards, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Saves .                                                        |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
@@ -120,7 +125,9 @@ bool SState::Save(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads .                                                        |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
@@ -176,7 +183,7 @@ bool SState::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
@@ -194,15 +201,21 @@ struct STrajectory
    bool              Load(int file_handle);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements STrajectory.                                        |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
+   // Implements DiscountFactor.
    DiscountFactor(DiscFactor),
+   // Creates and manages object lifecycle for CumCounted.
    CumCounted(false)
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Saves .                                                        |
 //+------------------------------------------------------------------+
 bool STrajectory::Save(int file_handle)
   {
@@ -222,7 +235,9 @@ bool STrajectory::Save(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads .                                                        |
 //+------------------------------------------------------------------+
 bool STrajectory::Load(int file_handle)
   {
@@ -242,7 +257,9 @@ bool STrajectory::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CumRevards.           |
 //+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {
@@ -255,7 +272,9 @@ void STrajectory::CumRevards(void)
    CumCounted = true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements Add.                                                |
 //+------------------------------------------------------------------+
 bool STrajectory::Add(SState &state)
   {
@@ -267,7 +286,9 @@ bool STrajectory::Add(SState &state)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Saves TotalBase.                                               |
 //+------------------------------------------------------------------+
 bool SaveTotalBase(void)
   {
@@ -295,7 +316,9 @@ bool SaveTotalBase(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads TotalBase.                                               |
 //+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
@@ -324,7 +347,9 @@ bool LoadTotalBase(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates or initializes Descriptions.                           |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *actor, CArrayObj *critic, CArrayObj *convolution)
   {
@@ -705,7 +730,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *critic, CArrayObj *convolut
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Checks NewBar.                                                 |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -717,7 +744,9 @@ bool IsNewBar(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for CloseByDirection.     |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -735,7 +764,9 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements TrailPosition.                                      |
 //+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
@@ -785,7 +816,9 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Creates and manages object lifecycle for ClosePartial.         |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
@@ -818,7 +851,9 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   }
 #endif
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements ForecastAccount.                                    |
 //+------------------------------------------------------------------+
 vector<float> ForecastAccount(float &prev_account[], vector<float> &actions, double prof_1l, float time_label)
   {
@@ -909,7 +944,9 @@ vector<float> ForecastAccount(float &prev_account[], vector<float> &actions, dou
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements EntropyLatentState.                                 |
 //+------------------------------------------------------------------+
 float EntropyLatentState(CNet &net)
   {
@@ -940,7 +977,9 @@ float EntropyLatentState(CNet &net)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Gets ProbTrajectories.                                         |
 //+------------------------------------------------------------------+
 vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
   {
@@ -990,7 +1029,9 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Implements SampleTrajectory.                                   |
 //+------------------------------------------------------------------+
 int SampleTrajectory(vector<float> &probability)
   {
@@ -1016,3 +1057,4 @@ int SampleTrajectory(vector<float> &probability)
    return result;
   }
 //+------------------------------------------------------------------+
+

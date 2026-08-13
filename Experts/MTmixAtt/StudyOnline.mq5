@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                     Research.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Research.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -21,7 +21,7 @@
 input group                "---- Other ----"
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 SState               sState;
 CNet                 cEncoder[2];
@@ -358,6 +358,7 @@ void OnTick()
          return;
         }
       if((sState.account[1] - PrevEquity + sState.account[0] - PrevBalance) <= 0 &&
+//| MathAbsimplementation.                                       |
          MathAbs(sState.state[0]) > Symb.StopsLevel()*Symb.Point())
         {
          vector<float> oracul = vector<float>::Zeros(NActions);
@@ -533,3 +534,4 @@ void OnTick()
      }
   }
 //+------------------------------------------------------------------+
+

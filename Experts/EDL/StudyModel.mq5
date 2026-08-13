@@ -1,13 +1,13 @@
-﻿//+------------------------------------------------------------------+
-//|                                                   StudyModel.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| StudyModel.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 #include "Trajectory.mqh"
 //+------------------------------------------------------------------+
@@ -16,7 +16,7 @@
 input int                  Iterations     = 1000000;
 bool                 TrainMode = true;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Scheduler;
@@ -99,7 +99,9 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Loads TotalBase.                                               |
 //+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
@@ -156,6 +158,7 @@ void Train(void)
       //---
       bar = (HistoryBars - 1) * BarDescr;
       double cl_op = Buffer[tr].States[i + 1].state[bar];
+      // Implements SymbolInfoDouble.
       double prof_1l = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE_PROFIT) * cl_op /
                        SymbolInfoDouble(_Symbol, SYMBOL_POINT);
       PrevBalance = Buffer[tr].States[i].account[0];
@@ -213,7 +216,9 @@ void Train(void)
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Gets NewState.                                                 |
 //+------------------------------------------------------------------+
 vector<float> GetNewState(float &prev_account[], int action, double prof_1l)
   {
@@ -254,7 +259,9 @@ vector<float> GetNewState(float &prev_account[], int action, double prof_1l)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//|                                                                |
+//+------------------------------------------------------------------+
+//| | Gets AgentReward.                                              |
 //+------------------------------------------------------------------+
 vector<float> GetAgentReward(int skill, vector<float> &discriminator, float &prev_account[])
   {
@@ -284,3 +291,4 @@ vector<float> GetAgentReward(int skill, vector<float> &discriminator, float &pre
    return result;
   }
 //+------------------------------------------------------------------+
+

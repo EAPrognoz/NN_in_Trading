@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                                     Research.mq5 |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| Research.mq5 |
+//| Copyright DNG® |
+//| https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -21,7 +21,7 @@
 input group                "---- Other ----"
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| |
 //+------------------------------------------------------------------+
 SState               sState;
 CNet                 cEncoder[2];
@@ -402,8 +402,8 @@ void OnTick()
       temp[0] = 0;
      }
 //--- buy control
-   if(temp[0] < min_lot || 
-      (temp[1] * MaxTP * Symb.Point()) <= 2 * stops || 
+   if(temp[0] < min_lot ||
+      (temp[1] * MaxTP * Symb.Point()) <= 2 * stops ||
       (temp[2] * MaxSL * Symb.Point()) <= stops
      )
      {
@@ -437,7 +437,7 @@ void OnTick()
         }
      }
 //--- sell control
-   if(temp[3] < min_lot || 
+   if(temp[3] < min_lot ||
       (temp[4] * MaxTP * Symb.Point()) <= 2 * stops ||
       (temp[5] * MaxSL * Symb.Point()) <= stops
      )
@@ -484,3 +484,4 @@ void OnTick()
      }
   }
 //+------------------------------------------------------------------+
+
