@@ -610,9 +610,7 @@ void Train(void)
                Stop = true;
                break;
               }
-         if(!cActor.feedForward((CBufferFloat*)GetPointer(bContext), 1, false,
-                                GetPointer(cStateEncoder), StateScenarioLayer) ||
-            !cCritic.feedForward(Action, 1, false, GetPointer(cStateEncoder), StateTokenLayer))
+         if(!cCritic.feedForward(Action, 1, false, GetPointer(cStateEncoder), StateTokenLayer))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             Stop = true;
@@ -624,8 +622,7 @@ void Train(void)
             Stop = true;
             break;
            }
-         if(!cCritic.backProp(Result, GetPointer(cStateEncoder), StateTokenLayer) ||
-            !cActor.backPropGradient(actor_market_gradient, GetPointer(bGradient), LatentLayer, true))
+         if(!cCritic.backProp(Result, GetPointer(cStateEncoder), StateTokenLayer))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             Stop = true;
