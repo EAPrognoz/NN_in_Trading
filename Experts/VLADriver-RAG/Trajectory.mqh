@@ -67,7 +67,9 @@ int            iLatentLayer = -1;
 #define        ActorMPITopK            3               //Must not exceed the three Actor primary candidates
 #define        TopK                    5               //Critic candidate selection remains independent from Actor MPI
 #define        Quantiles               8
-#define        StackSize               24*NScenarios
+// CogDriverData requires its state stack to hold at least ten quantile slots.
+// This is a MarketEncoder constraint, independent of Actor primary candidates.
+#define        StackSize               (10*Quantiles)
 #define        Blocks                  24
 CSymbolInfo          Symb;
 CTrade               Trade;
