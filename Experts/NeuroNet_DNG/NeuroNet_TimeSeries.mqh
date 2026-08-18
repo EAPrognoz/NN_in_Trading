@@ -10309,7 +10309,7 @@ bool CNeuronComplexConvOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
          setBuffer(kernel, def_k_uwca_matrix_i, NeuronOCL.getOutputIndex())
          setBuffer(kernel, def_k_uwca_matrix_m, FirstMomentumConv.GetIndex())
          setBuffer(kernel, def_k_uwca_matrix_v, SecondMomentumConv.GetIndex())
-   lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
+         lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(kernel, def_k_uwca_inputs, NeuronOCL.Neurons() / (2 * iVariables))
          setArgument(kernel, def_k_uwca_l, lt)
          setArgument(kernel, def_k_uwca_b1, b1)
@@ -19615,10 +19615,10 @@ bool CNeuronVLADriverRAGMPI::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat
       ReturnFalse;
    if(market_embedding != SecondInput)
      {
-       if(cMarketEmbedding.Neurons() > SecondInput.Total())
-          ReturnFalse;
-       if(!Concat(SecondInput, SecondInput, market_embedding, 1, 0,
-                  cMarketEmbedding.Neurons()))
+      if(cMarketEmbedding.Neurons() > SecondInput.Total())
+         ReturnFalse;
+      if(!Concat(SecondInput, SecondInput, market_embedding, 1, 0,
+                 cMarketEmbedding.Neurons()))
          ReturnFalse;
      }
    if(!cMarketProjection.FeedForward(cMarketEmbedding.AsObject()))
@@ -19681,13 +19681,13 @@ bool CNeuronVLADriverRAGMPI::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
 //--- gradients through this second-input boundary.
    if(SecondGradient)
      {
-       if(SecondGradient.Total() != SecondInput.Total())
-          ReturnFalse;
-       if(SecondGradient.GetOpenCL() != OpenCL || SecondGradient.GetIndex() < 0)
-          ReturnFalse;
-       if(!SecondGradient.Fill(0))
-          ReturnFalse;
-      }
+      if(SecondGradient.Total() != SecondInput.Total())
+         ReturnFalse;
+      if(SecondGradient.GetOpenCL() != OpenCL || SecondGradient.GetIndex() < 0)
+         ReturnFalse;
+      if(!SecondGradient.Fill(0))
+         ReturnFalse;
+     }
 //--- final MPI market-refine gradients
    CBufferFloat *market = cMarketProjection.getOutput();
    CBufferFloat *market_gradient = cMarketProjection.getGradient();
@@ -19704,38 +19704,38 @@ bool CNeuronVLADriverRAGMPI::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
 //--- RAG is immediately before the final market-refine block
    if(!!pRAGTokens)
      {
-       if(cMarketState.getGradient().Total() != int(iWindow) ||
-          cMarketState.getGradient().GetOpenCL() != OpenCL ||
-          cMarketState.getGradient().GetIndex() < 0)
-          ReturnFalse;
-       if(!cTTMHistory.getGradient().Fill(0))
-          ReturnFalse;
-       if(!cRAGGradient.Fill(0))
-          ReturnFalse;
-       if(!cRAGBranchActivityGradient.Fill(0))
-          ReturnFalse;
-       if(!cRAGResidualGradient.Fill(0))
-          ReturnFalse;
-       if(!cNullScenarioThreshold.getGradient().Fill(0))
-          ReturnFalse;
-       if(!ScalarToVectorGrad(GetPointer(cRAGBranchActivity),
-                              GetPointer(cRAGBranchActivityGradient),
-                              GetPointer(cRAGBranchDelta), cPolicyRAG.getGradient(),
-                              cMarketState.getGradient(), iWindow))
-          ReturnFalse;
-       if(!Different(cMarketState.getGradient(), cPolicyRAG.getGradient(),
-                     GetPointer(cRAGResidualGradient), iWindow))
-          ReturnFalse;
-       if(!cTTMHistory.CalcHiddenGradients(cPolicyRAG.AsObject(),
-                                           GetPointer(cGatedRAGTokens),
-                                           GetPointer(cRAGGradient), None))
-          ReturnFalse;
-       if(!SumAndNormalize(cTTMHistory.getGradient(), GetPointer(cRAGResidualGradient),
-                           cTTMHistory.getGradient(), iWindow, false, 0, 0, 0, 1.0f))
-          ReturnFalse;
-       if(!RAGTokenGateGradient())
-          ReturnFalse;
-      }
+      if(cMarketState.getGradient().Total() != int(iWindow) ||
+         cMarketState.getGradient().GetOpenCL() != OpenCL ||
+         cMarketState.getGradient().GetIndex() < 0)
+         ReturnFalse;
+      if(!cTTMHistory.getGradient().Fill(0))
+         ReturnFalse;
+      if(!cRAGGradient.Fill(0))
+         ReturnFalse;
+      if(!cRAGBranchActivityGradient.Fill(0))
+         ReturnFalse;
+      if(!cRAGResidualGradient.Fill(0))
+         ReturnFalse;
+      if(!cNullScenarioThreshold.getGradient().Fill(0))
+         ReturnFalse;
+      if(!ScalarToVectorGrad(GetPointer(cRAGBranchActivity),
+                             GetPointer(cRAGBranchActivityGradient),
+                             GetPointer(cRAGBranchDelta), cPolicyRAG.getGradient(),
+                             cMarketState.getGradient(), iWindow))
+         ReturnFalse;
+      if(!Different(cMarketState.getGradient(), cPolicyRAG.getGradient(),
+                    GetPointer(cRAGResidualGradient), iWindow))
+         ReturnFalse;
+      if(!cTTMHistory.CalcHiddenGradients(cPolicyRAG.AsObject(),
+                                          GetPointer(cGatedRAGTokens),
+                                          GetPointer(cRAGGradient), None))
+         ReturnFalse;
+      if(!SumAndNormalize(cTTMHistory.getGradient(), GetPointer(cRAGResidualGradient),
+                          cTTMHistory.getGradient(), iWindow, false, 0, 0, 0, 1.0f))
+         ReturnFalse;
+      if(!RAGTokenGateGradient())
+         ReturnFalse;
+     }
 //--- TTM-history gradients: Q_ttm and D_cur
    if(!cTTM.CalcHiddenGradients(cTTMHistory.AsObject(), cPolicyMarket.getOutput(),
                                 cPolicyMarket.getGradient(), None))
@@ -19783,18 +19783,18 @@ bool CNeuronVLADriverRAGMPI::updateInputWeights(CNeuronBaseOCL *NeuronOCL,
 //--- RAG attention consumes TTM history, not the final market-refined state
    if(!!pRAGTokens)
      {
-       if(iRAGTokenWidth < 2 || !pRAGAbsoluteRelevance ||
-          pRAGTokens.Total() != int(iRAGTokenCount * iRAGTokenWidth) ||
-          cGatedRAGTokens.Total() != pRAGTokens.Total() ||
-          pRAGTokens.GetOpenCL() != OpenCL || pRAGAbsoluteRelevance.GetOpenCL() != OpenCL ||
-          cGatedRAGTokens.GetOpenCL() != OpenCL || pRAGTokens.GetIndex() < 0 ||
-          pRAGAbsoluteRelevance.GetIndex() < 0 || cGatedRAGTokens.GetIndex() < 0)
-          ReturnFalse;
-       if(!cPolicyRAG.UpdateInputWeights(cTTMHistory.AsObject(), GetPointer(cGatedRAGTokens)))
-          ReturnFalse;
-       if(!cNullScenarioThreshold.UpdateInputWeights(cNullThresholdInput.AsObject()))
-          ReturnFalse;
-      }
+      if(iRAGTokenWidth < 2 || !pRAGAbsoluteRelevance ||
+         pRAGTokens.Total() != int(iRAGTokenCount * iRAGTokenWidth) ||
+         cGatedRAGTokens.Total() != pRAGTokens.Total() ||
+         pRAGTokens.GetOpenCL() != OpenCL || pRAGAbsoluteRelevance.GetOpenCL() != OpenCL ||
+         cGatedRAGTokens.GetOpenCL() != OpenCL || pRAGTokens.GetIndex() < 0 ||
+         pRAGAbsoluteRelevance.GetIndex() < 0 || cGatedRAGTokens.GetIndex() < 0)
+         ReturnFalse;
+      if(!cPolicyRAG.UpdateInputWeights(cTTMHistory.AsObject(), GetPointer(cGatedRAGTokens)))
+         ReturnFalse;
+      if(!cNullScenarioThreshold.UpdateInputWeights(cNullThresholdInput.AsObject()))
+         ReturnFalse;
+     }
 //--- inherited MPI prefix weights
    if(!cTTMHistory.UpdateInputWeights(cTTM.AsObject(), cPolicyMarket.getOutput()))
       ReturnFalse;
@@ -24189,6 +24189,9 @@ bool CNeuronScenarioCrossAttention::InitHolders(uint myIndex,
       ReturnFalse;
    if(!cMHAOutput.Init(0, index++, OpenCL, iQueries * iDimension, optimization_type, batch))
       ReturnFalse;
+//--- CNeuronMultiWindowsConvOCL emits one window_out vector per state
+//--- window.  The Task bank must therefore preserve the complete query
+//--- projection (Q * scenarios * D), not a single scenario slice.
 //--- The Actor keeps scenario-major contexts until the final Pi gate.  TTM
 //--- sees K candidates of width Q*D, while the stack holds the previous final
 //--- Cross output of the same layer.
@@ -24247,6 +24250,8 @@ bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
       ReturnFalse;
    if(!cQueryProjection.FeedForward(NeuronOCL))
       ReturnFalse;
+   if(!ApplyTaskSkill(cQueryProjection.AsObject()))
+      ReturnFalse;
    if(!cWz.FeedForward(Forecast))
       ReturnFalse;
    if(!cWu.FeedForwardBuffer(forecast.GetLogU()))
@@ -24256,12 +24261,14 @@ bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
       ReturnFalse;
    if(!cTokenPE.FeedForward(cTokenSum.AsObject()))
       ReturnFalse;
-   if(!cTokensTranspose.FeedForward(cTokenPE.AsObject()))
+   if(!ApplyStepSkill(cTokenPE.AsObject()))
+      ReturnFalse;
+   if(!cTokensTranspose.FeedForward(StepSkillOutput(cTokenPE.AsObject())))
       ReturnFalse;
    if(!Concat(cTokensTranspose.getOutput(), cTokensTranspose.getOutput(), cKV.getOutput(),
               iScenarios * iDimension, iScenarios * iDimension, iVariables * iHorizon))
       ReturnFalse;
-   if(!cAttention.FeedForward(cQueryProjection.AsObject(), cKV.getOutput()))
+   if(!cAttention.FeedForward(TaskSkillOutput(cQueryProjection.AsObject()), cKV.getOutput()))
       ReturnFalse;
    if(!cAttentionTranspose.FeedForward(cAttention.AsObject()))
       ReturnFalse;
@@ -24293,7 +24300,7 @@ bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
       ReturnFalse;
    if(!cOutputProjection.FeedForward(cHeadGateTranspose.AsObject()))
       ReturnFalse;
-   if(!cQueryResidual.FeedForward(cQueryProjection.AsObject()))
+   if(!cQueryResidual.FeedForward(TaskSkillOutput(cQueryProjection.AsObject())))
       ReturnFalse;
    if(!SumAndNormalize(cOutputProjection.getOutput(), cQueryResidual.getOutput(), cMHAOutput.getOutput(),
                        1, true, 0, 0, 0, 1))
@@ -24352,7 +24359,7 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
       ReturnFalse;
    if(!cQueryGradient.CalcHiddenGradients(cQueryResidual.AsObject()))
       ReturnFalse;
-   if(!cQueryProjection.CalcHiddenGradients(cAttention.AsObject(), cKV.getOutput(), cKV.getGradient(), None))
+   if(!RouteTaskGradient())
       ReturnFalse;
    if(!SumAndNormalize(cQueryProjection.getGradient(), cQueryGradient.getGradient(), cQueryProjection.getGradient(),
                        1, false, 0, 0, 0, 1))
@@ -24363,7 +24370,7 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
    if(!SumAndNormalize(cKVGradK.getGradient(), cKVGradV.getGradient(),
                        cTokensTranspose.getGradient(), 1, false, 0, 0, 0, 1))
       ReturnFalse;
-   if(!cTokenPE.CalcHiddenGradients(cTokensTranspose.AsObject()))
+   if(!RouteStepGradient())
       ReturnFalse;
    if(!cTokenSum.CalcHiddenGradients(cTokenPE.AsObject()))
       ReturnFalse;
@@ -24375,6 +24382,10 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
               iScenarios * iVariables * iHorizon * iDimension, 0, 1))
       ReturnFalse;
    if(!NeuronOCL.CalcHiddenGradients(cQueryProjection.AsObject()))
+      ReturnFalse;
+   if(!UpdateTaskSkill(cQueryProjection.getOutput(), cQueryProjection.getGradient()))
+      ReturnFalse;
+   if(!UpdateStepSkill(cTokenPE.getOutput(), cTokenPE.getGradient()))
       ReturnFalse;
    if(NeuronOCL.Activation() != None)
       return DeActivation(NeuronOCL.getOutput(), NeuronOCL.getGradient(), NeuronOCL.getGradient(),
@@ -24403,8 +24414,6 @@ bool CNeuronScenarioCrossAttention::updateInputWeightsSecond(CNeuronBaseOCL *Neu
    if(!cOutputProjection.UpdateInputWeights(cHeadGateTranspose.AsObject()))
       ReturnFalse;
    if(!cQueryResidual.UpdateInputWeights(cQueryProjection.AsObject()))
-      ReturnFalse;
-   if(!CNeuronMSRes::updateInputWeights(cMHAOutput.AsObject()))
       ReturnFalse;
    if(!bCritic)
      {
@@ -24660,3 +24669,5 @@ bool CNeuronScenarioCrossAttention::Clear(void)
   }
 //+------------------------------------------------------------------+
 
+
+//+------------------------------------------------------------------+

@@ -6,10 +6,12 @@
 #property version   "1.00"
 #define StudyOnline
 #include "Trajectory.mqh"
-CORIONNet Actor;
+CNet Actor;
 CBufferFloat State, TimeState, Account, Action;
 double PreviousBalance = 0, PreviousEquity = 0;
 bool ORIONTestInitialized = false;
+ulong OOSTransitions = 0, OOSExecutableActions = 0;
+double OOSInitialBalance = 0;
 //+------------------------------------------------------------------+
 //| Function OnInit.                                                 |
 //+------------------------------------------------------------------+
@@ -30,6 +32,9 @@ int OnInit(void)
      { Print("ORION test init: frozen forecast=FAIL"); return INIT_FAILED; }
    PreviousBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   OOSInitialBalance = PreviousBalance;
+   OOSTransitions = 0;
+   OOSExecutableActions = 0;
    ORIONTestInitialized = true;
    return INIT_SUCCEEDED;
   }
@@ -41,6 +46,10 @@ void OnDeinit(const int reason)
 //--- Inference is pure: neither policy nor Forecast artifacts are saved.
    if(ORIONTestInitialized && ORIONForecast != NULL && !ORIONVerifyFrozenForecastExact())
       PrintFormat("%s -> %d forecast mutation", __FUNCTION__, __LINE__);
+   if(ORIONTestInitialized)
+      PrintFormat("ORION OOS summary: transitions=%I64u executable_actions=%I64u initial_balance=%.2f final_balance=%.2f",
+                  OOSTransitions, OOSExecutableActions, OOSInitialBalance,
+                  AccountInfoDouble(ACCOUNT_BALANCE));
    ORIONForecast = NULL;
   }
 //+------------------------------------------------------------------+
@@ -60,8 +69,14 @@ void OnTick(void)
       !ReadAction(Actor, GetPointer(Action)) ||
       !ORIONExecuteAction(GetPointer(Action), buy_value, sell_value))
      { PrintFormat("%s -> %d actor/execute", __FUNCTION__, __LINE__); return; }
+   OOSTransitions++;
+   if(IsExecutableOrder(double(Action[0]), double(Action[1]), double(Action[2])) ||
+      IsExecutableOrder(double(Action[3]), double(Action[4]), double(Action[5])))
+      OOSExecutableActions++;
    PreviousBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity = AccountInfoDouble(ACCOUNT_EQUITY);
   }
 //+------------------------------------------------------------------+
 
+
+//+------------------------------------------------------------------+

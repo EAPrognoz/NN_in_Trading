@@ -7,7 +7,6 @@
 //+------------------------------------------------------------------+
 #include "NeuroNet_Definitions.mqh"
 #include "NeuroNet_Declarations.mqh"
-
 #include "NeuroNet_Core.mqh"
 #include "NeuroNet_RecurrentState.mqh"
 #include "NeuroNet_SpikeFlow.mqh"

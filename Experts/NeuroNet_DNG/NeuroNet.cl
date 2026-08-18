@@ -14,6 +14,13 @@
 #define SCENARIO_LOCAL_CAP 256
 #define MAX_VALUE 3.4e37f
 #define MIN_VALUE -MAX_VALUE
+#define RAG_MAX_VALUE 3.402823466e+38f
+#define RAG_INVALID_SCORE (-RAG_MAX_VALUE)
+#define D2SKILL_FREE       0
+#define D2SKILL_CANDIDATE  1
+#define D2SKILL_PROTECTED  2
+#define D2SKILL_ACTIVE     3
+#define D2SKILL_INACTIVE   4
 //--- Activation Functions
 #define ActFunc_None         -1
 #define ActFunc_TANH          0
@@ -1303,6 +1310,17 @@ __kernel void ConcatenateBuffers(__global float *input1, int window1,
       output[shift + i] = IsNaNOrInf(input4[shift_in + i], 0);
   }
 //+------------------------------------------------------------------+
+//| Copies raw 32-bit buffer payloads without float sanitization.     |
+//+------------------------------------------------------------------+
+__kernel void CopyBufferRaw(__global const uint *source,
+                            __global uint *destination,
+                            const int total)
+  {
+   const int index = get_global_id(0);
+   if(index < total)
+      destination[index] = source[index];
+  }
+//+------------------------------------------------------------------+
 ///\ingroup neuron_atten_gr
 /// Describes the process of deconcatenate matrix.
 ///\details Detailed description on <A
@@ -1579,9 +1597,9 @@ __kernel void BatchFeedForward(__global float *inputs, __global float *options,
          gamma = 1;
       const float betta = IsNaNOrInf(options[shift + 4], 0);
       const float nx = (inp - mean) / sqrt(variance);
-       output[n] = fActivation(gamma * nx + betta, activation);
-       return;
-      }
+      output[n] = fActivation(gamma * nx + betta, activation);
+      return;
+     }
    if(batch <= 1)
       return;
    float mean = (IsNaNOrInf(options[shift], 0) * max((float)batch - 1.0f, 0.0f) + inp) / max((float)batch, 1.0f);
@@ -14723,44 +14741,52 @@ __kernel void RAGScore(__global const float *embedding,
                        const int scenario_count,
                        const int embedding_dimension)
   {
-   const int scenario=get_global_id(0);
-   if(scenario>=scenario_count || embedding_dimension<=0)
+   const int scenario = get_global_id(0);
+   if(scenario >= scenario_count || embedding_dimension <= 0)
       return;
-   if(used[scenario]<=0.5f) { scores[scenario]=MIN_VALUE; return; }
-   float dot=0.0f, left=0.0f, right=0.0f;
-   for(int d=0;d<embedding_dimension;d++)
+   if(used[scenario] <= 0.5f)
      {
-      float a=IsNaNOrInf(embedding[d],0.0f);
-      float b=IsNaNOrInf(centroids[scenario*embedding_dimension+d],0.0f);
-      dot+=a*b; left+=a*a; right+=b*b;
+      scores[scenario] = RAG_INVALID_SCORE;
+      return;
      }
-   scores[scenario]=(left>1.0e-12f && right>1.0e-12f ? dot/sqrt(left*right) : MIN_VALUE);
+   float dot = 0.0f, left = 0.0f, right = 0.0f;
+   for(int d = 0; d < embedding_dimension; d++)
+     {
+      float a = IsNaNOrInf(embedding[d], 0.0f);
+      float b = IsNaNOrInf(centroids[scenario * embedding_dimension + d], 0.0f);
+      dot += a * b;
+      left += a * a;
+      right += b * b;
+     }
+   const float score = (left > 1.0e-12f && right > 1.0e-12f ?
+                        dot / (sqrt(left) * sqrt(right)) : RAG_INVALID_SCORE);
+   scores[scenario] = (isfinite(score) ? score : RAG_INVALID_SCORE);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-inline int RAGBefore(const float2 left,const float2 right)
+inline int RAGBefore(const float2 left, const float2 right)
   {
-   return (left.y>right.y || (left.y==right.y && left.x<right.x));
+   return (left.y > right.y || (left.y == right.y && left.x < right.x));
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-inline void RAGSortDescending(__local float2 candidates[],const int lane,const int block_size)
+inline void RAGSortDescending(__local float2 candidates[], const int lane, const int block_size)
   {
-   for(int width=2;width<=block_size;width<<=1)
-      for(int stride=width>>1;stride>0;stride>>=1)
+   for(int width = 2; width <= block_size; width <<= 1)
+      for(int stride = width >> 1; stride > 0; stride >>= 1)
         {
-         const int partner=lane^stride;
-         if(partner>lane)
+         const int partner = lane ^ stride;
+         if(partner > lane)
            {
-            const int descending=((lane&width)==0);
-            const int before=RAGBefore(candidates[lane],candidates[partner]);
+            const int descending = ((lane & width) == 0);
+            const int before = RAGBefore(candidates[lane], candidates[partner]);
             if((descending && !before) || (!descending && before))
               {
-               const float2 swap=candidates[lane];
-               candidates[lane]=candidates[partner];
-               candidates[partner]=swap;
+               const float2 swap = candidates[lane];
+               candidates[lane] = candidates[partner];
+               candidates[partner] = swap;
               }
            }
          BarrierLoc;
@@ -14775,19 +14801,21 @@ __kernel void RAGPartial(__global const float *scores,
                          const int block_size,
                          const int top_k)
   {
-   const int lane=get_local_id(0);
-   const int block=get_group_id(0);
-   const int scenario=block*block_size+lane;
+   const int lane = get_local_id(0);
+   const int block = get_group_id(0);
+   const int scenario = block * block_size + lane;
    __local float2 candidates[LOCAL_ARRAY_SIZE];
-   if(block_size<=0 || block_size>LOCAL_ARRAY_SIZE || (block_size&(block_size-1))!=0 ||
-      top_k<=0 || top_k>block_size)
+   if(block_size <= 0 || block_size > LOCAL_ARRAY_SIZE || (block_size & (block_size - 1)) != 0 ||
+      top_k <= 0 || top_k > block_size)
       return;
-   const float score=(scenario<scenario_count ? scores[scenario] : MIN_VALUE);
-   candidates[lane]=(score>MIN_VALUE ? (float2)((float)scenario,score) : (float2)(-1.0f,MIN_VALUE));
+   const float score = (scenario < scenario_count ? scores[scenario] : RAG_INVALID_SCORE);
+   candidates[lane] = (isfinite(score) && score > RAG_INVALID_SCORE ?
+                       (float2)((float)scenario, score) :
+                       (float2)(-1.0f, RAG_INVALID_SCORE));
    BarrierLoc;
-   RAGSortDescending(candidates,lane,block_size);
-   if(lane<top_k)
-      partial[block*top_k+lane]=candidates[lane];
+   RAGSortDescending(candidates, lane, block_size);
+   if(lane < top_k)
+      partial[block * top_k + lane] = candidates[lane];
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -14798,19 +14826,22 @@ __kernel void RAGMerge(__global const float2 *source,
                        const int block_size,
                        const int top_k)
   {
-   const int lane=get_local_id(0);
-   const int block=get_group_id(0);
-   const int candidate_id=block*block_size+lane;
+   const int lane = get_local_id(0);
+   const int block = get_group_id(0);
+   const int candidate_id = block * block_size + lane;
    __local float2 candidates[LOCAL_ARRAY_SIZE];
-   if(block_size<=0 || block_size>LOCAL_ARRAY_SIZE || (block_size&(block_size-1))!=0 ||
-      top_k<=0 || top_k>block_size)
+   if(block_size <= 0 || block_size > LOCAL_ARRAY_SIZE || (block_size & (block_size - 1)) != 0 ||
+      top_k <= 0 || top_k > block_size)
       return;
-   const float2 candidate=(candidate_id<candidate_count ? source[candidate_id] : (float2)(-1.0f,MIN_VALUE));
-   candidates[lane]=((int)candidate.x>=0 && candidate.y>MIN_VALUE ? candidate : (float2)(-1.0f,MIN_VALUE));
+   const float2 candidate = (candidate_id < candidate_count ? source[candidate_id] :
+                             (float2)(-1.0f, RAG_INVALID_SCORE));
+   candidates[lane] = ((int)candidate.x >= 0 && isfinite(candidate.y) &&
+                       candidate.y > RAG_INVALID_SCORE ? candidate :
+                       (float2)(-1.0f, RAG_INVALID_SCORE));
    BarrierLoc;
-   RAGSortDescending(candidates,lane,block_size);
-   if(lane<top_k)
-      destination[block*top_k+lane]=candidates[lane];
+   RAGSortDescending(candidates, lane, block_size);
+   if(lane < top_k)
+      destination[block * top_k + lane] = candidates[lane];
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -14828,77 +14859,78 @@ __kernel void RAGGather(__global const float2 *top,
                         __global const float *action_hit_count,
                         __global float *absolute_relevance)
   {
-   const int token=get_global_id(0);
-   const int total=top_k*action_count;
-   if(token>=total || action_count<=0 || action_dimension<=0 || token_width!=action_dimension+2) return;
-   if(token==0)
+   const int token = get_global_id(0);
+   const int total = top_k * action_count;
+   if(token >= total || action_count <= 0 || action_dimension <= 0 || token_width != action_dimension + 2)
+      return;
+   if(token == 0)
      {
-      float best_score=MIN_VALUE;
-      int has_action=0;
-      for(int candidate_rank=0;candidate_rank<top_k;candidate_rank++)
+      float best_score = MIN_VALUE;
+      int has_action = 0;
+      for(int candidate_rank = 0; candidate_rank < top_k; candidate_rank++)
         {
-         const int candidate_scenario=(int)top[candidate_rank].x;
-         if(candidate_scenario<0 || candidate_scenario>=scenario_count || top[candidate_rank].y<=MIN_VALUE)
+         const int candidate_scenario = (int)top[candidate_rank].x;
+         if(candidate_scenario < 0 || candidate_scenario >= scenario_count || top[candidate_rank].y <= MIN_VALUE)
             continue;
-         for(int candidate_action=0;candidate_action<action_count;candidate_action++)
+         for(int candidate_action = 0; candidate_action < action_count; candidate_action++)
            {
-            const int candidate_slot=candidate_scenario*action_count+candidate_action;
-            if(action_used[candidate_slot]>0.5f && action_hit_count[candidate_slot]>0.0f)
+            const int candidate_slot = candidate_scenario * action_count + candidate_action;
+            if(action_used[candidate_slot] > 0.5f && action_hit_count[candidate_slot] > 0.0f)
               {
-               best_score=fmax(best_score,IsNaNOrInf(top[candidate_rank].y,MIN_VALUE));
-               has_action=1;
+               best_score = fmax(best_score, IsNaNOrInf(top[candidate_rank].y, MIN_VALUE));
+               has_action = 1;
                break;
               }
            }
         }
-      absolute_relevance[0]=(has_action ? IsNaNOrInf(best_score,0.0f) : 0.0f);
+      absolute_relevance[0] = (has_action ? IsNaNOrInf(best_score, 0.0f) : 0.0f);
      }
-   const int rank=token/action_count, action=token-rank*action_count;
-   const int scenario=(int)top[rank].x;
-   const int width=token_width;
-   const int out=token*width;
-   if(scenario<0 || scenario>=scenario_count || top[rank].y<=MIN_VALUE)
+   const int rank = token / action_count, action = token - rank * action_count;
+   const int scenario = (int)top[rank].x;
+   const int width = token_width;
+   const int out = token * width;
+   if(scenario < 0 || scenario >= scenario_count || top[rank].y <= MIN_VALUE)
      {
-      for(int d=0;d<width;d++)
-         tokens[out+d]=0.0f;
+      for(int d = 0; d < width; d++)
+         tokens[out + d] = 0.0f;
       return;
      }
-   const int slot=scenario*action_count+action;
-   const int valid=(action_used[slot]>0.5f && action_hit_count[slot]>0.0f);
+   const int slot = scenario * action_count + action;
+   const int valid = (action_used[slot] > 0.5f && action_hit_count[slot] > 0.0f);
    if(!valid)
      {
-      for(int d=0;d<width;d++)
-         tokens[out+d]=0.0f;
+      for(int d = 0; d < width; d++)
+         tokens[out + d] = 0.0f;
       return;
      }
-   const float raw_relevance=exp(clamp(IsNaNOrInf(top[rank].y,MIN_VALUE),-16.0f,16.0f))*
-                             log(1.0f+fmax(IsNaNOrInf(action_hit_count[slot],0.0f),0.0f));
-   float relevance_sum=0.0f;
-   for(int candidate_rank=0;candidate_rank<top_k;candidate_rank++)
+   const float raw_relevance = exp(clamp(IsNaNOrInf(top[rank].y, MIN_VALUE), -16.0f, 16.0f)) *
+                               log(1.0f + fmax(IsNaNOrInf(action_hit_count[slot], 0.0f), 0.0f));
+   float relevance_sum = 0.0f;
+   for(int candidate_rank = 0; candidate_rank < top_k; candidate_rank++)
      {
-      const int candidate_scenario=(int)top[candidate_rank].x;
-      if(candidate_scenario<0 || candidate_scenario>=scenario_count || top[candidate_rank].y<=MIN_VALUE)
+      const int candidate_scenario = (int)top[candidate_rank].x;
+      if(candidate_scenario < 0 || candidate_scenario >= scenario_count || top[candidate_rank].y <= MIN_VALUE)
          continue;
-      for(int candidate_action=0;candidate_action<action_count;candidate_action++)
+      for(int candidate_action = 0; candidate_action < action_count; candidate_action++)
         {
-         const int candidate_slot=candidate_scenario*action_count+candidate_action;
-         if(action_used[candidate_slot]<=0.5f || action_hit_count[candidate_slot]<=0.0f)
+         const int candidate_slot = candidate_scenario * action_count + candidate_action;
+         if(action_used[candidate_slot] <= 0.5f || action_hit_count[candidate_slot] <= 0.0f)
             continue;
-         relevance_sum+=exp(clamp(IsNaNOrInf(top[candidate_rank].y,MIN_VALUE),-16.0f,16.0f))*
-                        log(1.0f+fmax(IsNaNOrInf(action_hit_count[candidate_slot],0.0f),0.0f));
+         relevance_sum += exp(clamp(IsNaNOrInf(top[candidate_rank].y, MIN_VALUE), -16.0f, 16.0f)) *
+                          log(1.0f + fmax(IsNaNOrInf(action_hit_count[candidate_slot], 0.0f), 0.0f));
         }
      }
-   const float weighted_relevance=(relevance_sum>1.0e-20f ? raw_relevance/relevance_sum : 0.0f);
-   if(weighted_relevance<=0.0f)
+   const float weighted_relevance = (relevance_sum > 1.0e-20f ? raw_relevance / relevance_sum : 0.0f);
+   if(weighted_relevance <= 0.0f)
      {
-      for(int d=0;d<width;d++)
-         tokens[out+d]=0.0f;
+      for(int d = 0; d < width; d++)
+         tokens[out + d] = 0.0f;
       return;
      }
-   for(int d=0;d<action_dimension;d++)
-      tokens[out+d]=IsNaNOrInf(actions[slot*action_dimension+d],0.0f);
-   tokens[out+action_dimension]=weighted_relevance;
-   tokens[out+action_dimension+1]=IsNaNOrInf(action_mean_reward[slot],0.0f);
+   for(int d = 0; d < action_dimension; d++)
+      tokens[out + d] = IsNaNOrInf(actions[slot * action_dimension + d], 0.0f);
+   tokens[out + action_dimension] = weighted_relevance;
+   tokens[out + action_dimension + 1] = IsNaNOrInf(action_mean_reward[slot], 0.0f);
   }
 //+------------------------------------------------------------------+
 //| Actor-owned differentiable rejection gate. Memory remains raw.  |
@@ -14912,33 +14944,33 @@ __kernel void RAGTokenGate(__global const float *tokens,
                            const int token_width,
                            const float scale)
   {
-   if(get_global_id(0)>0 || token_count<=0 || token_width<2)
+   if(get_global_id(0) > 0 || token_count <= 0 || token_width < 2)
       return;
-   int has_tokens=0;
-   for(int token=0;token<token_count;token++)
+   int has_tokens = 0;
+   for(int token = 0; token < token_count; token++)
      {
-      const float weighted_relevance=
-         IsNaNOrInf(tokens[token*token_width+token_width-2],0.0f);
-      if(weighted_relevance>0.0f)
+      const float weighted_relevance =
+         IsNaNOrInf(tokens[token * token_width + token_width - 2], 0.0f);
+      if(weighted_relevance > 0.0f)
         {
-         has_tokens=1;
+         has_tokens = 1;
          break;
         }
      }
    if(!has_tokens)
      {
-      for(int i=0;i<token_count*token_width;i++)
-         gated_tokens[i]=0.0f;
-      branch_activity[0]=0.0f;
+      for(int i = 0; i < token_count * token_width; i++)
+         gated_tokens[i] = 0.0f;
+      branch_activity[0] = 0.0f;
       return;
      }
-   const float threshold=IsNaNOrInf(threshold_weights[1],0.0f);
-   const float score=IsNaNOrInf(absolute_relevance[0],0.0f);
-   const float z=clamp(scale*(score-threshold),-40.0f,40.0f);
-   const float sigmoid=1.0f/(1.0f+exp(-z));
-   for(int i=0;i<token_count*token_width;i++)
-      gated_tokens[i]=IsNaNOrInf(tokens[i]*sigmoid,0.0f);
-   branch_activity[0]=sigmoid;
+   const float threshold = IsNaNOrInf(threshold_weights[1], 0.0f);
+   const float score = IsNaNOrInf(absolute_relevance[0], 0.0f);
+   const float z = clamp(scale * (score - threshold), -40.0f, 40.0f);
+   const float sigmoid = 1.0f / (1.0f + exp(-z));
+   for(int i = 0; i < token_count * token_width; i++)
+      gated_tokens[i] = IsNaNOrInf(tokens[i] * sigmoid, 0.0f);
+   branch_activity[0] = sigmoid;
   }
 //+------------------------------------------------------------------+
 //| Accumulate only the threshold derivative; memory has no gradient|
@@ -14953,84 +14985,84 @@ __kernel void RAGTokenGateGrad(__global const float *tokens,
                                const int token_width,
                                const float scale)
   {
-   if(get_global_id(0)>0 || token_count<=0 || token_width<2)
+   if(get_global_id(0) > 0 || token_count <= 0 || token_width < 2)
       return;
-   const float activity_gradient=IsNaNOrInf(branch_activity_gradient[0],0.0f);
-   int has_tokens=0;
-   for(int token=0;token<token_count;token++)
-      if(IsNaNOrInf(tokens[token*token_width+token_width-2],0.0f)>0.0f)
+   const float activity_gradient = IsNaNOrInf(branch_activity_gradient[0], 0.0f);
+   int has_tokens = 0;
+   for(int token = 0; token < token_count; token++)
+      if(IsNaNOrInf(tokens[token * token_width + token_width - 2], 0.0f) > 0.0f)
         {
-         has_tokens=1;
+         has_tokens = 1;
          break;
         }
    if(!has_tokens)
      {
-      threshold_gradient[0]=0.0f;
+      threshold_gradient[0] = 0.0f;
       return;
      }
-   const float threshold=IsNaNOrInf(threshold_weights[1],0.0f);
-   const float score=IsNaNOrInf(absolute_relevance[0],0.0f);
-   const float z=clamp(scale*(score-threshold),-40.0f,40.0f);
-   const float g=1.0f/(1.0f+exp(-z));
-   float token_gradient=0.0f;
-   for(int token=0;token<token_count;token++)
+   const float threshold = IsNaNOrInf(threshold_weights[1], 0.0f);
+   const float score = IsNaNOrInf(absolute_relevance[0], 0.0f);
+   const float z = clamp(scale * (score - threshold), -40.0f, 40.0f);
+   const float g = 1.0f / (1.0f + exp(-z));
+   float token_gradient = 0.0f;
+   for(int token = 0; token < token_count; token++)
      {
-      const int offset=token*token_width;
-      for(int d=0;d<token_width;d++)
-         token_gradient+=IsNaNOrInf(gated_gradient[offset+d],0.0f)*
-                         IsNaNOrInf(tokens[offset+d],0.0f);
+      const int offset = token * token_width;
+      for(int d = 0; d < token_width; d++)
+         token_gradient += IsNaNOrInf(gated_gradient[offset + d], 0.0f) *
+                           IsNaNOrInf(tokens[offset + d], 0.0f);
      }
-   const float gradient=(token_gradient+activity_gradient)*(-scale*g*(1.0f-g));
-   threshold_gradient[0]=clamp(IsNaNOrInf(gradient,0.0f),-MAX_GRAD,MAX_GRAD);
+   const float gradient = (token_gradient + activity_gradient) * (-scale * g * (1.0f - g));
+   threshold_gradient[0] = clamp(IsNaNOrInf(gradient, 0.0f), -MAX_GRAD, MAX_GRAD);
   }
 //+------------------------------------------------------------------+
 //| Generic bounded-memory nearest-pair reduction.  One work-group  |
 //| independently reduces one row of candidates; output is float4   |
 //| {squared_distance,left,right,valid}.                            |
 //+------------------------------------------------------------------+
-inline void RAGNearestPairIndex(const int pair,const int count,int *left,int *right)
+inline void RAGNearestPairIndex(const int pair, const int count, int *left, int *right)
   {
-   if(pair<0 || count<2)
+   if(pair < 0 || count < 2)
      {
-      *left=-1;
-      *right=-1;
+      *left = -1;
+      *right = -1;
       return;
      }
-   const long target=(long)pair;
-   int low=0;
-   int high=count-1;
-   // Find the last triangular row prefix not greater than target.  Exact
-   // 64-bit intermediates keep the mapping stable at count==65536.
-   while(low+1<high)
+   const long target = (long)pair;
+   int low = 0;
+   int high = count - 1;
+// Find the last triangular row prefix not greater than target.  Exact
+// 64-bit intermediates keep the mapping stable at count==65536.
+   while(low + 1 < high)
      {
-      const int middle=low+(high-low)/2;
-      const long before=((long)middle*(2L*(long)count-(long)middle-1L))/2L;
-      if(before<=target)
-         low=middle;
+      const int middle = low + (high - low) / 2;
+      const long before = ((long)middle * (2L * (long)count - (long)middle - 1L)) / 2L;
+      if(before <= target)
+         low = middle;
       else
-         high=middle;
+         high = middle;
      }
-   const long row_start=((long)low*(2L*(long)count-(long)low-1L))/2L;
-   const long column=(long)low+1L+(target-row_start);
-   *left=(column<(long)count ? low : -1);
-   *right=(column<(long)count ? (int)column : -1);
+   const long row_start = ((long)low * (2L * (long)count - (long)low - 1L)) / 2L;
+   const long column = (long)low + 1L + (target - row_start);
+   *left = (column < (long)count ? low : -1);
+   *right = (column < (long)count ? (int)column : -1);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-inline int RAGNearestBefore(const float4 left,const float4 right)
+inline int RAGNearestBefore(const float4 left, const float4 right)
   {
-   // Validity is part of the ordering.  A valid distance saturated to
-   // MAXFLOAT must still beat the invalid MAXFLOAT sentinel.
-   if(left.w!=right.w)
-      return left.w>right.w;
-   if(left.w<=0.0f)
+// Validity is part of the ordering.  A valid distance saturated to
+// MAXFLOAT must still beat the invalid MAXFLOAT sentinel.
+   if(left.w != right.w)
+      return left.w > right.w;
+   if(left.w <= 0.0f)
       return 0;
-   if(left.x!=right.x)
-      return left.x<right.x;
-   if(left.y!=right.y)
-      return left.y<right.y;
-   return left.z<right.z;
+   if(left.x != right.x)
+      return left.x < right.x;
+   if(left.y != right.y)
+      return left.y < right.y;
+   return left.z < right.z;
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -15042,52 +15074,52 @@ __kernel void RAGNearestPair(__global const float *centroids,
                              const int dimension,
                              const int batch_count)
   {
-   const int lane=get_local_id(0);
-   const int batch=get_group_id(0);
-   const int lanes=get_local_size(0);
+   const int lane = get_local_id(0);
+   const int batch = get_group_id(0);
+   const int lanes = get_local_size(0);
    __local float4 best[LOCAL_ARRAY_SIZE];
-   float4 current=(float4)(MAXFLOAT,-1.0f,-1.0f,0.0f);
-   if(candidate_count>1 && dimension>0 && batch>=0 && batch<batch_count &&
-      lanes>0 && lanes<=LOCAL_ARRAY_SIZE)
+   float4 current = (float4)(MAXFLOAT, -1.0f, -1.0f, 0.0f);
+   if(candidate_count > 1 && dimension > 0 && batch >= 0 && batch < batch_count &&
+      lanes > 0 && lanes <= LOCAL_ARRAY_SIZE)
      {
       // candidate_count<=65536: divide the even factor before multiplying so
       // the documented maximum (2,147,450,880 pairs) stays in signed int.
-      const int pairs=((candidate_count&1)==0 ?
-                       (candidate_count/2)*(candidate_count-1) :
-                       candidate_count*((candidate_count-1)/2));
-      const int base=batch*candidate_count;
-      for(int pair=lane;pair<pairs;pair+=lanes)
+      const int pairs = ((candidate_count & 1) == 0 ?
+                         (candidate_count / 2) * (candidate_count - 1) :
+                         candidate_count * ((candidate_count - 1) / 2));
+      const int base = batch * candidate_count;
+      for(int pair = lane; pair < pairs; pair += lanes)
         {
-         int left=-1,right=-1;
-         RAGNearestPairIndex(pair,candidate_count,&left,&right);
-         if(left<0 || right<0 || used[base+left]<=0.5f || used[base+right]<=0.5f)
+         int left = -1, right = -1;
+         RAGNearestPairIndex(pair, candidate_count, &left, &right);
+         if(left < 0 || right < 0 || used[base + left] <= 0.5f || used[base + right] <= 0.5f)
             continue;
-         float distance=0.0f;
-         const int lbase=(base+left)*dimension;
-         const int rbase=(base+right)*dimension;
-          for(int d=0;d<dimension;d++)
-            {
-             const float delta=IsNaNOrInf(centroids[lbase+d]-centroids[rbase+d],MAXFLOAT);
-             // Match the CPU fallback's explicit float rounding and prevent
-             // contraction from changing the nearest-pair ordering.
-             volatile float squared=delta*delta;
-             distance=distance+squared;
-            }
-         const float4 candidate=(float4)(IsNaNOrInf(distance,MAXFLOAT),(float)left,(float)right,1.0f);
-         if(RAGNearestBefore(candidate,current))
-            current=candidate;
+         float distance = 0.0f;
+         const int lbase = (base + left) * dimension;
+         const int rbase = (base + right) * dimension;
+         for(int d = 0; d < dimension; d++)
+           {
+            const float delta = IsNaNOrInf(centroids[lbase + d] - centroids[rbase + d], MAXFLOAT);
+            // Match the CPU fallback's explicit float rounding and prevent
+            // contraction from changing the nearest-pair ordering.
+            volatile float squared = delta * delta;
+            distance = distance + squared;
+           }
+         const float4 candidate = (float4)(IsNaNOrInf(distance, MAXFLOAT), (float)left, (float)right, 1.0f);
+         if(RAGNearestBefore(candidate, current))
+            current = candidate;
         }
      }
-   best[lane]=current;
+   best[lane] = current;
    BarrierLoc;
-   for(int stride=lanes>>1;stride>0;stride>>=1)
+   for(int stride = lanes >> 1; stride > 0; stride >>= 1)
      {
-      if(lane<stride && RAGNearestBefore(best[lane+stride],best[lane]))
-         best[lane]=best[lane+stride];
+      if(lane < stride && RAGNearestBefore(best[lane + stride], best[lane]))
+         best[lane] = best[lane + stride];
       BarrierLoc;
      }
-   if(lane==0 && batch>=0 && batch<batch_count)
-      result[batch]=best[0];
+   if(lane == 0 && batch >= 0 && batch < batch_count)
+      result[batch] = best[0];
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -15394,13 +15426,13 @@ __kernel void CogDriverAffineStackGrad(__global const float* snapshot,
 //|                                                                  |
 //+------------------------------------------------------------------+
 __kernel void CogDriverRankTCMInsertPending(__global float* memory,
-                                            __global float* age,
-                                            __global float* score,
-                                            __global float* valid,
-                                            __global const float* pending_query,
-                                            const int memory_len,
-                                            const int query_dim,
-                                            const int variables
+      __global float* age,
+      __global float* score,
+      __global float* valid,
+      __global const float* pending_query,
+      const int memory_len,
+      const int query_dim,
+      const int variables
                                            )
   {
    const int variable = get_global_id(0);
@@ -15573,8 +15605,8 @@ __kernel void CogDriverRankTCMMeanFlashScore(__global const float* query,
 //|                                                                  |
 //+------------------------------------------------------------------+
 __kernel void CogDriverRankTCMSelfKV(__global const float* source,
-      __global float* self_kv,
-      const int query_dim,
+                                     __global float* self_kv,
+                                     const int query_dim,
                                      const int variables,
                                      const int heads,
                                      const int head_dim
@@ -15617,15 +15649,15 @@ __kernel void ScenarioForecastForward(__global const float *input,
                                       const int dimension,
                                       const int phase,
                                       __global float *log_pi,
-                                       __global float *log_u,
-                                       const int variables,
-                                       __global float *forward_validity,
-                                       __global const float *generator_weights,
-                                       __global const float *router_weights,
-                                       __global const float *confidence_weights,
-                                       const int generator_weights_count,
-                                       const int router_weights_count,
-                                       const int confidence_weights_count)
+                                      __global float *log_u,
+                                      const int variables,
+                                      __global float *forward_validity,
+                                      __global const float *generator_weights,
+                                      __global const float *router_weights,
+                                      __global const float *confidence_weights,
+                                      const int generator_weights_count,
+                                      const int router_weights_count,
+                                      const int confidence_weights_count)
   {
    const int d = get_global_id(0);
    const int v = get_global_id(1);
@@ -15801,8 +15833,8 @@ __kernel void ScenarioResponsibilities(__global float *target,
          laplace = IsNaNOrInf(laplace + fabs(error) / scale + log(2.0f * scale), 0.0f);
          const float absolute_error = fabs(error);
          trajectory = IsNaNOrInf(trajectory + (absolute_error <= huber_delta ?
-                                    0.5f * absolute_error * absolute_error :
-                                    huber_delta * (absolute_error - 0.5f * huber_delta)), 0.0f);
+                                               0.5f * absolute_error * absolute_error :
+                                               huber_delta * (absolute_error - 0.5f * huber_delta)), 0.0f);
          confidence_cost = IsNaNOrInf(confidence_cost + log(scale) + absolute_error / scale, 0.0f);
          latent_abs = IsNaNOrInf(latent_abs + absolute_error, 0.0f);
         }
@@ -15820,9 +15852,9 @@ __kernel void ScenarioResponsibilities(__global float *target,
       if(ld == 0 && lv == 0)
         {
          const bool valid = (batch_control[0] > 0.5f);
-//--- The likelihood is accumulated across the whole joint trajectory. Scale
-//--- its complete log-posterior by the root coordinate count so the
-//--- sparse TopK posterior remains representable for all selected scenarios.
+         //--- The likelihood is accumulated across the whole joint trajectory. Scale
+         //--- its complete log-posterior by the root coordinate count so the
+         //--- sparse TopK posterior remains representable for all selected scenarios.
          const float score_scale = sqrt(max((float)variables * (float)horizon * (float)dimension, 1.0f));
          scores[k] = (valid ? IsNaNOrInf((log(max(IsNaNOrInf(pi[k], 0.0f), 1.0e-12f)) - joint_laplace) /
                                          score_scale, MIN_VALUE) : MIN_VALUE);
@@ -15873,7 +15905,7 @@ __kernel void ScenarioResponsibilities(__global float *target,
             const float confidence_signal = absolute_sum / (scale * scale) -
                                             (float)dimension / scale;
             confidence_gradient[confidence_shift] = (responsibility > 0.0f && scale < 10.0f ?
-               IsNaNOrInf(confidence_signal * softplus_gradient, 0.0f) : 0.0f);
+                                                    IsNaNOrInf(confidence_signal * softplus_gradient, 0.0f) : 0.0f);
            }
          BarrierLoc
         }
@@ -15945,7 +15977,7 @@ __kernel void ScenarioResponsibilities(__global float *target,
          const int coordinate = (v * horizon + h) * dimension + d;
          const int stride = variables * horizon * dimension;
          const float difference = IsNaNOrInf(prototypes[left * stride + coordinate] -
-                                              prototypes[right * stride + coordinate], 0.0f);
+                                             prototypes[right * stride + coordinate], 0.0f);
          square_sum += difference * difference;
         }
       const float variable_sum = LocalSum(square_sum, 0, Temp + lv * dimension);
@@ -15969,7 +16001,7 @@ __kernel void ScenarioResponsibilities(__global float *target,
          epoch_diagnostics[8] = IsNaNOrInf(entropy_sum, 0.0f);
       BarrierLoc
       const float inactive_sum = LocalSum(lane < scenarios && IsNaNOrInf(inactive[lane], 0.0f) > 0.0f ?
-                                           1.0f : 0.0f, 0, Temp);
+                                          1.0f : 0.0f, 0, Temp);
       if(lane == 0)
          epoch_diagnostics[10] = IsNaNOrInf(inactive_sum, 0.0f);
       BarrierLoc
@@ -16017,8 +16049,8 @@ __kernel void ScenarioCodebookEMA(__global const float *target,
       recovery[k] = 0.0f;
       if(batch_control[0] <= 0.5f)
          return;
-//--- The same normalized TopK responsibility that trains Z_k updates
-//--- this scenario's Delta-Z EMA.  Non-TopK scenarios receive zero.
+      //--- The same normalized TopK responsibility that trains Z_k updates
+      //--- this scenario's Delta-Z EMA.  Non-TopK scenarios receive zero.
       const float hit = clamp(IsNaNOrInf(responsibilities[k], 0.0f), 0.0f, 1.0f);
       const float count = decay * IsNaNOrInf(ema_counts[k], 0.0f) + (1.0f - decay) * hit;
       const float age = (hit > 0.0f ? 0.0f : IsNaNOrInf(inactivity_age[k], 0.0f) + 1.0f);
@@ -16051,7 +16083,7 @@ __kernel void ScenarioCodebookEMA(__global const float *target,
       if(recover)
         {
          const float prototype = IsNaNOrInf(sample + 0.01f * sin((float)seed + 17.0f * (float)k +
-                                                 0.61803398875f * (float)(coordinate + 1)), sample);
+                                            0.61803398875f * (float)(coordinate + 1)), sample);
          prototypes[shift] = prototype;
          ema_sums[shift] = prototype;
         }
@@ -16160,5 +16192,779 @@ __kernel void ScenarioGradientNormalize(__global float *generator_gradient,
          input_gradient[variable * dimension + dimension_index] = IsNaNOrInf(aggregate, 0.0f);
       return;
      }
+  }
+__kernel void D2SkillItemPartial(__global const float *source,
+                                 __global float *partials,
+                                 const int dimension,
+                                 const int output_offset)
+  {
+   const int id = get_global_id(0);
+   const int stride = get_global_size(0);
+   const int lane = get_local_id(0);
+   float sum = 0.0f;
+   for(int d = id; d < dimension; d += stride)
+     {
+      const float value = IsNaNOrInf(source[d], 0.0f);
+      sum += value * value;
+     }
+   __local float Temp[LOCAL_ARRAY_SIZE];
+   const float group_sum = LocalSum(sum, 0, Temp);
+   if(lane == 0)
+      partials[output_offset + get_group_id(0)] = IsNaNOrInf(group_sum, 0.0f);
+  }
+//+------------------------------------------------------------------+
+//| Recursive no-atomics reduction into disjoint scratch regions.    |
+//+------------------------------------------------------------------+
+__kernel void D2SkillItemReduce(__global float *partials,
+                                __global float *reduced,
+                                const int input_count,
+                                const int input_offset,
+                                const int output_offset,
+                                const int final_output)
+  {
+   const int group = get_group_id(0);
+   const int lane = get_local_id(0);
+   const int local_size = get_local_size(0);
+   const int groups = get_num_groups(0);
+   float sum = 0.0f;
+   for(int index = group * local_size + lane; index < input_count;
+       index += groups * local_size)
+      sum += IsNaNOrInf(partials[input_offset + index], 0.0f);
+   __local float Temp[LOCAL_ARRAY_SIZE];
+   const float group_sum = LocalSum(sum, 0, Temp);
+   if(lane == 0)
+     {
+      if(final_output != 0)
+         reduced[0] = IsNaNOrInf(group_sum, 0.0f);
+      else
+         partials[output_offset + group] = IsNaNOrInf(group_sum, 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+//| Parallel Item state update and correction materialization.       |
+//+------------------------------------------------------------------+
+#define D2_ITEM_APPLY_UPDATE    0
+#define D2_ITEM_APPLY_CORRECTION 1
+
+__kernel void D2SkillItemApply(__global const float *gradient,
+                               __global float *correction,
+                               __global float *direction,
+                               __global float *scale,
+                               __global float *observations,
+                               __global float *mass,
+                               __global const float *reduced_norm,
+                               const int dimension,
+                               const int representation,
+                               const float beta_correction,
+                               const float beta_direction,
+                               const float beta_magnitude,
+                               const int phase)
+  {
+   const int id = get_global_id(0);
+   const float norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
+   if(phase == D2_ITEM_APPLY_UPDATE)
+     {
+      if(id < dimension)
+        {
+         const float g = IsNaNOrInf(gradient[id], 0.0f);
+         if(representation == 0)
+           {
+            const float old_value = IsNaNOrInf(correction[id], 0.0f);
+            correction[id] = (1.0f - beta_correction) * old_value + beta_correction * g;
+           }
+         else
+           {
+            const float inv_norm = (norm > 1.0e-12f ? 1.0f / norm : 0.0f);
+            const float old_direction = IsNaNOrInf(direction[id], 0.0f);
+            direction[id] = (1.0f - beta_direction) * old_direction +
+                            beta_direction * g * inv_norm;
+           }
+        }
+      if(id == 0)
+        {
+         if(representation != 0)
+            scale[0] = clamp((1.0f - beta_magnitude) * IsNaNOrInf(scale[0], 0.0f) +
+                             beta_magnitude * norm, 0.0f, MAX_VALUE);
+         observations[0] = IsNaNOrInf(observations[0], 0.0f) + 1.0f;
+         mass[0] = IsNaNOrInf(mass[0], 0.0f) + norm;
+        }
+      return;
+     }
+   if(id >= dimension || representation == 0)
+      return;
+   const float inv_direction = (norm > 1.0e-12f ? 1.0f / norm : 0.0f);
+   correction[id] = IsNaNOrInf(scale[0], 0.0f) *
+                    IsNaNOrInf(direction[id], 0.0f) * inv_direction;
+  }
+//+------------------------------------------------------------------+
+//| Score one D2Skill slot per workgroup.                              |
+//+------------------------------------------------------------------+
+__kernel void D2SkillScoreSlots(__global const float *query,
+                                __global const float *keys,
+                                __global const float *utility,
+                                __global const float *used,
+                                __global const float *state,
+                                __global float *scores,
+                                const int slots,
+                                const int dimension,
+                                const float similarity_threshold,
+                                const float utility_weight,
+                                const float min_utility,
+                                const int utility_policy)
+  {
+   const int lane = get_local_id(0);
+   const int slot = get_group_id(0);
+   const int lanes = get_local_size(0);
+   float dot = 0.0f;
+   float query2 = 0.0f;
+   float key2 = 0.0f;
+   float invalid_reduction = 0.0f;
+   __local float dot_local[LOCAL_ARRAY_SIZE];
+   __local float query_local[LOCAL_ARRAY_SIZE];
+   __local float key_local[LOCAL_ARRAY_SIZE];
+   __local float invalid_local[LOCAL_ARRAY_SIZE];
+   if(slot < slots && dimension > 0)
+     {
+      for(int d = lane; d < dimension; d += lanes)
+        {
+         const float q = IsNaNOrInf(query[d], 0.0f);
+         const float k = IsNaNOrInf(keys[slot * dimension + d], 0.0f);
+         dot += q * k;
+         query2 += q * q;
+         key2 += k * k;
+         if(!isfinite(dot) || !isfinite(query2) || !isfinite(key2))
+            invalid_reduction = 1.0f;
+        }
+     }
+   dot = LocalSum(dot, 0, dot_local);
+   query2 = LocalSum(query2, 0, query_local);
+   key2 = LocalSum(key2, 0, key_local);
+   invalid_reduction = LocalSum(invalid_reduction, 0, invalid_local);
+   if(lane == 0 && slot < slots)
+     {
+      float score = RAG_INVALID_SCORE;
+      const int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_INACTIVE);
+      if(dimension > 0 && invalid_reduction <= 0.0f && isfinite(dot) &&
+         isfinite(query2) && isfinite(key2) && IsNaNOrInf(used[slot], 0.0f) > 0.5f &&
+         slot_state != D2SKILL_INACTIVE && query2 > 1.0e-12f && key2 > 1.0e-12f)
+        {
+         const float cosine = dot / (sqrt(query2) * sqrt(key2));
+         const float slot_utility = clamp(IsNaNOrInf(utility[slot], 0.0f), -1.0f, 1.0f);
+         if(isfinite(cosine) && cosine >= similarity_threshold &&
+            (utility_policy == 0 || slot_utility >= min_utility))
+           {
+            const float candidate_score = cosine + utility_weight * slot_utility;
+            if(isfinite(candidate_score))
+               score = candidate_score;
+           }
+        }
+      scores[slot] = score;
+     }
+  }
+//+------------------------------------------------------------------+
+//| Gather the selected signed correction in parallel by component.  |
+//+------------------------------------------------------------------+
+__kernel void D2SkillGatherCorrection(__global const float2 *top,
+                                      __global const float *corrections,
+                                      __global const float *directions,
+                                      __global const float *scales,
+                                      __global float *selected_correction,
+                                      __global float *selected_slot,
+                                      __global float *selected_score,
+                                      __global float *uses,
+                                      __global float *diagnostics,
+                                      const int slots,
+                                      const int dimension,
+                                      const int representation,
+                                      const float alpha)
+  {
+   const int component = get_global_id(0);
+   const float2 top_slot = top[0];
+   const int winner = (int)top_slot.x;
+   const float score = IsNaNOrInf(top_slot.y, RAG_INVALID_SCORE);
+   const int valid = (winner >= 0 && winner < slots && score > RAG_INVALID_SCORE);
+   if(component < dimension)
+     {
+      float correction = 0.0f;
+      if(valid)
+        {
+         const int shift = winner * dimension + component;
+         correction = (representation == 1 ?
+                       IsNaNOrInf(directions[shift], 0.0f) *
+                       IsNaNOrInf(scales[winner], 0.0f) :
+                       IsNaNOrInf(corrections[shift], 0.0f));
+         correction = IsNaNOrInf(correction * IsNaNOrInf(alpha, 0.0f), 0.0f);
+        }
+      selected_correction[component] = correction;
+     }
+   if(component == 0)
+     {
+      selected_slot[0] = (valid ? (float)winner : -1.0f);
+      selected_score[0] = (valid ? score : RAG_INVALID_SCORE);
+      if(valid)
+        {
+         uses[winner] = IsNaNOrInf(uses[winner], 0.0f) + 1.0f;
+         diagnostics[0] = IsNaNOrInf(diagnostics[0], 0.0f) + 1.0f;
+        }
+      else
+         diagnostics[1] = IsNaNOrInf(diagnostics[1], 0.0f) + 1.0f;
+     }
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+#define D2SKILL_METRIC_COUNT       10
+#define D2SKILL_DIAGNOSTIC_PARTIALS 21
+#define D2SKILL_DECISION_NONE       0
+#define D2SKILL_DECISION_MATCH      1
+#define D2SKILL_DECISION_SEED       2
+#define D2SKILL_DECISION_RESET      3
+#define D2SKILL_DECISION_CANDIDATE  4
+#define D2SKILL_DECISION_FREE       5
+#define D2SKILL_DECISION_EVICT      6
+
+__kernel void D2SkillAgeLifecycle(__global const float *used,
+                                  __global float *state,
+                                  __global float *age,
+                                  __global float *protection,
+                                  __global const float *utility,
+                                  __global float *free_scores,
+                                  __global float *eviction_scores,
+                                  const int slots,
+                                  const int inactivity_age)
+  {
+   const int slot = get_global_id(0);
+   if(slot >= slots)
+      return;
+   const float is_used = IsNaNOrInf(used[slot], 0.0f);
+   int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE);
+   float slot_age = max(IsNaNOrInf(age[slot], 0.0f), 0.0f);
+   float slot_protection = max(IsNaNOrInf(protection[slot], 0.0f), 0.0f);
+   if(is_used > 0.5f)
+     {
+      slot_age = min(slot_age + 1.0f, (float)MAX_VALUE);
+      slot_protection = max(slot_protection - 1.0f, 0.0f);
+      if(slot_state == D2SKILL_PROTECTED && slot_protection <= 0.0f)
+         slot_state = D2SKILL_ACTIVE;
+      if(slot_state == D2SKILL_ACTIVE && slot_age >= (float)max(1, inactivity_age))
+         slot_state = D2SKILL_INACTIVE;
+      state[slot] = (float)slot_state;
+      age[slot] = slot_age;
+      protection[slot] = slot_protection;
+     }
+   free_scores[slot] = (is_used <= 0.5f && slot_state == D2SKILL_FREE ?
+                        -(float)slot : RAG_INVALID_SCORE);
+   eviction_scores[slot] = (is_used > 0.5f && slot_state == D2SKILL_INACTIVE &&
+                            slot_protection <= 0.0f ?
+                            -clamp(IsNaNOrInf(utility[slot], 0.0f), -1.0f, 1.0f) +
+                            1.0e-4f * slot_age : RAG_INVALID_SCORE);
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillMetricPartial(__global const float *query,
+                                   __global const float *gradient,
+                                   __global const float *selected_slot,
+                                   __global const float *keys,
+                                   __global const float *directions,
+                                   __global const float *used,
+                                   __global const float *candidate_valid,
+                                   __global const float *candidate_key,
+                                   __global const float *candidate_direction,
+                                   __global float *partials,
+                                   const int slots,
+                                   const int dimension)
+  {
+   const int lane = get_local_id(0);
+   const int lanes = get_local_size(0);
+   const int group = get_group_id(0);
+   const int groups = get_num_groups(0);
+   const int selected = (int)round(selected_slot[0]);
+   const int selected_valid = (selected >= 0 && selected < slots &&
+                               IsNaNOrInf(used[selected], 0.0f) > 0.5f);
+   const int candidate = (candidate_valid[0] > 0.5f);
+   float m0 = 0.0f, m1 = 0.0f, m2 = 0.0f, m3 = 0.0f, m4 = 0.0f;
+   float m5 = 0.0f, m6 = 0.0f, m7 = 0.0f, m8 = 0.0f, m9 = 0.0f;
+   for(int d = group * lanes + lane; d < dimension; d += groups * lanes)
+     {
+      const float q = IsNaNOrInf(query[d], 0.0f);
+      const float g = IsNaNOrInf(gradient[d], 0.0f);
+      m0 += g * g;
+      m1 += q * q;
+      if(selected_valid)
+        {
+         const int shift = selected * dimension + d;
+         const float key = IsNaNOrInf(keys[shift], 0.0f);
+         const float direction = IsNaNOrInf(directions[shift], 0.0f);
+         m2 += q * key;
+         m3 += key * key;
+         m4 += g * direction;
+         m5 += direction * direction;
+        }
+      if(candidate)
+        {
+         const float key = IsNaNOrInf(candidate_key[d], 0.0f);
+         const float direction = IsNaNOrInf(candidate_direction[d], 0.0f);
+         m6 += q * key;
+         m7 += key * key;
+         m8 += g * direction;
+         m9 += direction * direction;
+        }
+     }
+   __local float t0[LOCAL_ARRAY_SIZE], t1[LOCAL_ARRAY_SIZE], t2[LOCAL_ARRAY_SIZE];
+   __local float t3[LOCAL_ARRAY_SIZE], t4[LOCAL_ARRAY_SIZE], t5[LOCAL_ARRAY_SIZE];
+   __local float t6[LOCAL_ARRAY_SIZE], t7[LOCAL_ARRAY_SIZE], t8[LOCAL_ARRAY_SIZE];
+   __local float t9[LOCAL_ARRAY_SIZE];
+   m0 = LocalSum(m0, 0, t0);
+   m1 = LocalSum(m1, 0, t1);
+   m2 = LocalSum(m2, 0, t2);
+   m3 = LocalSum(m3, 0, t3);
+   m4 = LocalSum(m4, 0, t4);
+   m5 = LocalSum(m5, 0, t5);
+   m6 = LocalSum(m6, 0, t6);
+   m7 = LocalSum(m7, 0, t7);
+   m8 = LocalSum(m8, 0, t8);
+   m9 = LocalSum(m9, 0, t9);
+   if(lane == 0)
+     {
+      const int base = group * D2SKILL_METRIC_COUNT;
+      partials[base] = IsNaNOrInf(m0, 0.0f);
+      partials[base + 1] = IsNaNOrInf(m1, 0.0f);
+      partials[base + 2] = IsNaNOrInf(m2, 0.0f);
+      partials[base + 3] = IsNaNOrInf(m3, 0.0f);
+      partials[base + 4] = IsNaNOrInf(m4, 0.0f);
+      partials[base + 5] = IsNaNOrInf(m5, 0.0f);
+      partials[base + 6] = IsNaNOrInf(m6, 0.0f);
+      partials[base + 7] = IsNaNOrInf(m7, 0.0f);
+      partials[base + 8] = IsNaNOrInf(m8, 0.0f);
+      partials[base + 9] = IsNaNOrInf(m9, 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillMetricReduce(__global const float *partials,
+                                  __global float *metrics,
+                                  const int input_count)
+  {
+   const int lane = get_local_id(0);
+   const int lanes = get_local_size(0);
+   const int metric = get_group_id(0);
+   if(metric >= D2SKILL_METRIC_COUNT)
+      return;
+   float value = 0.0f;
+   for(int item = lane; item < input_count; item += lanes)
+      value += IsNaNOrInf(partials[item * D2SKILL_METRIC_COUNT + metric], 0.0f);
+   __local float temp[LOCAL_ARRAY_SIZE];
+   value = LocalSum(value, 0, temp);
+   if(lane == 0)
+      metrics[metric] = IsNaNOrInf(value, 0.0f);
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillCandidateLeader(__global const float *selected_slot,
+                                     __global const float *used,
+                                     __global float *scales,
+                                     __global float *observations,
+                                     __global float *mass,
+                                     __global float *age,
+                                     __global float *candidate_streak,
+                                     __global float *candidate_valid,
+                                     __global float *candidate_scale,
+                                     __global const float *metrics,
+                                     __global const float2 *free_top,
+                                     __global const float2 *eviction_top,
+                                     __global float *decision,
+                                     __global float *diagnostics,
+                                     const int slots,
+                                     const int representation,
+                                     const float beta_magnitude,
+                                     const float max_correction,
+                                     const int min_confirmations,
+                                     const float similarity_threshold,
+                                     const float direction_threshold)
+  {
+   if(get_global_id(0) != 0)
+      return;
+   decision[0] = -1.0f;
+   decision[1] = D2SKILL_DECISION_NONE;
+   const float gradient_norm = sqrt(fmax(IsNaNOrInf(metrics[0], 0.0f), 0.0f));
+   decision[2] = gradient_norm;
+   decision[3] = 0.0f;
+   if(slots <= 0 || gradient_norm <= 1.0e-8f)
+      return;
+   const float query_norm = sqrt(fmax(IsNaNOrInf(metrics[1], 0.0f), 0.0f));
+   const int selected = (int)round(selected_slot[0]);
+   const int selected_valid = (selected >= 0 && selected < slots &&
+                               IsNaNOrInf(used[selected], 0.0f) > 0.5f);
+   const float selected_key_norm = sqrt(fmax(IsNaNOrInf(metrics[3], 0.0f), 0.0f));
+   const float selected_direction_norm = sqrt(fmax(IsNaNOrInf(metrics[5], 0.0f), 0.0f));
+   const float key_cosine = (query_norm > 1.0e-8f && selected_key_norm > 1.0e-8f ?
+                             metrics[2] / (query_norm * selected_key_norm) : -1.0f);
+   const float direction_cosine = (selected_direction_norm > 1.0e-8f ?
+                                   metrics[4] / (gradient_norm * selected_direction_norm) : 0.0f);
+   if(selected_valid)
+     {
+      diagnostics[2] = IsNaNOrInf(diagnostics[2], 0.0f) + 1.0f;
+      if(IsNaNOrInf(metrics[5], 0.0f) > 1.0e-8f)
+        {
+         diagnostics[19] = IsNaNOrInf(diagnostics[19], 0.0f) + 1.0f;
+         diagnostics[20] = IsNaNOrInf(diagnostics[20], 0.0f) + direction_cosine;
+        }
+     }
+   if(selected_valid && isfinite(key_cosine) && isfinite(direction_cosine) &&
+      key_cosine >= similarity_threshold && direction_cosine >= direction_threshold)
+     {
+      if(representation == 1)
+         scales[selected] = clamp((1.0f - beta_magnitude) * IsNaNOrInf(scales[selected], 0.0f) +
+                                  beta_magnitude * gradient_norm, 0.0f, max_correction);
+      observations[selected] = IsNaNOrInf(observations[selected], 0.0f) + 1.0f;
+      mass[selected] = 0.95f * IsNaNOrInf(mass[selected], 0.0f) + 0.05f;
+      age[selected] = 0.0f;
+      decision[0] = (float)selected;
+      decision[1] = D2SKILL_DECISION_MATCH;
+      return;
+     }
+   if(candidate_valid[0] <= 0.5f)
+     {
+      candidate_valid[0] = 1.0f;
+      candidate_streak[0] = 1.0f;
+      candidate_scale[0] = gradient_norm;
+      diagnostics[3] = IsNaNOrInf(diagnostics[3], 0.0f) + 1.0f;
+      decision[1] = D2SKILL_DECISION_SEED;
+      return;
+     }
+   const float candidate_key_norm = sqrt(fmax(IsNaNOrInf(metrics[7], 0.0f), 0.0f));
+   const float candidate_direction_norm = sqrt(fmax(IsNaNOrInf(metrics[9], 0.0f), 0.0f));
+   const float candidate_key_cosine = (query_norm > 1.0e-8f && candidate_key_norm > 1.0e-8f ?
+                                       metrics[6] / (query_norm * candidate_key_norm) : -1.0f);
+   const float candidate_direction_cosine =
+      (candidate_direction_norm > 1.0e-8f ?
+       metrics[8] / (gradient_norm * candidate_direction_norm) : 0.0f);
+   if(candidate_direction_norm > 1.0e-8f && isfinite(candidate_direction_cosine))
+     {
+      diagnostics[19] = IsNaNOrInf(diagnostics[19], 0.0f) + 1.0f;
+      diagnostics[20] = IsNaNOrInf(diagnostics[20], 0.0f) + candidate_direction_cosine;
+     }
+   const bool direction_rejected = (IsNaNOrInf(metrics[9], 0.0f) > 1.0e-8f &&
+                                    (!isfinite(candidate_direction_cosine) ||
+                                     candidate_direction_cosine < direction_threshold));
+   if(!isfinite(candidate_key_cosine) || candidate_key_cosine < similarity_threshold ||
+      direction_rejected)
+     {
+      candidate_streak[0] = 1.0f;
+      candidate_scale[0] = gradient_norm;
+      decision[1] = D2SKILL_DECISION_RESET;
+      return;
+     }
+   candidate_streak[0] = IsNaNOrInf(candidate_streak[0], 0.0f) + 1.0f;
+   candidate_scale[0] = clamp((1.0f - beta_magnitude) * IsNaNOrInf(candidate_scale[0], 0.0f) +
+                               beta_magnitude * gradient_norm, 0.0f, max_correction);
+   if(candidate_streak[0] < (float)max(1, min_confirmations))
+     {
+      decision[1] = D2SKILL_DECISION_CANDIDATE;
+      return;
+     }
+   const int free_slot = (int)round(free_top[0].x);
+   const int evict_slot = (int)round(eviction_top[0].x);
+   if(free_slot >= 0 && free_slot < slots && free_top[0].y > RAG_INVALID_SCORE)
+     {
+      decision[0] = (float)free_slot;
+      decision[1] = D2SKILL_DECISION_FREE;
+     }
+   else
+      if(evict_slot >= 0 && evict_slot < slots && eviction_top[0].y > RAG_INVALID_SCORE)
+        {
+         decision[0] = (float)evict_slot;
+         decision[1] = D2SKILL_DECISION_EVICT;
+        }
+      else
+        {
+         diagnostics[5] = IsNaNOrInf(diagnostics[5], 0.0f) + 1.0f;
+         decision[1] = D2SKILL_DECISION_CANDIDATE;
+        }
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillVectorUpdate(__global const float *query,
+                                  __global const float *gradient,
+                                  __global float *keys,
+                                  __global float *corrections,
+                                  __global float *directions,
+                                  __global const float *scales,
+                                  __global float *candidate_key,
+                                  __global float *candidate_direction,
+                                  __global const float *candidate_scale,
+                                  __global const float *decision,
+                                  __global const float *reduced_norm,
+                                  const int dimension,
+                                  const int representation,
+                                  const float beta_correction,
+                                  const float beta_direction,
+                                  const float beta_key,
+                                  const float max_correction,
+                                  const int phase)
+  {
+   const int component = get_global_id(0);
+   if(component >= dimension || dimension <= 0)
+      return;
+   const int action = (int)round(decision[1]);
+   const int target = (int)round(decision[0]);
+   const float gradient_norm = decision[2];
+   const float query_value = IsNaNOrInf(query[component], 0.0f);
+   const float gradient_value = IsNaNOrInf(gradient[component], 0.0f);
+   const float unit = (gradient_norm > 1.0e-8f ? gradient_value / gradient_norm : 0.0f);
+   if(phase == 1)
+     {
+      if(action != D2SKILL_DECISION_MATCH || target < 0)
+         return;
+      const int shift = target * dimension + component;
+      const float vector_norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
+      if(representation == 0)
+        {
+         const float factor = (vector_norm > max_correction && vector_norm > 1.0e-12f ?
+                               max_correction / vector_norm : 1.0f);
+         corrections[shift] = IsNaNOrInf(corrections[shift] * factor, 0.0f);
+        }
+      else
+        {
+         const float factor = (vector_norm > 1.0e-12f ? scales[target] / vector_norm : 0.0f);
+         corrections[shift] = IsNaNOrInf(directions[shift] * factor, 0.0f);
+        }
+      return;
+     }
+   if(action == D2SKILL_DECISION_MATCH && target >= 0)
+     {
+      const int shift = target * dimension + component;
+      keys[shift] = IsNaNOrInf((1.0f - beta_key) * keys[shift] + beta_key * query_value, 0.0f);
+      if(representation == 0)
+         corrections[shift] = IsNaNOrInf((1.0f - beta_correction) *
+                                         IsNaNOrInf(corrections[shift], 0.0f) +
+                                         beta_correction * gradient_value, 0.0f);
+      else
+         directions[shift] = IsNaNOrInf((1.0f - beta_direction) *
+                                        IsNaNOrInf(directions[shift], 0.0f) +
+                                        beta_direction * unit, 0.0f);
+      return;
+     }
+   if(action == D2SKILL_DECISION_SEED || action == D2SKILL_DECISION_RESET)
+     {
+      candidate_key[component] = query_value;
+      candidate_direction[component] = unit;
+      return;
+     }
+   if(action == D2SKILL_DECISION_CANDIDATE)
+     {
+      candidate_key[component] =
+         IsNaNOrInf((1.0f - beta_key) * candidate_key[component] +
+                    beta_key * query_value, 0.0f);
+      candidate_direction[component] =
+         IsNaNOrInf((1.0f - beta_direction) * candidate_direction[component] +
+                    beta_direction * unit, 0.0f);
+      return;
+     }
+   if((action == D2SKILL_DECISION_FREE || action == D2SKILL_DECISION_EVICT) && target >= 0)
+     {
+      const int shift = target * dimension + component;
+      const float next_key =
+         IsNaNOrInf((1.0f - beta_key) * candidate_key[component] +
+                    beta_key * query_value, 0.0f);
+      const float next_direction =
+         IsNaNOrInf((1.0f - beta_direction) * candidate_direction[component] +
+                    beta_direction * unit, 0.0f);
+      candidate_key[component] = next_key;
+      candidate_direction[component] = next_direction;
+      keys[shift] = next_key;
+      directions[shift] = next_direction;
+      corrections[shift] = IsNaNOrInf(next_direction * candidate_scale[0], 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillBankVectorPartial(__global const float *corrections,
+                                       __global const float *directions,
+                                       __global const float *decision,
+                                       __global float *partials,
+                                       const int dimension,
+                                       const int representation,
+                                       const int output_offset)
+  {
+   const int id = get_global_id(0);
+   const int lane = get_local_id(0);
+   const int stride = get_global_size(0);
+   const int target = (int)round(decision[0]);
+   const int action = (int)round(decision[1]);
+   float sum = 0.0f;
+   if(action == D2SKILL_DECISION_MATCH && target >= 0)
+      for(int component = id; component < dimension; component += stride)
+        {
+         const int shift = target * dimension + component;
+         const float value = (representation == 0 ?
+                              IsNaNOrInf(corrections[shift], 0.0f) :
+                              IsNaNOrInf(directions[shift], 0.0f));
+         sum += value * value;
+        }
+   __local float temp[LOCAL_ARRAY_SIZE];
+   const float group_sum = LocalSum(sum, 0, temp);
+   if(lane == 0)
+      partials[output_offset + get_group_id(0)] = IsNaNOrInf(group_sum, 0.0f);
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillPromoteSlot(__global float *scales,
+                                 __global float *utility,
+                                 __global float *observations,
+                                 __global float *uses,
+                                 __global float *mass,
+                                 __global float *used,
+                                 __global float *state,
+                                 __global float *age,
+                                 __global float *protection,
+                                 __global float *candidate_streak,
+                                 __global float *candidate_valid,
+                                 __global const float *candidate_scale,
+                                 __global const float *decision,
+                                 __global float *diagnostics,
+                                 const int slots,
+                                 const int protection_age)
+  {
+   if(get_global_id(0) != 0)
+      return;
+   const int action = (int)round(decision[1]);
+   const int target = (int)round(decision[0]);
+   if((action != D2SKILL_DECISION_FREE && action != D2SKILL_DECISION_EVICT) ||
+      target < 0 || target >= slots)
+      return;
+   scales[target] = candidate_scale[0];
+   utility[target] = 0.0f;
+   observations[target] = candidate_streak[0];
+   uses[target] = 0.0f;
+   mass[target] = candidate_streak[0];
+   used[target] = 1.0f;
+   state[target] = D2SKILL_PROTECTED;
+   age[target] = 0.0f;
+   protection[target] = (float)protection_age;
+   candidate_valid[0] = 0.0f;
+   if(action == D2SKILL_DECISION_EVICT)
+      diagnostics[7] = IsNaNOrInf(diagnostics[7], 0.0f) + 1.0f;
+   else
+      diagnostics[4] = IsNaNOrInf(diagnostics[4], 0.0f) + 1.0f;
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillDiagnosticsPartial(__global const float *corrections,
+                                        __global const float *utility,
+                                        __global const float *uses,
+                                        __global const float *used,
+                                        __global const float *state,
+                                        __global const float *age,
+                                        __global float *partials,
+                                        const int slots,
+                                        const int dimension)
+  {
+   const int lane = get_local_id(0), slot = get_group_id(0), lanes = get_local_size(0);
+   float norm2 = 0.0f;
+   if(slot < slots)
+      for(int d = lane; d < dimension; d += lanes)
+        {
+         const float value = IsNaNOrInf(corrections[slot * dimension + d], 0.0f);
+         norm2 += value * value;
+        }
+   __local float norm_temp[LOCAL_ARRAY_SIZE];
+   norm2 = LocalSum(norm2, 0, norm_temp);
+   if(lane != 0 || slot >= slots)
+      return;
+   const int base = slot * D2SKILL_DIAGNOSTIC_PARTIALS;
+   for(int item = 0; item < D2SKILL_DIAGNOSTIC_PARTIALS; item++)
+      partials[base + item] = 0.0f;
+   const float slot_used = IsNaNOrInf(used[slot], 0.0f);
+   const int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE);
+   if(slot_used <= 0.5f && slot_state == D2SKILL_FREE)
+      partials[base] = 1.0f;
+   if(slot_state == D2SKILL_PROTECTED)
+      partials[base + 1] = 1.0f;
+   if(slot_state == D2SKILL_ACTIVE)
+      partials[base + 2] = 1.0f;
+   if(slot_state == D2SKILL_INACTIVE)
+      partials[base + 3] = 1.0f;
+   if(slot_used <= 0.5f)
+      return;
+   const float slot_age = max(IsNaNOrInf(age[slot], 0.0f), 0.0f);
+   const float slot_usage = max(IsNaNOrInf(uses[slot], 0.0f), 0.0f);
+   partials[base + 4] = 1.0f;
+   partials[base + 5] = IsNaNOrInf(utility[slot], 0.0f);
+   partials[base + 6] = sqrt(fmax(norm2, 0.0f));
+   partials[base + 7] = slot_age;
+   partials[base + 8] = slot_usage;
+   partials[base + 9] = slot_age;
+   partials[base + 10] = slot_usage;
+   int utility_bin = clamp((int)floor((clamp(IsNaNOrInf(utility[slot], 0.0f),
+                                                -1.0f, 1.0f) + 1.0f) * 2.5f), 0, 4);
+   const int usage_bin = (slot_usage < 1.0f ? 0 : (slot_usage < 2.0f ? 1 :
+                         (slot_usage < 4.0f ? 2 : (slot_usage < 8.0f ? 3 : 4))));
+   partials[base + 11 + utility_bin] = 1.0f;
+   partials[base + 16 + usage_bin] = 1.0f;
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillDiagnosticsReduce(__global const float *partials,
+                                       __global const float *candidate_valid,
+                                       __global float *diagnostics,
+                                       __global float *utility_distribution,
+                                       __global float *usage_distribution,
+                                       const int slots)
+  {
+   const int lane = get_local_id(0), lanes = get_local_size(0);
+   __local float totals[D2SKILL_DIAGNOSTIC_PARTIALS][LOCAL_ARRAY_SIZE];
+   for(int field = 0; field < D2SKILL_DIAGNOSTIC_PARTIALS; field++)
+     {
+      float value = 0.0f;
+      for(int slot = lane; slot < slots; slot += lanes)
+        {
+         const float item = IsNaNOrInf(partials[slot * D2SKILL_DIAGNOSTIC_PARTIALS + field], 0.0f);
+         value = (field == 9 || field == 10 ? max(value, item) :
+                  IsNaNOrInf(value + item, 0.0f));
+        }
+      totals[field][lane] = value;
+      barrier(CLK_LOCAL_MEM_FENCE);
+      for(int stride = lanes / 2; stride > 0; stride /= 2)
+        {
+         if(lane < stride)
+           totals[field][lane] = (field == 9 || field == 10 ?
+                                  max(totals[field][lane], totals[field][lane + stride]) :
+                                  IsNaNOrInf(totals[field][lane] +
+                                             totals[field][lane + stride], 0.0f));
+         barrier(CLK_LOCAL_MEM_FENCE);
+        }
+     }
+   if(lane != 0)
+      return;
+   const float used_count = totals[4][0];
+   diagnostics[8] = (float)slots;
+   diagnostics[9] = totals[0][0];
+   diagnostics[10] = (candidate_valid[0] > 0.5f ? 1.0f : 0.0f);
+   diagnostics[11] = totals[1][0];
+   diagnostics[12] = totals[2][0];
+   diagnostics[13] = totals[3][0];
+   diagnostics[14] = (used_count > 0.0f ? totals[5][0] / used_count : 0.0f);
+   diagnostics[15] = (used_count > 0.0f ? totals[6][0] / used_count : 0.0f);
+   diagnostics[16] = (diagnostics[19] > 0.0f ? diagnostics[20] / diagnostics[19] : 0.0f);
+   diagnostics[17] = (used_count > 0.0f ? totals[7][0] / used_count : 0.0f);
+   diagnostics[18] = (used_count > 0.0f ? totals[8][0] / used_count : 0.0f);
+   diagnostics[21] = totals[9][0];
+   diagnostics[22] = totals[10][0];
+   for(int bin = 0; bin < 5; bin++)
+     {
+      utility_distribution[bin] = totals[11 + bin][0];
+      usage_distribution[bin] = totals[16 + bin][0];
+     }
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillUtility(__global const float *selected_slot,
+                             __global float *utility,
+                             __global const float *used,
+                             const float delta_j,
+                             const float beta,
+                             const int slots,
+                             __global float *diagnostics)
+  {
+   if(get_global_id(0) != 0 || slots <= 0)
+      return;
+   const int slot = (int)round(selected_slot[0]);
+   if(slot < 0 || slot >= slots || IsNaNOrInf(used[slot], 0.0f) <= 0.5f)
+      return;
+   utility[slot] = (1.0f - beta) * IsNaNOrInf(utility[slot], 0.0f) +
+                   beta * clamp(IsNaNOrInf(delta_j, 0.0f), -1.0f, 1.0f);
+   diagnostics[6] = IsNaNOrInf(diagnostics[6], 0.0f) + 1.0f;
   }
 //+------------------------------------------------------------------+

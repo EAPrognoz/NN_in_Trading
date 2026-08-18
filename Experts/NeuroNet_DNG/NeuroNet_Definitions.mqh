@@ -1,3 +1,8 @@
+//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2020, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
 #ifndef NEURONET_DEFINITIONS_MQH
 #define NEURONET_DEFINITIONS_MQH
 /// \file
@@ -93,6 +98,20 @@ uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRan
 #define dFileReadUInt(file_handle, value)   if(FileIsEnding(file_handle)) ReturnFalse; value = (uint)FileReadInteger(file_handle);
 #define dFileWriteFloat(file_handle, value)  if(FileWriteFloat(file_handle, (float)value)<sizeof(float)) ReturnFalse;
 #define dFileReadUFloat(file_handle, value)   if(FileIsEnding(file_handle)) ReturnFalse; value = FileReadFloat(file_handle);
+//--- D2Skill shared MQL5 contract constants.  NeuroNet.cl is a separate
+//--- OpenCL program and keeps matching device-side constants in its source.
+#define D2SKILL_FORMAT                           7
+#define D2SKILL_LAYER_FORMAT                     1
+#define D2SKILL_ITEM_FORMAT                      1
+#define D2SKILL_DIAGNOSTICS                      24
+#define D2SKILL_DISTRIBUTION_BINS                5
+#define D2SKILL_METRICS                           10
+#define D2SKILL_DIAGNOSTIC_PARTIALS               21
+#define D2SKILL_FREE                             0
+#define D2SKILL_CANDIDATE                        1
+#define D2SKILL_PROTECTED                        2
+#define D2SKILL_ACTIVE                           3
+#define D2SKILL_INACTIVE                         4
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -482,6 +501,9 @@ union uaLongChar
 #define  defNeuronScenarioCrossAttention 0x8119
 #define  defNeuronRAGMemory               0x811A
 #define  defNeuronVLADriverRAGMPI          0x811B
+#define  defNeuronD2SkillItem             0x811C
+#define  defNeuronD2SkillBank             0x811D
+#define  defNeuronD2Skill                 0x811E
 ///\}
 ///@}
 //+------------------------------------------------------------------+
@@ -2847,6 +2869,183 @@ union uaLongChar
 #define def_k_sgn_confidence_gradient            10
 #define def_k_sgn_variables                      11
 #define def_k_sgn_batch_control                  12
+//--- D2Skill GPU retrieval, update and hindsight utility kernels.
+#define def_k_D2SkillScoreSlots                  294
+#define def_k_d2ss_query                           0
+#define def_k_d2ss_keys                            1
+#define def_k_d2ss_utility                         2
+#define def_k_d2ss_used                            3
+#define def_k_d2ss_state                           4
+#define def_k_d2ss_scores                          5
+#define def_k_d2ss_slots                           6
+#define def_k_d2ss_dimension                       7
+#define def_k_d2ss_similarity_threshold            8
+#define def_k_d2ss_utility_weight                  9
+#define def_k_d2ss_min_utility                     10
+#define def_k_d2ss_utility_policy                  11
+#define def_k_D2SkillUtility                      296
+#define def_k_d2ut_selected_slot                   0
+#define def_k_d2ut_utility                         1
+#define def_k_d2ut_used                            2
+#define def_k_d2ut_delta                           3
+#define def_k_d2ut_beta                            4
+#define def_k_d2ut_slots                           5
+#define def_k_d2ut_diagnostics                     6
+#define def_k_D2SkillItemPartial                 286
+#define def_k_d2ip_source                          0
+#define def_k_d2ip_partials                        1
+#define def_k_d2ip_dimension                       2
+#define def_k_d2ip_output_offset                   3
+#define def_k_D2SkillItemReduce                  297
+#define def_k_d2ir_partials                        0
+#define def_k_d2ir_reduced                         1
+#define def_k_d2ir_input_count                     2
+#define def_k_d2ir_input_offset                    3
+#define def_k_d2ir_output_offset                   4
+#define def_k_d2ir_final_output                    5
+#define def_k_D2SkillItemApply                   298
+#define def_k_d2ia_gradient                        0
+#define def_k_d2ia_correction                      1
+#define def_k_d2ia_direction                       2
+#define def_k_d2ia_scale                           3
+#define def_k_d2ia_observations                    4
+#define def_k_d2ia_mass                            5
+#define def_k_d2ia_reduced_norm                    6
+#define def_k_d2ia_dimension                       7
+#define def_k_d2ia_representation                  8
+#define def_k_d2ia_beta_correction                 9
+#define def_k_d2ia_beta_direction                 10
+#define def_k_d2ia_beta_magnitude                 11
+#define def_k_d2ia_phase                          12
+#define def_k_D2SkillGatherCorrection            299
+#define def_k_d2gc_top                             0
+#define def_k_d2gc_corrections                     1
+#define def_k_d2gc_directions                      2
+#define def_k_d2gc_scales                          3
+#define def_k_d2gc_selected_correction             4
+#define def_k_d2gc_selected_slot                   5
+#define def_k_d2gc_selected_score                  6
+#define def_k_d2gc_uses                            7
+#define def_k_d2gc_diagnostics                     8
+#define def_k_d2gc_slots                           9
+#define def_k_d2gc_dimension                      10
+#define def_k_d2gc_representation                 11
+#define def_k_d2gc_alpha                          12
+//--- D2Skill staged bank update.  Scratch is device-only and is never saved.
+#define def_k_D2SkillAgeLifecycle                295
+#define def_k_d2al_used                            0
+#define def_k_d2al_state                           1
+#define def_k_d2al_age                             2
+#define def_k_d2al_protection                      3
+#define def_k_d2al_utility                         4
+#define def_k_d2al_free_scores                     5
+#define def_k_d2al_eviction_scores                 6
+#define def_k_d2al_slots                           7
+#define def_k_d2al_inactivity_age                  8
+#define def_k_D2SkillMetricPartial               300
+#define def_k_d2mp_query                           0
+#define def_k_d2mp_gradient                        1
+#define def_k_d2mp_selected_slot                   2
+#define def_k_d2mp_keys                            3
+#define def_k_d2mp_directions                      4
+#define def_k_d2mp_used                            5
+#define def_k_d2mp_candidate_valid                 6
+#define def_k_d2mp_candidate_key                   7
+#define def_k_d2mp_candidate_direction             8
+#define def_k_d2mp_partials                        9
+#define def_k_d2mp_slots                          10
+#define def_k_d2mp_dimension                      11
+#define def_k_D2SkillMetricReduce                301
+#define def_k_d2mr_partials                        0
+#define def_k_d2mr_metrics                         1
+#define def_k_d2mr_input_count                     2
+#define def_k_D2SkillCandidateLeader             302
+#define def_k_d2cl_selected_slot                   0
+#define def_k_d2cl_used                            1
+#define def_k_d2cl_scales                          2
+#define def_k_d2cl_observations                    3
+#define def_k_d2cl_mass                            4
+#define def_k_d2cl_age                             5
+#define def_k_d2cl_candidate_streak                6
+#define def_k_d2cl_candidate_valid                 7
+#define def_k_d2cl_candidate_scale                 8
+#define def_k_d2cl_metrics                         9
+#define def_k_d2cl_free_top                       10
+#define def_k_d2cl_eviction_top                   11
+#define def_k_d2cl_decision                       12
+#define def_k_d2cl_diagnostics                    13
+#define def_k_d2cl_slots                          14
+#define def_k_d2cl_representation                 15
+#define def_k_d2cl_beta_magnitude                 16
+#define def_k_d2cl_max_correction                 17
+#define def_k_d2cl_min_confirmations              18
+#define def_k_d2cl_similarity_threshold           19
+#define def_k_d2cl_direction_threshold            20
+#define def_k_D2SkillVectorUpdate                303
+#define def_k_d2vu_query                           0
+#define def_k_d2vu_gradient                        1
+#define def_k_d2vu_keys                            2
+#define def_k_d2vu_corrections                     3
+#define def_k_d2vu_directions                      4
+#define def_k_d2vu_scales                          5
+#define def_k_d2vu_candidate_key                   6
+#define def_k_d2vu_candidate_direction             7
+#define def_k_d2vu_candidate_scale                 8
+#define def_k_d2vu_decision                        9
+#define def_k_d2vu_reduced_norm                   10
+#define def_k_d2vu_dimension                      11
+#define def_k_d2vu_representation                 12
+#define def_k_d2vu_beta_correction                13
+#define def_k_d2vu_beta_direction                 14
+#define def_k_d2vu_beta_key                       15
+#define def_k_d2vu_max_correction                 16
+#define def_k_d2vu_phase                          17
+#define def_k_D2SkillPromoteSlot                 304
+#define def_k_d2ps_scales                          0
+#define def_k_d2ps_utility                         1
+#define def_k_d2ps_observations                    2
+#define def_k_d2ps_uses                            3
+#define def_k_d2ps_mass                            4
+#define def_k_d2ps_used                            5
+#define def_k_d2ps_state                           6
+#define def_k_d2ps_age                             7
+#define def_k_d2ps_protection                      8
+#define def_k_d2ps_candidate_streak                9
+#define def_k_d2ps_candidate_valid                10
+#define def_k_d2ps_candidate_scale                11
+#define def_k_d2ps_decision                       12
+#define def_k_d2ps_diagnostics                    13
+#define def_k_d2ps_slots                          14
+#define def_k_d2ps_protection_age                 15
+#define def_k_D2SkillDiagnosticsPartial          305
+#define def_k_d2dp_corrections                     0
+#define def_k_d2dp_utility                         1
+#define def_k_d2dp_uses                            2
+#define def_k_d2dp_used                            3
+#define def_k_d2dp_state                           4
+#define def_k_d2dp_age                             5
+#define def_k_d2dp_partials                        6
+#define def_k_d2dp_slots                           7
+#define def_k_d2dp_dimension                       8
+#define def_k_D2SkillDiagnosticsReduce           306
+#define def_k_d2dr_partials                        0
+#define def_k_d2dr_candidate_valid                 1
+#define def_k_d2dr_diagnostics                     2
+#define def_k_d2dr_utility_distribution            3
+#define def_k_d2dr_usage_distribution              4
+#define def_k_d2dr_slots                           5
+#define def_k_D2SkillBankVectorPartial            307
+#define def_k_d2bvp_corrections                     0
+#define def_k_d2bvp_directions                      1
+#define def_k_d2bvp_decision                        2
+#define def_k_d2bvp_partials                        3
+#define def_k_d2bvp_dimension                       4
+#define def_k_d2bvp_representation                  5
+#define def_k_d2bvp_output_offset                   6
+#define def_k_CopyBufferRaw                       308
+#define def_k_copy_raw_source                       0
+#define def_k_copy_raw_destination                  1
+#define def_k_copy_raw_total                        2
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -2888,3 +3087,5 @@ enum ENUM_OPTIMIZATION
 #endif // NEURONET_BUILDING_FACADE
 
 
+
+//+------------------------------------------------------------------+

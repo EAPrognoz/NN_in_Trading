@@ -22,55 +22,43 @@
 #define ORION_Q2_FILE            "ORIONQ2.nnw"
 #define ORION_AC_MANIFEST_FILE   "ORIONActorCritic.manifest"
 #define ORION_AC_FORMAT_VERSION  12
+#ifndef D2SKILL_STAGE_VALUE
+#define D2SKILL_STAGE_VALUE         0
+#define D2SKILL_MODE_VALUE          3
+#define D2SKILL_UTILITY_AWARE_VALUE false
+#define D2SKILL_MIN_UTILITY_VALUE   -1.0
+#define D2SKILL_UTILITY_SCALE_VALUE 1.0
+#endif
+//--- Article 3 lifecycle: A=base, B=formation, C=hindsight utility,
+//--- D=utility-aware augmented, E=online calibration.
+#define ORION_D2_STAGE_BASE       0
+#define ORION_D2_STAGE_FORMATION  1
+#define ORION_D2_STAGE_HINDSIGHT  2
+#define ORION_D2_STAGE_AUGMENTED  3
+#define ORION_D2_STAGE_ONLINE     4
+//--- Article 3 final bank modes: Base, Task-only, Step-only, Full.
+#define ORION_D2_MODE_BASE        0
+#define ORION_D2_MODE_TASK        1
+#define ORION_D2_MODE_STEP        2
+#define ORION_D2_MODE_FULL        3
+//--- Utility sources are intentionally disjoint.  An observed online return
+//--- is not a counterfactual paired advantage.
+#define ORION_D2_UTILITY_PAIRED_HINDSIGHT 0
+#define ORION_D2_UTILITY_OBSERVED_RETURN  1
 //+------------------------------------------------------------------+
 //| ORION builds transitions directly from historical windows        |
 //+------------------------------------------------------------------+
-class CORIONNet : public CNet
-  {
-public:
+//| Base CNet already provides Layer(int) and FeedForwardLayer(CNeuronBaseOCL*). |
 //+------------------------------------------------------------------+
-//| Function Layer.                                                  |
-//+------------------------------------------------------------------+
-   CNeuronBaseOCL    *Layer(int index)
-     {
-      if(!layers)
-         return NULL;
-      const int total = layers.Total();
-      if(index < 0)
-         index += total;
-      if(index < 0 || index >= total)
-         return NULL;
-      CLayer *layer = (CLayer*)layers.At((int)index);
-      return (layer ? layer[0] : NULL);
-     }
-//+------------------------------------------------------------------+
-//| Device-resident input path for the detached Target Encoder. T... |
-//+------------------------------------------------------------------+
-   bool              FeedForwardLayer(CNeuronBaseOCL *source_layer)
-     {
-      if(!source_layer || !layers || layers.Total() <= 1)
-         ReturnFalse;
-      CNeuronBaseOCL *previous = source_layer;
-      for(int i = 1; i < layers.Total(); i++)
-        {
-         CLayer *layer = (CLayer*)layers.At(i);
-         CNeuronBaseOCL *current = (layer ? layer[0] : NULL);
-         if(!current || !current.FeedForward(previous))
-            ReturnFalse;
-         previous = current;
-        }
-      return true;
-     }
-  };
 //+------------------------------------------------------------------+
 //| A transient, non-owning layer view lets the library transpose    |
 //+------------------------------------------------------------------+
 class CORIONBufferView : public CNeuronBaseOCL
   {
 public:
-//+------------------------------------------------------------------+
-//| Implements Bind.                                                 |
-//+------------------------------------------------------------------+
+   //+------------------------------------------------------------------+
+   //| Implements Bind.                                                 |
+   //+------------------------------------------------------------------+
    bool              Bind(CBufferFloat *source)
      {
       if(!source || source.GetIndex() < 0)
@@ -80,9 +68,9 @@ public:
       Output = source;
       return true;
      }
-//+------------------------------------------------------------------+
-//| Implements Unbind.                                               |
-//+------------------------------------------------------------------+
+   //+------------------------------------------------------------------+
+   //| Implements Unbind.                                               |
+   //+------------------------------------------------------------------+
    void              Unbind(void)
      {
       Output = NULL;
@@ -94,23 +82,25 @@ public:
 class CORIONDeviceOps : public CNeuronBaseOCL
   {
 public:
-//+------------------------------------------------------------------+
-//| Implements Bind.                                                 |
-//+------------------------------------------------------------------+
+   //+------------------------------------------------------------------+
+   //| Implements Bind.                                                 |
+   //+------------------------------------------------------------------+
    bool              Bind(COpenCLMy *open_cl)
      {
       OpenCL = open_cl;
       return (CheckPointer(OpenCL) != POINTER_INVALID);
      }
-//+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for Copy.                   |
-//+------------------------------------------------------------------+
+   //+------------------------------------------------------------------+
+   //| Creates and manages object lifecycle for Copy.                   |
+   //+------------------------------------------------------------------+
    bool              Copy(CBufferFloat *source, CBufferFloat *destination, const uint total)
      {
       if(!source || !destination || source.Total() != int(total) ||
-         destination.Total() != int(total) || source.GetIndex() < 0 || destination.GetIndex() < 0)
+         destination.Total() != int(total) || source.GetIndex() < 0 ||
+         destination.GetIndex() < 0 || source.GetOpenCL() != OpenCL ||
+         destination.GetOpenCL() != OpenCL)
          ReturnFalse;
-      return Concat(source, source, destination, total, 0, 1);
+      return CopyBufferRaw(source, destination, total);
      }
    bool              Join2(CBufferFloat *first, const uint first_total, CBufferFloat *second,
                            const uint second_total, CBufferFloat *destination)
@@ -154,8 +144,8 @@ public:
       return DeConcat(first, second, source, first_total, second_total, 1);
      }
   };
-CORIONNet            ORIONMarket;
-CORIONNet            ORIONTarget;
+CNet                 ORIONMarket;
+CNet                 ORIONTarget;
 CNeuronScenarioForecast *ORIONForecast = NULL;
 //---
 CBufferFloat         ORIONState;
@@ -187,6 +177,200 @@ CBufferFloat         ORIONFrozenInactive;
 CBufferFloat         ORIONFrozenInactivityAge;
 bool                 ORIONFrozenBaselineReady = false;
 CORIONDeviceOps      ORIONDevice;
+int                  ORIOND2Stage = ORION_D2_STAGE_BASE;
+int                  ORIOND2Mode = ORION_D2_MODE_BASE;
+bool                 ORIOND2UtilityAware = false;
+double               ORIOND2UtilityScale = 1.0;
+int                  ORIOND2UtilityMode = ORION_D2_UTILITY_PAIRED_HINDSIGHT;
+ulong                ORIOND2PairedUtilityUpdates = 0;
+ulong                ORIOND2ObservedReturnUpdates = 0;
+//+------------------------------------------------------------------+
+//| Device-resident snapshot of all mutable Actor Cross forward state.|
+//+------------------------------------------------------------------+
+class CORIONActorForwardSnapshot
+  {
+private:
+   CNeuronScenarioCrossAttention *cCross;
+   CORIONDeviceOps      cDevice;
+   CBufferFloat         cCrossOutput;
+   CBufferFloat         cHistory;
+   CBufferFloat         cBatchFirst;
+   CBufferFloat         cBatchSecond;
+   CBufferFloat         cSpikeFirstOutput;
+   CBufferFloat         cSpikeFirstPrevious;
+   CBufferFloat         cSpikeSecondOutput;
+   CBufferFloat         cSpikeSecondPrevious;
+   int                  iBatchFirstCount;
+   int                  iBatchSecondCount;
+   bool                 bFirstHasOptions;
+   bool                 bSecondHasOptions;
+   bool                 bReady;
+
+   bool              PrepareBuffer(CBufferFloat *source, CBufferFloat &snapshot,
+                                   COpenCLMy *open_cl)
+     {
+      if(!source || !open_cl || source.Total() <= 0 || source.GetIndex() < 0 ||
+         source.GetOpenCL() != open_cl)
+         return false;
+      snapshot.BufferFree();
+      if(!snapshot.BufferInit((uint)source.Total(), 0.0f) ||
+         !snapshot.BufferCreate(open_cl))
+         return false;
+      return (snapshot.Total() == source.Total() && snapshot.GetIndex() >= 0 &&
+              snapshot.GetOpenCL() == open_cl);
+     }
+   bool              CopyOptional(CBufferFloat *source, CBufferFloat &snapshot)
+     {
+      if(!source)
+         return true;
+      return cDevice.Copy(source, GetPointer(snapshot), (uint)source.Total());
+     }
+
+public:
+                     CORIONActorForwardSnapshot(void) : cCross(NULL),
+                     iBatchFirstCount(0), iBatchSecondCount(0),
+                     bFirstHasOptions(false), bSecondHasOptions(false), bReady(false) {}
+   bool              Init(CNeuronScenarioCrossAttention *cross, COpenCLMy *open_cl)
+     {
+      bReady = false;
+      cCross = cross;
+      if(!cCross || !open_cl || cCross.IsCritic() || !cCross.HasHistory() ||
+         cCross.ForwardStateBatchBlocks() != 2 || !cDevice.Bind(open_cl))
+         ReturnFalse;
+      CNeuronAddToStack *history = cCross.GetHistoryStack();
+      CBufferFloat *first = cCross.GetForwardStateBatchOptions(0);
+      CBufferFloat *second = cCross.GetForwardStateBatchOptions(1);
+      CBufferFloat *spike_first = cCross.GetForwardStateSpikeOutput(0);
+      CBufferFloat *spike_first_previous = cCross.GetForwardStateSpikePrevOutput(0);
+      CBufferFloat *spike_second = cCross.GetForwardStateSpikeOutput(1);
+      CBufferFloat *spike_second_previous = cCross.GetForwardStateSpikePrevOutput(1);
+      if(!history || !PrepareBuffer(cCross.getOutput(), cCrossOutput, open_cl) ||
+         !PrepareBuffer(history.getOutput(), cHistory, open_cl) ||
+         !PrepareBuffer(spike_first, cSpikeFirstOutput, open_cl) ||
+         !PrepareBuffer(spike_first_previous, cSpikeFirstPrevious, open_cl) ||
+         !PrepareBuffer(spike_second, cSpikeSecondOutput, open_cl) ||
+         !PrepareBuffer(spike_second_previous, cSpikeSecondPrevious, open_cl))
+         ReturnFalse;
+      bFirstHasOptions = (first != NULL);
+      bSecondHasOptions = (second != NULL);
+      if((bFirstHasOptions && !PrepareBuffer(first, cBatchFirst, open_cl)) ||
+         (bSecondHasOptions && !PrepareBuffer(second, cBatchSecond, open_cl)))
+         ReturnFalse;
+      iBatchFirstCount = cCross.GetForwardStateBatchCount(0);
+      iBatchSecondCount = cCross.GetForwardStateBatchCount(1);
+      if(iBatchFirstCount < 1 || iBatchSecondCount < 1)
+         ReturnFalse;
+      bReady = true;
+      return true;
+     }
+   bool              Init(CNet &actor)
+     {
+      CNeuronBaseOCL *layer = actor.Layer(1);
+      if(!layer || (layer.Type() != defNeuronD2Skill &&
+                    layer.Type() != defNeuronScenarioCrossAttention))
+         ReturnFalse;
+      return Init((CNeuronScenarioCrossAttention*)layer, actor.GetOpenCL());
+     }
+   bool              Capture(void)
+     {
+      if(!bReady || !cCross)
+         ReturnFalse;
+      CNeuronAddToStack *history = cCross.GetHistoryStack();
+      CBufferFloat *first = cCross.GetForwardStateBatchOptions(0);
+      CBufferFloat *second = cCross.GetForwardStateBatchOptions(1);
+      CBufferFloat *spike_first = cCross.GetForwardStateSpikeOutput(0);
+      CBufferFloat *spike_first_previous = cCross.GetForwardStateSpikePrevOutput(0);
+      CBufferFloat *spike_second = cCross.GetForwardStateSpikeOutput(1);
+      CBufferFloat *spike_second_previous = cCross.GetForwardStateSpikePrevOutput(1);
+      if(!history || (bFirstHasOptions != (first != NULL)) ||
+         (bSecondHasOptions != (second != NULL)) || !spike_first ||
+         !spike_first_previous || !spike_second || !spike_second_previous)
+         ReturnFalse;
+      iBatchFirstCount = cCross.GetForwardStateBatchCount(0);
+      iBatchSecondCount = cCross.GetForwardStateBatchCount(1);
+      if(iBatchFirstCount < 1 || iBatchSecondCount < 1 ||
+         !cDevice.Copy(cCross.getOutput(), GetPointer(cCrossOutput),
+                       (uint)cCrossOutput.Total()) ||
+         !cDevice.Copy(history.getOutput(), GetPointer(cHistory),
+                       (uint)cHistory.Total()) ||
+         !cDevice.Copy(spike_first, GetPointer(cSpikeFirstOutput),
+                       (uint)cSpikeFirstOutput.Total()) ||
+         !cDevice.Copy(spike_first_previous, GetPointer(cSpikeFirstPrevious),
+                       (uint)cSpikeFirstPrevious.Total()) ||
+         !cDevice.Copy(spike_second, GetPointer(cSpikeSecondOutput),
+                       (uint)cSpikeSecondOutput.Total()) ||
+         !cDevice.Copy(spike_second_previous, GetPointer(cSpikeSecondPrevious),
+                       (uint)cSpikeSecondPrevious.Total()) ||
+         !CopyOptional(first, cBatchFirst) || !CopyOptional(second, cBatchSecond))
+         ReturnFalse;
+      return true;
+     }
+   bool              Restore(void)
+     {
+      if(!bReady || !cCross)
+         ReturnFalse;
+      CNeuronAddToStack *history = cCross.GetHistoryStack();
+      CBufferFloat *first = cCross.GetForwardStateBatchOptions(0);
+      CBufferFloat *second = cCross.GetForwardStateBatchOptions(1);
+      CBufferFloat *spike_first = cCross.GetForwardStateSpikeOutput(0);
+      CBufferFloat *spike_first_previous = cCross.GetForwardStateSpikePrevOutput(0);
+      CBufferFloat *spike_second = cCross.GetForwardStateSpikeOutput(1);
+      CBufferFloat *spike_second_previous = cCross.GetForwardStateSpikePrevOutput(1);
+      if(!history || (bFirstHasOptions != (first != NULL)) ||
+         (bSecondHasOptions != (second != NULL)) ||
+         !spike_first || !spike_first_previous || !spike_second ||
+         !spike_second_previous ||
+         !cDevice.Copy(GetPointer(cCrossOutput), cCross.getOutput(),
+                       (uint)cCrossOutput.Total()) ||
+         !cDevice.Copy(GetPointer(cHistory), history.getOutput(),
+                       (uint)cHistory.Total()) ||
+         !cDevice.Copy(GetPointer(cSpikeFirstOutput), spike_first,
+                       (uint)cSpikeFirstOutput.Total()) ||
+         !cDevice.Copy(GetPointer(cSpikeFirstPrevious), spike_first_previous,
+                       (uint)cSpikeFirstPrevious.Total()) ||
+         !cDevice.Copy(GetPointer(cSpikeSecondOutput), spike_second,
+                       (uint)cSpikeSecondOutput.Total()) ||
+         !cDevice.Copy(GetPointer(cSpikeSecondPrevious), spike_second_previous,
+                       (uint)cSpikeSecondPrevious.Total()) ||
+         (first && !cDevice.Copy(GetPointer(cBatchFirst), first,
+                                 (uint)cBatchFirst.Total())) ||
+         (second && !cDevice.Copy(GetPointer(cBatchSecond), second,
+                                  (uint)cBatchSecond.Total())) ||
+         !cCross.SetForwardStateBatchCount(0, iBatchFirstCount) ||
+         !cCross.SetForwardStateBatchCount(1, iBatchSecondCount))
+         ReturnFalse;
+      return true;
+     }
+   bool              Ready(void) const { return bReady; }
+  };
+//+------------------------------------------------------------------+
+//| Returns whether this exact Actor state is eligible for pairing.  |
+//+------------------------------------------------------------------+
+bool ORIONUsePairedHindsight(CD2Skill *skill,
+                             CORIONActorForwardSnapshot &snapshot)
+  {
+   return(ORIOND2Stage >= ORION_D2_STAGE_HINDSIGHT &&
+          ORIOND2Mode != ORION_D2_MODE_BASE && skill != NULL &&
+          skill.Ready() && snapshot.Ready());
+  }
+//+------------------------------------------------------------------+
+//| Restores an Actor pair capture and its exact configured D2 mode. |
+//+------------------------------------------------------------------+
+bool ORIONRestorePairedActorState(CORIONActorForwardSnapshot &snapshot,
+                                  CD2Skill *skill,
+                                  const bool task_enabled,
+                                  const bool step_enabled,
+                                  const string stage)
+  {
+   const bool state_restored = snapshot.Restore();
+   const bool mode_restored = (skill != NULL &&
+                               skill.Enable(task_enabled, step_enabled));
+   if(!state_restored || !mode_restored)
+      PrintFormat("ORION paired cleanup stage=%s state=%s mode=%s",
+                  stage, (state_restored ? "restored" : "failed"),
+                  (mode_restored ? "restored" : "failed"));
+   return(state_restored && mode_restored);
+  }
 //+------------------------------------------------------------------+
 //| Implements ForecastRecoveryAge.                                  |
 //+------------------------------------------------------------------+
@@ -292,9 +476,9 @@ bool ORIONCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
    while(layer >= 0)
      {
       CLayerDescription* descr = market.At(layer);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!descr || descr.type != defNeuronCogDriverRankTCM)
         {
          if(!market.Delete(layer))
@@ -533,9 +717,9 @@ bool ORIONValidateShapes(const bool training = true)
      {
       layer = ORIONTarget.Layer(0);
       buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("ORION shape: target input expected=%d actual=%d", BarDescr * NForecast,
@@ -544,9 +728,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(1);
       buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("ORION shape: target PeriodNorm expected=%d actual=%d", BarDescr * NForecast,
@@ -555,9 +739,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(2);
       buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("ORION shape: target Conv3 expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -566,9 +750,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(3);
       buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast * 2 * EmbeddingSize))
         {
          PrintFormat("ORION shape: target Conv2 expected=%d actual=%d", BarDescr * NForecast * 2 * EmbeddingSize,
@@ -577,9 +761,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(4);
       buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("ORION shape: target final Conv expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -588,9 +772,9 @@ bool ORIONValidateShapes(const bool training = true)
         }
       layer = ORIONTarget.Layer(-1);
       buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("ORION shape: target output PeriodNorm expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -598,9 +782,9 @@ bool ORIONValidateShapes(const bool training = true)
          ReturnFalse;
         }
       buffer = ORIONFutureTranspose.getOutput();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("ORION shape: future transpose expected=%d actual=%d", BarDescr * NForecast,
@@ -684,7 +868,7 @@ ulong ORIONHashFile(ulong hash, const string file_name)
      { FileClose(handle); return 0; }
    uchar bytes[];
    if(ArrayResize(bytes, (int)length) != (int)length ||
-       // Read file payload as bytes after successful allocation.
+// Read file payload as bytes after successful allocation.
       FileReadArray(handle, bytes, 0, (int)length) != (int)length)
      { FileClose(handle); return 0; }
    FileClose(handle);
@@ -810,9 +994,9 @@ bool CreateORIONForecastStudy(void)
       ORIONForecast = NULL;
       PrintFormat("ORION init: forecast restore=FAIL error=%d; creating new random model", load_error);
       ResetLastError();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(!ORIONCreateNetworks())
         {
          PrintFormat("ORION init: forecast create=FAIL error=%d", GetLastError());
@@ -899,7 +1083,7 @@ bool ORIONPrepareLatentTarget(CBufferFloat *market_latent)
 //+------------------------------------------------------------------+
 //| Implements ORIONProbeNet.                                        |
 //+------------------------------------------------------------------+
-bool ORIONProbeNet(CORIONNet &net, CBufferFloat *probe_state, double &latent[], const bool restore_training)
+bool ORIONProbeNet(CNet &net, CBufferFloat *probe_state, double &latent[], const bool restore_training)
   {
    if(!probe_state || ArrayResize(latent, (BarDescr * EmbeddingSize)) != (BarDescr * EmbeddingSize))
       ReturnFalse;
@@ -951,7 +1135,7 @@ string FormatScenarioCounts(const uint &counts[])
    string result = "[";
    for(int i = 0; i < ArraySize(counts); i++)
       result += (i > 0 ? "," : "") + IntegerToString((int)counts[i]);
-  return result + "]";
+   return result + "]";
   }
 //+------------------------------------------------------------------+
 //| Smoke-only responsibility audit; all tensor reads are host-side  |
@@ -998,6 +1182,9 @@ bool ORIONCollectRecoverySmoke(ulong &hits[], double &responsibility_sum[], doub
      }
    return true;
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool ORIONLogRecoverySmoke(const ulong &hits[], const double &responsibility_sum[],
                            const double &scale_sum[], const double &absolute_sum[],
                            const double &absolute_over_scale_sum[],
@@ -1135,7 +1322,7 @@ void TrainORIONForecast(void)
 //--- every future target out of the diagnostic input.
    const int probe_position = MathMax(end - 1, 0);
    if(!CreateBuffers(probe_position + NForecast, GetPointer(ORIONProbeState),
-                     // Gets Pointer.
+// Gets Pointer.
                      GetPointer(ORIONProbeTime), NULL))
      { PrintFormat("%s -> %d fixed probe unavailable", __FUNCTION__, __LINE__); return; }
    uint ticks = GetTickCount();
@@ -1155,7 +1342,7 @@ void TrainORIONForecast(void)
       if(ORIONRecoverySmoke &&
          (ArrayResize(smoke_hits, NScenarios) != NScenarios || ArrayResize(smoke_responsibility_sum, NScenarios) != NScenarios ||
           ArrayResize(smoke_scale_sum, NScenarios) != NScenarios || ArrayResize(smoke_absolute_sum, NScenarios) != NScenarios ||
-           // All temporary smoke buffers must resize to NScenarios.
+          // All temporary smoke buffers must resize to NScenarios.
           ArrayResize(smoke_absolute_over_scale_sum, NScenarios) != NScenarios))
         { PrintFormat("%s -> %d smoke counter allocation failed", __FUNCTION__, __LINE__); break; }
       ArrayInitialize(smoke_hits, 0);
@@ -1174,16 +1361,16 @@ void TrainORIONForecast(void)
       ORIONResponsibilityMicroseconds = 0;
       for(int position = start - HistoryBars - NForecast - 1; position >= end && !IsStopped() && !stop; position--)
         {
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+         //+------------------------------------------------------------------+
+         //| Function if.                                                     |
+         //+------------------------------------------------------------------+
          if(!ORIONTrainBatch(position))
            {
             epoch_failures++;
             PrintFormat("ORION invalid batch epoch=%d position=%d line=%d", epoch, position, __LINE__);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+            //+------------------------------------------------------------------+
+            //| Function if.                                                     |
+            //+------------------------------------------------------------------+
             if(GetTickCount() - ticks > 500)
               {
                const double percent = (double(pass) + 1.0 - double(position - end) / MathMax(start - end - HistoryBars - NForecast, 1)) * 100.0 / Epochs;
@@ -1192,9 +1379,9 @@ void TrainORIONForecast(void)
               }
             continue;
            }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+         //+------------------------------------------------------------------+
+         //| Function if.                                                     |
+         //+------------------------------------------------------------------+
          if(ORIONRecoverySmoke)
            {
             if(!ORIONCollectRecoverySmoke(smoke_hits, smoke_responsibility_sum, smoke_scale_sum,
@@ -1204,9 +1391,9 @@ void TrainORIONForecast(void)
             if(smoke_batches >= smoke_limit)
                break;
            }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+         //+------------------------------------------------------------------+
+         //| Function if.                                                     |
+         //+------------------------------------------------------------------+
          if(GetTickCount() - ticks > 500)
            {
             const double percent = (double(pass) + 1.0 - double(position - end) / MathMax(start - end - HistoryBars - NForecast, 1)) * 100.0 / Epochs;
@@ -1252,8 +1439,8 @@ void TrainORIONForecast(void)
                   latent_drift, inactive, recovered, FormatScenarioCounts(recovered_by_scenario),
                   double(ORIONResponsibilityMicroseconds) / (1000.0 * double(valid)));
       if(ORIONRecoverySmoke && !ORIONLogRecoverySmoke(smoke_hits, smoke_responsibility_sum, smoke_scale_sum,
-                                                        smoke_absolute_sum, smoke_absolute_over_scale_sum,
-                                                        recovered_by_scenario, age_zero_by_scenario))
+            smoke_absolute_sum, smoke_absolute_over_scale_sum,
+            recovered_by_scenario, age_zero_by_scenario))
         { PrintFormat("%s -> %d smoke state log failed", __FUNCTION__, __LINE__); stop = true; break; }
       if(!ORIONRecoverySmoke && !ORIONSaveCheckpoint(epoch + 1))
         { PrintFormat("%s -> %d checkpoint failed", __FUNCTION__, __LINE__); stop = true; break; }
@@ -1294,9 +1481,9 @@ string ORIONManifestValue(const string file_name, const string key)
    while(!FileIsEnding(handle))
      {
       const string line = FileReadString(handle);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(StringFind(line, prefix) == 0)
         {
          value = StringSubstr(line, StringLen(prefix));
@@ -1563,12 +1750,12 @@ bool ORIONLoadForecastTraining(void)
 //+------------------------------------------------------------------+
 //| Implements ORIONAddCross.                                        |
 //+------------------------------------------------------------------+
-bool ORIONAddCross(CArrayObj *description, const bool critic)
+bool ORIONAddCross(CArrayObj *description, const bool critic, const bool d2 = false)
   {
    CLayerDescription *descr = new CLayerDescription();
    if(!description || !descr)
      { DeleteObj(descr); ReturnFalse; }
-   descr.type = defNeuronScenarioCrossAttention;
+   descr.type = (d2 && !critic ? defNeuronD2Skill : defNeuronScenarioCrossAttention);
    descr.count = NScenarios;
    descr.variables = (critic ? 5 : 3);
    descr.window_out = NForecast;
@@ -1584,6 +1771,9 @@ bool ORIONAddCross(CArrayObj *description, const bool critic)
    DeleteObj(descr);
    ReturnFalse;
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool ORIONAddConv(CArrayObj *description, const uint count, const uint window, const uint output,
                   const uint variables, const ENUM_ACTIVATION activation)
   {
@@ -1616,7 +1806,7 @@ bool CreateORIONActorCriticDescriptions(CArrayObj *&actor, CArrayObj *&critic)
    actor.FreeMode(true);
    critic.FreeMode(true);
 //--- Full K-major scenario tensors enter one learned trunk. There is no Pi sum.
-   if(!ORIONAddBase(actor, AccountDescr) || !ORIONAddCross(actor, false) ||
+   if(!ORIONAddBase(actor, AccountDescr) || !ORIONAddCross(actor, false, true) ||
       !ORIONAddConv(actor, 1, (3 * EmbeddingSize), EmbeddingSize, 1, GELU) ||
       !ORIONAddConv(actor, 1, EmbeddingSize, 3, 2, SIGMOID))
       ReturnFalse;
@@ -1629,10 +1819,12 @@ bool CreateORIONActorCriticDescriptions(CArrayObj *&actor, CArrayObj *&critic)
 //+------------------------------------------------------------------+
 //| Implements ORIONValidatePolicyShape.                             |
 //+------------------------------------------------------------------+
-bool ORIONValidatePolicyShape(CORIONNet &net, const bool critic)
+bool ORIONValidatePolicyShape(CNet &net, const bool critic)
   {
    CNeuronScenarioCrossAttention *cross = (CNeuronScenarioCrossAttention*)net.Layer(1);
-   if(!cross || cross.Type() != defNeuronScenarioCrossAttention ||
+   const bool type_ok = (cross && (critic ? cross.Type() == defNeuronScenarioCrossAttention
+                                   : cross.Type() == defNeuronD2Skill));
+   if(!type_ok ||
       cross.Variables() != BarDescr || cross.Scenarios() != NScenarios ||
       cross.Horizon() != NForecast || cross.Latent() != EmbeddingSize ||
       cross.Queries() != (critic ? 5 : 3) || cross.IsCritic() != critic ||
@@ -1918,7 +2110,7 @@ bool ORIONValidateACManifest(const bool required)
 //+------------------------------------------------------------------+
 //| Implements ORIONLoadPolicyNet. Shared Actor-Critic lifecycle ... |
 //+------------------------------------------------------------------+
-bool ORIONLoadPolicyNet(CORIONNet &net, const string file_name)
+bool ORIONLoadPolicyNet(CNet &net, const string file_name)
   {
    float error = 0, undefine = 0, forecast = 0;
    datetime studied = 0;
@@ -1927,7 +2119,7 @@ bool ORIONLoadPolicyNet(CORIONNet &net, const string file_name)
 //+------------------------------------------------------------------+
 //| Implements ORIONCreatePolicySet.                                 |
 //+------------------------------------------------------------------+
-bool ORIONCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
+bool ORIONCreatePolicySet(CNet &actor, CNet &q1, CNet &q2)
   {
    CArrayObj *actor_descr = NULL, *critic_descr = NULL;
    if(!CreateORIONActorCriticDescriptions(actor_descr, critic_descr))
@@ -1959,7 +2151,143 @@ bool ORIONCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
      }
    return result;
   }
-bool ORIONLoadOrCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2,
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void ORIOND2BankFlags(bool &task_enabled, bool &step_enabled)
+  {
+   const bool stage_allows_banks = (ORIOND2Stage != ORION_D2_STAGE_BASE);
+   task_enabled = (stage_allows_banks &&
+                   (ORIOND2Mode == ORION_D2_MODE_TASK ||
+                    ORIOND2Mode == ORION_D2_MODE_FULL));
+   step_enabled = (stage_allows_banks &&
+                   (ORIOND2Mode == ORION_D2_MODE_STEP ||
+                    ORIOND2Mode == ORION_D2_MODE_FULL));
+  }
+//+------------------------------------------------------------------+
+//| Selects the only utility interpretation accepted by this run.   |
+//+------------------------------------------------------------------+
+bool ORIONConfigureD2UtilityMode(const int utility_mode)
+  {
+   if(utility_mode != ORION_D2_UTILITY_PAIRED_HINDSIGHT &&
+      utility_mode != ORION_D2_UTILITY_OBSERVED_RETURN)
+      ReturnFalse;
+   ORIOND2UtilityMode = utility_mode;
+   ORIOND2PairedUtilityUpdates = 0;
+   ORIOND2ObservedReturnUpdates = 0;
+   PrintFormat("ORION D2 utility_source=%s",
+               (utility_mode == ORION_D2_UTILITY_PAIRED_HINDSIGHT ?
+                "paired_hindsight" : "observed_return_non_counterfactual"));
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool ORIONEnableD2Banks(CNet &actor)
+  {
+   CNeuronBaseOCL *layer = actor.Layer(1);
+   if(!layer || layer.Type() != defNeuronD2Skill)
+      ReturnFalse;
+   CD2Skill *skill = (CD2Skill*)layer;
+   if(!skill || !skill.Ready())
+      ReturnFalse;
+   ORIOND2Stage = MathMax(ORION_D2_STAGE_BASE, MathMin(ORION_D2_STAGE_ONLINE,
+                          (int)D2SKILL_STAGE_VALUE));
+   ORIOND2Mode = MathMax(ORION_D2_MODE_BASE, MathMin(ORION_D2_MODE_FULL,
+                         (int)D2SKILL_MODE_VALUE));
+   ORIOND2UtilityAware = (ORIOND2Stage >= ORION_D2_STAGE_AUGMENTED &&
+                          (bool)D2SKILL_UTILITY_AWARE_VALUE);
+   ORIOND2UtilityScale = (MathIsValidNumber((double)D2SKILL_UTILITY_SCALE_VALUE) ?
+                          MathMax(0.0, (double)D2SKILL_UTILITY_SCALE_VALUE) : 1.0);
+   bool task_enabled = false;
+   bool step_enabled = false;
+   ORIOND2BankFlags(task_enabled, step_enabled);
+   if(!skill.Enable(task_enabled, step_enabled))
+      ReturnFalse;
+   CD2SkillBank *task = skill.TaskBank();
+   CD2SkillBank *step = skill.StepBank();
+   if(!task || !step)
+      ReturnFalse;
+   if(!task.SetThresholds(0.65f, 0.0f) || !step.SetThresholds(0.65f, 0.0f) ||
+      !task.SetLifecycle(3, 32, 256) || !step.SetLifecycle(3, 32, 256) ||
+      !task.SetMaxCorrection(10.0f) || !step.SetMaxCorrection(10.0f) ||
+      !task.SetAlpha(1.0f) || !step.SetAlpha(1.0f) ||
+      !task.SetUtilityPolicy(ORIOND2UtilityAware,
+                             (float)MathMin(1.0, MathMax(-1.0, (double)D2SKILL_MIN_UTILITY_VALUE))) ||
+      !step.SetUtilityPolicy(ORIOND2UtilityAware,
+                             (float)MathMin(1.0, MathMax(-1.0, (double)D2SKILL_MIN_UTILITY_VALUE))))
+      ReturnFalse;
+   PrintFormat("ORION D2 stage=%d mode=%d task=%s step=%s utility=%s scale=%.3f",
+               ORIOND2Stage, ORIOND2Mode, (task_enabled ? "on" : "off"),
+               (step_enabled ? "on" : "off"),
+               (ORIOND2UtilityAware ? "aware" : "similarity"), ORIOND2UtilityScale);
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Applies one normalized utility observation to selected banks.    |
+//+------------------------------------------------------------------+
+bool ORIONApplyD2Utility(CNet &actor, const double value)
+  {
+   if(!MathIsValidNumber(value))
+      ReturnFalse;
+   CNeuronBaseOCL *layer = actor.Layer(1);
+   if(!layer || layer.Type() != defNeuronD2Skill)
+      ReturnFalse;
+   CD2Skill *skill = (CD2Skill*)layer;
+   if(!skill || !skill.Ready())
+      ReturnFalse;
+   const double normalized = MathMax(-1.0, MathMin(1.0,
+                                     value * ORIOND2UtilityScale / MathMax(EtalonBalance, 1.0)));
+   if(!MathIsValidNumber(normalized))
+      ReturnFalse;
+   if(ORIOND2Mode == ORION_D2_MODE_TASK || ORIOND2Mode == ORION_D2_MODE_FULL)
+      if(!skill.TaskUtility((float)normalized))
+         ReturnFalse;
+   if(ORIOND2Mode == ORION_D2_MODE_STEP || ORIOND2Mode == ORION_D2_MODE_FULL)
+      if(!skill.StepUtility((float)normalized))
+         ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Applies paired hindsight delta JSkill-JBase to selected skills.  |
+//| Utility is separate from Actor gradients and pseudo-residuals.  |
+//+------------------------------------------------------------------+
+bool ORIONUpdateD2UtilityDelta(CNet &actor, const double delta_j)
+  {
+   if(ORIOND2Stage < ORION_D2_STAGE_HINDSIGHT ||
+      ORIOND2Mode == ORION_D2_MODE_BASE)
+      return true;
+   if(ORIOND2UtilityMode != ORION_D2_UTILITY_PAIRED_HINDSIGHT ||
+      !MathIsValidNumber(delta_j))
+      return false;
+   if(!ORIONApplyD2Utility(actor, delta_j))
+      ReturnFalse;
+   ORIOND2PairedUtilityUpdates++;
+   return true;
+  }
+//+------------------------------------------------------------------+
+//| Online-only realized return.  This is not a paired advantage.    |
+//+------------------------------------------------------------------+
+bool ORIONUpdateD2ObservedReturn(CNet &actor, const double observed_return)
+  {
+   if(ORIOND2Stage < ORION_D2_STAGE_ONLINE ||
+      ORIOND2Mode == ORION_D2_MODE_BASE)
+      return true;
+   if(ORIOND2UtilityMode != ORION_D2_UTILITY_OBSERVED_RETURN ||
+      !MathIsValidNumber(observed_return))
+      return false;
+   if(!ORIONApplyD2Utility(actor, observed_return))
+      ReturnFalse;
+   ORIOND2ObservedReturnUpdates++;
+   if(ORIOND2ObservedReturnUpdates == 1 || ORIOND2ObservedReturnUpdates % 256 == 0)
+      PrintFormat("ORION D2 observed_return updates=%I64u value=%.8f counterfactual=false",
+                  ORIOND2ObservedReturnUpdates, observed_return);
+   return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool ORIONLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
                                 const bool allow_create)
   {
    const bool manifest_exists = FileIsExist(ORION_AC_MANIFEST_FILE, FILE_COMMON);
@@ -1982,6 +2310,10 @@ bool ORIONLoadOrCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2,
    if(!ORIONValidatePolicyShape(actor, false) || !ORIONValidatePolicyShape(q1, true) ||
       !ORIONValidatePolicyShape(q2, true))
       ReturnFalse;
+#ifdef D2SKILL_ENABLE_BANKS
+   if(!ORIONEnableD2Banks(actor))
+      ReturnFalse;
+#endif
    actor.TrainMode(true);
    q1.TrainMode(true);
    q2.TrainMode(true);
@@ -1990,7 +2322,7 @@ bool ORIONLoadOrCreatePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2,
 //+------------------------------------------------------------------+
 //| Implements ORIONSavePolicySet.                                   |
 //+------------------------------------------------------------------+
-bool ORIONSavePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
+bool ORIONSavePolicySet(CNet &actor, CNet &q1, CNet &q2)
   {
    if(!ORIONVerifyFrozenWeightsExact() || !ORIONVerifyFrozenCodebookExact() ||
       ORIONForecastSignature() != ORIONLastSignature)
@@ -2004,20 +2336,24 @@ bool ORIONSavePolicySet(CORIONNet &actor, CORIONNet &q1, CORIONNet &q2)
 //+------------------------------------------------------------------+
 //| Implements ORIONLoadInferenceActor.                              |
 //+------------------------------------------------------------------+
-bool ORIONLoadInferenceActor(CORIONNet &actor)
+bool ORIONLoadInferenceActor(CNet &actor)
   {
    if(!ORIONValidateACManifest(true) || !ORIONLoadPolicyNet(actor, ORION_ACTOR_FILE))
       ReturnFalse;
    actor.SetOpenCL(ORIONMarket.GetOpenCL());
    if(!ORIONValidatePolicyShape(actor, false))
       ReturnFalse;
+#ifdef D2SKILL_ENABLE_BANKS
+   if(!ORIONEnableD2Banks(actor))
+      ReturnFalse;
+#endif
    actor.TrainMode(false);
    return true;
   }
 //+------------------------------------------------------------------+
 //| Implements ReadAction.                                           |
 //+------------------------------------------------------------------+
-bool ReadAction(CORIONNet &net, CBufferFloat *target)
+bool ReadAction(CNet &net, CBufferFloat *target)
   {
 //--- This is the explicit device-to-CPU boundary for trade execution.
 //--- The final actor layer is allowed to be host-only, therefore its live
@@ -2074,6 +2410,9 @@ bool ORIONForwardForecastState(CBufferFloat *state)
       ReturnFalse;
    return true;
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool ORIONBuildLiveAccount(const double previous_balance, const double previous_equity,
                            const datetime state_time, CBufferFloat *account,
                            double &buy_value, double &sell_value)
@@ -2176,6 +2515,9 @@ bool ORIONValidateAction(CBufferFloat *action)
          ReturnFalse;
    return true;
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_value, double &margin_penalty,
                         bool &market_closed)
   {
@@ -2201,23 +2543,23 @@ bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_valu
       if((buy_value - lot) >= min_lot)
          ClosePartial(POSITION_TYPE_BUY, buy_value - lot);
       else
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+         //+------------------------------------------------------------------+
+         //| Function if.                                                     |
+         //+------------------------------------------------------------------+
          if((lot - buy_value) >= min_lot && !Trade.Buy(lot - buy_value, Symb.Name(), Symb.Ask(), sl, tp))
            {
             const uint retcode = Trade.ResultRetcode();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+            //+------------------------------------------------------------------+
+            //| Function if.                                                     |
+            //+------------------------------------------------------------------+
             if(retcode == TRADE_RETCODE_MARKET_CLOSED)
               {
                market_closed = true;
                return true;
               }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+            //+------------------------------------------------------------------+
+            //| Function if.                                                     |
+            //+------------------------------------------------------------------+
             if(retcode != 10019)
               {
                PrintFormat("ORION buy execution failed: retcode=%u %s", retcode, Trade.ResultRetcodeDescription());
@@ -2240,23 +2582,23 @@ bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_valu
       if((sell_value - lot) >= min_lot)
          ClosePartial(POSITION_TYPE_SELL, sell_value - lot);
       else
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+         //+------------------------------------------------------------------+
+         //| Function if.                                                     |
+         //+------------------------------------------------------------------+
          if((lot - sell_value) >= min_lot && !Trade.Sell(lot - sell_value, Symb.Name(), Symb.Bid(), sl, tp))
            {
             const uint retcode = Trade.ResultRetcode();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+            //+------------------------------------------------------------------+
+            //| Function if.                                                     |
+            //+------------------------------------------------------------------+
             if(retcode == TRADE_RETCODE_MARKET_CLOSED)
               {
                market_closed = true;
                return true;
               }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+            //+------------------------------------------------------------------+
+            //| Function if.                                                     |
+            //+------------------------------------------------------------------+
             if(retcode != 10019)
               {
                PrintFormat("ORION sell execution failed: retcode=%u %s", retcode, Trade.ResultRetcodeDescription());
@@ -2277,7 +2619,7 @@ bool ORIONExecuteAction(CBufferFloat *action, double buy_value, double sell_valu
    return ORIONExecuteAction(action, buy_value, sell_value, margin_penalty, market_closed);
   }
 #endif
-bool PolicyBackward(CORIONNet &actor, CORIONNet &critic, CBufferFloat *actor_target,
+bool PolicyBackward(CNet &actor, CNet &critic, CBufferFloat *actor_target,
                     CNet *scenario_net, const int scenario_layer)
   {
    CNeuronBaseOCL *critic_output = critic.Layer(3);
@@ -2358,17 +2700,17 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
       realized = current_buy_profit + current_sell_profit;
      }
    else
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+      //+------------------------------------------------------------------+
+      //| Function if.                                                     |
+      //+------------------------------------------------------------------+
       if(open_buy)
         {
          //--- A reverse target closes the Sell; a same-side reduction realizes only its
          //--- proportional carried P/L.  The retained Buy keeps its marked-to-market P/L.
          realized += current_sell_profit;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+         //+------------------------------------------------------------------+
+         //| Function if.                                                     |
+         //+------------------------------------------------------------------+
          if(current_buy > target_buy && current_buy > 0)
            {
             const double closed = current_buy - target_buy;
@@ -2395,9 +2737,9 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
         {
          //--- Symmetric Sell lifecycle.  The SL-before-TP order matches CheckAction.
          realized += current_buy_profit;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+         //+------------------------------------------------------------------+
+         //| Function if.                                                     |
+         //+------------------------------------------------------------------+
          if(current_sell > target_sell && current_sell > 0)
            {
             const double closed = current_sell - target_sell;
@@ -2440,3 +2782,5 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
   }
 //+------------------------------------------------------------------+
 
+
+//+------------------------------------------------------------------+

@@ -11,7 +11,7 @@ input int   UpdateTargets = TargetUpdate;
 input float Tau           = tau;
 input int   CheckpointTransitions = 256;
 input double MinBalance = 50.0;
-CORIONNet Actor, TargetActor, Q1, Q2, TargetQ1, TargetQ2;
+CNet Actor, TargetActor, Q1, Q2, TargetQ1, TargetQ2;
 CBufferFloat State, TimeState, Account, Action, CriticInput, TargetCriticInput, ScalarTarget;
 CBufferFloat PreviousAccount;
 double PreviousBalance = 0, PreviousEquity = 0;
@@ -116,8 +116,14 @@ bool TrainPreviousTransition(const bool terminal)
          !MathIsValidNumber(point_cost))
          ReturnFalse;
       const double loss = MathAbs(State[0]) * point_cost * Symb.LotsMin();
-      observed -= loss * PreviousBalance / EtalonBalance;
-     }
+       observed -= loss * PreviousBalance / EtalonBalance;
+      }
+#ifdef D2SKILL_ENABLE_BANKS
+//--- Online calibration is explicitly observational: no counterfactual Actor
+//--- branch is available for this realized transition.
+   if(!ORIONUpdateD2ObservedReturn(Actor, observed))
+      ReturnFalse;
+#endif
    const double target = observed + (terminal ? 0.0 : DiscFactor * MathMin(q1_target, q2_target));
    if(!MathIsValidNumber(target) || !ScalarTarget.BufferInit(1, 0) || !ScalarTarget.Update(0, float(target)))
       ReturnFalse;
@@ -168,6 +174,10 @@ int OnInit(void)
      { Print("ORION online init: runtime targets=FAIL"); return INIT_FAILED; }
    if(!ORIONVerifyFrozenForecastExact())
      { Print("ORION online init: frozen forecast=FAIL"); return INIT_FAILED; }
+#ifdef D2SKILL_ENABLE_BANKS
+   if(!ORIONConfigureD2UtilityMode(ORION_D2_UTILITY_OBSERVED_RETURN))
+     { Print("ORION online init: utility source=FAIL"); return INIT_FAILED; }
+#endif
    if(!ORIONMarket.Clear())
      { Print("ORION online init: forecast clear=FAIL"); return INIT_FAILED; }
    PreviousBalance = AccountInfoDouble(ACCOUNT_BALANCE);
