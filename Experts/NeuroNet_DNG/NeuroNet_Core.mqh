@@ -14618,20 +14618,35 @@ bool CNet::GetLayerOutputDevice(uint layer, CBufferFloat *&result)
 //+------------------------------------------------------------------+
 //| Return the first neuron object of a layer without a host copy.    |
 //+------------------------------------------------------------------+
-CNeuronBaseOCL *CNet::Layer(uint layer)
+CNeuronBaseOCL *CNet::Layer(int layer)
   {
    if(!layers || layers.Total() <= 0)
       return(NULL);
-//--- Preserve the established Layer(-1) convention used by the
-//--- forecast/policy lifecycle while keeping the public index unsigned.
-   if(layer == UINT_MAX)
-      layer = (uint)(layers.Total() - 1);
-   if(layers.Total() <= (int)layer)
+   const int total = layers.Total();
+   if(layer < 0)
+      layer += total;
+   if(layer < 0 || layer >= total)
       return(NULL);
    CLayer *LayerObject = layers.At(layer);
-   if(!LayerObject || LayerObject.Total() <= 0)
-      return(NULL);
-   return(LayerObject.At(0));
+   return(LayerObject ? LayerObject[0] : NULL);
+  }
+//+------------------------------------------------------------------+
+//| Feed forward from an existing device-resident layer.             |
+//+------------------------------------------------------------------+
+bool CNet::FeedForwardLayer(CNeuronBaseOCL *source_layer)
+  {
+   if(!source_layer || !layers || layers.Total() <= 1)
+      ReturnFalse;
+   CNeuronBaseOCL *previous = source_layer;
+   for(int i = 1; i < layers.Total(); i++)
+     {
+      CLayer *layer = layers.At(i);
+      CNeuronBaseOCL *current = (layer ? layer[0] : NULL);
+      if(!current || !current.FeedForward(previous))
+         ReturnFalse;
+      previous = current;
+     }
+   return true;
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -16865,7 +16880,7 @@ bool CNet::OpenCLInit(void)
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(309);
+   opencl.SetKernelsCount(313);
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")
@@ -17175,6 +17190,10 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_D2SkillDiagnosticsReduce, "D2SkillDiagnosticsReduce")
    CreateKernel(def_k_D2SkillBankVectorPartial, "D2SkillBankVectorPartial")
    CreateKernel(def_k_CopyBufferRaw, "CopyBufferRaw")
+   CreateKernel(def_k_D2SkillInfluenceTotal, "D2SkillInfluenceTotal")
+   CreateKernel(def_k_D2SkillResetInfluence, "D2SkillResetInfluence")
+   CreateKernel(def_k_D2SkillScoreFinalize, "D2SkillScoreFinalize")
+   CreateKernel(def_k_D2SkillDiagnosticsNormPartial, "D2SkillDiagnosticsNormPartial")
 //---
    return true;
   }

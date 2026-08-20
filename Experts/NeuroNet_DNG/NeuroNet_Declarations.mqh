@@ -349,7 +349,8 @@ public:
    virtual bool            TrainMode(bool flag);                     ///< Set Training Mode Flag
    virtual bool            GetLayerOutput(uint layer, CBufferFloat *&result); ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
    virtual bool            GetLayerOutputDevice(uint layer, CBufferFloat *&result); ///< Return a non-owning existing OpenCL output buffer; the layer/net retains its lifetime.
-   virtual CNeuronBaseOCL  *Layer(uint layer); ///< Return the first neuron of a layer without copying its device buffers.
+   virtual CNeuronBaseOCL  *Layer(int layer); ///< Return the first neuron of a layer without copying its device buffers.
+   virtual bool            FeedForwardLayer(CNeuronBaseOCL *source_layer); ///< Feed forward from a device-resident layer.
    virtual bool            GetLayerOutput(uint layer, vector<float> &result); ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
    bool                    BindRAGMemory(const uint layer, CNeuronRAGMemory *memory); ///< Bind a compatible library-owned RAG token snapshot to a VLADriver RAG-MPI layer.
    bool                    UnbindRAGMemory(const uint layer); ///< Detach a RAG snapshot before its COW buffers are replaced.
@@ -8518,8 +8519,8 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   CBufferFloat     *GetRecurrentOutput(void) { return cHV.getOutput(); }
-   CBufferFloat     *GetRecurrentPrevOutput(void) { return cHV.getPrevOutput(); }
+   CBufferFloat      *GetRecurrentOutput(void) { return cHV.getOutput(); }
+   CBufferFloat      *GetRecurrentPrevOutput(void) { return cHV.getPrevOutput(); }
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
@@ -9395,10 +9396,10 @@ public:
    virtual uint      GetFilters(void) const { return cConv.GetFilters(); }
    virtual uint      GetVariables(void) const { return cConv.GetVariables(); }
    virtual uint      GetUnits(void) const { return cConv.GetUnits(); }
-   CBufferFloat     *GetForwardStateSpikeOutput(void)
-     { return cActivation.GetRecurrentOutput(); }
-   CBufferFloat     *GetForwardStateSpikePrevOutput(void)
-     { return cActivation.GetRecurrentPrevOutput(); }
+   CBufferFloat      *GetForwardStateSpikeOutput(void)
+     { return        cActivation.GetRecurrentOutput(); }
+   CBufferFloat      *GetForwardStateSpikePrevOutput(void)
+     { return        cActivation.GetRecurrentPrevOutput(); }
    //---
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    virtual void      TrainMode(bool flag) override;
@@ -13620,20 +13621,6 @@ protected:
    virtual bool               updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool               updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *Forecast) override;
    bool                       InitHolders(uint myIndex, ENUM_OPTIMIZATION optimization_type, uint batch);
-   //--- Extension hooks used by CD2Skill. The base attention layer keeps
-   //--- its original behavior and performs no skill lookup by default.
-   virtual bool               ApplyTaskSkill(CNeuronBaseOCL *source) { return(true); }
-   virtual bool               ApplyStepSkill(CNeuronBaseOCL *source) { return(true); }
-   virtual CNeuronBaseOCL    *TaskSkillOutput(CNeuronBaseOCL *source) { return(source); }
-   virtual CNeuronBaseOCL    *StepSkillOutput(CNeuronBaseOCL *source) { return(source); }
-   virtual bool               UpdateTaskSkill(CBufferFloat *state, CBufferFloat *gradient) { return(true); }
-   virtual bool               UpdateStepSkill(CBufferFloat *state, CBufferFloat *gradient) { return(true); }
-   virtual bool               RouteTaskGradient(void)
-     {               return(cQueryProjection.CalcHiddenGradients(cAttention.AsObject(), cKV.getOutput(), cKV.getGradient(), None)); }
-   virtual bool               RouteStepGradient(void)
-     {
-      return(cTokenPE.CalcHiddenGradients(cTokensTranspose.AsObject()));
-     }
 
 public:
                      CNeuronScenarioCrossAttention(void) : iVariables(0), iScenarios(0), iHorizon(0), iDimension(0),
@@ -13714,9 +13701,285 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//| D2Skill scenario-attention extension.                            |
+//| D2Skill public layer contract.  Implemented after TimeSeries.   |
 //+------------------------------------------------------------------+
-#include "NeuroNet_D2Skill.mqh"
+enum ED2SkillRepresentation
+  {
+   D2SkillFullResidual = 0,         //Full residual correction
+   D2SkillDirectionMagnitude = 1    //Direction and magnitude correction
+  };
+//+------------------------------------------------------------------+
+//| D2Skill execution policy.                                       |
+//+------------------------------------------------------------------+
+enum ENUM_D2SKILL_MODE
+  {
+//| Bypass D2 residuals for exact base-model parity.             |
+   D2_DISABLED = 0,                 //Base model only
+//| Retrieve and update skill banks while collecting samples.    |
+   D2_COLLECT,                      //Collect skill-bank observations
+//| Retrieve skills without updating their persistent state.     |
+   D2_EVALUATE,                     //Evaluate without persistent updates
+//| Use fixed skills for model inference only.                   |
+   D2_INFERENCE,                    //Inference with fixed skills
+//| Apply paired terminal utility during online calibration.     |
+   D2_ONLINE_CALIBRATION            //Online paired-utility calibration
+  };
+//+------------------------------------------------------------------+
+//| One reusable latent correction.                                 |
+//+------------------------------------------------------------------+
+class CD2SkillItem : public CNeuronBaseOCL
+  {
+protected:
+   CBufferFloat                *m_correction;
+   ED2SkillRepresentation       m_representation;
+   float                        m_beta_correction;
+   float                        m_beta_direction;
+   float                        m_beta_magnitude;
+   uint                         m_item_dimension;
+   CBufferFloat                 m_item_correction;
+   CBufferFloat                 m_item_direction;
+   CBufferFloat                 m_item_scale;
+   CBufferFloat                 m_item_observations;
+   CBufferFloat                 m_item_mass;
+   CBufferFloat                 m_item_partials;
+   CBufferFloat                 m_item_reduced_norm;
+
+   bool              EnsureItemState(void);
+   bool              ItemLaunchLayout(uint &local_size, uint &groups,
+                                      uint &partial_count) const;
+   bool              EnsureItemScratch(void);
+   bool              CalculateItemNorm(CBufferFloat *source, const uint local_size,
+                                       const uint groups);
+   void              RebindItemBuffer(CBufferFloat &buffer, COpenCLMy *obj);
+
+public:
+                     CD2SkillItem(void);
+   virtual          ~CD2SkillItem(void);
+
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint numNeurons, ENUM_OPTIMIZATION optimization_type,
+                          uint batch) override;
+   bool              SetCorrectionBuffer(CBufferFloat *correction);
+   CBufferFloat      *GetCorrectionBuffer(void) const;
+   void              SetRepresentation(const ED2SkillRepresentation mode);
+   ED2SkillRepresentation Representation(void) const;
+   void              SetEMA(const float beta_correction, const float beta_direction,
+                            const float beta_magnitude);
+   float             BetaCorrection(void) const;
+   float             BetaDirection(void) const;
+   float             BetaMagnitude(void) const;
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   bool              Load(const int file_handle, COpenCLMy *opencl);
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      Clear(void) override;
+   bool              UpdateFromGradient(CBufferFloat *gradient);
+   CBufferFloat      *Correction(void);
+   CBufferFloat      *Direction(void);
+   CBufferFloat      *Scale(void);
+   CBufferFloat      *Observations(void);
+   CBufferFloat      *Mass(void);
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   virtual int       Type(void) const override;
+  };
+//+------------------------------------------------------------------+
+//| Flat, bounded GPU-resident bank of CD2SkillItem slots.          |
+//+------------------------------------------------------------------+
+class CD2SkillBank : public CD2SkillItem
+  {
+protected:
+   uint                         m_slots;
+   uint                         m_dimension;
+   bool                         m_enabled;
+   float                        m_similarity_threshold;
+   float                        m_direction_threshold;
+   float                        m_utility_weight;
+   float                        m_alpha;
+   float                        m_min_utility;
+   bool                         m_utility_aware;
+   float                        m_beta_key;
+   float                        m_beta_utility;
+   float                        m_max_correction;
+   uint                         m_min_confirmations;
+   uint                         m_protection_age;
+   uint                         m_inactivity_age;
+   uint                         m_active_slot;
+   CBufferFloat                 m_keys;
+   CBufferFloat                 m_corrections;
+   CBufferFloat                 m_directions;
+   CBufferFloat                 m_scales;
+   CBufferFloat                 m_utility;
+   CBufferFloat                 m_observations;
+   CBufferFloat                 m_uses;
+   CBufferFloat                 m_mass;
+   CBufferFloat                 m_used;
+   CBufferFloat                 m_state;
+   CBufferFloat                 m_age;
+   CBufferFloat                 m_protection;
+   CBufferFloat                 m_influence;
+   CBufferFloat                 m_influence_total;
+   CBufferFloat                 m_influence_partials;
+   CBufferFloat                 m_retrieved;
+   CBufferFloat                 m_selected_correction;
+   CBufferFloat                 m_selected_slot;
+   CBufferFloat                 m_selected_score;
+   CBufferFloat                 m_diagnostics;
+   CBufferFloat                 m_utility_distribution;
+   CBufferFloat                 m_usage_distribution;
+   CBufferFloat                 m_retrieval_scores;
+   CBufferFloat                 m_score_partials;
+   CBufferFloat                 m_score_metrics;
+   CBufferFloat                 m_retrieval_partial;
+   CBufferFloat                 m_retrieval_merge;
+   CBufferFloat                 m_retrieval_top;
+   CBufferFloat                 m_free_scores;
+   CBufferFloat                 m_eviction_scores;
+   CBufferFloat                 m_free_top;
+   CBufferFloat                 m_eviction_top;
+   CBufferFloat                 m_metric_partials;
+   CBufferFloat                 m_metrics;
+   CBufferFloat                 m_decision;
+   CBufferFloat                 m_diagnostics_norm_partials;
+   CBufferFloat                 m_diagnostics_norms;
+   CBufferFloat                 m_diagnostics_partials;
+   CBufferFloat                 m_diagnostics_totals;
+
+   void              RebindBuffer(CBufferFloat &buffer, COpenCLMy *obj);
+   bool              ValidateBuffers(void);
+   bool              InitBuffer(CBufferFloat &buffer, const int total,
+                                const float value = 0.0f);
+   bool              RetrievalLaunchLayout(uint &local_size, uint &partial_count) const;
+   bool              EnsureRetrievalBuffer(CBufferFloat &buffer, const int total);
+   bool              ReductionScratchCount(const uint items, const uint batches,
+                                           const uint fields, uint &total) const;
+   bool              RunStagedReduction(CBufferFloat &partials, CBufferFloat &reduced,
+                                        const uint items, const uint batches, const uint fields,
+                                        const uint local_size, const int max_field_a = -1,
+                                        const int max_field_b = -1);
+   bool              EnsureRetrievalScratch(void);
+   bool              UpdateLaunchLayout(uint &local_size, uint &groups) const;
+   bool              EnsureUpdateScratch(void);
+   bool              RunTop1(CBufferFloat &scores, CBufferFloat &top);
+   bool              RunMetrics(CBufferFloat *state, CBufferFloat *gradient,
+                                const uint local_size, const uint groups);
+   bool              CalculateBankVectorNorm(const uint local_size, const uint groups);
+   bool              Retrieve(CBufferFloat *state);
+
+public:
+                     CD2SkillBank(void);
+   virtual          ~CD2SkillBank(void);
+
+   virtual bool      Init(uint dimension, uint myIndex, COpenCLMy *open_cl,
+                          uint slots, ENUM_OPTIMIZATION optimization_type,
+                          uint batch) override;
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   bool              Load(const int file_handle, COpenCLMy *opencl);
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      Clear(void) override;
+   virtual int       Type(void) const override;
+   bool              SetEnabled(const bool enabled);
+   bool              Enabled(void) const;
+   bool              SetThresholds(const float similarity, const float direction);
+   bool              SetUtilityWeight(const float value);
+   bool              SetAlpha(const float value);
+   float             Alpha(void) const;
+   bool              SetUtilityPolicy(const bool utility_aware, const float min_utility = 0.0f);
+   bool              UtilityAware(void) const;
+   float             MinUtility(void) const;
+   bool              SetLifecycle(const uint confirmations, const uint protection_age,
+                                  const uint inactivity_age = 256);
+   bool              SetMaxCorrection(const float value);
+   float             MaxCorrection(void) const;
+   bool              UpdateFromGradient(CBufferFloat *state, CBufferFloat *gradient);
+   bool              UpdateUtility(const float delta_j);
+   bool              ResetEpisodeInfluence(void);
+   uint              Slots(void) const;
+   uint              Dimension(void) const;
+   uint              ActiveSlot(void) const;
+   CBufferFloat      *SelectedCorrection(void);
+   CBufferFloat      *SelectedSlot(void);
+   CBufferFloat      *SelectedScore(void);
+   CBufferFloat      *Keys(void);
+   CBufferFloat      *Corrections(void);
+   CBufferFloat      *Directions(void);
+   CBufferFloat      *Scales(void);
+   CBufferFloat      *ObservationsBank(void);
+   CBufferFloat      *Uses(void);
+   CBufferFloat      *MassBank(void);
+   CBufferFloat      *Utility(void);
+   CBufferFloat      *Used(void);
+   CBufferFloat      *State(void);
+   CBufferFloat      *Ages(void);
+   CBufferFloat      *Protection(void);
+   CBufferFloat      *Diagnostics(void);
+   CBufferFloat      *UtilityDistribution(void);
+   CBufferFloat      *UsageDistribution(void);
+   CBufferFloat      *Influence(void);
+   CBufferFloat      *Retrieved(void);
+   bool              RefreshDiagnostics(void);
+  };
+//+------------------------------------------------------------------+
+//| Top-level D2Skill coordinator.  It owns exactly two banks.      |
+//+------------------------------------------------------------------+
+class CD2Skill : public CNeuronScenarioCrossAttention
+  {
+private:
+   CD2SkillBank                 m_task_bank;
+   CD2SkillBank                 m_step_bank;
+   bool                         m_ready;
+   ENUM_D2SKILL_MODE            m_mode;
+
+protected:
+   virtual bool      feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
+                                       CNeuronBaseOCL *Forecast) override;
+   virtual bool      calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL,
+         CNeuronBaseOCL *Forecast) override;
+   virtual bool      updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL,
+         CNeuronBaseOCL *Forecast) override;
+   bool              InitBanks(ENUM_OPTIMIZATION optimization_type, uint batch);
+   bool              TaskSkillEnabled(void) const;
+   bool              StepSkillEnabled(void) const;
+   bool              SkillUpdatesEnabled(void) const;
+
+public:
+                     CD2Skill(void);
+   virtual          ~CD2Skill(void);
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *opencl,
+                          uint scenarios = 21, uint horizon = 12, uint latent = 16,
+                          bool critic = false, ENUM_OPTIMIZATION optimization_type = ADAM,
+                          uint batch = 1, uint variables = 1, uint stack_size = 1,
+                          uint top_k = 1) override;
+   virtual int       Type(void) const override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   bool              Load(const int file_handle, COpenCLMy *opencl);
+   virtual void      SetOpenCL(COpenCLMy *opencl) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+   bool              SetMode(const ENUM_D2SKILL_MODE mode);
+   ENUM_D2SKILL_MODE Mode(void) const;
+   bool              ResetEpisodeInfluence(void);
+   bool              Ready(void) const;
+   CD2SkillBank      *TaskBank(void);
+   CD2SkillBank      *StepBank(void);
+   CD2SkillBank      *Bank(void);
+   const CD2SkillBank *Bank(void) const;
+   const CD2SkillBank *TaskBank(void) const;
+   const CD2SkillBank *StepBank(void) const;
+   bool              Enable(const bool task, const bool step);
+   bool              TaskFeedForward(CNeuronBaseOCL *source);
+   bool              StepFeedForward(CNeuronBaseOCL *source);
+   bool              TaskUpdate(CBufferFloat *state, CBufferFloat *gradient);
+   bool              StepUpdate(CBufferFloat *state, CBufferFloat *gradient);
+   bool              TaskUtility(const float delta_j);
+   bool              StepUtility(const float delta_j);
+   bool              BackwardSecond(CNeuronBaseOCL *source, CNeuronBaseOCL *forecast);
+  };
 #endif // NEURONET_DECLARATIONS_MQH
 
 #ifndef NEURONET_BUILDING_FACADE

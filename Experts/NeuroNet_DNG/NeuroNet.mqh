@@ -15,6 +15,7 @@
 #include "NeuroNet_GraphSparse.mqh"
 #include "NeuroNet_AgentsRL.mqh"
 #include "NeuroNet_TimeSeries.mqh"
+#include "NeuroNet_D2Skill.mqh"
 #include "NeuroNet_Misc.mqh"
 #undef NEURONET_BUILDING_FACADE
 #endif // NEURONET_MQH

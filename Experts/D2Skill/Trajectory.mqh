@@ -1,13 +1,13 @@
 //+------------------------------------------------------------------+
-//| Trajectory.mqh |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                   Trajectory.mqh |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 #include <Trade\Trade.mqh>
@@ -63,7 +63,7 @@ input bool                 InpD2SkillUtilityAware = true; //Utility-aware retrie
 input double               InpD2SkillMinUtility = -1.0; //Minimum utility
 input double               InpD2SkillUtilityScale = 1.0; //Utility scale
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 int            iLatentLayer = -1;
 int            iStateRawForecastLayer = 5;
@@ -98,7 +98,7 @@ int            iStateTokenLayer = 6;
 #define        StackSize               24*21
 #define        Blocks                  24
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 CSymbolInfo          Symb;
 CTrade               Trade;
@@ -109,7 +109,7 @@ CiCCI                CCI;
 CiATR                ATR;
 CiMACD               MACD;
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -132,9 +132,7 @@ struct SState
      }
   };
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Implements SState.                                             |
+//| Implements SState.                                               |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
@@ -144,9 +142,7 @@ SState::SState(void)
    ArrayInitialize(rewards, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Saves .                                                        |
+//| Saves                                                            |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
@@ -183,9 +179,7 @@ bool SState::Save(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Loads .                                                        |
+//| Loads.                                                           |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
@@ -241,7 +235,7 @@ bool SState::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 bool CreateStateDescriptions(CArrayObj *&encoder,
                              CArrayObj *&decoder
@@ -421,7 +415,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    return true;
   }
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *&actor,
                         CArrayObj *&critic
@@ -607,9 +601,7 @@ bool CreateDescriptions(CArrayObj *&actor,
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Checks NewBar.                                                 |
+//| Checks NewBar.                                                   |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -621,9 +613,7 @@ bool IsNewBar(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CloseByDirection.     |
+//| Creates and manages object lifecycle for CloseByDirection.       |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -641,9 +631,7 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Implements TrailPosition.                                      |
+//| Implements TrailPosition.                                        |
 //+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
@@ -696,9 +684,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for ClosePartial.         |
+//| Creates and manages object lifecycle for ClosePartial.           |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
@@ -731,7 +717,7 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   }
 #endif
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
@@ -751,9 +737,7 @@ public:
    vector<float>        Action(datetime current, double ask, double bid, int period_seconds);
   };
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CDeal.                |
+//| Creates and manages object lifecycle for CDeal.                  |
 //+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
 // Creates and manages object lifecycle for CloseTime.
@@ -773,9 +757,7 @@ void CDeal::CDeal(void) :  OpenTime(0),
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Implements Action.                                             |
+//| Implements Action.                                               |
 //+------------------------------------------------------------------+
 vector<float> CDeal::Action(datetime current, double ask, double bid, int period_seconds)
   {
@@ -804,7 +786,7 @@ vector<float> CDeal::Action(datetime current, double ask, double bid, int period
    return result;
   }
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 class CDeals
   {
@@ -818,9 +800,7 @@ public:
    vector<float>     Action(datetime current, double ask, double bid, int period_seconds);
   };
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Loads Deals.                                                   |
+//| Loads Deals.                                                     |
 //+------------------------------------------------------------------+
 bool CDeals::LoadDeals(string file_name, string symbol, double point)
   {
@@ -914,9 +894,7 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Implements Action.                                             |
+//| Implements Action.                                               |
 //+------------------------------------------------------------------+
 vector<float> CDeals::Action(datetime current, double ask, double bid, int period_seconds)
   {
@@ -938,9 +916,7 @@ vector<float> CDeals::Action(datetime current, double ask, double bid, int perio
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Creates or initializes Buffers.                                |
+//| Creates or initializes Buffers.                                  |
 //+------------------------------------------------------------------+
 bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time, CBufferFloat* forecast)
   {
@@ -1014,9 +990,7 @@ bool CreateBuffers(const int start_bar, CBufferFloat* state, CBufferFloat *time,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Implements SampleAccount.                                      |
+//| Implements SampleAccount.                                        |
 //+------------------------------------------------------------------+
 const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max_balance, double min_balance = 0)
   {
@@ -1095,9 +1069,7 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CheckAction.          |
+//| Creates and manages object lifecycle for CheckAction.            |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action, double balance, uint start_position)
   {
@@ -1213,9 +1185,7 @@ double CheckAction(CBufferFloat *action, double balance, uint start_position)
    return reward;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Implements OraculAction.                                       |
+//| Implements OraculAction.                                         |
 //+------------------------------------------------------------------+
 vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
   {
@@ -1349,9 +1319,6 @@ vector<float> OraculAction(const vector<float> &account, CBufferFloat *forecat)
    return result;
   }
 //+------------------------------------------------------------------+
-
-
-//+------------------------------------------------------------------+
 //| D2Skill ScenarioForecast and Actor/Critic runtime                |
 //+------------------------------------------------------------------+
 bool                 D2SkillRecoverySmoke = false;
@@ -1371,11 +1338,9 @@ const string         D2Skill_OOS_MANIFEST_FILE = "D2SkillOOS.manifest";
 //--- Utility is defined only by the counterfactual paired terminal outcome.
 const int            D2Skill_D2_UTILITY_PAIRED_HINDSIGHT = 0;
 //+------------------------------------------------------------------+
-//| D2Skill builds transitions directly from historical windows        |
-//+------------------------------------------------------------------+
-//| Base CNet already provides Layer(int) and FeedForwardLayer(CNeuronBaseOCL*). |
-//+------------------------------------------------------------------+
-//+------------------------------------------------------------------+
+//| D2Skill builds transitions directly from historical windows      |
+//| Base CNet already provides Layer(int) and                        |
+//| FeedForwardLayer(CNeuronBaseOCL*).                               |
 //| A transient, non-owning layer view lets the library transpose    |
 //+------------------------------------------------------------------+
 class CD2SkillBufferView : public CNeuronBaseOCL
@@ -1425,6 +1390,7 @@ public:
          destination.GetIndex() < 0 || source.GetOpenCL() != OpenCL ||
          destination.GetOpenCL() != OpenCL)
          ReturnFalse;
+      //---
       return CopyBufferRaw(source, destination, total);
      }
    bool              Join2(CBufferFloat *first, const uint first_total, CBufferFloat *second,
@@ -1469,6 +1435,7 @@ public:
       return DeConcat(first, second, source, first_total, second_total, 1);
      }
   };
+//---
 CNet                 D2SkillMarket;
 CNet                 D2SkillTarget;
 CNeuronScenarioForecast *D2SkillForecast = NULL;

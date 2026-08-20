@@ -100,13 +100,13 @@ uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRan
 #define dFileReadUFloat(file_handle, value)   if(FileIsEnding(file_handle)) ReturnFalse; value = FileReadFloat(file_handle);
 //--- D2Skill shared MQL5 contract constants.  NeuroNet.cl is a separate
 //--- OpenCL program and keeps matching device-side constants in its source.
-#define D2SKILL_FORMAT                           7
+#define D2SKILL_FORMAT                           8
 #define D2SKILL_LAYER_FORMAT                     1
 #define D2SKILL_ITEM_FORMAT                      1
 #define D2SKILL_DIAGNOSTICS                      24
 #define D2SKILL_DISTRIBUTION_BINS                5
 #define D2SKILL_METRICS                           10
-#define D2SKILL_DIAGNOSTIC_PARTIALS               21
+#define D2SKILL_DIAGNOSTIC_PARTIALS               22
 #define D2SKILL_FREE                             0
 #define D2SKILL_CANDIDATE                        1
 #define D2SKILL_PROTECTED                        2
@@ -2873,24 +2873,20 @@ union uaLongChar
 #define def_k_D2SkillScoreSlots                  294
 #define def_k_d2ss_query                           0
 #define def_k_d2ss_keys                            1
-#define def_k_d2ss_utility                         2
-#define def_k_d2ss_used                            3
-#define def_k_d2ss_state                           4
-#define def_k_d2ss_scores                          5
-#define def_k_d2ss_slots                           6
-#define def_k_d2ss_dimension                       7
-#define def_k_d2ss_similarity_threshold            8
-#define def_k_d2ss_utility_weight                  9
-#define def_k_d2ss_min_utility                     10
-#define def_k_d2ss_utility_policy                  11
+#define def_k_d2ss_partials                        2
+#define def_k_d2ss_slots                           3
+#define def_k_d2ss_dimension                       4
 #define def_k_D2SkillUtility                      296
 #define def_k_d2ut_selected_slot                   0
-#define def_k_d2ut_utility                         1
-#define def_k_d2ut_used                            2
-#define def_k_d2ut_delta                           3
-#define def_k_d2ut_beta                            4
-#define def_k_d2ut_slots                           5
-#define def_k_d2ut_diagnostics                     6
+#define def_k_d2ut_influence                       1
+#define def_k_d2ut_influence_total                 2
+#define def_k_d2ut_utility                         3
+#define def_k_d2ut_used                            4
+#define def_k_d2ut_state                           5
+#define def_k_d2ut_delta                           6
+#define def_k_d2ut_beta                            7
+#define def_k_d2ut_slots                           8
+#define def_k_d2ut_diagnostics                     9
 #define def_k_D2SkillItemPartial                 286
 #define def_k_d2ip_source                          0
 #define def_k_d2ip_partials                        1
@@ -2931,6 +2927,8 @@ union uaLongChar
 #define def_k_d2gc_dimension                      10
 #define def_k_d2gc_representation                 11
 #define def_k_d2gc_alpha                          12
+#define def_k_d2gc_influence                      13
+#define def_k_d2gc_retrieved                      14
 //--- D2Skill staged bank update.  Scratch is device-only and is never saved.
 #define def_k_D2SkillAgeLifecycle                295
 #define def_k_d2al_used                            0
@@ -2942,6 +2940,8 @@ union uaLongChar
 #define def_k_d2al_eviction_scores                 6
 #define def_k_d2al_slots                           7
 #define def_k_d2al_inactivity_age                  8
+#define def_k_d2al_retrieved                       9
+#define def_k_d2al_candidate_scores               10
 #define def_k_D2SkillMetricPartial               300
 #define def_k_d2mp_query                           0
 #define def_k_d2mp_gradient                        1
@@ -2949,7 +2949,7 @@ union uaLongChar
 #define def_k_d2mp_keys                            3
 #define def_k_d2mp_directions                      4
 #define def_k_d2mp_used                            5
-#define def_k_d2mp_candidate_valid                 6
+#define def_k_d2mp_candidate_top                   6
 #define def_k_d2mp_candidate_key                   7
 #define def_k_d2mp_candidate_direction             8
 #define def_k_d2mp_partials                        9
@@ -2958,7 +2958,14 @@ union uaLongChar
 #define def_k_D2SkillMetricReduce                301
 #define def_k_d2mr_partials                        0
 #define def_k_d2mr_metrics                         1
-#define def_k_d2mr_input_count                     2
+#define def_k_d2mr_batch_count                     2
+#define def_k_d2mr_input_count                     3
+#define def_k_d2mr_fields                          4
+#define def_k_d2mr_input_offset                    5
+#define def_k_d2mr_output_offset                   6
+#define def_k_d2mr_max_field_a                     7
+#define def_k_d2mr_max_field_b                     8
+#define def_k_d2mr_final_output                    9
 #define def_k_D2SkillCandidateLeader             302
 #define def_k_d2cl_selected_slot                   0
 #define def_k_d2cl_used                            1
@@ -2981,6 +2988,8 @@ union uaLongChar
 #define def_k_d2cl_min_confirmations              18
 #define def_k_d2cl_similarity_threshold           19
 #define def_k_d2cl_direction_threshold            20
+#define def_k_d2cl_candidate_top                  21
+#define def_k_d2cl_candidate_protection           22
 #define def_k_D2SkillVectorUpdate                303
 #define def_k_d2vu_query                           0
 #define def_k_d2vu_gradient                        1
@@ -3018,7 +3027,7 @@ union uaLongChar
 #define def_k_d2ps_slots                          14
 #define def_k_d2ps_protection_age                 15
 #define def_k_D2SkillDiagnosticsPartial          305
-#define def_k_d2dp_corrections                     0
+#define def_k_d2dp_norms                           0
 #define def_k_d2dp_utility                         1
 #define def_k_d2dp_uses                            2
 #define def_k_d2dp_used                            3
@@ -3026,14 +3035,12 @@ union uaLongChar
 #define def_k_d2dp_age                             5
 #define def_k_d2dp_partials                        6
 #define def_k_d2dp_slots                           7
-#define def_k_d2dp_dimension                       8
 #define def_k_D2SkillDiagnosticsReduce           306
-#define def_k_d2dr_partials                        0
-#define def_k_d2dr_candidate_valid                 1
-#define def_k_d2dr_diagnostics                     2
-#define def_k_d2dr_utility_distribution            3
-#define def_k_d2dr_usage_distribution              4
-#define def_k_d2dr_slots                           5
+#define def_k_d2dr_totals                          0
+#define def_k_d2dr_diagnostics                     1
+#define def_k_d2dr_utility_distribution            2
+#define def_k_d2dr_usage_distribution              3
+#define def_k_d2dr_slots                           4
 #define def_k_D2SkillBankVectorPartial            307
 #define def_k_d2bvp_corrections                     0
 #define def_k_d2bvp_directions                      1
@@ -3046,6 +3053,32 @@ union uaLongChar
 #define def_k_copy_raw_source                       0
 #define def_k_copy_raw_destination                  1
 #define def_k_copy_raw_total                        2
+//--- D2Skill terminal hindsight kernels.
+#define def_k_D2SkillInfluenceTotal               309
+#define def_k_d2it_influence                        0
+#define def_k_d2it_used                             1
+#define def_k_d2it_state                            2
+#define def_k_d2it_partials                         3
+#define def_k_d2it_slots                            4
+#define def_k_D2SkillResetInfluence                310
+#define def_k_d2ri_influence                        0
+#define def_k_d2ri_slots                            1
+#define def_k_D2SkillScoreFinalize                311
+#define def_k_d2sf_metrics                          0
+#define def_k_d2sf_utility                          1
+#define def_k_d2sf_used                             2
+#define def_k_d2sf_state                            3
+#define def_k_d2sf_scores                           4
+#define def_k_d2sf_slots                            5
+#define def_k_d2sf_similarity_threshold             6
+#define def_k_d2sf_utility_weight                   7
+#define def_k_d2sf_min_utility                      8
+#define def_k_d2sf_utility_policy                   9
+#define def_k_D2SkillDiagnosticsNormPartial       312
+#define def_k_d2dnp_corrections                     0
+#define def_k_d2dnp_partials                        1
+#define def_k_d2dnp_slots                           2
+#define def_k_d2dnp_dimension                       3
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

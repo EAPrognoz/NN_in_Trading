@@ -16199,18 +16199,10 @@ __kernel void D2SkillItemPartial(__global const float *source,
                                  const int output_offset)
   {
    const int id = get_global_id(0);
-   const int stride = get_global_size(0);
-   const int lane = get_local_id(0);
-   float sum = 0.0f;
-   for(int d = id; d < dimension; d += stride)
-     {
-      const float value = IsNaNOrInf(source[d], 0.0f);
-      sum += value * value;
-     }
-   __local float Temp[LOCAL_ARRAY_SIZE];
-   const float group_sum = LocalSum(sum, 0, Temp);
-   if(lane == 0)
-      partials[output_offset + get_group_id(0)] = IsNaNOrInf(group_sum, 0.0f);
+   if(id < 0 || id >= dimension)
+      return;
+   const float value = IsNaNOrInf(source[id], 0.0f);
+   partials[output_offset + id] = IsNaNOrInf(value * value, 0.0f);
   }
 //+------------------------------------------------------------------+
 //| Recursive no-atomics reduction into disjoint scratch regions.    |
@@ -16222,23 +16214,16 @@ __kernel void D2SkillItemReduce(__global float *partials,
                                 const int output_offset,
                                 const int final_output)
   {
-   const int group = get_group_id(0);
-   const int lane = get_local_id(0);
-   const int local_size = get_local_size(0);
-   const int groups = get_num_groups(0);
-   float sum = 0.0f;
-   for(int index = group * local_size + lane; index < input_count;
-       index += groups * local_size)
-      sum += IsNaNOrInf(partials[input_offset + index], 0.0f);
-   __local float Temp[LOCAL_ARRAY_SIZE];
-   const float group_sum = LocalSum(sum, 0, Temp);
-   if(lane == 0)
-     {
-      if(final_output != 0)
-         reduced[0] = IsNaNOrInf(group_sum, 0.0f);
-      else
-         partials[output_offset + group] = IsNaNOrInf(group_sum, 0.0f);
-     }
+   const int index = get_global_id(0);
+   const int left = 2 * index;
+   if(left >= input_count)
+      return;
+   const float sum = IsNaNOrInf(partials[input_offset + left], 0.0f) +
+                     (left + 1 < input_count ? IsNaNOrInf(partials[input_offset + left + 1], 0.0f) : 0.0f);
+   if(final_output != 0)
+      reduced[0] = IsNaNOrInf(sum, 0.0f);
+   else
+      partials[output_offset + index] = IsNaNOrInf(sum, 0.0f);
   }
 //+------------------------------------------------------------------+
 //| Parallel Item state update and correction materialization.       |
@@ -16297,69 +16282,69 @@ __kernel void D2SkillItemApply(__global const float *gradient,
                     IsNaNOrInf(direction[id], 0.0f) * inv_direction;
   }
 //+------------------------------------------------------------------+
-//| Score one D2Skill slot per workgroup.                              |
+//| Write one score contribution per slot/component lane.             |
 //+------------------------------------------------------------------+
 __kernel void D2SkillScoreSlots(__global const float *query,
                                 __global const float *keys,
-                                __global const float *utility,
-                                __global const float *used,
-                                __global const float *state,
-                                __global float *scores,
+                                __global float *partials,
                                 const int slots,
-                                const int dimension,
-                                const float similarity_threshold,
-                                const float utility_weight,
-                                const float min_utility,
-                                const int utility_policy)
+                                const int dimension)
   {
-   const int lane = get_local_id(0);
-   const int slot = get_group_id(0);
-   const int lanes = get_local_size(0);
-   float dot = 0.0f;
-   float query2 = 0.0f;
-   float key2 = 0.0f;
-   float invalid_reduction = 0.0f;
-   __local float dot_local[LOCAL_ARRAY_SIZE];
-   __local float query_local[LOCAL_ARRAY_SIZE];
-   __local float key_local[LOCAL_ARRAY_SIZE];
-   __local float invalid_local[LOCAL_ARRAY_SIZE];
-   if(slot < slots && dimension > 0)
+   const int index = get_global_id(0);
+   const int total = slots * dimension;
+   if(index < 0 || index >= total || dimension <= 0)
+      return;
+   const int component = index % dimension;
+   const float q = IsNaNOrInf(query[component], 0.0f);
+   const float k = IsNaNOrInf(keys[index], 0.0f);
+   const float dot = q * k;
+   const float query2 = q * q;
+   const float key2 = k * k;
+   const int base = index * 4;
+   partials[base] = IsNaNOrInf(dot, 0.0f);
+   partials[base + 1] = IsNaNOrInf(query2, 0.0f);
+   partials[base + 2] = IsNaNOrInf(key2, 0.0f);
+   partials[base + 3] = (!isfinite(dot) || !isfinite(query2) || !isfinite(key2) ? 1.0f : 0.0f);
+  }
+//+------------------------------------------------------------------+
+//| Finalize one D2Skill score per slot after staged reduction.       |
+//+------------------------------------------------------------------+
+__kernel void D2SkillScoreFinalize(__global const float *metrics,
+                                   __global const float *utility,
+                                   __global const float *used,
+                                   __global const float *state,
+                                   __global float *scores,
+                                   const int slots,
+                                   const float similarity_threshold,
+                                   const float utility_weight,
+                                   const float min_utility,
+                                   const int utility_policy)
+  {
+   const int slot = get_global_id(0);
+   if(slot < 0 || slot >= slots)
+      return;
+   const int base = slot * 4;
+   const float dot = IsNaNOrInf(metrics[base], 0.0f);
+   const float query2 = IsNaNOrInf(metrics[base + 1], 0.0f);
+   const float key2 = IsNaNOrInf(metrics[base + 2], 0.0f);
+   const float invalid_reduction = IsNaNOrInf(metrics[base + 3], 1.0f);
+   float score = RAG_INVALID_SCORE;
+   const int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_INACTIVE);
+   if(invalid_reduction <= 0.0f && IsNaNOrInf(used[slot], 0.0f) > 0.5f &&
+      slot_state != D2SKILL_INACTIVE && slot_state != D2SKILL_CANDIDATE &&
+      query2 > 1.0e-12f && key2 > 1.0e-12f)
      {
-      for(int d = lane; d < dimension; d += lanes)
+      const float cosine = dot / (sqrt(query2) * sqrt(key2));
+      const float slot_utility = clamp(IsNaNOrInf(utility[slot], 0.0f), -1.0f, 1.0f);
+      if(isfinite(cosine) && cosine >= similarity_threshold &&
+         (utility_policy == 0 || slot_utility >= min_utility))
         {
-         const float q = IsNaNOrInf(query[d], 0.0f);
-         const float k = IsNaNOrInf(keys[slot * dimension + d], 0.0f);
-         dot += q * k;
-         query2 += q * q;
-         key2 += k * k;
-         if(!isfinite(dot) || !isfinite(query2) || !isfinite(key2))
-            invalid_reduction = 1.0f;
+         const float candidate_score = cosine + utility_weight * slot_utility;
+         if(isfinite(candidate_score))
+            score = candidate_score;
         }
      }
-   dot = LocalSum(dot, 0, dot_local);
-   query2 = LocalSum(query2, 0, query_local);
-   key2 = LocalSum(key2, 0, key_local);
-   invalid_reduction = LocalSum(invalid_reduction, 0, invalid_local);
-   if(lane == 0 && slot < slots)
-     {
-      float score = RAG_INVALID_SCORE;
-      const int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_INACTIVE);
-      if(dimension > 0 && invalid_reduction <= 0.0f && isfinite(dot) &&
-         isfinite(query2) && isfinite(key2) && IsNaNOrInf(used[slot], 0.0f) > 0.5f &&
-         slot_state != D2SKILL_INACTIVE && query2 > 1.0e-12f && key2 > 1.0e-12f)
-        {
-         const float cosine = dot / (sqrt(query2) * sqrt(key2));
-         const float slot_utility = clamp(IsNaNOrInf(utility[slot], 0.0f), -1.0f, 1.0f);
-         if(isfinite(cosine) && cosine >= similarity_threshold &&
-            (utility_policy == 0 || slot_utility >= min_utility))
-           {
-            const float candidate_score = cosine + utility_weight * slot_utility;
-            if(isfinite(candidate_score))
-               score = candidate_score;
-           }
-        }
-      scores[slot] = score;
-     }
+   scores[slot] = score;
   }
 //+------------------------------------------------------------------+
 //| Gather the selected signed correction in parallel by component.  |
@@ -16374,9 +16359,11 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
                                       __global float *uses,
                                       __global float *diagnostics,
                                       const int slots,
-                                      const int dimension,
-                                      const int representation,
-                                      const float alpha)
+                                       const int dimension,
+                                       const int representation,
+                                       const float alpha,
+                                       __global float *influence,
+                                       __global float *retrieved)
   {
    const int component = get_global_id(0);
    const float2 top_slot = top[0];
@@ -16403,7 +16390,10 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
       selected_score[0] = (valid ? score : RAG_INVALID_SCORE);
       if(valid)
         {
-         uses[winner] = IsNaNOrInf(uses[winner], 0.0f) + 1.0f;
+          uses[winner] = IsNaNOrInf(uses[winner], 0.0f) + 1.0f;
+          influence[winner] = IsNaNOrInf(influence[winner], 0.0f) +
+                              fmax(IsNaNOrInf(score, 0.0f), 0.0f);
+          retrieved[winner] = 1.0f;
          diagnostics[0] = IsNaNOrInf(diagnostics[0], 0.0f) + 1.0f;
         }
       else
@@ -16414,7 +16404,7 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
 //|                                                                  |
 //+------------------------------------------------------------------+
 #define D2SKILL_METRIC_COUNT       10
-#define D2SKILL_DIAGNOSTIC_PARTIALS 21
+#define D2SKILL_DIAGNOSTIC_PARTIALS 22
 #define D2SKILL_DECISION_NONE       0
 #define D2SKILL_DECISION_MATCH      1
 #define D2SKILL_DECISION_SEED       2
@@ -16430,8 +16420,10 @@ __kernel void D2SkillAgeLifecycle(__global const float *used,
                                   __global const float *utility,
                                   __global float *free_scores,
                                   __global float *eviction_scores,
-                                  const int slots,
-                                  const int inactivity_age)
+                                   const int slots,
+                                   const int inactivity_age,
+                                   __global float *retrieved,
+                                   __global float *candidate_scores)
   {
    const int slot = get_global_id(0);
    if(slot >= slots)
@@ -16440,9 +16432,11 @@ __kernel void D2SkillAgeLifecycle(__global const float *used,
    int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE);
    float slot_age = max(IsNaNOrInf(age[slot], 0.0f), 0.0f);
    float slot_protection = max(IsNaNOrInf(protection[slot], 0.0f), 0.0f);
-   if(is_used > 0.5f)
-     {
-      slot_age = min(slot_age + 1.0f, (float)MAX_VALUE);
+    if(is_used > 0.5f && slot_state != D2SKILL_CANDIDATE)
+      {
+       const bool was_retrieved = (IsNaNOrInf(retrieved[slot], 0.0f) > 0.5f);
+       slot_age = (was_retrieved ? 0.0f : min(slot_age + 1.0f, (float)MAX_VALUE));
+       retrieved[slot] = 0.0f;
       slot_protection = max(slot_protection - 1.0f, 0.0f);
       if(slot_state == D2SKILL_PROTECTED && slot_protection <= 0.0f)
          slot_state = D2SKILL_ACTIVE;
@@ -16458,6 +16452,8 @@ __kernel void D2SkillAgeLifecycle(__global const float *used,
                             slot_protection <= 0.0f ?
                             -clamp(IsNaNOrInf(utility[slot], 0.0f), -1.0f, 1.0f) +
                             1.0e-4f * slot_age : RAG_INVALID_SCORE);
+   candidate_scores[slot] = (is_used > 0.5f && slot_state == D2SKILL_CANDIDATE ?
+                             -(float)slot : RAG_INVALID_SCORE);
   }
 //+------------------------------------------------------------------+
 __kernel void D2SkillMetricPartial(__global const float *query,
@@ -16466,99 +16462,132 @@ __kernel void D2SkillMetricPartial(__global const float *query,
                                    __global const float *keys,
                                    __global const float *directions,
                                    __global const float *used,
-                                   __global const float *candidate_valid,
+                                   __global const float2 *candidate_top,
                                    __global const float *candidate_key,
                                    __global const float *candidate_direction,
                                    __global float *partials,
                                    const int slots,
                                    const int dimension)
   {
-   const int lane = get_local_id(0);
-   const int lanes = get_local_size(0);
-   const int group = get_group_id(0);
-   const int groups = get_num_groups(0);
+   const int component = get_global_id(0);
+   if(component < 0 || component >= dimension)
+      return;
    const int selected = (int)round(selected_slot[0]);
    const int selected_valid = (selected >= 0 && selected < slots &&
                                IsNaNOrInf(used[selected], 0.0f) > 0.5f);
-   const int candidate = (candidate_valid[0] > 0.5f);
-   float m0 = 0.0f, m1 = 0.0f, m2 = 0.0f, m3 = 0.0f, m4 = 0.0f;
-   float m5 = 0.0f, m6 = 0.0f, m7 = 0.0f, m8 = 0.0f, m9 = 0.0f;
-   for(int d = group * lanes + lane; d < dimension; d += groups * lanes)
+   const int candidate_index = (int)round(candidate_top[0].x);
+   const int candidate = (candidate_index >= 0 && candidate_index < slots &&
+                          candidate_top[0].y > RAG_INVALID_SCORE ? candidate_index : -1);
+   const float q = IsNaNOrInf(query[component], 0.0f);
+   const float g = IsNaNOrInf(gradient[component], 0.0f);
+   float values[D2SKILL_METRIC_COUNT];
+   for(int metric = 0; metric < D2SKILL_METRIC_COUNT; metric++)
+      values[metric] = 0.0f;
+   values[0] = IsNaNOrInf(g * g, 0.0f);
+   values[1] = IsNaNOrInf(q * q, 0.0f);
+   if(selected_valid)
      {
-      const float q = IsNaNOrInf(query[d], 0.0f);
-      const float g = IsNaNOrInf(gradient[d], 0.0f);
-      m0 += g * g;
-      m1 += q * q;
-      if(selected_valid)
-        {
-         const int shift = selected * dimension + d;
-         const float key = IsNaNOrInf(keys[shift], 0.0f);
-         const float direction = IsNaNOrInf(directions[shift], 0.0f);
-         m2 += q * key;
-         m3 += key * key;
-         m4 += g * direction;
-         m5 += direction * direction;
-        }
-      if(candidate)
-        {
-         const float key = IsNaNOrInf(candidate_key[d], 0.0f);
-         const float direction = IsNaNOrInf(candidate_direction[d], 0.0f);
-         m6 += q * key;
-         m7 += key * key;
-         m8 += g * direction;
-         m9 += direction * direction;
-        }
+      const int shift = selected * dimension + component;
+      const float key = IsNaNOrInf(keys[shift], 0.0f);
+      const float direction = IsNaNOrInf(directions[shift], 0.0f);
+      values[2] = IsNaNOrInf(q * key, 0.0f);
+      values[3] = IsNaNOrInf(key * key, 0.0f);
+      values[4] = IsNaNOrInf(g * direction, 0.0f);
+      values[5] = IsNaNOrInf(direction * direction, 0.0f);
      }
-   __local float t0[LOCAL_ARRAY_SIZE], t1[LOCAL_ARRAY_SIZE], t2[LOCAL_ARRAY_SIZE];
-   __local float t3[LOCAL_ARRAY_SIZE], t4[LOCAL_ARRAY_SIZE], t5[LOCAL_ARRAY_SIZE];
-   __local float t6[LOCAL_ARRAY_SIZE], t7[LOCAL_ARRAY_SIZE], t8[LOCAL_ARRAY_SIZE];
-   __local float t9[LOCAL_ARRAY_SIZE];
-   m0 = LocalSum(m0, 0, t0);
-   m1 = LocalSum(m1, 0, t1);
-   m2 = LocalSum(m2, 0, t2);
-   m3 = LocalSum(m3, 0, t3);
-   m4 = LocalSum(m4, 0, t4);
-   m5 = LocalSum(m5, 0, t5);
-   m6 = LocalSum(m6, 0, t6);
-   m7 = LocalSum(m7, 0, t7);
-   m8 = LocalSum(m8, 0, t8);
-   m9 = LocalSum(m9, 0, t9);
-   if(lane == 0)
+   if(candidate >= 0)
      {
-      const int base = group * D2SKILL_METRIC_COUNT;
-      partials[base] = IsNaNOrInf(m0, 0.0f);
-      partials[base + 1] = IsNaNOrInf(m1, 0.0f);
-      partials[base + 2] = IsNaNOrInf(m2, 0.0f);
-      partials[base + 3] = IsNaNOrInf(m3, 0.0f);
-      partials[base + 4] = IsNaNOrInf(m4, 0.0f);
-      partials[base + 5] = IsNaNOrInf(m5, 0.0f);
-      partials[base + 6] = IsNaNOrInf(m6, 0.0f);
-      partials[base + 7] = IsNaNOrInf(m7, 0.0f);
-      partials[base + 8] = IsNaNOrInf(m8, 0.0f);
-      partials[base + 9] = IsNaNOrInf(m9, 0.0f);
+      const int shift = candidate * dimension + component;
+      const float key = IsNaNOrInf(candidate_key[shift], 0.0f);
+      const float direction = IsNaNOrInf(candidate_direction[shift], 0.0f);
+      values[6] = IsNaNOrInf(q * key, 0.0f);
+      values[7] = IsNaNOrInf(key * key, 0.0f);
+      values[8] = IsNaNOrInf(g * direction, 0.0f);
+      values[9] = IsNaNOrInf(direction * direction, 0.0f);
      }
+   const int base = component * D2SKILL_METRIC_COUNT;
+   for(int metric = 0; metric < D2SKILL_METRIC_COUNT; metric++)
+      partials[base + metric] = values[metric];
   }
 //+------------------------------------------------------------------+
-__kernel void D2SkillMetricReduce(__global const float *partials,
-                                  __global float *metrics,
-                                  const int input_count)
+//| Generic radix-8 field reduction with disjoint global outputs.    |
+//+------------------------------------------------------------------+
+inline float D2SkillMetricReducePair(const float left, const float right,
+                                     const int field, const int max_field_a,
+                                     const int max_field_b)
   {
-   const int lane = get_local_id(0);
-   const int lanes = get_local_size(0);
-   const int metric = get_group_id(0);
-   if(metric >= D2SKILL_METRIC_COUNT)
+   if(field == max_field_a || field == max_field_b)
+      return(max(left, right));
+   return(IsNaNOrInf(left + right, 0.0f));
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillMetricReduce(__global float *partials,
+                                  __global float *metrics,
+                                  const int batch_count,
+                                  const int input_count,
+                                  const int fields,
+                                  const int input_offset,
+                                  const int output_offset,
+                                  const int max_field_a,
+                                  const int max_field_b,
+                                  const int final_output)
+  {
+   const int index = get_global_id(0);
+   const int reduction_radix = 8;
+   const int output_count = (input_count + reduction_radix - 1) / reduction_radix;
+   const int total = batch_count * output_count * fields;
+   if(index < 0 || index >= total || input_count <= 0 || fields <= 0)
       return;
-   float value = 0.0f;
-   for(int item = lane; item < input_count; item += lanes)
-      value += IsNaNOrInf(partials[item * D2SKILL_METRIC_COUNT + metric], 0.0f);
-   __local float temp[LOCAL_ARRAY_SIZE];
-   value = LocalSum(value, 0, temp);
-   if(lane == 0)
-      metrics[metric] = IsNaNOrInf(value, 0.0f);
+   const int field = index % fields;
+   const int item_index = index / fields;
+   const int output_index = item_index % output_count;
+   const int batch = item_index / output_count;
+   const int first = reduction_radix * output_index;
+   const int input_base = input_offset + (batch * input_count + first) * fields + field;
+   float value = IsNaNOrInf(partials[input_base], 0.0f);
+   if(first + 1 < input_count)
+     {
+      const float right = IsNaNOrInf(partials[input_base + fields], 0.0f);
+      value = D2SkillMetricReducePair(value, right, field, max_field_a, max_field_b);
+     }
+   if(first + 2 < input_count)
+     {
+      float right = IsNaNOrInf(partials[input_base + 2 * fields], 0.0f);
+      if(first + 3 < input_count)
+        {
+         const float pair = IsNaNOrInf(partials[input_base + 3 * fields], 0.0f);
+         right = D2SkillMetricReducePair(right, pair, field, max_field_a, max_field_b);
+        }
+      value = D2SkillMetricReducePair(value, right, field, max_field_a, max_field_b);
+     }
+   if(first + 4 < input_count)
+     {
+      float right = IsNaNOrInf(partials[input_base + 4 * fields], 0.0f);
+      if(first + 5 < input_count)
+        {
+         const float pair = IsNaNOrInf(partials[input_base + 5 * fields], 0.0f);
+         right = D2SkillMetricReducePair(right, pair, field, max_field_a, max_field_b);
+        }
+      if(first + 6 < input_count)
+        {
+         float pair = IsNaNOrInf(partials[input_base + 6 * fields], 0.0f);
+         if(first + 7 < input_count)
+           {
+            const float pair_right = IsNaNOrInf(partials[input_base + 7 * fields], 0.0f);
+            pair = D2SkillMetricReducePair(pair, pair_right, field, max_field_a, max_field_b);
+           }
+         right = D2SkillMetricReducePair(right, pair, field, max_field_a, max_field_b);
+        }
+      value = D2SkillMetricReducePair(value, right, field, max_field_a, max_field_b);
+     }
+   if(final_output != 0)
+      metrics[batch * fields + field] = value;
+   else
+      partials[output_offset + (batch * output_count + output_index) * fields + field] = value;
   }
 //+------------------------------------------------------------------+
 __kernel void D2SkillCandidateLeader(__global const float *selected_slot,
-                                     __global const float *used,
+                                     __global float *used,
                                      __global float *scales,
                                      __global float *observations,
                                      __global float *mass,
@@ -16577,7 +16606,9 @@ __kernel void D2SkillCandidateLeader(__global const float *selected_slot,
                                      const float max_correction,
                                      const int min_confirmations,
                                      const float similarity_threshold,
-                                     const float direction_threshold)
+                                     const float direction_threshold,
+                                     __global const float2 *candidate_top,
+                                     __global float *candidate_protection)
   {
    if(get_global_id(0) != 0)
       return;
@@ -16620,15 +16651,35 @@ __kernel void D2SkillCandidateLeader(__global const float *selected_slot,
       decision[1] = D2SKILL_DECISION_MATCH;
       return;
      }
-   if(candidate_valid[0] <= 0.5f)
-     {
-      candidate_valid[0] = 1.0f;
-      candidate_streak[0] = 1.0f;
-      candidate_scale[0] = gradient_norm;
-      diagnostics[3] = IsNaNOrInf(diagnostics[3], 0.0f) + 1.0f;
-      decision[1] = D2SKILL_DECISION_SEED;
-      return;
-     }
+    const int candidate_index = (int)round(candidate_top[0].x);
+    int candidate = (candidate_index >= 0 && candidate_index < slots &&
+                     candidate_top[0].y > RAG_INVALID_SCORE ? candidate_index : -1);
+    if(candidate < 0)
+      {
+       const int free_slot = (int)round(free_top[0].x);
+       const int evict_slot = (int)round(eviction_top[0].x);
+       const bool free_available = (free_slot >= 0 && free_slot < slots &&
+                                    free_top[0].y > RAG_INVALID_SCORE);
+       const bool evict_available = (evict_slot >= 0 && evict_slot < slots &&
+                                     eviction_top[0].y > RAG_INVALID_SCORE);
+       candidate = (free_available ? free_slot : (evict_available ? evict_slot : -1));
+       if(candidate < 0)
+         {
+          diagnostics[5] = IsNaNOrInf(diagnostics[5], 0.0f) + 1.0f;
+          return;
+         }
+       candidate_valid[candidate] = D2SKILL_CANDIDATE;
+       used[candidate] = 1.0f;
+       candidate_streak[candidate] = 1.0f;
+       candidate_scale[candidate] = gradient_norm;
+       mass[candidate] = gradient_norm;
+       age[candidate] = 0.0f;
+       candidate_protection[candidate] = (free_available ? 0.0f : -1.0f);
+       decision[0] = (float)candidate;
+       decision[1] = D2SKILL_DECISION_SEED;
+       diagnostics[3] = IsNaNOrInf(diagnostics[3], 0.0f) + 1.0f;
+       return;
+      }
    const float candidate_key_norm = sqrt(fmax(IsNaNOrInf(metrics[7], 0.0f), 0.0f));
    const float candidate_direction_norm = sqrt(fmax(IsNaNOrInf(metrics[9], 0.0f), 0.0f));
    const float candidate_key_cosine = (query_norm > 1.0e-8f && candidate_key_norm > 1.0e-8f ?
@@ -16647,37 +16698,24 @@ __kernel void D2SkillCandidateLeader(__global const float *selected_slot,
    if(!isfinite(candidate_key_cosine) || candidate_key_cosine < similarity_threshold ||
       direction_rejected)
      {
-      candidate_streak[0] = 1.0f;
-      candidate_scale[0] = gradient_norm;
+       candidate_streak[candidate] = 1.0f;
+       candidate_scale[candidate] = gradient_norm;
+       age[candidate] = 0.0f;
+       decision[0] = (float)candidate;
       decision[1] = D2SKILL_DECISION_RESET;
       return;
      }
-   candidate_streak[0] = IsNaNOrInf(candidate_streak[0], 0.0f) + 1.0f;
-   candidate_scale[0] = clamp((1.0f - beta_magnitude) * IsNaNOrInf(candidate_scale[0], 0.0f) +
-                               beta_magnitude * gradient_norm, 0.0f, max_correction);
-   if(candidate_streak[0] < (float)max(1, min_confirmations))
+    candidate_streak[candidate] = IsNaNOrInf(candidate_streak[candidate], 0.0f) + 1.0f;
+    candidate_scale[candidate] = clamp((1.0f - beta_magnitude) * IsNaNOrInf(candidate_scale[candidate], 0.0f) +
+                                beta_magnitude * gradient_norm, 0.0f, max_correction);
+    decision[0] = (float)candidate;
+    if(candidate_streak[candidate] < (float)max(1, min_confirmations))
      {
       decision[1] = D2SKILL_DECISION_CANDIDATE;
       return;
      }
-   const int free_slot = (int)round(free_top[0].x);
-   const int evict_slot = (int)round(eviction_top[0].x);
-   if(free_slot >= 0 && free_slot < slots && free_top[0].y > RAG_INVALID_SCORE)
-     {
-      decision[0] = (float)free_slot;
-      decision[1] = D2SKILL_DECISION_FREE;
-     }
-   else
-      if(evict_slot >= 0 && evict_slot < slots && eviction_top[0].y > RAG_INVALID_SCORE)
-        {
-         decision[0] = (float)evict_slot;
-         decision[1] = D2SKILL_DECISION_EVICT;
-        }
-      else
-        {
-         diagnostics[5] = IsNaNOrInf(diagnostics[5], 0.0f) + 1.0f;
-         decision[1] = D2SKILL_DECISION_CANDIDATE;
-        }
+    decision[1] = (candidate_protection[candidate] < 0.0f ?
+                   D2SKILL_DECISION_EVICT : D2SKILL_DECISION_FREE);
   }
 //+------------------------------------------------------------------+
 __kernel void D2SkillVectorUpdate(__global const float *query,
@@ -16708,26 +16746,29 @@ __kernel void D2SkillVectorUpdate(__global const float *query,
    const float query_value = IsNaNOrInf(query[component], 0.0f);
    const float gradient_value = IsNaNOrInf(gradient[component], 0.0f);
    const float unit = (gradient_norm > 1.0e-8f ? gradient_value / gradient_norm : 0.0f);
-   if(phase == 1)
-     {
-      if(action != D2SKILL_DECISION_MATCH || target < 0)
-         return;
-      const int shift = target * dimension + component;
-      const float vector_norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
-      if(representation == 0)
-        {
-         const float factor = (vector_norm > max_correction && vector_norm > 1.0e-12f ?
-                               max_correction / vector_norm : 1.0f);
-         corrections[shift] = IsNaNOrInf(corrections[shift] * factor, 0.0f);
-        }
-      else
-        {
-         const float factor = (vector_norm > 1.0e-12f ? scales[target] / vector_norm : 0.0f);
-         corrections[shift] = IsNaNOrInf(directions[shift] * factor, 0.0f);
-        }
-      return;
-     }
-   if(action == D2SKILL_DECISION_MATCH && target >= 0)
+    if(phase == 1)
+      {
+       if((action != D2SKILL_DECISION_MATCH && action != D2SKILL_DECISION_FREE &&
+           action != D2SKILL_DECISION_EVICT) || target < 0)
+          return;
+       const int shift = target * dimension + component;
+       const float vector_norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
+       if(representation == 0)
+         {
+          const float factor = (vector_norm > max_correction && vector_norm > 1.0e-12f ?
+                                max_correction / vector_norm : 1.0f);
+          corrections[shift] = IsNaNOrInf(corrections[shift] * factor, 0.0f);
+         }
+       else
+         {
+          const float factor = (vector_norm > 1.0e-12f ?
+                                fmin(scales[target], max_correction) / vector_norm : 0.0f);
+          corrections[shift] = IsNaNOrInf(directions[shift] * factor, 0.0f);
+         }
+       return;
+      }
+    if((action == D2SKILL_DECISION_MATCH || action == D2SKILL_DECISION_FREE ||
+        action == D2SKILL_DECISION_EVICT) && target >= 0)
      {
       const int shift = target * dimension + component;
       keys[shift] = IsNaNOrInf((1.0f - beta_key) * keys[shift] + beta_key * query_value, 0.0f);
@@ -16741,37 +16782,25 @@ __kernel void D2SkillVectorUpdate(__global const float *query,
                                         beta_direction * unit, 0.0f);
       return;
      }
-   if(action == D2SKILL_DECISION_SEED || action == D2SKILL_DECISION_RESET)
-     {
-      candidate_key[component] = query_value;
-      candidate_direction[component] = unit;
-      return;
-     }
-   if(action == D2SKILL_DECISION_CANDIDATE)
-     {
-      candidate_key[component] =
-         IsNaNOrInf((1.0f - beta_key) * candidate_key[component] +
-                    beta_key * query_value, 0.0f);
-      candidate_direction[component] =
-         IsNaNOrInf((1.0f - beta_direction) * candidate_direction[component] +
-                    beta_direction * unit, 0.0f);
-      return;
-     }
-   if((action == D2SKILL_DECISION_FREE || action == D2SKILL_DECISION_EVICT) && target >= 0)
-     {
-      const int shift = target * dimension + component;
-      const float next_key =
-         IsNaNOrInf((1.0f - beta_key) * candidate_key[component] +
-                    beta_key * query_value, 0.0f);
-      const float next_direction =
-         IsNaNOrInf((1.0f - beta_direction) * candidate_direction[component] +
-                    beta_direction * unit, 0.0f);
-      candidate_key[component] = next_key;
-      candidate_direction[component] = next_direction;
-      keys[shift] = next_key;
-      directions[shift] = next_direction;
-      corrections[shift] = IsNaNOrInf(next_direction * candidate_scale[0], 0.0f);
-     }
+    if((action == D2SKILL_DECISION_SEED || action == D2SKILL_DECISION_RESET) && target >= 0)
+      {
+       const int shift = target * dimension + component;
+       keys[shift] = query_value;
+       directions[shift] = unit;
+       return;
+      }
+    if((action == D2SKILL_DECISION_CANDIDATE || action == D2SKILL_DECISION_FREE ||
+        action == D2SKILL_DECISION_EVICT) && target >= 0)
+      {
+       const int shift = target * dimension + component;
+       keys[shift] =
+          IsNaNOrInf((1.0f - beta_key) * keys[shift] +
+                     beta_key * query_value, 0.0f);
+       directions[shift] =
+          IsNaNOrInf((1.0f - beta_direction) * directions[shift] +
+                     beta_direction * unit, 0.0f);
+       return;
+      }
   }
 //+------------------------------------------------------------------+
 __kernel void D2SkillBankVectorPartial(__global const float *corrections,
@@ -16782,25 +16811,20 @@ __kernel void D2SkillBankVectorPartial(__global const float *corrections,
                                        const int representation,
                                        const int output_offset)
   {
-   const int id = get_global_id(0);
-   const int lane = get_local_id(0);
-   const int stride = get_global_size(0);
+   const int component = get_global_id(0);
+   if(component < 0 || component >= dimension)
+      return;
    const int target = (int)round(decision[0]);
    const int action = (int)round(decision[1]);
-   float sum = 0.0f;
-   if(action == D2SKILL_DECISION_MATCH && target >= 0)
-      for(int component = id; component < dimension; component += stride)
-        {
-         const int shift = target * dimension + component;
-         const float value = (representation == 0 ?
-                              IsNaNOrInf(corrections[shift], 0.0f) :
-                              IsNaNOrInf(directions[shift], 0.0f));
-         sum += value * value;
-        }
-   __local float temp[LOCAL_ARRAY_SIZE];
-   const float group_sum = LocalSum(sum, 0, temp);
-   if(lane == 0)
-      partials[output_offset + get_group_id(0)] = IsNaNOrInf(group_sum, 0.0f);
+   float value = 0.0f;
+   if((action == D2SKILL_DECISION_MATCH || action == D2SKILL_DECISION_FREE ||
+       action == D2SKILL_DECISION_EVICT) && target >= 0)
+     {
+      const int shift = target * dimension + component;
+      value = (representation == 0 ? IsNaNOrInf(corrections[shift], 0.0f) :
+               IsNaNOrInf(directions[shift], 0.0f));
+     }
+   partials[output_offset + component] = IsNaNOrInf(value * value, 0.0f);
   }
 //+------------------------------------------------------------------+
 __kernel void D2SkillPromoteSlot(__global float *scales,
@@ -16824,46 +16848,49 @@ __kernel void D2SkillPromoteSlot(__global float *scales,
       return;
    const int action = (int)round(decision[1]);
    const int target = (int)round(decision[0]);
-   if((action != D2SKILL_DECISION_FREE && action != D2SKILL_DECISION_EVICT) ||
-      target < 0 || target >= slots)
-      return;
-   scales[target] = candidate_scale[0];
+    if((action != D2SKILL_DECISION_FREE && action != D2SKILL_DECISION_EVICT) ||
+       target < 0 || target >= slots ||
+       (int)IsNaNOrInf(candidate_valid[target], (float)D2SKILL_FREE) != D2SKILL_CANDIDATE)
+       return;
+    scales[target] = IsNaNOrInf(candidate_scale[target], 0.0f);
    utility[target] = 0.0f;
-   observations[target] = candidate_streak[0];
+    observations[target] = IsNaNOrInf(candidate_streak[target], 1.0f);
    uses[target] = 0.0f;
-   mass[target] = candidate_streak[0];
+    mass[target] = IsNaNOrInf(candidate_streak[target], 1.0f);
    used[target] = 1.0f;
    state[target] = D2SKILL_PROTECTED;
    age[target] = 0.0f;
    protection[target] = (float)protection_age;
-   candidate_valid[0] = 0.0f;
    if(action == D2SKILL_DECISION_EVICT)
       diagnostics[7] = IsNaNOrInf(diagnostics[7], 0.0f) + 1.0f;
    else
       diagnostics[4] = IsNaNOrInf(diagnostics[4], 0.0f) + 1.0f;
   }
 //+------------------------------------------------------------------+
-__kernel void D2SkillDiagnosticsPartial(__global const float *corrections,
+__kernel void D2SkillDiagnosticsNormPartial(__global const float *corrections,
+                                            __global float *partials,
+                                            const int slots,
+                                            const int dimension)
+  {
+   const int index = get_global_id(0);
+   const int total = slots * dimension;
+   if(index < 0 || index >= total)
+      return;
+   const float value = IsNaNOrInf(corrections[index], 0.0f);
+   partials[index] = IsNaNOrInf(value * value, 0.0f);
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillDiagnosticsPartial(__global const float *norms,
                                         __global const float *utility,
                                         __global const float *uses,
                                         __global const float *used,
                                         __global const float *state,
                                         __global const float *age,
                                         __global float *partials,
-                                        const int slots,
-                                        const int dimension)
+                                        const int slots)
   {
-   const int lane = get_local_id(0), slot = get_group_id(0), lanes = get_local_size(0);
-   float norm2 = 0.0f;
-   if(slot < slots)
-      for(int d = lane; d < dimension; d += lanes)
-        {
-         const float value = IsNaNOrInf(corrections[slot * dimension + d], 0.0f);
-         norm2 += value * value;
-        }
-   __local float norm_temp[LOCAL_ARRAY_SIZE];
-   norm2 = LocalSum(norm2, 0, norm_temp);
-   if(lane != 0 || slot >= slots)
+   const int slot = get_global_id(0);
+   if(slot < 0 || slot >= slots)
       return;
    const int base = slot * D2SKILL_DIAGNOSTIC_PARTIALS;
    for(int item = 0; item < D2SKILL_DIAGNOSTIC_PARTIALS; item++)
@@ -16878,13 +16905,15 @@ __kernel void D2SkillDiagnosticsPartial(__global const float *corrections,
       partials[base + 2] = 1.0f;
    if(slot_state == D2SKILL_INACTIVE)
       partials[base + 3] = 1.0f;
+   if(slot_state == D2SKILL_CANDIDATE)
+      partials[base + 21] = 1.0f;
    if(slot_used <= 0.5f)
       return;
    const float slot_age = max(IsNaNOrInf(age[slot], 0.0f), 0.0f);
    const float slot_usage = max(IsNaNOrInf(uses[slot], 0.0f), 0.0f);
    partials[base + 4] = 1.0f;
    partials[base + 5] = IsNaNOrInf(utility[slot], 0.0f);
-   partials[base + 6] = sqrt(fmax(norm2, 0.0f));
+   partials[base + 6] = sqrt(fmax(IsNaNOrInf(norms[slot], 0.0f), 0.0f));
    partials[base + 7] = slot_age;
    partials[base + 8] = slot_usage;
    partials[base + 9] = slot_age;
@@ -16897,74 +16926,84 @@ __kernel void D2SkillDiagnosticsPartial(__global const float *corrections,
    partials[base + 16 + usage_bin] = 1.0f;
   }
 //+------------------------------------------------------------------+
-__kernel void D2SkillDiagnosticsReduce(__global const float *partials,
-                                       __global const float *candidate_valid,
+__kernel void D2SkillDiagnosticsReduce(__global const float *totals,
                                        __global float *diagnostics,
                                        __global float *utility_distribution,
                                        __global float *usage_distribution,
                                        const int slots)
   {
-   const int lane = get_local_id(0), lanes = get_local_size(0);
-   __local float totals[D2SKILL_DIAGNOSTIC_PARTIALS][LOCAL_ARRAY_SIZE];
-   for(int field = 0; field < D2SKILL_DIAGNOSTIC_PARTIALS; field++)
+   const int output = get_global_id(0);
+   const float used_count = IsNaNOrInf(totals[4], 0.0f);
+   switch(output)
      {
-      float value = 0.0f;
-      for(int slot = lane; slot < slots; slot += lanes)
-        {
-         const float item = IsNaNOrInf(partials[slot * D2SKILL_DIAGNOSTIC_PARTIALS + field], 0.0f);
-         value = (field == 9 || field == 10 ? max(value, item) :
-                  IsNaNOrInf(value + item, 0.0f));
-        }
-      totals[field][lane] = value;
-      barrier(CLK_LOCAL_MEM_FENCE);
-      for(int stride = lanes / 2; stride > 0; stride /= 2)
-        {
-         if(lane < stride)
-           totals[field][lane] = (field == 9 || field == 10 ?
-                                  max(totals[field][lane], totals[field][lane + stride]) :
-                                  IsNaNOrInf(totals[field][lane] +
-                                             totals[field][lane + stride], 0.0f));
-         barrier(CLK_LOCAL_MEM_FENCE);
-        }
-     }
-   if(lane != 0)
-      return;
-   const float used_count = totals[4][0];
-   diagnostics[8] = (float)slots;
-   diagnostics[9] = totals[0][0];
-   diagnostics[10] = (candidate_valid[0] > 0.5f ? 1.0f : 0.0f);
-   diagnostics[11] = totals[1][0];
-   diagnostics[12] = totals[2][0];
-   diagnostics[13] = totals[3][0];
-   diagnostics[14] = (used_count > 0.0f ? totals[5][0] / used_count : 0.0f);
-   diagnostics[15] = (used_count > 0.0f ? totals[6][0] / used_count : 0.0f);
-   diagnostics[16] = (diagnostics[19] > 0.0f ? diagnostics[20] / diagnostics[19] : 0.0f);
-   diagnostics[17] = (used_count > 0.0f ? totals[7][0] / used_count : 0.0f);
-   diagnostics[18] = (used_count > 0.0f ? totals[8][0] / used_count : 0.0f);
-   diagnostics[21] = totals[9][0];
-   diagnostics[22] = totals[10][0];
-   for(int bin = 0; bin < 5; bin++)
-     {
-      utility_distribution[bin] = totals[11 + bin][0];
-      usage_distribution[bin] = totals[16 + bin][0];
+      case 0:  diagnostics[8] = (float)slots; break;
+      case 1:  diagnostics[9] = IsNaNOrInf(totals[0], 0.0f); break;
+      case 2:  diagnostics[10] = (IsNaNOrInf(totals[21], 0.0f) > 0.0f ? 1.0f : 0.0f); break;
+      case 3:  diagnostics[11] = IsNaNOrInf(totals[1], 0.0f); break;
+      case 4:  diagnostics[12] = IsNaNOrInf(totals[2], 0.0f); break;
+      case 5:  diagnostics[13] = IsNaNOrInf(totals[3], 0.0f); break;
+      case 6:  diagnostics[14] = (used_count > 0.0f ? totals[5] / used_count : 0.0f); break;
+      case 7:  diagnostics[15] = (used_count > 0.0f ? totals[6] / used_count : 0.0f); break;
+      case 8:  diagnostics[16] = (diagnostics[19] > 0.0f ? diagnostics[20] / diagnostics[19] : 0.0f); break;
+      case 9:  diagnostics[17] = (used_count > 0.0f ? totals[7] / used_count : 0.0f); break;
+      case 10: diagnostics[18] = (used_count > 0.0f ? totals[8] / used_count : 0.0f); break;
+      case 11: diagnostics[21] = IsNaNOrInf(totals[9], 0.0f); break;
+      case 12: diagnostics[22] = IsNaNOrInf(totals[10], 0.0f); break;
+      default:
+         if(output >= 13 && output < 18)
+            utility_distribution[output - 13] = IsNaNOrInf(totals[output - 2], 0.0f);
+         else
+            if(output >= 18 && output < 23)
+               usage_distribution[output - 18] = IsNaNOrInf(totals[output - 2], 0.0f);
+         break;
      }
   }
 //+------------------------------------------------------------------+
-__kernel void D2SkillUtility(__global const float *selected_slot,
-                             __global float *utility,
-                             __global const float *used,
-                             const float delta_j,
-                             const float beta,
-                             const int slots,
-                             __global float *diagnostics)
+__kernel void D2SkillInfluenceTotal(__global const float *influence,
+                                     __global const float *used,
+                                     __global const float *state,
+                                     __global float *partials,
+                                     const int slots)
   {
-   if(get_global_id(0) != 0 || slots <= 0)
+   const int slot = get_global_id(0);
+   if(slot < 0 || slot >= slots)
       return;
-   const int slot = (int)round(selected_slot[0]);
-   if(slot < 0 || slot >= slots || IsNaNOrInf(used[slot], 0.0f) <= 0.5f)
+   const bool eligible = (IsNaNOrInf(used[slot], 0.0f) > 0.5f &&
+                          (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE) != D2SKILL_CANDIDATE);
+   partials[slot] = (eligible ? fmax(IsNaNOrInf(influence[slot], 0.0f), 0.0f) : 0.0f);
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillResetInfluence(__global float *influence,
+                                     const int slots)
+  {
+   const int slot = get_global_id(0);
+   if(slot < slots)
+      influence[slot] = 0.0f;
+  }
+//+------------------------------------------------------------------+
+__kernel void D2SkillUtility(__global const float *selected_slot,
+                              __global float *influence,
+                              __global const float *influence_total,
+                              __global float *utility,
+                              __global const float *used,
+                              __global const float *state,
+                              const float delta_j,
+                              const float beta,
+                              const int slots,
+                              __global float *diagnostics)
+  {
+   const int slot = get_global_id(0);
+   if(slot < 0 || slot >= slots || slots <= 0)
       return;
-   utility[slot] = (1.0f - beta) * IsNaNOrInf(utility[slot], 0.0f) +
-                   beta * clamp(IsNaNOrInf(delta_j, 0.0f), -1.0f, 1.0f);
-   diagnostics[6] = IsNaNOrInf(diagnostics[6], 0.0f) + 1.0f;
+   const float mass = fmax(IsNaNOrInf(influence[slot], 0.0f), 0.0f);
+   const float total = fmax(IsNaNOrInf(influence_total[0], 0.0f), 0.0f);
+   const bool eligible = (IsNaNOrInf(used[slot], 0.0f) > 0.5f &&
+                          (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE) != D2SKILL_CANDIDATE);
+   if(eligible && total > 1.0e-12f && mass > 0.0f && fabs(delta_j) > 1.0e-12f)
+      utility[slot] = (1.0f - beta) * IsNaNOrInf(utility[slot], 0.0f) +
+                      beta * clamp(IsNaNOrInf(delta_j, 0.0f), -1.0f, 1.0f) * mass / total;
+   influence[slot] = 0.0f;
+   if(slot == 0 && total > 1.0e-12f && fabs(delta_j) > 1.0e-12f)
+      diagnostics[6] = IsNaNOrInf(diagnostics[6], 0.0f) + 1.0f;
   }
 //+------------------------------------------------------------------+

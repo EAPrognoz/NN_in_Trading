@@ -24250,8 +24250,6 @@ bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
       ReturnFalse;
    if(!cQueryProjection.FeedForward(NeuronOCL))
       ReturnFalse;
-   if(!ApplyTaskSkill(cQueryProjection.AsObject()))
-      ReturnFalse;
    if(!cWz.FeedForward(Forecast))
       ReturnFalse;
    if(!cWu.FeedForwardBuffer(forecast.GetLogU()))
@@ -24261,14 +24259,12 @@ bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
       ReturnFalse;
    if(!cTokenPE.FeedForward(cTokenSum.AsObject()))
       ReturnFalse;
-   if(!ApplyStepSkill(cTokenPE.AsObject()))
-      ReturnFalse;
-   if(!cTokensTranspose.FeedForward(StepSkillOutput(cTokenPE.AsObject())))
+   if(!cTokensTranspose.FeedForward(cTokenPE.AsObject()))
       ReturnFalse;
    if(!Concat(cTokensTranspose.getOutput(), cTokensTranspose.getOutput(), cKV.getOutput(),
               iScenarios * iDimension, iScenarios * iDimension, iVariables * iHorizon))
       ReturnFalse;
-   if(!cAttention.FeedForward(TaskSkillOutput(cQueryProjection.AsObject()), cKV.getOutput()))
+   if(!cAttention.FeedForward(cQueryProjection.AsObject(), cKV.getOutput()))
       ReturnFalse;
    if(!cAttentionTranspose.FeedForward(cAttention.AsObject()))
       ReturnFalse;
@@ -24300,7 +24296,7 @@ bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
       ReturnFalse;
    if(!cOutputProjection.FeedForward(cHeadGateTranspose.AsObject()))
       ReturnFalse;
-   if(!cQueryResidual.FeedForward(TaskSkillOutput(cQueryProjection.AsObject())))
+   if(!cQueryResidual.FeedForward(cQueryProjection.AsObject()))
       ReturnFalse;
    if(!SumAndNormalize(cOutputProjection.getOutput(), cQueryResidual.getOutput(), cMHAOutput.getOutput(),
                        1, true, 0, 0, 0, 1))
@@ -24359,7 +24355,7 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
       ReturnFalse;
    if(!cQueryGradient.CalcHiddenGradients(cQueryResidual.AsObject()))
       ReturnFalse;
-   if(!RouteTaskGradient())
+   if(!cQueryProjection.CalcHiddenGradients(cAttention.AsObject(), cKV.getOutput(), cKV.getGradient(), None))
       ReturnFalse;
    if(!SumAndNormalize(cQueryProjection.getGradient(), cQueryGradient.getGradient(), cQueryProjection.getGradient(),
                        1, false, 0, 0, 0, 1))
@@ -24370,7 +24366,7 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
    if(!SumAndNormalize(cKVGradK.getGradient(), cKVGradV.getGradient(),
                        cTokensTranspose.getGradient(), 1, false, 0, 0, 0, 1))
       ReturnFalse;
-   if(!RouteStepGradient())
+   if(!cTokenPE.CalcHiddenGradients(cTokensTranspose.AsObject()))
       ReturnFalse;
    if(!cTokenSum.CalcHiddenGradients(cTokenPE.AsObject()))
       ReturnFalse;
@@ -24382,10 +24378,6 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
               iScenarios * iVariables * iHorizon * iDimension, 0, 1))
       ReturnFalse;
    if(!NeuronOCL.CalcHiddenGradients(cQueryProjection.AsObject()))
-      ReturnFalse;
-   if(!UpdateTaskSkill(cQueryProjection.getOutput(), cQueryProjection.getGradient()))
-      ReturnFalse;
-   if(!UpdateStepSkill(cTokenPE.getOutput(), cTokenPE.getGradient()))
       ReturnFalse;
    if(NeuronOCL.Activation() != None)
       return DeActivation(NeuronOCL.getOutput(), NeuronOCL.getGradient(), NeuronOCL.getGradient(),

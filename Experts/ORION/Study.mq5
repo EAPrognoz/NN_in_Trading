@@ -22,8 +22,6 @@ CBufferFloat TimeState;
 CBufferFloat Account;
 CBufferFloat NextAccount;
 CBufferFloat CurrentAction;
-CBufferFloat BaselineAction;
-CBufferFloat BaselineNextAccount;
 CBufferFloat TeacherAction;
 CBufferFloat RandomAction;
 CBufferFloat CriticInput;
@@ -35,9 +33,6 @@ ulong RandomCriticTransitions = 0;
 double TeacherRewardSum = 0;
 ulong PolicyTransitions = 0;
 ulong PolicySkippedInvalid = 0;
-ulong PairedTransitions = 0;
-double PairedDeltaSum = 0;
-CORIONActorForwardSnapshot ActorForwardSnapshot;
 //+------------------------------------------------------------------+
 //| Loads OrCreateORIONPolicies.                                     |
 //+------------------------------------------------------------------+
@@ -100,100 +95,6 @@ bool PolicyBackward(void)
    return PolicyBackward(Actor, Q1, GetPointer(ActorObjective), GetPointer(ORIONMarket), -1);
   }
 //+------------------------------------------------------------------+
-//| Builds one causal baseline/skill pair on the same state.         |
-//+------------------------------------------------------------------+
-bool BuildPairedTransition(const int position, const bool trace_td, bool &terminal,
-                           double &reward, double &delta_j, bool &paired)
-  {
-   terminal = false;
-   reward = 0;
-   delta_j = 0;
-   paired = false;
-#ifdef D2SKILL_ENABLE_BANKS
-   CNeuronBaseOCL *layer = Actor.Layer(1);
-   CD2Skill *skill = (layer && layer.Type() == defNeuronD2Skill ? (CD2Skill*)layer : NULL);
-   paired = ORIONUsePairedHindsight(skill, ActorForwardSnapshot);
-   bool task_enabled = false;
-   bool step_enabled = false;
-   ORIOND2BankFlags(task_enabled, step_enabled);
-   static bool pair_setup_logged = false;
-   if(!pair_setup_logged)
-     {
-      PrintFormat("ORION paired setup stage=%d layer_type=%d skill_ready=%s paired=%s",
-                  ORIOND2Stage, (layer ? layer.Type() : -1),
-                  (skill != NULL && skill.Ready() ? "true" : "false"),
-                  (paired ? "true" : "false"));
-      pair_setup_logged = true;
-     }
-   double baseline_reward = 0;
-   bool baseline_terminal = false;
-   if(paired)
-     {
-      if(!ActorForwardSnapshot.Capture())
-        {
-         Print("TrainTransition stage=baseline_capture");
-         ReturnFalse;
-        }
-      if(!skill.Enable(false, false) ||
-         !Actor.feedForward(GetPointer(Account), 1, false, GetPointer(ORIONMarket), -1) ||
-         !ReadAction(Actor, GetPointer(BaselineAction)) ||
-         !AdvanceAccount(GetPointer(Account), GetPointer(BaselineAction), position, MinBalance,
-                         GetPointer(BaselineNextAccount), baseline_reward, baseline_terminal))
-        {
-         ORIONRestorePairedActorState(ActorForwardSnapshot, skill,
-                                      task_enabled, step_enabled,
-                                      "baseline_failure");
-         Print("TrainTransition stage=baseline_transition");
-         ReturnFalse;
-        }
-      if(!ORIONRestorePairedActorState(ActorForwardSnapshot, skill,
-                                      task_enabled, step_enabled,
-                                      "baseline_to_skill"))
-        { Print("TrainTransition stage=restore_skill_state"); ReturnFalse; }
-     }
-   if(!Actor.feedForward(GetPointer(Account), 1, false, GetPointer(ORIONMarket), -1) ||
-      !ReadAction(Actor, GetPointer(CurrentAction)) ||
-      !AdvanceAccount(GetPointer(Account), GetPointer(CurrentAction), position, MinBalance,
-                      GetPointer(NextAccount), reward, terminal))
-     {
-      if(paired)
-         ORIONRestorePairedActorState(ActorForwardSnapshot, skill,
-                                      task_enabled, step_enabled,
-                                      "skill_failure");
-      Print("TrainTransition stage=skill_transition");
-      ReturnFalse;
-     }
-   if(paired)
-     {
-      delta_j = reward - baseline_reward;
-      if(!MathIsValidNumber(delta_j))
-        {
-         ORIONRestorePairedActorState(ActorForwardSnapshot, skill,
-                                      task_enabled, step_enabled,
-                                      "nonfinite_delta");
-         Print("TrainTransition stage=paired_delta_nonfinite");
-         ReturnFalse;
-        }
-      PairedTransitions++;
-      PairedDeltaSum += delta_j;
-      if(trace_td)
-         PrintFormat("ORION paired iteration=%d JBase=%.8f JSkill=%.8f DeltaJ=%.8f baseline_terminal=%s skill_terminal=%s",
-                     PairedTransitions, baseline_reward, reward, delta_j,
-                     (baseline_terminal ? "true" : "false"), (terminal ? "true" : "false"));
-     }
-#else
-   if(!Actor.feedForward(GetPointer(Account), 1, false, GetPointer(ORIONMarket), -1) ||
-      !ReadAction(Actor, GetPointer(CurrentAction)) ||
-      !AdvanceAccount(GetPointer(Account), GetPointer(CurrentAction), position, MinBalance,
-                      GetPointer(NextAccount), reward, terminal))
-     {
-      Print("TrainTransition stage=skill_transition");
-      ReturnFalse;
-     }
-#endif
-   return(true);
-  }
-//+------------------------------------------------------------------+
 //| Implements TrainTransition.                                      |
 //+------------------------------------------------------------------+
 bool TrainTransition(const int position, const int iteration, bool &terminal)
@@ -202,11 +103,10 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
    const bool trace_td = (iteration < 8 || iteration % 10000 == 0);
    if(!ORIONForwardForecast(position, GetPointer(State), GetPointer(TimeState)))
      { Print("TrainTransition stage=current_forecast"); ReturnFalse; }
-   double reward = 0;
-   double delta_j = 0;
-   bool paired = false;
-   if(!BuildPairedTransition(position, trace_td, terminal, reward, delta_j, paired))
-      ReturnFalse;
+   if(!Actor.feedForward(GetPointer(Account), 1, false, GetPointer(ORIONMarket), -1))
+     { Print("TrainTransition stage=actor_forward"); ReturnFalse; }
+   if(!ReadAction(Actor, GetPointer(CurrentAction)))
+     { Print("TrainTransition stage=read_action"); ReturnFalse; }
    const double balance = MathMax(0.0, double(Account[0]) * EtalonBalance);
    const double buy_lot = MathMax(0.0, double(CurrentAction[0] - CurrentAction[3]));
    const double sell_lot = MathMax(0.0, double(CurrentAction[3] - CurrentAction[0]));
@@ -214,12 +114,11 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
       PrintFormat("ORION action iteration=%d balance=%.2f buy_lot=%.8f buy_tp=%.8f buy_sl=%.8f sell_lot=%.8f sell_tp=%.8f sell_sl=%.8f",
                   iteration, balance, buy_lot, double(CurrentAction[1]), double(CurrentAction[2]),
                   sell_lot, double(CurrentAction[4]), double(CurrentAction[5]));
-#ifdef D2SKILL_ENABLE_BANKS
-//--- Hindsight utility is the paired causal advantage of the selected skills.
-//--- No latent, gradient, or bank tensor is read back to the host here.
-   if(paired && !ORIONUpdateD2UtilityDelta(Actor, delta_j))
-     { Print("TrainTransition stage=d2_utility"); ReturnFalse; }
-#endif
+   double reward = 0;
+   if(!AdvanceAccount(GetPointer(Account), GetPointer(CurrentAction), position, MinBalance,
+                      // Gets Pointer.
+                      GetPointer(NextAccount), reward, terminal))
+     { Print("TrainTransition stage=advance_account"); ReturnFalse; }
    const double target_value = reward;
    if(trace_td)
       PrintFormat("ORION return iteration=%d reward=%.8f target=%.8f balance=%.2f equity=%.2f "
@@ -269,9 +168,9 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
 //+------------------------------------------------------------------+
    if(iteration > 0 && UpdatePolicy > 0 && iteration % UpdatePolicy == 0)
      {
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(executable_action)
         {
          if(!PolicyBackward())
@@ -368,13 +267,11 @@ void TrainORIONActorCritic(void)
    TeacherRewardSum = 0;
    PolicyTransitions = 0;
    PolicySkippedInvalid = 0;
-   PairedTransitions = 0;
-   PairedDeltaSum = 0;
    for(int iteration = 0; iteration < Iterations && !IsStopped(); iteration++)
      {
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(episode == 0)
         {
          if(!ORIONForwardForecast(position, GetPointer(State), GetPointer(TimeState)))
@@ -385,9 +282,9 @@ void TrainORIONActorCritic(void)
             break;
         }
       bool terminal = false;
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(!TrainTransition(position, iteration, terminal))
         {
          failed_iteration = iteration;
@@ -400,18 +297,18 @@ void TrainORIONActorCritic(void)
         { failed_iteration = iteration; failed_position = position; break; }
       position--;
       episode++;
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(position < first || terminal || episode >= MathMax(1, EpisodeBars))
         {
          if(position < first)
             position = last;
          episode = 0;
         }
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Function if.                                                     |
+//+------------------------------------------------------------------+
       if(GetTickCount() - shown > 500)
         {
          const double q1_rmse = MathSqrt(MathMax(0.0, double(Q1.getRecentAverageError()))) / MathMax(EtalonBalance, 1.0);
@@ -441,9 +338,6 @@ void TrainORIONActorCritic(void)
      }
    if(!SaveORIONPolicies())
       PrintFormat("%s -> %d save failed", __FUNCTION__, __LINE__);
-   if(PairedTransitions > 0)
-      PrintFormat("ORION paired summary transitions=%I64u mean_delta_j=%.8f",
-                  PairedTransitions, PairedDeltaSum / double(PairedTransitions));
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
@@ -461,16 +355,6 @@ int OnInit()
       PrintFormat("ORION Actor-Critic initialization failed at line %d error=%d", __LINE__, GetLastError());
       return INIT_FAILED;
      }
-#ifdef D2SKILL_ENABLE_BANKS
-   if(!ORIONConfigureD2UtilityMode(ORION_D2_UTILITY_PAIRED_HINDSIGHT) ||
-      (ORIOND2Stage >= ORION_D2_STAGE_HINDSIGHT && ORIOND2Mode != ORION_D2_MODE_BASE &&
-       !ActorForwardSnapshot.Init(Actor)))
-     {
-      PrintFormat("ORION paired snapshot initialization failed at line %d error=%d",
-                  __LINE__, GetLastError());
-      return INIT_FAILED;
-     }
-#endif
    return (EventChartCustom(ChartID(), 1, 0, 0, "Init") ? INIT_SUCCEEDED : INIT_FAILED);
   }
 //+------------------------------------------------------------------+
@@ -492,7 +376,4 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    if(id == 1001)
       TrainORIONActorCritic();
   }
-//+------------------------------------------------------------------+
-
-
 //+------------------------------------------------------------------+
