@@ -30,6 +30,7 @@ CBufferFloat Account;
 CBufferFloat NextAccount;
 CBufferFloat CurrentAction;
 CBufferFloat BaselineAction;
+CBufferFloat BaselineAccount;
 CBufferFloat BaselineNextAccount;
 CBufferFloat TeacherAction;
 CBufferFloat RandomAction;
@@ -45,6 +46,10 @@ ulong PolicySkippedInvalid = 0;
 ulong PairedTransitions = 0;
 double PairedDeltaSum = 0;
 CD2SkillActorForwardSnapshot ActorForwardSnapshot;
+CD2SkillActorForwardSnapshot BaselineActorForwardSnapshot;
+SD2SkillEpisodeOutcome       BaselineEpisodeOutcome;
+SD2SkillEpisodeOutcome       SkillEpisodeOutcome;
+bool                          PairedEpisodeActive = false;
 //+------------------------------------------------------------------+
 //| Resets only D2Skill episode influence, preserving bank params.   |
 //+------------------------------------------------------------------+
@@ -57,6 +62,23 @@ bool ResetD2SkillEpisodeInfluence(CNet &actor)
    if(!skill.Ready() || !skill.ResetEpisodeInfluence())
       ReturnFalse;
    return(true);
+  }
+//+------------------------------------------------------------------+
+//| Adds one simulated account transition to its own episode result.|
+//+------------------------------------------------------------------+
+bool AccumulateEpisodeOutcome(SD2SkillEpisodeOutcome &outcome,
+                              CBufferFloat *account,
+                              const double reward)
+  {
+   if(!account || account.Total() != AccountDescr || !MathIsValidNumber(reward) ||
+      (account.GetIndex() >= 0 && !account.BufferRead()))
+      ReturnFalse;
+   const double balance = MathMax(0.0, double(account[0]) * EtalonBalance);
+   const double equity = MathMax(0.0, double(account[2]) * MathMax(balance, 1.0));
+   const double drawdown = MathMin(0.0, double(account[1]));
+   const double cost = MathMax(0.0, -reward);
+   const double risk = MathMax(0.0, double(account[4]) + double(account[5]));
+   return(outcome.Accumulate(reward, balance, equity, drawdown, cost, 1, risk));
   }
 //+------------------------------------------------------------------+
 //| Loads OrCreateD2SkillPolicies.                                     |
@@ -149,16 +171,20 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
    double baseline_reward = 0;
    if(paired)
      {
-      if(!ActorForwardSnapshot.Capture())
+      if(!BaselineActorForwardSnapshot.Ready() ||
+         !D2SkillRestorePairedActorState(BaselineActorForwardSnapshot, skill,
+                                         false, false, "baseline_start"))
         {
-         Print("TrainTransition stage=baseline_capture");
+         Print("TrainTransition stage=baseline_restore");
          ReturnFalse;
         }
-      if(!skill.Enable(false, false) ||
-         !Actor.feedForward(GetPointer(Account), 1, false, GetPointer(D2SkillMarket), -1) ||
+      if(!Actor.feedForward(GetPointer(BaselineAccount), 1, false, GetPointer(D2SkillMarket), -1) ||
          !ReadAction(Actor, GetPointer(BaselineAction)) ||
-         !AdvanceAccount(GetPointer(Account), GetPointer(BaselineAction), position, MinBalance,
-                         GetPointer(BaselineNextAccount), baseline_reward, baseline_terminal))
+         !AdvanceAccount(GetPointer(BaselineAccount), GetPointer(BaselineAction), position, MinBalance,
+                         GetPointer(BaselineNextAccount), baseline_reward, baseline_terminal) ||
+         !BaselineActorForwardSnapshot.Capture() ||
+         !AccumulateEpisodeOutcome(BaselineEpisodeOutcome, GetPointer(BaselineNextAccount),
+                                   baseline_reward))
         {
          D2SkillRestorePairedActorState(ActorForwardSnapshot, skill,
                                         task_enabled, step_enabled,
@@ -174,7 +200,9 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
    if(!Actor.feedForward(GetPointer(Account), 1, false, GetPointer(D2SkillMarket), -1) ||
       !ReadAction(Actor, GetPointer(CurrentAction)) ||
       !AdvanceAccount(GetPointer(Account), GetPointer(CurrentAction), position, MinBalance,
-                      GetPointer(NextAccount), reward, terminal))
+                      GetPointer(NextAccount), reward, terminal) ||
+      (paired && (!ActorForwardSnapshot.Capture() ||
+                  !AccumulateEpisodeOutcome(SkillEpisodeOutcome, GetPointer(NextAccount), reward))))
      {
       if(paired)
          D2SkillRestorePairedActorState(ActorForwardSnapshot, skill,
@@ -194,11 +222,9 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
          Print("TrainTransition stage=paired_delta_nonfinite");
          ReturnFalse;
         }
-      PairedTransitions++;
-      PairedDeltaSum += delta_j;
       if(trace_td)
          PrintFormat("D2Skill paired iteration=%d JBase=%.8f JSkill=%.8f DeltaJ=%.8f baseline_terminal=%s skill_terminal=%s",
-                     PairedTransitions, baseline_reward, reward, delta_j,
+                     position, baseline_reward, reward, delta_j,
                      (baseline_terminal ? "true" : "false"), (terminal ? "true" : "false"));
      }
    return(true);
@@ -226,20 +252,11 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
       PrintFormat("D2Skill action iteration=%d balance=%.2f buy_lot=%.8f buy_tp=%.8f buy_sl=%.8f sell_lot=%.8f sell_tp=%.8f sell_sl=%.8f",
                   iteration, balance, buy_lot, double(CurrentAction[1]), double(CurrentAction[2]),
                   sell_lot, double(CurrentAction[4]), double(CurrentAction[5]));
-//--- Utility is emitted once, only when both same-state branches reached their
-//--- terminal outcome.  Intermediate rewards must not alter skill utility.
-   if(paired && terminal && baseline_terminal && !D2SkillUpdateD2UtilityDelta(Actor, delta_j))
-     { Print("TrainTransition stage=d2_utility"); ReturnFalse; }
-   if(paired && terminal != baseline_terminal)
-     {
-      PrintFormat("D2Skill paired terminal mismatch base=%s skill=%s; utility skipped",
-                  (baseline_terminal ? "true" : "false"), (terminal ? "true" : "false"));
-      if(!ResetD2SkillEpisodeInfluence(Actor))
-        {
-         Print("TrainTransition stage=terminal_mismatch_reset");
-         ReturnFalse;
-        }
-     }
+//--- Utility is emitted only at the common episode boundary. The two branch
+//--- outcomes are accumulated independently, never inferred from this reward.
+   if(paired && trace_td)
+      PrintFormat("D2Skill paired transition base_reward=%.8f skill_reward=%.8f",
+                  reward - delta_j, reward);
    const double target_value = reward;
    if(trace_td)
       PrintFormat("D2Skill return iteration=%d reward=%.8f target=%.8f balance=%.2f equity=%.2f "
@@ -403,7 +420,17 @@ void TrainD2SkillActorCritic(void)
             break;
          const vector<float> sampled = SampleAccount(GetPointer(State), Rates[position].time, EtalonBalance, MinBalance);
          if(sampled.Size() != AccountDescr || !Account.AssignArray(sampled) ||
-            (Account.GetIndex() >= 0 && !Account.BufferWrite()) || !Actor.Clear())
+            (Account.GetIndex() >= 0 && !Account.BufferWrite()) ||
+            !BaselineAccount.AssignArray(GetPointer(Account)) ||
+            (BaselineAccount.GetIndex() >= 0 && !BaselineAccount.BufferWrite()) ||
+            !BaselineEpisodeOutcome.Reset() || !SkillEpisodeOutcome.Reset() || !Actor.Clear())
+            break;
+         CNeuronBaseOCL *layer = Actor.Layer(1);
+         CD2Skill *skill = (layer && layer.Type() == defNeuronD2Skill ? (CD2Skill*)layer : NULL);
+         PairedEpisodeActive = (D2SkillUsePairedHindsight(skill, ActorForwardSnapshot) &&
+                                BaselineActorForwardSnapshot.Ready());
+         if(PairedEpisodeActive && (!ActorForwardSnapshot.Capture() ||
+                                    !BaselineActorForwardSnapshot.Capture()))
             break;
         }
       bool terminal = false;
@@ -420,7 +447,11 @@ void TrainD2SkillActorCritic(void)
         }
       completed_iterations++;
       if((NextAccount.GetIndex() >= 0 && !NextAccount.BufferRead()) || !Account.AssignArray(GetPointer(NextAccount)) ||
-         (Account.GetIndex() >= 0 && !Account.BufferWrite()))
+         (Account.GetIndex() >= 0 && !Account.BufferWrite()) ||
+         (PairedEpisodeActive &&
+          ((BaselineNextAccount.GetIndex() >= 0 && !BaselineNextAccount.BufferRead()) ||
+           !BaselineAccount.AssignArray(GetPointer(BaselineNextAccount)) ||
+           (BaselineAccount.GetIndex() >= 0 && !BaselineAccount.BufferWrite()))))
         {
          failed_iteration = iteration;
          failed_position = position;
@@ -435,6 +466,24 @@ void TrainD2SkillActorCritic(void)
       //+------------------------------------------------------------------+
       if(position < first || terminal || episode >= MathMax(1, EpisodeBars))
         {
+         if(PairedEpisodeActive)
+           {
+            const double terminal_delta = SkillEpisodeOutcome.Outcome() - BaselineEpisodeOutcome.Outcome();
+            if(!MathIsValidNumber(terminal_delta) ||
+               !D2SkillUpdateD2UtilityDelta(Actor, terminal_delta))
+              {
+               failed_iteration = iteration;
+               failed_position = position;
+               episode_reset_failed = true;
+               break;
+              }
+            PairedTransitions++;
+            PairedDeltaSum += terminal_delta;
+            PrintFormat("D2Skill paired terminal JBase=%.8f JSkill=%.8f DeltaJ=%.8f base_balance=%.2f skill_balance=%.2f base_duration=%u skill_duration=%u",
+                        BaselineEpisodeOutcome.Outcome(), SkillEpisodeOutcome.Outcome(), terminal_delta,
+                        BaselineEpisodeOutcome.Balance(), SkillEpisodeOutcome.Balance(),
+                        BaselineEpisodeOutcome.Duration(), SkillEpisodeOutcome.Duration());
+           }
          if(!ResetD2SkillEpisodeInfluence(Actor))
            {
             failed_iteration = iteration;
@@ -506,8 +555,10 @@ int OnInit()
       return INIT_FAILED;
      }
    if(!D2SkillConfigureD2UtilityMode(D2Skill_D2_UTILITY_PAIRED_HINDSIGHT) ||
-      (D2SkillD2ExecutionMode == D2_ONLINE_CALIBRATION && D2SkillD2Mode != D2Skill_D2_MODE_BASE &&
-       !ActorForwardSnapshot.Init(Actor)))
+      ((D2SkillD2ExecutionMode == D2_EVALUATE ||
+        D2SkillD2ExecutionMode == D2_ONLINE_CALIBRATION) &&
+       D2SkillD2Mode != D2Skill_D2_MODE_BASE &&
+       (!ActorForwardSnapshot.Init(Actor) || !BaselineActorForwardSnapshot.Init(Actor))))
      {
       PrintFormat("D2Skill paired snapshot initialization failed at line %d error=%d",
                   __LINE__, GetLastError());

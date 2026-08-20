@@ -131,6 +131,59 @@ struct SState
       ArrayCopy(rewards, obj.rewards);
      }
   };
+
+//+------------------------------------------------------------------+
+//| Complete outcome of one independently simulated D2Skill episode.|
+//+------------------------------------------------------------------+
+struct SD2SkillEpisodeOutcome
+  {
+private:
+   double            dOutcome;
+   double            dBalance;
+   double            dEquity;
+   double            dDrawdown;
+   double            dCost;
+   double            dRisk;
+   uint              uDuration;
+
+public:
+   bool              Reset(void)
+     {
+      dOutcome = 0.0;
+      dBalance = 0.0;
+      dEquity = 0.0;
+      dDrawdown = 0.0;
+      dCost = 0.0;
+      dRisk = 0.0;
+      uDuration = 0;
+      return(true);
+     }
+   bool              Accumulate(const double reward, const double balance,
+                                const double equity, const double drawdown,
+                                const double cost, const uint duration,
+                                const double risk = 0.0)
+     {
+      if(!MathIsValidNumber(reward) || !MathIsValidNumber(balance) ||
+         !MathIsValidNumber(equity) || !MathIsValidNumber(drawdown) ||
+         !MathIsValidNumber(cost) || !MathIsValidNumber(risk))
+         ReturnFalse;
+      dOutcome += reward;
+      dBalance = balance;
+      dEquity = equity;
+      dDrawdown = MathMax(dDrawdown, MathAbs(drawdown));
+      dCost += MathAbs(cost);
+      dRisk = MathMax(dRisk, MathAbs(risk));
+      uDuration += duration;
+      return(true);
+     }
+   double            Outcome(void) const { return(dOutcome); }
+   double            Balance(void) const { return(dBalance); }
+   double            Equity(void) const { return(dEquity); }
+   double            Drawdown(void) const { return(dDrawdown); }
+   double            Cost(void) const { return(dCost); }
+   double            Risk(void) const { return(dRisk); }
+   uint              Duration(void) const { return(uDuration); }
+  };
 //+------------------------------------------------------------------+
 //| Implements SState.                                               |
 //+------------------------------------------------------------------+
@@ -1677,7 +1730,8 @@ public:
 bool D2SkillUsePairedHindsight(CD2Skill *skill,
                                CD2SkillActorForwardSnapshot &snapshot)
   {
-   return(D2SkillD2ExecutionMode == D2_ONLINE_CALIBRATION &&
+   return((D2SkillD2ExecutionMode == D2_EVALUATE ||
+           D2SkillD2ExecutionMode == D2_ONLINE_CALIBRATION) &&
           D2SkillD2Mode != D2Skill_D2_MODE_BASE && skill != NULL &&
           skill.Ready() && snapshot.Ready());
   }
@@ -3559,7 +3613,9 @@ bool D2SkillEnableD2Banks(CNet &actor)
 //+------------------------------------------------------------------+
 bool D2SkillApplyD2Utility(CNet &actor, const double value)
   {
-   if(D2SkillD2ExecutionMode != D2_ONLINE_CALIBRATION || !MathIsValidNumber(value))
+   if((D2SkillD2ExecutionMode != D2_EVALUATE &&
+       D2SkillD2ExecutionMode != D2_ONLINE_CALIBRATION) ||
+      !MathIsValidNumber(value))
       ReturnFalse;
    CNeuronBaseOCL *layer = actor.Layer(1);
    if(!layer || layer.Type() != defNeuronD2Skill)
@@ -3588,7 +3644,8 @@ bool D2SkillApplyD2Utility(CNet &actor, const double value)
 //+------------------------------------------------------------------+
 bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j)
   {
-   if(D2SkillD2ExecutionMode != D2_ONLINE_CALIBRATION ||
+   if((D2SkillD2ExecutionMode != D2_EVALUATE &&
+       D2SkillD2ExecutionMode != D2_ONLINE_CALIBRATION) ||
       D2SkillD2Mode == D2Skill_D2_MODE_BASE)
       return(true);
    if(D2SkillD2UtilityMode != D2Skill_D2_UTILITY_PAIRED_HINDSIGHT ||

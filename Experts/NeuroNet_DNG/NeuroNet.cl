@@ -16359,11 +16359,10 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
                                       __global float *uses,
                                       __global float *diagnostics,
                                       const int slots,
-                                       const int dimension,
-                                       const int representation,
-                                       const float alpha,
-                                       __global float *influence,
-                                       __global float *retrieved)
+                                      const int dimension,
+                                      const int representation,
+                                      const float alpha,
+                                      __global float *retrieved)
   {
    const int component = get_global_id(0);
    const float2 top_slot = top[0];
@@ -16389,10 +16388,8 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
       selected_slot[0] = (valid ? (float)winner : -1.0f);
       selected_score[0] = (valid ? score : RAG_INVALID_SCORE);
       if(valid)
-        {
+       {
           uses[winner] = IsNaNOrInf(uses[winner], 0.0f) + 1.0f;
-          influence[winner] = IsNaNOrInf(influence[winner], 0.0f) +
-                              fmax(IsNaNOrInf(score, 0.0f), 0.0f);
           retrieved[winner] = 1.0f;
          diagnostics[0] = IsNaNOrInf(diagnostics[0], 0.0f) + 1.0f;
         }
@@ -16973,6 +16970,36 @@ __kernel void D2SkillInfluenceTotal(__global const float *influence,
    partials[slot] = (eligible ? fmax(IsNaNOrInf(influence[slot], 0.0f), 0.0f) : 0.0f);
   }
 //+------------------------------------------------------------------+
+//| Gradient contribution for the selected forward correction.      |
+//+------------------------------------------------------------------+
+__kernel void D2SkillInfluencePartial(__global const float *gradient,
+                                      __global const float *correction,
+                                      __global float *partials,
+                                      const int dimension)
+  {
+   const int component = get_global_id(0);
+   if(component < 0 || component >= dimension)
+      return;
+   partials[component] = IsNaNOrInf(IsNaNOrInf(gradient[component], 0.0f) *
+                                    IsNaNOrInf(correction[component], 0.0f), 0.0f);
+  }
+//+------------------------------------------------------------------+
+//| Single writer after staged reduction: no atomics are required.  |
+//+------------------------------------------------------------------+
+__kernel void D2SkillInfluenceAccumulate(__global const float *selected_slot,
+                                         __global const float *reduced_influence,
+                                         __global float *influence,
+                                         const int slots)
+  {
+   if(get_global_id(0) != 0 || slots <= 0)
+      return;
+   const int slot = (int)round(IsNaNOrInf(selected_slot[0], -1.0f));
+   if(slot < 0 || slot >= slots)
+      return;
+   influence[slot] = IsNaNOrInf(influence[slot], 0.0f) +
+                     IsNaNOrInf(reduced_influence[0], 0.0f);
+  }
+//+------------------------------------------------------------------+
 __kernel void D2SkillResetInfluence(__global float *influence,
                                      const int slots)
   {
@@ -16981,8 +17008,7 @@ __kernel void D2SkillResetInfluence(__global float *influence,
       influence[slot] = 0.0f;
   }
 //+------------------------------------------------------------------+
-__kernel void D2SkillUtility(__global const float *selected_slot,
-                              __global float *influence,
+__kernel void D2SkillUtility(__global float *influence,
                               __global const float *influence_total,
                               __global float *utility,
                               __global const float *used,

@@ -2877,16 +2877,15 @@ union uaLongChar
 #define def_k_d2ss_slots                           3
 #define def_k_d2ss_dimension                       4
 #define def_k_D2SkillUtility                      296
-#define def_k_d2ut_selected_slot                   0
-#define def_k_d2ut_influence                       1
-#define def_k_d2ut_influence_total                 2
-#define def_k_d2ut_utility                         3
-#define def_k_d2ut_used                            4
-#define def_k_d2ut_state                           5
-#define def_k_d2ut_delta                           6
-#define def_k_d2ut_beta                            7
-#define def_k_d2ut_slots                           8
-#define def_k_d2ut_diagnostics                     9
+#define def_k_d2ut_influence                       0
+#define def_k_d2ut_influence_total                 1
+#define def_k_d2ut_utility                         2
+#define def_k_d2ut_used                            3
+#define def_k_d2ut_state                           4
+#define def_k_d2ut_delta                           5
+#define def_k_d2ut_beta                            6
+#define def_k_d2ut_slots                           7
+#define def_k_d2ut_diagnostics                     8
 #define def_k_D2SkillItemPartial                 286
 #define def_k_d2ip_source                          0
 #define def_k_d2ip_partials                        1
@@ -2927,8 +2926,7 @@ union uaLongChar
 #define def_k_d2gc_dimension                      10
 #define def_k_d2gc_representation                 11
 #define def_k_d2gc_alpha                          12
-#define def_k_d2gc_influence                      13
-#define def_k_d2gc_retrieved                      14
+#define def_k_d2gc_retrieved                      13
 //--- D2Skill staged bank update.  Scratch is device-only and is never saved.
 #define def_k_D2SkillAgeLifecycle                295
 #define def_k_d2al_used                            0
@@ -3079,6 +3077,17 @@ union uaLongChar
 #define def_k_d2dnp_partials                        1
 #define def_k_d2dnp_slots                           2
 #define def_k_d2dnp_dimension                       3
+//--- Gradient-to-correction influence is reduced entirely on the device.
+#define def_k_D2SkillInfluencePartial             313
+#define def_k_d2sip_gradient                        0
+#define def_k_d2sip_correction                      1
+#define def_k_d2sip_partials                        2
+#define def_k_d2sip_dimension                       3
+#define def_k_D2SkillInfluenceAccumulate           314
+#define def_k_d2sia_selected_slot                   0
+#define def_k_d2sia_reduced_influence               1
+#define def_k_d2sia_influence                       2
+#define def_k_d2sia_slots                           3
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

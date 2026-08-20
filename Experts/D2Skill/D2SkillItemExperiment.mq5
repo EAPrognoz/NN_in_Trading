@@ -57,7 +57,9 @@ float TargetValue(const int sample, const int dimension)
    return(value);
   }
 //+------------------------------------------------------------------+
-bool RunRepresentation(const ED2SkillRepresentation representation, const float beta)
+bool RunRepresentation(const ED2SkillRepresentation representation, const float beta,
+                       float &final_skill_loss, float &final_cosine,
+                       float &final_reconstruction_error, float &outlier_response)
   {
    COpenCLMy *opencl = g_net.GetOpenCL();
    CD2SkillItem item;
@@ -74,12 +76,12 @@ bool RunRepresentation(const ED2SkillRepresentation representation, const float 
 //--- Forward, loss-gradient and bank update stay on the GPU.  No output,
 //--- gradient or slot buffer is read during this sample loop.
    const float stable[D2_ITEM_DIM] = {0.80f, 0.0f, 0.0f, 0.0f};
-   float final_skill_loss = 0.0f;
+   final_skill_loss = 0.0f;
    float final_base_loss = 0.0f;
-   float final_cosine = 0.0f;
-   float final_reconstruction_error = 0.0f;
+   final_cosine = 0.0f;
+   final_reconstruction_error = 0.0f;
+   outlier_response = 0.0f;
    int stabilization_epoch = -1;
-   float outlier_response = 0.0f;
    for(int epoch = 0; epoch < D2_ITEM_EPOCHS; epoch++)
      {
       float pseudo_norm_sum = 0.0f;
@@ -296,14 +298,39 @@ int OnInit()
    if(!CreateOpenCLHost() ||
       !g_source.Init(0, 100, g_net.GetOpenCL(), D2_ITEM_DIM, ADAM, 1))
       return(INIT_FAILED);
+   float full_skill_loss = 0.0f;
+   float full_cosine = 0.0f;
+   float full_reconstruction_error = 0.0f;
+   float full_outlier_response = 0.0f;
+   float direction_skill_loss = 0.0f;
+   float direction_cosine = 0.0f;
+   float direction_reconstruction_error = 0.0f;
+   float direction_outlier_response = 0.0f;
+   float slow_skill_loss = 0.0f;
+   float slow_cosine = 0.0f;
+   float slow_reconstruction_error = 0.0f;
+   float slow_outlier_response = 0.0f;
    if(!RunArbitraryDimensionCoverage() ||
-      !RunRepresentation(D2SkillFullResidual, 0.08f) ||
-      !RunRepresentation(D2SkillDirectionMagnitude, 0.08f) ||
-      !RunRepresentation(D2SkillDirectionMagnitude, 0.02f))
+      !RunRepresentation(D2SkillFullResidual, 0.08f, full_skill_loss, full_cosine,
+                         full_reconstruction_error, full_outlier_response) ||
+      !RunRepresentation(D2SkillDirectionMagnitude, 0.08f, direction_skill_loss,
+                         direction_cosine, direction_reconstruction_error,
+                         direction_outlier_response) ||
+      !RunRepresentation(D2SkillDirectionMagnitude, 0.02f, slow_skill_loss, slow_cosine,
+                         slow_reconstruction_error, slow_outlier_response))
      {
       PrintFormat("D2SkillItemExperiment: FAILED error=%d", GetLastError());
       return(INIT_FAILED);
      }
+   const bool direction_advantage =
+      (direction_skill_loss < full_skill_loss &&
+       direction_reconstruction_error <= full_reconstruction_error &&
+       direction_outlier_response <= full_outlier_response);
+   PrintFormat("D2SkillItemExperiment: representation-summary beta=0.080 direction_advantage=%s default=direction-magnitude full(skill_loss=%.6f cosine=%.5f reconstruction=%.5f outlier=%.5f) direction(skill_loss=%.6f cosine=%.5f reconstruction=%.5f outlier=%.5f)",
+               (direction_advantage ? "observed" : "not-observed"),
+               full_skill_loss, full_cosine, full_reconstruction_error,
+               full_outlier_response, direction_skill_loss, direction_cosine,
+               direction_reconstruction_error, direction_outlier_response);
    Print("D2SkillItemExperiment: PASS");
    g_completed = true;
    if(!EventSetMillisecondTimer(1))

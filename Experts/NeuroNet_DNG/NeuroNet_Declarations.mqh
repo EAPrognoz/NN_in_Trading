@@ -13821,6 +13821,8 @@ protected:
    CBufferFloat                 m_influence;
    CBufferFloat                 m_influence_total;
    CBufferFloat                 m_influence_partials;
+   CBufferFloat                 m_gradient_influence_total;
+   CBufferFloat                 m_gradient_influence_partials;
    CBufferFloat                 m_retrieved;
    CBufferFloat                 m_selected_correction;
    CBufferFloat                 m_selected_slot;
@@ -13894,6 +13896,7 @@ public:
                                   const uint inactivity_age = 256);
    bool              SetMaxCorrection(const float value);
    float             MaxCorrection(void) const;
+   bool              AccumulateInfluenceFromGradient(CBufferFloat *gradient);
    bool              UpdateFromGradient(CBufferFloat *state, CBufferFloat *gradient);
    bool              UpdateUtility(const float delta_j);
    bool              ResetEpisodeInfluence(void);
