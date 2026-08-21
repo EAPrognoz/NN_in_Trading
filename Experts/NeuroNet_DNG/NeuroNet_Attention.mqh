@@ -2328,6 +2328,21 @@ bool CNeuronMH2AttentionOCL::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Append the trainable multi-head attention graph.                  |
+//+------------------------------------------------------------------+
+bool CNeuronMH2AttentionOCL::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint) ||
+      !Q_Embedding.AppendParameterFingerprint(fingerprint) ||
+      !KV_Embedding.AppendParameterFingerprint(fingerprint) ||
+      !W0.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   for(int i = 0; i < 2; i++)
+      if(!FF[i].AppendParameterFingerprint(fingerprint))
+         ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronMH2AttentionOCL::Load(const int file_handle)

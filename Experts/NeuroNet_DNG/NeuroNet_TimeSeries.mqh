@@ -19062,6 +19062,17 @@ bool CNeuronMomADTTM::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Append trainable TTM layers without candidate runtime state.      |
+//+------------------------------------------------------------------+
+bool CNeuronMomADTTM::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint) ||
+      !cMeanDistance.AppendParameterFingerprint(fingerprint) ||
+      !cScores.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronMomADTTM::Load(const int file_handle)
@@ -19304,6 +19315,18 @@ bool CNeuronMomADMPI::Save(const int file_handle)
       ReturnFalse;
 //---
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Append the trainable MPI graph; stacks are runtime state only.    |
+//+------------------------------------------------------------------+
+bool CNeuronMomADMPI::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronCrossAttention::AppendParameterFingerprint(fingerprint) ||
+      !cTTM.AppendParameterFingerprint(fingerprint) ||
+      !cPolicyMarket.AppendParameterFingerprint(fingerprint) ||
+      !cTTMHistory.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -20252,6 +20275,21 @@ bool CNeuronCogDriverData::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Append the trainable CogDriver encoder graph.                     |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronSpikeConvBlock::AppendParameterFingerprint(fingerprint) ||
+      !cNorm.AppendParameterFingerprint(fingerprint) ||
+      !cStateStack.AppendParameterFingerprint(fingerprint) ||
+      !cMSD.AppendParameterFingerprint(fingerprint) ||
+      !cAffine.AppendParameterFingerprint(fingerprint) ||
+      !cQuantStack.AppendParameterFingerprint(fingerprint) ||
+      !cPrevQuantStack.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronCogDriverData::Load(const int file_handle)
@@ -20865,6 +20903,17 @@ bool CNeuronCogDriverRankTCM::Save(const int file_handle)
       ReturnFalse;
 //---
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Append trainable RankTCM projections only.                        |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint) ||
+      !cQueryProjection.AppendParameterFingerprint(fingerprint) ||
+      !cGateProjection.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -23343,7 +23392,18 @@ bool CScenarioCodebook::Save(const int file_handle)
    dFileWriteUInt(file_handle, iDimension);
    return (cPrototypes.Save(file_handle) && cEMASums.Save(file_handle) &&
            cEMACounts.Save(file_handle) && cUsage.Save(file_handle) && cInactive.Save(file_handle) &&
-           cInactivityAge.Save(file_handle));
+            cInactivityAge.Save(file_handle));
+  }
+//+------------------------------------------------------------------+
+//| Append codebook parameters and their EMA optimizer state.         |
+//+------------------------------------------------------------------+
+bool CScenarioCodebook::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterBufferFingerprint(GetPointer(cPrototypes), fingerprint, 41) ||
+      !CNeuronBaseOCL::AppendParameterBufferFingerprint(GetPointer(cEMASums), fingerprint, 42) ||
+      !CNeuronBaseOCL::AppendParameterBufferFingerprint(GetPointer(cEMACounts), fingerprint, 43))
+      ReturnFalse;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -23900,7 +23960,20 @@ bool CNeuronScenarioForecast::Save(const int file_handle)
            cLogProbabilities.Save(file_handle) && cResponsibilities.Save(file_handle) && cTarget.Save(file_handle) &&
            cGeneratorInput.Save(file_handle) && cRouterInput.Save(file_handle) && cConfidenceInput.Save(file_handle) &&
            cGenerator.Save(file_handle) && cRouter.Save(file_handle) && cConfidenceHead.Save(file_handle) &&
-           cRouterSoftmax.Save(file_handle) && cResponsibilityScores.Save(file_handle) && cTopKSelector.Save(file_handle));
+            cRouterSoftmax.Save(file_handle) && cResponsibilityScores.Save(file_handle) && cTopKSelector.Save(file_handle));
+  }
+//+------------------------------------------------------------------+
+//| Append scenario forecast parameters, not batch diagnostics/state. |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioForecast::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint) ||
+      !cCodebook.AppendParameterFingerprint(fingerprint) ||
+      !cGenerator.AppendParameterFingerprint(fingerprint) ||
+      !cRouter.AppendParameterFingerprint(fingerprint) ||
+      !cConfidenceHead.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -24461,6 +24534,28 @@ bool CNeuronScenarioCrossAttention::Save(const int file_handle)
          ReturnFalse;
      }
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Append scenario cross-attention parameters and nested flow only.  |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioCrossAttention::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronMSRes::AppendParameterFingerprint(fingerprint) ||
+      !cWz.AppendParameterFingerprint(fingerprint) ||
+      !cWu.AppendParameterFingerprint(fingerprint) ||
+      !cTokenPE.AppendParameterFingerprint(fingerprint) ||
+      !cQueryProjection.AppendParameterFingerprint(fingerprint) ||
+      !cOutputProjection.AppendParameterFingerprint(fingerprint) ||
+      !cQueryResidual.AppendParameterFingerprint(fingerprint) ||
+      !cAttention.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   if(!bCritic &&
+      (!cHistoryTokenProjection.AppendParameterFingerprint(fingerprint) ||
+       !cHistoryMarket.AppendParameterFingerprint(fingerprint) ||
+       !cHistoryContext.AppendParameterFingerprint(fingerprint) ||
+       !cScenarioHistory.AppendParameterFingerprint(fingerprint)))
+      ReturnFalse;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |

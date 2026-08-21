@@ -10802,7 +10802,8 @@ bool CNet::backPropOCL(CBufferFloat *targetVals, CBufferFloat *SecondInput = NUL
          CLayer *prevLayer = layers.At(layer_update - 1);
          currentLayer = layers.At(layer_update);
          neuron = currentLayer.At(0);
-         if(!neuron.UpdateInputWeights(prevLayer.At(0), SecondInput))
+         if(bWeightsUpdate ? !neuron.UpdateInputWeights(prevLayer.At(0), SecondInput) :
+            !neuron.UpdateInputState(prevLayer.At(0), SecondInput))
             ReturnFalse;
          //---
          for(int layerNum = layer_update; layerNum < total; layerNum++)
@@ -10986,6 +10987,26 @@ bool CNet::Save(const int file_handle)
       ReturnFalse;
 //---
    return layers.Save(file_handle);
+  }
+//+------------------------------------------------------------------+
+//| Diagnostic fingerprint of trainable parameters only.             |
+//+------------------------------------------------------------------+
+bool CNet::ParameterFingerprint(ulong &fingerprint)
+  {
+   if(!layers || layers.Total() <= 0)
+      ReturnFalse;
+   fingerprint = ulong(1469598103934665603);
+   for(int i = 0; i < layers.Total(); i++)
+     {
+      CLayer *layer = layers.At(i);
+      CNeuronBaseOCL *neuron = (layer ? layer.At(0) : NULL);
+      if(!neuron)
+         ReturnFalse;
+      fingerprint = (fingerprint ^ ulong(i + 1)) * ulong(1099511628211);
+      if(!neuron.AppendParameterFingerprint(fingerprint))
+         ReturnFalse;
+     }
+   return(fingerprint != 0);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -12430,6 +12451,56 @@ bool CNeuronBaseOCL::UpdateInputWeightsSecond(CObject *SourceObject, CNeuronBase
    return updateInputWeightsSecond(temp, SecondNeuron);
   }
 //+------------------------------------------------------------------+
+//| Append one trainable device buffer to the diagnostic fingerprint. |
+//+------------------------------------------------------------------+
+bool CNeuronBaseOCL::AppendParameterBufferFingerprint(CBufferFloat *buffer,
+                                                       ulong &fingerprint,
+                                                       const uint tag,
+                                                       const uint skip,
+                                                       const uint stride)
+  {
+   fingerprint = (fingerprint ^ ulong(tag)) * ulong(1099511628211);
+   if(!buffer)
+     {
+      fingerprint = (fingerprint ^ ulong(0)) * ulong(1099511628211);
+      return(true);
+     }
+   if(buffer.GetIndex() >= 0 && !buffer.BufferRead())
+      ReturnFalse;
+   const int total = buffer.Total();
+   if(total < 0)
+      ReturnFalse;
+   if(stride > 0 && (skip > stride || total % (int)stride != 0))
+      ReturnFalse;
+   const int fields = (stride > 0 ? total / (int)stride * ((int)stride - (int)skip) : total - (int)skip);
+   if(fields < 0)
+      ReturnFalse;
+   fingerprint = (fingerprint ^ ulong(fields)) * ulong(1099511628211);
+   for(int i = 0; i < total; i++)
+     {
+      if((stride == 0 && i < (int)skip) ||
+         (stride > 0 && (uint)(i % (int)stride) < skip))
+         continue;
+      URAGFloatBits raw;
+      raw.value = buffer[i];
+      fingerprint = (fingerprint ^ ulong(raw.bits)) * ulong(1099511628211);
+     }
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Append direct trainable parameters and optimizer buffers only.    |
+//+------------------------------------------------------------------+
+bool CNeuronBaseOCL::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   fingerprint = (fingerprint ^ ulong(Type())) * ulong(1099511628211);
+   if(!AppendParameterBufferFingerprint(Weights, fingerprint, 1) ||
+      !AppendParameterBufferFingerprint(DeltaWeights, fingerprint, 2) ||
+      !AppendParameterBufferFingerprint(FirstMomentum, fingerprint, 3) ||
+      !AppendParameterBufferFingerprint(SecondMomentum, fingerprint, 4))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronBaseOCL::Save(const int file_handle)
@@ -13341,6 +13412,19 @@ bool CNeuronConvOCL::Save(const int file_handle)
       ReturnFalse;
 //---
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Append convolution parameters and optimizer buffers.              |
+//+------------------------------------------------------------------+
+bool CNeuronConvOCL::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronProofOCL::AppendParameterFingerprint(fingerprint) ||
+      !AppendParameterBufferFingerprint(WeightsConv, fingerprint, 11) ||
+      !AppendParameterBufferFingerprint(DeltaWeightsConv, fingerprint, 12) ||
+      !AppendParameterBufferFingerprint(FirstMomentumConv, fingerprint, 13) ||
+      !AppendParameterBufferFingerprint(SecondMomentumConv, fingerprint, 14))
+      ReturnFalse;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -14522,6 +14606,17 @@ bool CNeuronBatchNormOCL::Save(const int file_handle)
    return BatchOptions.Save(file_handle);
   }
 //+------------------------------------------------------------------+
+//| Append batch-normalization parameters and optimizer buffers.      |
+//+------------------------------------------------------------------+
+bool CNeuronBatchNormOCL::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint) ||
+      !AppendParameterBufferFingerprint(BatchOptions, fingerprint, 21, 3,
+                                        (optimization == SGD ? 7 : 9)))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronBatchNormOCL::Load(const int file_handle)
@@ -15393,14 +15488,15 @@ bool CNet::backPropGradient(CBufferFloat *SecondInput = NULL, CBufferFloat *Seco
       neuron = currentLayer.At(0);
       if(!neuron || !prevLayer.At(0))
          ReturnFalse;
-      if(!neuron.UpdateInputWeights(prevLayer.At(0), SecondInput))
+      if(bWeightsUpdate ? !neuron.UpdateInputWeights(prevLayer.At(0), SecondInput) :
+         !neuron.UpdateInputState(prevLayer.At(0), SecondInput))
         {
          PrintFormat("CNet backprop UpdateInputWeights failed layer=%d neuron=%d", layerNum, neuron.Type());
          ReturnFalse;
         }
      }
 //---
-   if(!load_weights)
+   if(!load_weights || !bWeightsUpdate)
       return true;
 //---
    bool result = false;
@@ -15505,11 +15601,12 @@ bool CNet::backPropGradient(CNet* secondNet, int secondLayer = -1, int LastLayer
       currentLayer = prevLayer;
       prevLayer = layers.At(layerNum - 1);
       neuron = currentLayer.At(0);
-      if(!neuron.UpdateInputWeightsSecond(prevLayer.At(0), secondNeuron))
+      if(bWeightsUpdate ? !neuron.UpdateInputWeightsSecond(prevLayer.At(0), secondNeuron) :
+         !neuron.UpdateInputStateSecond(prevLayer.At(0), secondNeuron))
          ReturnFalse;
      }
 //---
-   if(!load_weights)
+   if(!load_weights || !bWeightsUpdate)
       return true;
 //---
    bool result = false;
@@ -16880,7 +16977,7 @@ bool CNet::OpenCLInit(void)
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(315);
+   opencl.SetKernelsCount(316);
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")
@@ -17196,6 +17293,7 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_D2SkillDiagnosticsNormPartial, "D2SkillDiagnosticsNormPartial")
    CreateKernel(def_k_D2SkillInfluencePartial, "D2SkillInfluencePartial")
    CreateKernel(def_k_D2SkillInfluenceAccumulate, "D2SkillInfluenceAccumulate")
+   CreateKernel(def_k_D2SkillDirectionEMA, "D2SkillDirectionEMA")
 //---
    return true;
   }
@@ -17462,6 +17560,16 @@ bool CNeuronLearnabledPE::Save(const int file_handle)
       ReturnFalse;
 //---
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Append learnable positional encoder parameters.                   |
+//+------------------------------------------------------------------+
+bool CNeuronLearnabledPE::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint) ||
+      !cPositionEncoder.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |

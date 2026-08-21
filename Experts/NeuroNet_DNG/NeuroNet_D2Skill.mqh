@@ -375,7 +375,8 @@ CBufferFloat *CD2SkillBank::Influence(void) { return(GetPointer(m_influence)); }
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Retrieved(void) { return(GetPointer(m_retrieved)); }
 //+------------------------------------------------------------------+
-CD2Skill::CD2Skill(void) : m_ready(false), m_mode(D2_DISABLED)
+CD2Skill::CD2Skill(void) : m_ready(false), m_online_direction_update(false),
+   m_mode(D2_DISABLED)
   {
   }
 //+------------------------------------------------------------------+
@@ -531,9 +532,25 @@ bool CD2Skill::StepSkillEnabled(void) const
 //+------------------------------------------------------------------+
 bool CD2Skill::SkillUpdatesEnabled(void) const
   {
-//--- Online direction EMA is intentionally disabled until its explicit
-//--- configuration switch is introduced with the public bank config API.
    return(m_mode == D2_COLLECT);
+  }
+//+------------------------------------------------------------------+
+//| Enables only the opt-in online direction EMA.                   |
+//+------------------------------------------------------------------+
+bool CD2Skill::OnlineDirectionUpdatesEnabled(void) const
+  {
+   return(m_mode == D2_ONLINE_CALIBRATION && m_online_direction_update);
+  }
+//+------------------------------------------------------------------+
+//| Updates one selected bank direction without mutating its lifecycle. |
+//+------------------------------------------------------------------+
+bool CD2Skill::UpdateOnlineDirection(CD2SkillBank *bank, CBufferFloat *gradient)
+  {
+   if(!OnlineDirectionUpdatesEnabled() || !bank || !bank.Enabled())
+      return(true);
+   if(!gradient)
+      ReturnFalse;
+   return(bank.UpdateDirectionFromGradient(gradient));
   }
 //+------------------------------------------------------------------+
 bool CD2Skill::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
@@ -558,6 +575,10 @@ bool CD2Skill::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
          ReturnFalse;
       task_source = m_task_bank.AsObject();
      }
+   else
+      if(m_mode == D2_COLLECT && m_task_bank.Enabled() &&
+         !m_task_bank.Observe(task_source))
+         ReturnFalse;
    if(!cWz.FeedForward(Forecast))
       ReturnFalse;
    CNeuronBaseOCL *step_source = cWz.AsObject();
@@ -567,6 +588,10 @@ bool CD2Skill::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
          ReturnFalse;
       step_source = m_step_bank.AsObject();
      }
+   else
+      if(m_mode == D2_COLLECT && m_step_bank.Enabled() &&
+         !m_step_bank.Observe(step_source))
+         ReturnFalse;
    if(!cWu.FeedForwardBuffer(forecast.GetLogU()))
       ReturnFalse;
    if(!SumAndNormalize(step_source.getOutput(), cWu.getOutput(), cTokenSum.getOutput(),
@@ -721,6 +746,9 @@ bool CD2Skill::calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL,
    if(SkillUpdatesEnabled() && m_step_bank.Enabled() &&
        !m_step_bank.UpdateFromGradient(cWz.getOutput(), cWz.getGradient()))
       ReturnFalse;
+   if(!UpdateOnlineDirection(GetPointer(m_task_bank), m_task_bank.getGradient()) ||
+      !UpdateOnlineDirection(GetPointer(m_step_bank), m_step_bank.getGradient()))
+      ReturnFalse;
    if(NeuronOCL.Activation() != None)
       return(DeActivation(NeuronOCL.getOutput(), NeuronOCL.getGradient(), NeuronOCL.getGradient(),
                           NeuronOCL.Activation()));
@@ -829,6 +857,17 @@ bool CD2Skill::WeightsUpdate(CNeuronBaseOCL *source, float tau)
    return(CNeuronScenarioCrossAttention::WeightsUpdate(source, tau));
   }
 //+------------------------------------------------------------------+
+//| Preserves COLLECT bank state while CNet weights are frozen.      |
+//+------------------------------------------------------------------+
+bool CD2Skill::UpdateInputStateSecond(CObject *SourceObject,
+                                      CNeuronBaseOCL *Forecast)
+  {
+   if(CheckPointer(SourceObject) == POINTER_INVALID || !Forecast || !m_ready)
+      ReturnFalse;
+   CNeuronBaseOCL *source = SourceObject;
+   return(updateInputWeightsSecond(source, Forecast));
+  }
+//+------------------------------------------------------------------+
 bool CD2Skill::Clear(void)
   {
 //--- Clear resets only the recurrent execution state inherited from the
@@ -848,6 +887,13 @@ bool CD2Skill::SetMode(const ENUM_D2SKILL_MODE mode)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Configures the optional online direction-only EMA.              |
+//+------------------------------------------------------------------+
+bool CD2Skill::SetOnlineDirectionUpdate(const bool enabled)
+  {
+   m_online_direction_update = enabled;
+   return(true);
+  }
 bool CD2Skill::ResetEpisodeInfluence(void)
   {
    if(!m_ready || !m_task_bank.ResetEpisodeInfluence() ||
@@ -1497,7 +1543,7 @@ void CD2SkillBank::SetOpenCL(COpenCLMy *obj)
       m_correction = GetPointer(m_selected_correction);
   }
 //+------------------------------------------------------------------+
-bool CD2SkillBank::Retrieve(CBufferFloat *state)
+bool CD2SkillBank::Retrieve(CBufferFloat *state, const bool mark_retrieved)
   {
    if(!m_enabled || !state || state.Total() != (int)m_dimension ||
       state.GetOpenCL() != OpenCL || state.GetIndex() < 0 ||
@@ -1594,6 +1640,7 @@ bool CD2SkillBank::Retrieve(CBufferFloat *state)
    setArgument(gather_kernel, def_k_d2gc_representation, (int)m_representation)
    setArgument(gather_kernel, def_k_d2gc_alpha, m_alpha)
    setBuffer(gather_kernel, def_k_d2gc_retrieved, m_retrieved.GetIndex())
+   setArgument(gather_kernel, def_k_d2gc_mark_retrieved, (int)mark_retrieved)
    uint gather_global[1] = {m_dimension};
    kernelExecute(gather_kernel, offset, gather_global)
    return(true);
@@ -1619,6 +1666,19 @@ bool CD2SkillBank::feedForward(CNeuronBaseOCL *NeuronOCL)
 //--- CD2SkillItem owns the residual application.  The bank only selects
 //--- m_selected_correction and exposes it through the inherited buffer.
    return(CD2SkillItem::feedForward(NeuronOCL));
+  }
+//+------------------------------------------------------------------+
+//| Select the current slot without routing its correction.          |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::Observe(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!OpenCL || !m_enabled || CheckPointer(NeuronOCL) == POINTER_INVALID)
+      ReturnFalse;
+   CBufferFloat *source = NeuronOCL.getOutput();
+   if(!source || source.Total() != (int)m_dimension || source.GetOpenCL() != OpenCL ||
+      source.GetIndex() < 0)
+      ReturnFalse;
+   return(Retrieve(source, false));
   }
 //+------------------------------------------------------------------+
 //| Accumulates g dot (alpha * correction) for the forward winner.  |
@@ -1654,6 +1714,37 @@ bool CD2SkillBank::AccumulateInfluenceFromGradient(CBufferFloat *gradient)
    setArgument(accumulate_kernel, def_k_d2sia_slots, (int)m_slots)
    uint scalar_global[1] = {1};
    kernelExecute(accumulate_kernel, offset, scalar_global)
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Updates only the direction EMA of the retrieved stable slot.    |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::UpdateDirectionFromGradient(CBufferFloat *gradient)
+  {
+   if(!m_enabled || !OpenCL || !gradient || gradient.Total() != (int)m_dimension ||
+      gradient.GetOpenCL() != OpenCL || gradient.GetIndex() < 0 ||
+      m_selected_slot.GetIndex() < 0 || !EnsureItemState())
+      ReturnFalse;
+   uint local_size = 0;
+   uint groups = 0;
+   uint partial_count = 0;
+   if(!ItemLaunchLayout(local_size, groups, partial_count) ||
+      !CalculateItemNorm(gradient, local_size, groups))
+      ReturnFalse;
+   const int kernel = def_k_D2SkillDirectionEMA;
+   setBuffer(kernel, def_k_d2de_gradient, gradient.GetIndex())
+   setBuffer(kernel, def_k_d2de_directions, m_directions.GetIndex())
+   setBuffer(kernel, def_k_d2de_selected_slot, m_selected_slot.GetIndex())
+   setBuffer(kernel, def_k_d2de_used, m_used.GetIndex())
+   setBuffer(kernel, def_k_d2de_state, m_state.GetIndex())
+   setBuffer(kernel, def_k_d2de_reduced_norm, m_item_reduced_norm.GetIndex())
+   setArgument(kernel, def_k_d2de_slots, (int)m_slots)
+   setArgument(kernel, def_k_d2de_dimension, (int)m_dimension)
+   setArgument(kernel, def_k_d2de_beta_direction, m_beta_direction)
+   uint offset[1] = {0};
+   uint global[1] = {groups * local_size};
+   uint local[1] = {local_size};
+   kernelExecuteLoc(kernel, offset, global, local)
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -1983,6 +2074,40 @@ bool CD2SkillBank::Clear(void)
    if(!CNeuronBaseOCL::Clear())
       ReturnFalse;
    m_active_slot = UINT_MAX;
+   if(!(m_used.Fill(0) && m_retrieved.Fill(0) && m_influence.Fill(0) &&
+        m_influence_total.Fill(0) && m_gradient_influence_total.Fill(0) &&
+        m_selected_correction.Fill(0) && m_selected_slot.Fill(-1.0f) &&
+        m_selected_score.Fill(-3.402823e+38f) && m_diagnostics.Fill(0) &&
+        m_utility_distribution.Fill(0) && m_usage_distribution.Fill(0) &&
+        (m_retrieval_scores.Total() == 0 || m_retrieval_scores.Fill(0)) &&
+        (m_score_partials.Total() == 0 || m_score_partials.Fill(0)) &&
+        (m_score_metrics.Total() == 0 || m_score_metrics.Fill(0)) &&
+        (m_retrieval_partial.Total() == 0 || m_retrieval_partial.Fill(0)) &&
+        (m_retrieval_merge.Total() == 0 || m_retrieval_merge.Fill(0)) &&
+        (m_retrieval_top.Total() == 0 || m_retrieval_top.Fill(0)) &&
+        (m_free_scores.Total() == 0 || m_free_scores.Fill(0)) &&
+        (m_eviction_scores.Total() == 0 || m_eviction_scores.Fill(0)) &&
+        (m_free_top.Total() == 0 || m_free_top.Fill(0)) &&
+        (m_eviction_top.Total() == 0 || m_eviction_top.Fill(0)) &&
+        (m_influence_partials.Total() == 0 || m_influence_partials.Fill(0)) &&
+        (m_gradient_influence_partials.Total() == 0 || m_gradient_influence_partials.Fill(0)) &&
+        (m_metric_partials.Total() == 0 || m_metric_partials.Fill(0)) &&
+        (m_metrics.Total() == 0 || m_metrics.Fill(0)) &&
+        (m_decision.Total() == 0 || m_decision.Fill(0)) &&
+        (m_diagnostics_norm_partials.Total() == 0 || m_diagnostics_norm_partials.Fill(0)) &&
+        (m_diagnostics_norms.Total() == 0 || m_diagnostics_norms.Fill(0)) &&
+        (m_diagnostics_partials.Total() == 0 || m_diagnostics_partials.Fill(0)) &&
+        (m_diagnostics_totals.Total() == 0 || m_diagnostics_totals.Fill(0))))
+      ReturnFalse;
+   return(SetCorrectionBuffer(GetPointer(m_selected_correction)));
+  }
+//+------------------------------------------------------------------+
+//| Explicit destructive reset used only by isolated fixture tests. |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::ResetDurableState(void)
+  {
+   if(!Clear())
+      ReturnFalse;
    if(!(m_keys.Fill(0) && m_corrections.Fill(0) && m_directions.Fill(0) &&
         m_scales.Fill(0) && m_utility.Fill(0) && m_observations.Fill(0) &&
         m_uses.Fill(0) && m_mass.Fill(0) && m_used.Fill(0) && m_state.Fill(0) &&

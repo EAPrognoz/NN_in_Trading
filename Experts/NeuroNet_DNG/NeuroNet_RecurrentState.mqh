@@ -706,6 +706,18 @@ bool CNeuronLSTMOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Append LSTM parameters and optimizer buffers.                     |
+//+------------------------------------------------------------------+
+bool CNeuronLSTMOCL::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint) ||
+      !AppendParameterBufferFingerprint(GetPointer(m_cWeightsLSTM), fingerprint, 31) ||
+      !AppendParameterBufferFingerprint(GetPointer(m_cFirstMomentumLSTM), fingerprint, 32) ||
+      !AppendParameterBufferFingerprint(GetPointer(m_cSecondMomentumLSTM), fingerprint, 33))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronLSTMOCL::WeightsUpdate(CNeuronBaseOCL* source, float tau)

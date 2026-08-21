@@ -317,12 +317,13 @@ protected:
    CArrayLayer            *layers;                             ///< Array of layers
    COpenCLMy              *opencl;                             ///< Class for working with OpenCL
    bool                    bOwnOpenCL;                         ///< This net created and must release OpenCL
+   bool                    bWeightsUpdate;                     ///< Allows trainable-parameter updates without suppressing gradients
    virtual bool            OpenCLInit(void);
 
 public:
    /** Constructor */
-                     CNet(void) : bOwnOpenCL(false) { Create(NULL); }
-                     CNet(CArrayObj *Description) : bOwnOpenCL(false) { Create(Description); }
+                    CNet(void) : bOwnOpenCL(false), bWeightsUpdate(true) { Create(NULL); }
+                    CNet(CArrayObj *Description) : bOwnOpenCL(false), bWeightsUpdate(true) { Create(Description); }
    bool                    Create(CArrayObj *Description);
    /** Destructor */      ~CNet(void);
    bool                    feedForward(CArrayFloat *inputVals, int window = 1, bool tem = true, CBufferFloat *SecondInput = NULL); ///< Feed Forward method.@param[in] prevLayer Pointer to previos layer. @param[in] window Window of input data. @param[in] tem Use Time Embedding.
@@ -347,6 +348,8 @@ public:
    static float            recentAverageSmoothingFactor;             ///< Smoothing factor of average error
    virtual int             Type(void)   const   {  return defNet;   }///< Identificator of class.@return Type of class
    virtual bool            TrainMode(bool flag);                     ///< Set Training Mode Flag
+   virtual bool            SetWeightsUpdate(const bool flag) { bWeightsUpdate = flag; return(true); } ///< Enable or freeze trainable-parameter writes while retaining backpropagation.
+   virtual bool            WeightsUpdateEnabled(void) const { return(bWeightsUpdate); } ///< Return the trainable-parameter write permission.
    virtual bool            GetLayerOutput(uint layer, CBufferFloat *&result); ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
    virtual bool            GetLayerOutputDevice(uint layer, CBufferFloat *&result); ///< Return a non-owning existing OpenCL output buffer; the layer/net retains its lifetime.
    virtual CNeuronBaseOCL  *Layer(int layer); ///< Return the first neuron of a layer without copying its device buffers.
@@ -358,7 +361,10 @@ public:
    virtual void            SetOpenCL(COpenCLMy *obj);
    virtual COpenCLMy*      GetOpenCL(void)   {  return opencl; }
    //---
-   virtual bool            WeightsUpdate(CNet *net, float tau);
+    virtual bool            WeightsUpdate(CNet *net, float tau);
+   //--- Diagnostic-only fingerprint of trainable parameters and optimizer state.
+   //--- Runtime outputs, gradients and recurrent state are intentionally excluded.
+   virtual bool            ParameterFingerprint(ulong &fingerprint);
    //--- Soft Actor-Critic
    virtual bool            GetLogProbs(vector<float> &log_probs);
    virtual bool            AlphasGradient(CNet *PolicyNet);
@@ -631,6 +637,8 @@ public:
    virtual bool      FeedForwardSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron);
    virtual bool      UpdateInputWeights(CObject *SourceObject, CBufferFloat *SecondInput = NULL);             ///< Dispatch method for defining the subroutine for updating weights.@param SourceObject Pointer to previos layer.
    virtual bool      UpdateInputWeightsSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron);
+   virtual bool      UpdateInputState(CObject *SourceObject, CBufferFloat *SecondInput = NULL) { return(true); } ///< Update durable non-weight state while network parameter writes are frozen.
+   virtual bool      UpdateInputStateSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron) { return(true); } ///< Update durable non-weight state for a two-input layer while network parameter writes are frozen.
    ///\ingroup neuron_base_gr
    ///@{
    virtual bool      CalcHiddenGradients(CObject *TargetObject, CBufferFloat *SecondInput = NULL, CBufferFloat *SecondGradient = NULL, ENUM_ACTIVATION SecondActivation = None);        ///< Dispatch method for defining the subroutine for transferring the gradient to the previous layer. @param TargetObject Pointer to the next layer.
@@ -654,7 +662,14 @@ public:
    virtual void      AttachOpenCL(COpenCLMy *obj) { OpenCL = obj; }
    virtual CObject*  AsObject(void) {  return GetPointer(this);   }
    //---
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau);
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau);
+   //--- Append direct trainable buffers and nested trainable layers only.
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint);
+   static bool       AppendParameterBufferFingerprint(CBufferFloat *buffer,
+                                                       ulong &fingerprint,
+                                                       const uint tag,
+                                                       const uint skip = 0,
+                                                       const uint stride = 0);
    //---
    virtual bool      Clear(void) { return !(!Output || !Output.Fill(0) || !Gradient || !Gradient.Fill(0)); }
    //---
@@ -729,7 +744,8 @@ public:
    virtual CLayerDescription* GetLayerInfo(void) override;
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual uint      GetFilters(void) const { return iWindowOut; }
    virtual uint      GetVariables(void) const { return iVariables; }
    virtual uint      GetUnits(void) const { return Output.Total() / (iWindowOut * iVariables); }
@@ -1060,7 +1076,8 @@ public:
    virtual CLayerDescription* GetLayerInfo(void);
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual CBufferFloat   *getWeights(void) override { return BatchOptions; }
   };
 //+------------------------------------------------------------------+
@@ -1103,9 +1120,10 @@ public:
    virtual int       Type(void) override       const                      {  return defNeuronLSTMOCL;                  }///< Identificator of class.@return Type of class
    virtual bool      Clear(void);
    virtual CBufferFloat *getLSTMWeights(void) { return GetPointer(m_cWeightsLSTM);}
-   virtual void      SetOpenCL(COpenCLMy *obj);
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-  };
+    virtual void      SetOpenCL(COpenCLMy *obj);
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
+   };
 //+------------------------------------------------------------------+
 //| |
 //+------------------------------------------------------------------+
@@ -1437,7 +1455,8 @@ public:
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
@@ -2050,7 +2069,8 @@ public:
          ReturnFalse;
       return true;
      }
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
   };
 //+------------------------------------------------------------------+
 //| |
@@ -9391,8 +9411,9 @@ public:
    //---
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetWindow(void) const { return cConv.GetWindow();   }
+     virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
+    virtual uint      GetWindow(void) const { return cConv.GetWindow();   }
    virtual uint      GetFilters(void) const { return cConv.GetFilters(); }
    virtual uint      GetVariables(void) const { return cConv.GetVariables(); }
    virtual uint      GetUnits(void) const { return cConv.GetUnits(); }
@@ -9432,7 +9453,8 @@ public:
    //---
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
@@ -12859,7 +12881,8 @@ public:
    virtual bool      Load(int const file_handle) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
-   virtual bool      Clear(void) override;
+    virtual bool      Clear(void) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
   };
 //+------------------------------------------------------------------+
 //| |
@@ -12897,7 +12920,8 @@ public:
    virtual bool      Load(int const file_handle) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
@@ -13039,7 +13063,8 @@ public:
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
@@ -13118,7 +13143,8 @@ public:
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
@@ -13448,7 +13474,8 @@ public:
    bool              Save(const int file_handle);
    bool              Load(const int file_handle, COpenCLMy *open_cl);
    bool              ValidateContract(uint scenarios, uint dimension);
-   void              SetOpenCL(COpenCLMy *open_cl);
+    void              SetOpenCL(COpenCLMy *open_cl);
+   bool              AppendParameterFingerprint(ulong &fingerprint);
    uint              Scenarios(void) const { return iScenarios; }
    uint              Dimension(void) const { return iDimension; }
    CBufferFloat      *GetPrototypes(void) { return GetPointer(cPrototypes); }
@@ -13539,7 +13566,8 @@ public:
    bool              Load(const int file_handle, COpenCLMy *open_cl);
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual bool      Clear(void) override;
    //---
    uint              Variables(void) const { return iVariables; }
@@ -13637,9 +13665,10 @@ public:
    virtual bool               Load(const int file_handle) override;
    bool                       Load(const int file_handle, COpenCLMy *open_cl);
    virtual void               SetOpenCL(COpenCLMy *obj) override;
-   virtual void               TrainMode(bool flag) override;
-   virtual bool               WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual bool               Clear(void) override;
+     virtual void               TrainMode(bool flag) override;
+     virtual bool               WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+    virtual bool               AppendParameterFingerprint(ulong &fingerprint) override;
+    virtual bool               Clear(void) override;
    uint                       Variables(void) const { return iVariables; }
    uint                       Scenarios(void) const { return iScenarios; }
    uint                       Horizon(void) const { return iHorizon; }
@@ -13867,7 +13896,7 @@ protected:
    bool              RunMetrics(CBufferFloat *state, CBufferFloat *gradient,
                                 const uint local_size, const uint groups);
    bool              CalculateBankVectorNorm(const uint local_size, const uint groups);
-   bool              Retrieve(CBufferFloat *state);
+   bool              Retrieve(CBufferFloat *state, const bool mark_retrieved = true);
 
 public:
                      CD2SkillBank(void);
@@ -13877,11 +13906,14 @@ public:
                           uint slots, ENUM_OPTIMIZATION optimization_type,
                           uint batch) override;
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   bool              Observe(CNeuronBaseOCL *NeuronOCL);
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    bool              Load(const int file_handle, COpenCLMy *opencl);
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      Clear(void) override;
+   // Destructive fixture reset. Clear() preserves durable bank state.
+   bool              ResetDurableState(void);
    virtual int       Type(void) const override;
    bool              SetEnabled(const bool enabled);
    bool              Enabled(void) const;
@@ -13898,6 +13930,7 @@ public:
    float             MaxCorrection(void) const;
    bool              AccumulateInfluenceFromGradient(CBufferFloat *gradient);
    bool              UpdateFromGradient(CBufferFloat *state, CBufferFloat *gradient);
+   bool              UpdateDirectionFromGradient(CBufferFloat *gradient);
    bool              UpdateUtility(const float delta_j);
    bool              ResetEpisodeInfluence(void);
    uint              Slots(void) const;
@@ -13934,6 +13967,7 @@ private:
    CD2SkillBank                 m_task_bank;
    CD2SkillBank                 m_step_bank;
    bool                         m_ready;
+   bool                         m_online_direction_update;
    ENUM_D2SKILL_MODE            m_mode;
 
 protected:
@@ -13947,6 +13981,8 @@ protected:
    bool              TaskSkillEnabled(void) const;
    bool              StepSkillEnabled(void) const;
    bool              SkillUpdatesEnabled(void) const;
+   bool              OnlineDirectionUpdatesEnabled(void) const;
+   bool              UpdateOnlineDirection(CD2SkillBank *bank, CBufferFloat *gradient);
 
 public:
                      CD2Skill(void);
@@ -13963,8 +13999,11 @@ public:
    virtual void      SetOpenCL(COpenCLMy *opencl) override;
    virtual void      TrainMode(bool flag) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      UpdateInputStateSecond(CObject *SourceObject,
+                                            CNeuronBaseOCL *Forecast) override;
    virtual bool      Clear(void) override;
    bool              SetMode(const ENUM_D2SKILL_MODE mode);
+   bool              SetOnlineDirectionUpdate(const bool enabled);
    ENUM_D2SKILL_MODE Mode(void) const;
    bool              ResetEpisodeInfluence(void);
    bool              Ready(void) const;

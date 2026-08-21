@@ -7035,6 +7035,17 @@ bool CNeuronSpikeConvBlock::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Append the trainable spike-convolution block graph.               |
+//+------------------------------------------------------------------+
+bool CNeuronSpikeConvBlock::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBatchNormOCL::AppendParameterFingerprint(fingerprint) ||
+      !cActivation.AppendParameterFingerprint(fingerprint) ||
+      !cConv.AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 bool CNeuronSpikeConvBlock::Load(const int file_handle)
@@ -7212,6 +7223,21 @@ bool CNeuronMSRes::Save(const int file_handle)
       ReturnFalse;
 //---
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Append the trainable residual-flow graph.                          |
+//+------------------------------------------------------------------+
+bool CNeuronMSRes::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint))
+      ReturnFalse;
+   for(int i = 0; i < cFlow.Total(); i++)
+     {
+      CNeuronBaseOCL *layer = cFlow.At(i);
+      if(!layer || !layer.AppendParameterFingerprint(fingerprint))
+         ReturnFalse;
+     }
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |

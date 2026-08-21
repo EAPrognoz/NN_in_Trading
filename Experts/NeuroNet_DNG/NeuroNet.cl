@@ -16362,7 +16362,8 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
                                       const int dimension,
                                       const int representation,
                                       const float alpha,
-                                      __global float *retrieved)
+                                      __global float *retrieved,
+                                      const int mark_retrieved)
   {
    const int component = get_global_id(0);
    const float2 top_slot = top[0];
@@ -16387,14 +16388,17 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
      {
       selected_slot[0] = (valid ? (float)winner : -1.0f);
       selected_score[0] = (valid ? score : RAG_INVALID_SCORE);
-      if(valid)
+      if(valid && mark_retrieved != 0)
        {
           uses[winner] = IsNaNOrInf(uses[winner], 0.0f) + 1.0f;
           retrieved[winner] = 1.0f;
          diagnostics[0] = IsNaNOrInf(diagnostics[0], 0.0f) + 1.0f;
         }
       else
-         diagnostics[1] = IsNaNOrInf(diagnostics[1], 0.0f) + 1.0f;
+         if(!valid && mark_retrieved != 0)
+           {
+            diagnostics[1] = IsNaNOrInf(diagnostics[1], 0.0f) + 1.0f;
+           }
      }
   }
 //+------------------------------------------------------------------+
@@ -16614,7 +16618,9 @@ __kernel void D2SkillCandidateLeader(__global const float *selected_slot,
    const float gradient_norm = sqrt(fmax(IsNaNOrInf(metrics[0], 0.0f), 0.0f));
    decision[2] = gradient_norm;
    decision[3] = 0.0f;
-   if(slots <= 0 || gradient_norm <= 1.0e-8f)
+//--- Collection must preserve a non-zero pseudo-residual even before the
+//--- untrained Actor has amplified it.  Only an exact zero has no direction.
+   if(slots <= 0 || gradient_norm <= 0.0f)
       return;
    const float query_norm = sqrt(fmax(IsNaNOrInf(metrics[1], 0.0f), 0.0f));
    const int selected = (int)round(selected_slot[0]);
@@ -16742,7 +16748,7 @@ __kernel void D2SkillVectorUpdate(__global const float *query,
    const float gradient_norm = decision[2];
    const float query_value = IsNaNOrInf(query[component], 0.0f);
    const float gradient_value = IsNaNOrInf(gradient[component], 0.0f);
-   const float unit = (gradient_norm > 1.0e-8f ? gradient_value / gradient_norm : 0.0f);
+   const float unit = (gradient_norm > 0.0f ? gradient_value / gradient_norm : 0.0f);
     if(phase == 1)
       {
        if((action != D2SKILL_DECISION_MATCH && action != D2SKILL_DECISION_FREE &&
@@ -16757,11 +16763,12 @@ __kernel void D2SkillVectorUpdate(__global const float *query,
           corrections[shift] = IsNaNOrInf(corrections[shift] * factor, 0.0f);
          }
        else
-         {
-          const float factor = (vector_norm > 1.0e-12f ?
-                                fmin(scales[target], max_correction) / vector_norm : 0.0f);
-          corrections[shift] = IsNaNOrInf(directions[shift] * factor, 0.0f);
-         }
+          {
+           const float factor = (vector_norm > 1.0e-12f ? 1.0f / vector_norm : 0.0f);
+           directions[shift] = IsNaNOrInf(directions[shift] * factor, 0.0f);
+           corrections[shift] = IsNaNOrInf(directions[shift] *
+                                           fmin(scales[target], max_correction), 0.0f);
+          }
        return;
       }
     if((action == D2SKILL_DECISION_MATCH || action == D2SKILL_DECISION_FREE ||
@@ -16798,6 +16805,39 @@ __kernel void D2SkillVectorUpdate(__global const float *query,
                      beta_direction * unit, 0.0f);
        return;
       }
+  }
+//+------------------------------------------------------------------+
+//| Applies the online direction EMA to one retrieved stable slot.  |
+//| It intentionally does not touch keys, correction, scale or lifecycle. |
+//+------------------------------------------------------------------+
+__kernel void D2SkillDirectionEMA(__global const float *gradient,
+                                  __global float *directions,
+                                  __global const float *selected_slot,
+                                  __global const float *used,
+                                  __global const float *state,
+                                  __global const float *reduced_norm,
+                                  const int slots,
+                                  const int dimension,
+                                  const float beta_direction)
+  {
+   const int component = get_global_id(0);
+   if(component < 0 || component >= dimension || slots <= 0)
+      return;
+   const int slot = (int)round(IsNaNOrInf(selected_slot[0], -1.0f));
+   if(slot < 0 || slot >= slots || IsNaNOrInf(used[slot], 0.0f) <= 0.5f)
+      return;
+   const int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE);
+   if(slot_state == D2SKILL_FREE || slot_state == D2SKILL_CANDIDATE ||
+      slot_state == D2SKILL_INACTIVE)
+      return;
+   const float norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
+   if(norm <= 1.0e-12f)
+      return;
+   const int index = slot * dimension + component;
+   const float unit = IsNaNOrInf(gradient[component], 0.0f) / norm;
+   directions[index] = IsNaNOrInf((1.0f - beta_direction) *
+                                   IsNaNOrInf(directions[index], 0.0f) +
+                                   beta_direction * unit, 0.0f);
   }
 //+------------------------------------------------------------------+
 __kernel void D2SkillBankVectorPartial(__global const float *corrections,

@@ -144,6 +144,7 @@ private:
    double            dDrawdown;
    double            dCost;
    double            dRisk;
+   double            dPeakEquity;
    uint              uDuration;
 
 public:
@@ -155,6 +156,7 @@ public:
       dDrawdown = 0.0;
       dCost = 0.0;
       dRisk = 0.0;
+      dPeakEquity = 0.0;
       uDuration = 0;
       return(true);
      }
@@ -170,7 +172,10 @@ public:
       dOutcome += reward;
       dBalance = balance;
       dEquity = equity;
-      dDrawdown = MathMax(dDrawdown, MathAbs(drawdown));
+      dPeakEquity = MathMax(dPeakEquity, equity);
+      const double peak_drawdown = (dPeakEquity > 0.0 ?
+                                    (dPeakEquity - equity) / dPeakEquity : 0.0);
+      dDrawdown = MathMax(dDrawdown, MathMax(MathAbs(drawdown), peak_drawdown));
       dCost += MathAbs(cost);
       dRisk = MathMax(dRisk, MathAbs(risk));
       uDuration += duration;
@@ -184,6 +189,27 @@ public:
    double            Risk(void) const { return(dRisk); }
    uint              Duration(void) const { return(uDuration); }
   };
+//+------------------------------------------------------------------+
+//| Calculates terminal paired utility from complete episode state.  |
+//+------------------------------------------------------------------+
+bool D2SkillComputePairedEpisodeDelta(const SD2SkillEpisodeOutcome &base,
+                                      const SD2SkillEpisodeOutcome &skill,
+                                      double &delta_j)
+  {
+   const double base_outcome = base.Outcome();
+   const double skill_outcome = skill.Outcome();
+   if(!MathIsValidNumber(base_outcome) || !MathIsValidNumber(skill_outcome))
+      ReturnFalse;
+   delta_j = skill_outcome - base_outcome;
+   return(MathIsValidNumber(delta_j));
+  }
+//+------------------------------------------------------------------+
+//| An independent pair ends as soon as either branch is terminal.  |
+//+------------------------------------------------------------------+
+bool D2SkillPairReachedTerminal(const bool base_terminal, const bool skill_terminal)
+  {
+   return(base_terminal || skill_terminal);
+  }
 //+------------------------------------------------------------------+
 //| Implements SState.                                               |
 //+------------------------------------------------------------------+
@@ -1528,6 +1554,7 @@ ENUM_D2SKILL_MODE    D2SkillD2ExecutionMode = D2_DISABLED;
 bool                 D2SkillD2UtilityAware = false;
 double               D2SkillD2UtilityScale = 1.0;
 double               D2SkillD2MinUtility = -1.0;
+bool                 D2SkillD2OnlineDirectionUpdate = false;
 int                  D2SkillD2UtilityMode = D2Skill_D2_UTILITY_PAIRED_HINDSIGHT;
 ulong                D2SkillD2PairedUtilityUpdates = 0;
 //+------------------------------------------------------------------+
@@ -1536,7 +1563,8 @@ ulong                D2SkillD2PairedUtilityUpdates = 0;
 bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage, const ENUM_D2SKILL_BANK_MODE mode,
                              const ENUM_D2SKILL_MODE execution_mode,
                              const bool utility_aware, const double min_utility,
-                             const double utility_scale)
+                             const double utility_scale,
+                             const bool online_direction_update = false)
   {
    if(stage < D2Skill_D2_STAGE_BASE || stage > D2Skill_D2_STAGE_ONLINE ||
       mode < D2Skill_D2_MODE_BASE || mode > D2Skill_D2_MODE_FULL ||
@@ -1550,6 +1578,7 @@ bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage, const ENUM_D2SKILL_
    D2SkillD2UtilityAware = utility_aware;
    D2SkillD2MinUtility = min_utility;
    D2SkillD2UtilityScale = utility_scale;
+   D2SkillD2OnlineDirectionUpdate = online_direction_update;
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -1566,185 +1595,207 @@ bool D2SkillConfigureForecastRun(const bool recovery_smoke,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Device-resident snapshot of all mutable Actor Cross forward state.|
+//| Device-resident snapshot data for one Actor trajectory branch.  |
 //+------------------------------------------------------------------+
-class CD2SkillActorForwardSnapshot
+struct SD2SkillActorForwardState
   {
-private:
-   CNeuronScenarioCrossAttention *cCross;
-   CD2SkillDeviceOps      cDevice;
-   CBufferFloat         cCrossOutput;
-   CBufferFloat         cHistory;
-   CBufferFloat         cBatchFirst;
-   CBufferFloat         cBatchSecond;
-   CBufferFloat         cSpikeFirstOutput;
-   CBufferFloat         cSpikeFirstPrevious;
-   CBufferFloat         cSpikeSecondOutput;
-   CBufferFloat         cSpikeSecondPrevious;
-   int                  iBatchFirstCount;
-   int                  iBatchSecondCount;
-   bool                 bFirstHasOptions;
-   bool                 bSecondHasOptions;
-   bool                 bReady;
-
-   bool              PrepareBuffer(CBufferFloat *source, CBufferFloat &snapshot,
-                                   COpenCLMy *open_cl)
-     {
-      if(!source || !open_cl || source.Total() <= 0 || source.GetIndex() < 0 ||
-         source.GetOpenCL() != open_cl)
-         ReturnFalse;
-      snapshot.BufferFree();
-      if(!snapshot.BufferInit((uint)source.Total(), 0.0f) ||
-         !snapshot.BufferCreate(open_cl))
-         ReturnFalse;
-      return (snapshot.Total() == source.Total() && snapshot.GetIndex() >= 0 &&
-              snapshot.GetOpenCL() == open_cl);
-     }
-   bool              CopyOptional(CBufferFloat *source, CBufferFloat &snapshot)
-     {
-      if(!source)
-         return true;
-      return cDevice.Copy(source, GetPointer(snapshot), (uint)source.Total());
-     }
-
-public:
-                     CD2SkillActorForwardSnapshot(void) : cCross(NULL),
-                     iBatchFirstCount(0), iBatchSecondCount(0),
-                     bFirstHasOptions(false), bSecondHasOptions(false), bReady(false) {}
-   bool              Init(CNeuronScenarioCrossAttention *cross, COpenCLMy *open_cl)
-     {
-      bReady = false;
-      cCross = cross;
-      if(!cCross || !open_cl || cCross.IsCritic() || !cCross.HasHistory() ||
-         cCross.ForwardStateBatchBlocks() != 2 || !cDevice.Bind(open_cl))
-         ReturnFalse;
-      CNeuronAddToStack *history = cCross.GetHistoryStack();
-      CBufferFloat *first = cCross.GetForwardStateBatchOptions(0);
-      CBufferFloat *second = cCross.GetForwardStateBatchOptions(1);
-      CBufferFloat *spike_first = cCross.GetForwardStateSpikeOutput(0);
-      CBufferFloat *spike_first_previous = cCross.GetForwardStateSpikePrevOutput(0);
-      CBufferFloat *spike_second = cCross.GetForwardStateSpikeOutput(1);
-      CBufferFloat *spike_second_previous = cCross.GetForwardStateSpikePrevOutput(1);
-      if(!history || !PrepareBuffer(cCross.getOutput(), cCrossOutput, open_cl) ||
-         !PrepareBuffer(history.getOutput(), cHistory, open_cl) ||
-         !PrepareBuffer(spike_first, cSpikeFirstOutput, open_cl) ||
-         !PrepareBuffer(spike_first_previous, cSpikeFirstPrevious, open_cl) ||
-         !PrepareBuffer(spike_second, cSpikeSecondOutput, open_cl) ||
-         !PrepareBuffer(spike_second_previous, cSpikeSecondPrevious, open_cl))
-         ReturnFalse;
-      bFirstHasOptions = (first != NULL);
-      bSecondHasOptions = (second != NULL);
-      if((bFirstHasOptions && !PrepareBuffer(first, cBatchFirst, open_cl)) ||
-         (bSecondHasOptions && !PrepareBuffer(second, cBatchSecond, open_cl)))
-         ReturnFalse;
-      iBatchFirstCount = cCross.GetForwardStateBatchCount(0);
-      iBatchSecondCount = cCross.GetForwardStateBatchCount(1);
-      if(iBatchFirstCount < 1 || iBatchSecondCount < 1)
-         ReturnFalse;
-      bReady = true;
-      return true;
-     }
-   bool              Init(CNet &actor)
-     {
-      CNeuronBaseOCL *layer = actor.Layer(1);
-      if(!layer || (layer.Type() != defNeuronD2Skill &&
-                    layer.Type() != defNeuronScenarioCrossAttention))
-         ReturnFalse;
-      return Init((CNeuronScenarioCrossAttention*)layer, actor.GetOpenCL());
-     }
-   bool              Capture(void)
-     {
-      if(!bReady || !cCross)
-         ReturnFalse;
-      CNeuronAddToStack *history = cCross.GetHistoryStack();
-      CBufferFloat *first = cCross.GetForwardStateBatchOptions(0);
-      CBufferFloat *second = cCross.GetForwardStateBatchOptions(1);
-      CBufferFloat *spike_first = cCross.GetForwardStateSpikeOutput(0);
-      CBufferFloat *spike_first_previous = cCross.GetForwardStateSpikePrevOutput(0);
-      CBufferFloat *spike_second = cCross.GetForwardStateSpikeOutput(1);
-      CBufferFloat *spike_second_previous = cCross.GetForwardStateSpikePrevOutput(1);
-      if(!history || (bFirstHasOptions != (first != NULL)) ||
-         (bSecondHasOptions != (second != NULL)) || !spike_first ||
-         !spike_first_previous || !spike_second || !spike_second_previous)
-         ReturnFalse;
-      iBatchFirstCount = cCross.GetForwardStateBatchCount(0);
-      iBatchSecondCount = cCross.GetForwardStateBatchCount(1);
-      if(iBatchFirstCount < 1 || iBatchSecondCount < 1 ||
-         !cDevice.Copy(cCross.getOutput(), GetPointer(cCrossOutput),
-                       (uint)cCrossOutput.Total()) ||
-         !cDevice.Copy(history.getOutput(), GetPointer(cHistory),
-                       (uint)cHistory.Total()) ||
-         !cDevice.Copy(spike_first, GetPointer(cSpikeFirstOutput),
-                       (uint)cSpikeFirstOutput.Total()) ||
-         !cDevice.Copy(spike_first_previous, GetPointer(cSpikeFirstPrevious),
-                       (uint)cSpikeFirstPrevious.Total()) ||
-         !cDevice.Copy(spike_second, GetPointer(cSpikeSecondOutput),
-                       (uint)cSpikeSecondOutput.Total()) ||
-         !cDevice.Copy(spike_second_previous, GetPointer(cSpikeSecondPrevious),
-                       (uint)cSpikeSecondPrevious.Total()) ||
-         !CopyOptional(first, cBatchFirst) || !CopyOptional(second, cBatchSecond))
-         ReturnFalse;
-      return true;
-     }
-   bool              Restore(void)
-     {
-      if(!bReady || !cCross)
-         ReturnFalse;
-      CNeuronAddToStack *history = cCross.GetHistoryStack();
-      CBufferFloat *first = cCross.GetForwardStateBatchOptions(0);
-      CBufferFloat *second = cCross.GetForwardStateBatchOptions(1);
-      CBufferFloat *spike_first = cCross.GetForwardStateSpikeOutput(0);
-      CBufferFloat *spike_first_previous = cCross.GetForwardStateSpikePrevOutput(0);
-      CBufferFloat *spike_second = cCross.GetForwardStateSpikeOutput(1);
-      CBufferFloat *spike_second_previous = cCross.GetForwardStateSpikePrevOutput(1);
-      if(!history || (bFirstHasOptions != (first != NULL)) ||
-         (bSecondHasOptions != (second != NULL)) ||
-         !spike_first || !spike_first_previous || !spike_second ||
-         !spike_second_previous ||
-         !cDevice.Copy(GetPointer(cCrossOutput), cCross.getOutput(),
-                       (uint)cCrossOutput.Total()) ||
-         !cDevice.Copy(GetPointer(cHistory), history.getOutput(),
-                       (uint)cHistory.Total()) ||
-         !cDevice.Copy(GetPointer(cSpikeFirstOutput), spike_first,
-                       (uint)cSpikeFirstOutput.Total()) ||
-         !cDevice.Copy(GetPointer(cSpikeFirstPrevious), spike_first_previous,
-                       (uint)cSpikeFirstPrevious.Total()) ||
-         !cDevice.Copy(GetPointer(cSpikeSecondOutput), spike_second,
-                       (uint)cSpikeSecondOutput.Total()) ||
-         !cDevice.Copy(GetPointer(cSpikeSecondPrevious), spike_second_previous,
-                       (uint)cSpikeSecondPrevious.Total()) ||
-         (first && !cDevice.Copy(GetPointer(cBatchFirst), first,
-                                 (uint)cBatchFirst.Total())) ||
-         (second && !cDevice.Copy(GetPointer(cBatchSecond), second,
-                                  (uint)cBatchSecond.Total())) ||
-         !cCross.SetForwardStateBatchCount(0, iBatchFirstCount) ||
-         !cCross.SetForwardStateBatchCount(1, iBatchSecondCount))
-         ReturnFalse;
-      return true;
-     }
-   bool              Ready(void) const { return bReady; }
+   CNeuronScenarioCrossAttention *cross;
+   CD2SkillDeviceOps               device;
+   CBufferFloat                    cross_output;
+   CBufferFloat                    history;
+   CBufferFloat                    batch_first;
+   CBufferFloat                    batch_second;
+   CBufferFloat                    spike_first_output;
+   CBufferFloat                    spike_first_previous;
+   CBufferFloat                    spike_second_output;
+   CBufferFloat                    spike_second_previous;
+   int                             batch_first_count;
+   int                             batch_second_count;
+   bool                            first_has_options;
+   bool                            second_has_options;
+   bool                            ready;
   };
+//+------------------------------------------------------------------+
+//| Creates a device buffer owned by local trajectory state.         |
+//+------------------------------------------------------------------+
+bool D2SkillPrepareForwardStateBuffer(CBufferFloat *source, CBufferFloat &snapshot,
+                                      COpenCLMy *open_cl)
+  {
+   if(!source || !open_cl || source.Total() <= 0 || source.GetIndex() < 0 ||
+      source.GetOpenCL() != open_cl)
+      ReturnFalse;
+   snapshot.BufferFree();
+   if(!snapshot.BufferInit((uint)source.Total(), 0.0f) || !snapshot.BufferCreate(open_cl))
+      ReturnFalse;
+   return(snapshot.Total() == source.Total() && snapshot.GetIndex() >= 0 &&
+          snapshot.GetOpenCL() == open_cl);
+  }
+//+------------------------------------------------------------------+
+//| Copies an optional forward buffer without host readback.         |
+//+------------------------------------------------------------------+
+bool D2SkillCopyOptionalForwardState(CD2SkillDeviceOps &device, CBufferFloat *source,
+                                     CBufferFloat &snapshot)
+  {
+   if(!source)
+      return(true);
+   return(device.Copy(source, GetPointer(snapshot), (uint)source.Total()));
+  }
+//+------------------------------------------------------------------+
+//| Initializes the local device state for one Actor trajectory.     |
+//+------------------------------------------------------------------+
+bool D2SkillInitActorForwardState(SD2SkillActorForwardState &state,
+                                  CNeuronScenarioCrossAttention *cross,
+                                  COpenCLMy *open_cl)
+  {
+   state.ready = false;
+   state.cross = cross;
+   if(!state.cross || !open_cl || state.cross.IsCritic() || !state.cross.HasHistory() ||
+      state.cross.ForwardStateBatchBlocks() != 2 || !state.device.Bind(open_cl))
+      ReturnFalse;
+   CNeuronAddToStack *history = state.cross.GetHistoryStack();
+   CBufferFloat *first = state.cross.GetForwardStateBatchOptions(0);
+   CBufferFloat *second = state.cross.GetForwardStateBatchOptions(1);
+   CBufferFloat *spike_first = state.cross.GetForwardStateSpikeOutput(0);
+   CBufferFloat *spike_first_previous = state.cross.GetForwardStateSpikePrevOutput(0);
+   CBufferFloat *spike_second = state.cross.GetForwardStateSpikeOutput(1);
+   CBufferFloat *spike_second_previous = state.cross.GetForwardStateSpikePrevOutput(1);
+   if(!history || !D2SkillPrepareForwardStateBuffer(state.cross.getOutput(), state.cross_output, open_cl) ||
+      !D2SkillPrepareForwardStateBuffer(history.getOutput(), state.history, open_cl) ||
+      !D2SkillPrepareForwardStateBuffer(spike_first, state.spike_first_output, open_cl) ||
+      !D2SkillPrepareForwardStateBuffer(spike_first_previous, state.spike_first_previous, open_cl) ||
+      !D2SkillPrepareForwardStateBuffer(spike_second, state.spike_second_output, open_cl) ||
+      !D2SkillPrepareForwardStateBuffer(spike_second_previous, state.spike_second_previous, open_cl))
+      ReturnFalse;
+   state.first_has_options = (first != NULL);
+   state.second_has_options = (second != NULL);
+   if((state.first_has_options &&
+       !D2SkillPrepareForwardStateBuffer(first, state.batch_first, open_cl)) ||
+      (state.second_has_options &&
+       !D2SkillPrepareForwardStateBuffer(second, state.batch_second, open_cl)))
+      ReturnFalse;
+   state.batch_first_count = state.cross.GetForwardStateBatchCount(0);
+   state.batch_second_count = state.cross.GetForwardStateBatchCount(1);
+   if(state.batch_first_count < 1 || state.batch_second_count < 1)
+      ReturnFalse;
+   state.ready = true;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Initializes local trajectory state from the D2 Actor topology.   |
+//+------------------------------------------------------------------+
+bool D2SkillInitActorForwardState(SD2SkillActorForwardState &state, CNet &actor)
+  {
+   CNeuronBaseOCL *layer = actor.Layer(1);
+   if(!layer || (layer.Type() != defNeuronD2Skill &&
+                 layer.Type() != defNeuronScenarioCrossAttention))
+      ReturnFalse;
+   return(D2SkillInitActorForwardState(state, (CNeuronScenarioCrossAttention*)layer,
+                                       actor.GetOpenCL()));
+  }
+//+------------------------------------------------------------------+
+//| Captures forward state into a local trajectory branch.           |
+//+------------------------------------------------------------------+
+bool D2SkillCaptureActorForwardState(SD2SkillActorForwardState &state)
+  {
+   if(!state.ready || !state.cross)
+      ReturnFalse;
+   CNeuronAddToStack *history = state.cross.GetHistoryStack();
+   CBufferFloat *first = state.cross.GetForwardStateBatchOptions(0);
+   CBufferFloat *second = state.cross.GetForwardStateBatchOptions(1);
+   CBufferFloat *spike_first = state.cross.GetForwardStateSpikeOutput(0);
+   CBufferFloat *spike_first_previous = state.cross.GetForwardStateSpikePrevOutput(0);
+   CBufferFloat *spike_second = state.cross.GetForwardStateSpikeOutput(1);
+   CBufferFloat *spike_second_previous = state.cross.GetForwardStateSpikePrevOutput(1);
+   if(!history || (state.first_has_options != (first != NULL)) ||
+      (state.second_has_options != (second != NULL)) || !spike_first ||
+      !spike_first_previous || !spike_second || !spike_second_previous)
+      ReturnFalse;
+   state.batch_first_count = state.cross.GetForwardStateBatchCount(0);
+   state.batch_second_count = state.cross.GetForwardStateBatchCount(1);
+   if(state.batch_first_count < 1 || state.batch_second_count < 1 ||
+      !state.device.Copy(state.cross.getOutput(), GetPointer(state.cross_output),
+                         (uint)state.cross_output.Total()) ||
+      !state.device.Copy(history.getOutput(), GetPointer(state.history),
+                         (uint)state.history.Total()) ||
+      !state.device.Copy(spike_first, GetPointer(state.spike_first_output),
+                         (uint)state.spike_first_output.Total()) ||
+      !state.device.Copy(spike_first_previous, GetPointer(state.spike_first_previous),
+                         (uint)state.spike_first_previous.Total()) ||
+      !state.device.Copy(spike_second, GetPointer(state.spike_second_output),
+                         (uint)state.spike_second_output.Total()) ||
+      !state.device.Copy(spike_second_previous, GetPointer(state.spike_second_previous),
+                         (uint)state.spike_second_previous.Total()) ||
+      !D2SkillCopyOptionalForwardState(state.device, first, state.batch_first) ||
+      !D2SkillCopyOptionalForwardState(state.device, second, state.batch_second))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Restores one local trajectory branch without host readback.      |
+//+------------------------------------------------------------------+
+bool D2SkillRestoreActorForwardState(SD2SkillActorForwardState &state)
+  {
+   if(!state.ready || !state.cross)
+      ReturnFalse;
+   CNeuronAddToStack *history = state.cross.GetHistoryStack();
+   CBufferFloat *first = state.cross.GetForwardStateBatchOptions(0);
+   CBufferFloat *second = state.cross.GetForwardStateBatchOptions(1);
+   CBufferFloat *spike_first = state.cross.GetForwardStateSpikeOutput(0);
+   CBufferFloat *spike_first_previous = state.cross.GetForwardStateSpikePrevOutput(0);
+   CBufferFloat *spike_second = state.cross.GetForwardStateSpikeOutput(1);
+   CBufferFloat *spike_second_previous = state.cross.GetForwardStateSpikePrevOutput(1);
+   if(!history || (state.first_has_options != (first != NULL)) ||
+      (state.second_has_options != (second != NULL)) || !spike_first ||
+      !spike_first_previous || !spike_second || !spike_second_previous ||
+      !state.device.Copy(GetPointer(state.cross_output), state.cross.getOutput(),
+                         (uint)state.cross_output.Total()) ||
+      !state.device.Copy(GetPointer(state.history), history.getOutput(),
+                         (uint)state.history.Total()) ||
+      !state.device.Copy(GetPointer(state.spike_first_output), spike_first,
+                         (uint)state.spike_first_output.Total()) ||
+      !state.device.Copy(GetPointer(state.spike_first_previous), spike_first_previous,
+                         (uint)state.spike_first_previous.Total()) ||
+      !state.device.Copy(GetPointer(state.spike_second_output), spike_second,
+                         (uint)state.spike_second_output.Total()) ||
+      !state.device.Copy(GetPointer(state.spike_second_previous), spike_second_previous,
+                         (uint)state.spike_second_previous.Total()) ||
+      (first && !state.device.Copy(GetPointer(state.batch_first), first,
+                                   (uint)state.batch_first.Total())) ||
+      (second && !state.device.Copy(GetPointer(state.batch_second), second,
+                                    (uint)state.batch_second.Total())) ||
+      !state.cross.SetForwardStateBatchCount(0, state.batch_first_count) ||
+      !state.cross.SetForwardStateBatchCount(1, state.batch_second_count))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Confirms that a local trajectory branch was initialized.         |
+//+------------------------------------------------------------------+
+bool D2SkillActorForwardStateReady(const SD2SkillActorForwardState &state)
+  {
+   return(state.ready);
+  }
 //+------------------------------------------------------------------+
 //| Returns whether this exact Actor state is eligible for pairing.  |
 //+------------------------------------------------------------------+
 bool D2SkillUsePairedHindsight(CD2Skill *skill,
-                               CD2SkillActorForwardSnapshot &snapshot)
+                               SD2SkillActorForwardState &state)
   {
    return((D2SkillD2ExecutionMode == D2_EVALUATE ||
            D2SkillD2ExecutionMode == D2_ONLINE_CALIBRATION) &&
           D2SkillD2Mode != D2Skill_D2_MODE_BASE && skill != NULL &&
-          skill.Ready() && snapshot.Ready());
+          skill.Ready() && D2SkillActorForwardStateReady(state));
   }
 //+------------------------------------------------------------------+
 //| Restores an Actor pair capture and its exact configured D2 mode. |
 //+------------------------------------------------------------------+
-bool D2SkillRestorePairedActorState(CD2SkillActorForwardSnapshot &snapshot,
+bool D2SkillRestorePairedActorState(SD2SkillActorForwardState &state,
                                     CD2Skill *skill,
                                     const bool task_enabled,
                                     const bool step_enabled,
                                     const string stage)
   {
-   const bool state_restored = snapshot.Restore();
+   const bool state_restored = D2SkillRestoreActorForwardState(state);
    const bool mode_restored = (skill != NULL &&
                                skill.Enable(task_enabled, step_enabled));
    if(!state_restored || !mode_restored)
@@ -3587,7 +3638,9 @@ bool D2SkillEnableD2Banks(CNet &actor)
    bool task_enabled = false;
    bool step_enabled = false;
    D2SkillD2BankFlags(task_enabled, step_enabled);
-   if(!skill.SetMode(D2SkillD2ExecutionMode) || !skill.Enable(task_enabled, step_enabled))
+   if(!skill.SetMode(D2SkillD2ExecutionMode) ||
+      !skill.SetOnlineDirectionUpdate(D2SkillD2OnlineDirectionUpdate) ||
+      !skill.Enable(task_enabled, step_enabled))
       ReturnFalse;
    CD2SkillBank *task = skill.TaskBank();
    CD2SkillBank *step = skill.StepBank();
@@ -3602,10 +3655,11 @@ bool D2SkillEnableD2Banks(CNet &actor)
       !step.SetUtilityPolicy(D2SkillD2UtilityAware,
                              (float)MathMin(1.0, MathMax(-1.0, D2SkillD2MinUtility))))
       ReturnFalse;
-   PrintFormat("D2Skill D2 stage=%d mode=%d execution=%d task=%s step=%s utility=%s scale=%.3f",
+   PrintFormat("D2Skill D2 stage=%d mode=%d execution=%d task=%s step=%s utility=%s scale=%.3f direction_ema=%s",
                D2SkillD2Stage, D2SkillD2Mode, D2SkillD2ExecutionMode, (task_enabled ? "on" : "off"),
                (step_enabled ? "on" : "off"),
-               (D2SkillD2UtilityAware ? "aware" : "similarity"), D2SkillD2UtilityScale);
+               (D2SkillD2UtilityAware ? "aware" : "similarity"), D2SkillD2UtilityScale,
+               (D2SkillD2OnlineDirectionUpdate ? "on" : "off"));
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -3688,6 +3742,40 @@ bool D2SkillLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
    q1.TrainMode(true);
    q2.TrainMode(true);
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Configures the Actor-Critic write permissions for the D2 mode.  |
+//+------------------------------------------------------------------+
+bool D2SkillConfigureActorCriticUpdates(CNet &actor, CNet &q1, CNet &q2)
+  {
+//--- D2_DISABLED is the ordinary Actor-Critic baseline.  Online calibration
+//--- retains the observed-transition Actor-Critic update, while bank direction
+//--- EMA remains separately opt-in through D2SkillD2OnlineDirectionUpdate.
+   bool actor_weights = false;
+   bool critic_weights = false;
+   switch(D2SkillD2ExecutionMode)
+     {
+      case D2_DISABLED:
+      case D2_ONLINE_CALIBRATION:
+         actor_weights = true;
+         critic_weights = true;
+         break;
+      case D2_COLLECT:
+         critic_weights = true;
+         break;
+      case D2_EVALUATE:
+      case D2_INFERENCE:
+         break;
+      default:
+         ReturnFalse;
+     }
+//--- CNet preserves TrainMode and full gradient routing.  Only its explicit
+//--- bWeightsUpdate gate controls trainable-parameter writes.
+   if(!actor.SetWeightsUpdate(actor_weights) || !q1.SetWeightsUpdate(critic_weights) ||
+      !q2.SetWeightsUpdate(critic_weights) || !D2SkillMarket.SetWeightsUpdate(false) ||
+      !D2SkillMarket.TrainMode(false))
+      ReturnFalse;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Implements D2SkillSavePolicySet.                                   |

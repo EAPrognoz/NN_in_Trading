@@ -2927,6 +2927,7 @@ union uaLongChar
 #define def_k_d2gc_representation                 11
 #define def_k_d2gc_alpha                          12
 #define def_k_d2gc_retrieved                      13
+#define def_k_d2gc_mark_retrieved                 14
 //--- D2Skill staged bank update.  Scratch is device-only and is never saved.
 #define def_k_D2SkillAgeLifecycle                295
 #define def_k_d2al_used                            0
@@ -3088,6 +3089,16 @@ union uaLongChar
 #define def_k_d2sia_reduced_influence               1
 #define def_k_d2sia_influence                       2
 #define def_k_d2sia_slots                           3
+#define def_k_D2SkillDirectionEMA                  315
+#define def_k_d2de_gradient                          0
+#define def_k_d2de_directions                        1
+#define def_k_d2de_selected_slot                     2
+#define def_k_d2de_used                              3
+#define def_k_d2de_state                             4
+#define def_k_d2de_reduced_norm                      5
+#define def_k_d2de_slots                             6
+#define def_k_d2de_dimension                         7
+#define def_k_d2de_beta_direction                    8
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

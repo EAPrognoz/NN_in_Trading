@@ -45,8 +45,8 @@ ulong PolicyTransitions = 0;
 ulong PolicySkippedInvalid = 0;
 ulong PairedTransitions = 0;
 double PairedDeltaSum = 0;
-CD2SkillActorForwardSnapshot ActorForwardSnapshot;
-CD2SkillActorForwardSnapshot BaselineActorForwardSnapshot;
+SD2SkillActorForwardState    ActorForwardState;
+SD2SkillActorForwardState    BaselineActorForwardState;
 SD2SkillEpisodeOutcome       BaselineEpisodeOutcome;
 SD2SkillEpisodeOutcome       SkillEpisodeOutcome;
 bool                          PairedEpisodeActive = false;
@@ -155,7 +155,7 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
    baseline_terminal = false;
    CNeuronBaseOCL *layer = Actor.Layer(1);
    CD2Skill *skill = (layer && layer.Type() == defNeuronD2Skill ? (CD2Skill*)layer : NULL);
-   paired = D2SkillUsePairedHindsight(skill, ActorForwardSnapshot);
+   paired = D2SkillUsePairedHindsight(skill, ActorForwardState);
    bool task_enabled = false;
    bool step_enabled = false;
    D2SkillD2BankFlags(task_enabled, step_enabled);
@@ -171,8 +171,8 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
    double baseline_reward = 0;
    if(paired)
      {
-      if(!BaselineActorForwardSnapshot.Ready() ||
-         !D2SkillRestorePairedActorState(BaselineActorForwardSnapshot, skill,
+      if(!D2SkillActorForwardStateReady(BaselineActorForwardState) ||
+         !D2SkillRestorePairedActorState(BaselineActorForwardState, skill,
                                          false, false, "baseline_start"))
         {
          Print("TrainTransition stage=baseline_restore");
@@ -182,17 +182,17 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
          !ReadAction(Actor, GetPointer(BaselineAction)) ||
          !AdvanceAccount(GetPointer(BaselineAccount), GetPointer(BaselineAction), position, MinBalance,
                          GetPointer(BaselineNextAccount), baseline_reward, baseline_terminal) ||
-         !BaselineActorForwardSnapshot.Capture() ||
+         !D2SkillCaptureActorForwardState(BaselineActorForwardState) ||
          !AccumulateEpisodeOutcome(BaselineEpisodeOutcome, GetPointer(BaselineNextAccount),
                                    baseline_reward))
         {
-         D2SkillRestorePairedActorState(ActorForwardSnapshot, skill,
+         D2SkillRestorePairedActorState(ActorForwardState, skill,
                                         task_enabled, step_enabled,
                                         "baseline_failure");
          Print("TrainTransition stage=baseline_transition");
          ReturnFalse;
         }
-      if(!D2SkillRestorePairedActorState(ActorForwardSnapshot, skill,
+      if(!D2SkillRestorePairedActorState(ActorForwardState, skill,
                                          task_enabled, step_enabled,
                                          "baseline_to_skill"))
         { Print("TrainTransition stage=restore_skill_state"); ReturnFalse; }
@@ -201,11 +201,11 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
       !ReadAction(Actor, GetPointer(CurrentAction)) ||
       !AdvanceAccount(GetPointer(Account), GetPointer(CurrentAction), position, MinBalance,
                       GetPointer(NextAccount), reward, terminal) ||
-      (paired && (!ActorForwardSnapshot.Capture() ||
+      (paired && (!D2SkillCaptureActorForwardState(ActorForwardState) ||
                   !AccumulateEpisodeOutcome(SkillEpisodeOutcome, GetPointer(NextAccount), reward))))
      {
       if(paired)
-         D2SkillRestorePairedActorState(ActorForwardSnapshot, skill,
+         D2SkillRestorePairedActorState(ActorForwardState, skill,
                                         task_enabled, step_enabled,
                                         "skill_failure");
       Print("TrainTransition stage=skill_transition");
@@ -216,7 +216,7 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
       delta_j = reward - baseline_reward;
       if(!MathIsValidNumber(delta_j))
         {
-         D2SkillRestorePairedActorState(ActorForwardSnapshot, skill,
+         D2SkillRestorePairedActorState(ActorForwardState, skill,
                                         task_enabled, step_enabled,
                                         "nonfinite_delta");
          Print("TrainTransition stage=paired_delta_nonfinite");
@@ -427,10 +427,10 @@ void TrainD2SkillActorCritic(void)
             break;
          CNeuronBaseOCL *layer = Actor.Layer(1);
          CD2Skill *skill = (layer && layer.Type() == defNeuronD2Skill ? (CD2Skill*)layer : NULL);
-         PairedEpisodeActive = (D2SkillUsePairedHindsight(skill, ActorForwardSnapshot) &&
-                                BaselineActorForwardSnapshot.Ready());
-         if(PairedEpisodeActive && (!ActorForwardSnapshot.Capture() ||
-                                    !BaselineActorForwardSnapshot.Capture()))
+         PairedEpisodeActive = (D2SkillUsePairedHindsight(skill, ActorForwardState) &&
+                                D2SkillActorForwardStateReady(BaselineActorForwardState));
+         if(PairedEpisodeActive && (!D2SkillCaptureActorForwardState(ActorForwardState) ||
+                                    !D2SkillCaptureActorForwardState(BaselineActorForwardState)))
             break;
         }
       bool terminal = false;
@@ -468,8 +468,10 @@ void TrainD2SkillActorCritic(void)
         {
          if(PairedEpisodeActive)
            {
-            const double terminal_delta = SkillEpisodeOutcome.Outcome() - BaselineEpisodeOutcome.Outcome();
-            if(!MathIsValidNumber(terminal_delta) ||
+            double terminal_delta = 0.0;
+            if(!D2SkillComputePairedEpisodeDelta(BaselineEpisodeOutcome,
+                                                  SkillEpisodeOutcome,
+                                                  terminal_delta) ||
                !D2SkillUpdateD2UtilityDelta(Actor, terminal_delta))
               {
                failed_iteration = iteration;
@@ -546,6 +548,7 @@ int OnInit()
                                InpD2SkillExecutionMode, InpD2SkillUtilityAware,
                                InpD2SkillMinUtility, InpD2SkillUtilityScale) ||
       !D2SkillInitIndicators() || !D2SkillLoadForecastInference() || !LoadOrCreateD2SkillPolicies() ||
+      !D2SkillConfigureActorCriticUpdates(Actor, Q1, Q2) ||
 //+------------------------------------------------------------------+
 //| Function D2SkillVerifyFrozenForecastExact.                         |
 //+------------------------------------------------------------------+
@@ -558,7 +561,8 @@ int OnInit()
       ((D2SkillD2ExecutionMode == D2_EVALUATE ||
         D2SkillD2ExecutionMode == D2_ONLINE_CALIBRATION) &&
        D2SkillD2Mode != D2Skill_D2_MODE_BASE &&
-       (!ActorForwardSnapshot.Init(Actor) || !BaselineActorForwardSnapshot.Init(Actor))))
+       (!D2SkillInitActorForwardState(ActorForwardState, Actor) ||
+        !D2SkillInitActorForwardState(BaselineActorForwardState, Actor))))
      {
       PrintFormat("D2Skill paired snapshot initialization failed at line %d error=%d",
                   __LINE__, GetLastError());

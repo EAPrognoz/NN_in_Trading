@@ -10,6 +10,7 @@
 input group                       "---- D2Skill online ----"
 input ENUM_D2SKILL_STAGE          InpD2SkillStage = D2Skill_D2_STAGE_ONLINE; //Lifecycle stage
 input ENUM_D2SKILL_MODE           InpD2SkillExecutionMode = D2_ONLINE_CALIBRATION; //Bank execution mode
+input bool                        InpD2SkillOnlineDirectionUpdate = false; //Update direction EMA
 //---
 input group                       "---- Online learning ----"
 input int                         UpdatePolicy  = ActorUpdate; //Actor update interval
@@ -26,8 +27,8 @@ CBufferFloat PreviousAccount;
 CBufferFloat BaselineVirtualAccount, SkillVirtualAccount;
 CBufferFloat BaselineVirtualNext, SkillVirtualNext;
 CBufferFloat BaselineVirtualAction, SkillVirtualAction;
-CD2SkillActorForwardSnapshot ActorForwardSnapshot;
-CD2SkillActorForwardSnapshot BaselineActorForwardSnapshot;
+SD2SkillActorForwardState    ActorForwardState;
+SD2SkillActorForwardState    BaselineActorForwardState;
 SD2SkillEpisodeOutcome BaselineEpisodeOutcome, SkillEpisodeOutcome;
 double PreviousBalance = 0, PreviousEquity = 0;
 double PreviousMarginPenalty = 0;
@@ -79,16 +80,17 @@ bool StartOnlinePair(CBufferFloat *account)
    CD2Skill *skill = (layer && layer.Type() == defNeuronD2Skill ? (CD2Skill*)layer : NULL);
    if(!account)
       ReturnFalse;
-   if(!skill || !D2SkillUsePairedHindsight(skill, ActorForwardSnapshot))
+   if(!skill || !D2SkillUsePairedHindsight(skill, ActorForwardState))
      {
       OnlinePairActive = false;
       OnlineVirtualTransitionPending = false;
       return(true);
      }
-   if(!BaselineActorForwardSnapshot.Ready() || !BaselineVirtualAccount.AssignArray(account) ||
+   if(!D2SkillActorForwardStateReady(BaselineActorForwardState) ||
+      !BaselineVirtualAccount.AssignArray(account) ||
       !SkillVirtualAccount.AssignArray(account) || !BaselineEpisodeOutcome.Reset() ||
-      !SkillEpisodeOutcome.Reset() || !ActorForwardSnapshot.Capture() ||
-      !BaselineActorForwardSnapshot.Capture())
+      !SkillEpisodeOutcome.Reset() || !D2SkillCaptureActorForwardState(ActorForwardState) ||
+      !D2SkillCaptureActorForwardState(BaselineActorForwardState))
       ReturnFalse;
    OnlinePairActive = true;
    OnlineVirtualTransitionPending = false;
@@ -138,8 +140,9 @@ bool FinishOnlinePair(void)
   {
    if(!OnlinePairActive)
       return(true);
-   const double delta_j = SkillEpisodeOutcome.Outcome() - BaselineEpisodeOutcome.Outcome();
-   if(!MathIsValidNumber(delta_j) || !D2SkillUpdateD2UtilityDelta(Actor, delta_j) ||
+   double delta_j = 0.0;
+   if(!D2SkillComputePairedEpisodeDelta(BaselineEpisodeOutcome, SkillEpisodeOutcome,
+                                        delta_j) || !D2SkillUpdateD2UtilityDelta(Actor, delta_j) ||
       !ResetD2SkillEpisodeInfluence(Actor))
       ReturnFalse;
    PrintFormat("D2Skill online paired terminal JBase=%.8f JSkill=%.8f DeltaJ=%.8f "
@@ -160,6 +163,21 @@ bool FinishOnlinePair(void)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Drops an incomplete pair without emitting terminal utility.     |
+//+------------------------------------------------------------------+
+bool AbortOnlinePair(void)
+  {
+   if(!OnlinePairActive)
+      return(true);
+   if(!ResetD2SkillEpisodeInfluence(Actor))
+      ReturnFalse;
+   OnlinePairActive = false;
+   OnlineVirtualTransitionPending = false;
+   OnlineBaselineTerminal = false;
+   OnlineSkillTerminal = false;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Produces a Base action without disturbing the Skill recurrent state. |
 //+------------------------------------------------------------------+
 bool BuildOnlineBaselineAction(void)
@@ -173,14 +191,14 @@ bool BuildOnlineBaselineAction(void)
    bool task_enabled = false;
    bool step_enabled = false;
    D2SkillD2BankFlags(task_enabled, step_enabled);
-   if(!D2SkillRestorePairedActorState(BaselineActorForwardSnapshot, skill,
+   if(!D2SkillRestorePairedActorState(BaselineActorForwardState, skill,
                                       false, false, "online_baseline_start") ||
       !Actor.feedForward(GetPointer(BaselineVirtualAccount), 1, false,
                          GetPointer(D2SkillMarket), -1) ||
       !ReadAction(Actor, GetPointer(BaselineVirtualAction)) ||
       !D2SkillValidateAction(GetPointer(BaselineVirtualAction)) ||
-      !BaselineActorForwardSnapshot.Capture() ||
-      !D2SkillRestorePairedActorState(ActorForwardSnapshot, skill,
+      !D2SkillCaptureActorForwardState(BaselineActorForwardState) ||
+      !D2SkillRestorePairedActorState(ActorForwardState, skill,
                                       task_enabled, step_enabled,
                                       "online_baseline_to_skill"))
       ReturnFalse;
@@ -191,7 +209,7 @@ bool BuildOnlineBaselineAction(void)
 //+------------------------------------------------------------------+
 bool ClearPreviousTransition(void)
   {
-   if(OnlinePairActive && !FinishOnlinePair())
+   if(!AbortOnlinePair())
       ReturnFalse;
    HavePrevious = false;
    PreviousAccount.Clear();
@@ -329,7 +347,8 @@ int OnInit(void)
    D2SkillOnlineInitialized = false;
    if(!D2SkillConfigureRuntime(InpD2SkillStage, InpD2SkillMode,
                                InpD2SkillExecutionMode, InpD2SkillUtilityAware,
-                               InpD2SkillMinUtility, InpD2SkillUtilityScale))
+                               InpD2SkillMinUtility, InpD2SkillUtilityScale,
+                               InpD2SkillOnlineDirectionUpdate))
      { Print("D2Skill online init: runtime configuration=FAIL"); return INIT_FAILED; }
    if(!D2SkillInitIndicators())
      { Print("D2Skill online init: indicators=FAIL"); return INIT_FAILED; }
@@ -339,15 +358,19 @@ int OnInit(void)
      { Print("D2Skill online init: forecast=FAIL"); return INIT_FAILED; }
    if(!D2SkillLoadOrCreatePolicySet(Actor, Q1, Q2, false))
      { Print("D2Skill online init: policy checkpoint=FAIL"); return INIT_FAILED; }
+   if(!D2SkillConfigureActorCriticUpdates(Actor, Q1, Q2))
+     { Print("D2Skill online init: update permissions=FAIL"); return INIT_FAILED; }
    if(!LoadOnlineTargets())
      { Print("D2Skill online init: runtime targets=FAIL"); return INIT_FAILED; }
    if(!D2SkillVerifyFrozenForecastExact())
      { Print("D2Skill online init: frozen forecast=FAIL"); return INIT_FAILED; }
    if(!D2SkillConfigureD2UtilityMode(D2Skill_D2_UTILITY_PAIRED_HINDSIGHT))
       { Print("D2Skill online init: utility source=FAIL"); return INIT_FAILED; }
-   if(!ActorForwardSnapshot.Init(Actor) || !BaselineActorForwardSnapshot.Init(Actor) ||
+   if(!D2SkillInitActorForwardState(ActorForwardState, Actor) ||
+      !D2SkillInitActorForwardState(BaselineActorForwardState, Actor) ||
       !Actor.Clear() || !D2SkillMarket.Clear() || !ResetD2SkillEpisodeInfluence(Actor) ||
-      !ActorForwardSnapshot.Capture() || !BaselineActorForwardSnapshot.Capture())
+      !D2SkillCaptureActorForwardState(ActorForwardState) ||
+      !D2SkillCaptureActorForwardState(BaselineActorForwardState))
       { Print("D2Skill online init: forecast clear=FAIL"); return INIT_FAILED; }
    PreviousBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity = AccountInfoDouble(ACCOUNT_EQUITY);
@@ -359,7 +382,7 @@ int OnInit(void)
 //+------------------------------------------------------------------+
  void OnDeinit(const int reason)
   {
-   if(D2SkillOnlineInitialized && OnlinePairActive && !FinishOnlinePair())
+   if(D2SkillOnlineInitialized && !AbortOnlinePair())
       PolicyCheckpointSafe = false;
    if(D2SkillOnlineInitialized && !ResetD2SkillEpisodeInfluence(Actor))
      {
@@ -484,6 +507,17 @@ void OnTick(void)
          ClearPreviousTransition();
          ExpertRemove();
          return;
+        }
+      if(!terminal && OnlinePairActive &&
+         D2SkillPairReachedTerminal(OnlineBaselineTerminal, OnlineSkillTerminal))
+        {
+         if(!FinishOnlinePair() || !StartOnlinePair(GetPointer(Account)))
+           {
+            PrintFormat("%s -> %d paired virtual terminal", __FUNCTION__, __LINE__);
+            ClearPreviousTransition();
+            ExpertRemove();
+            return;
+           }
         }
      }
 //+------------------------------------------------------------------+

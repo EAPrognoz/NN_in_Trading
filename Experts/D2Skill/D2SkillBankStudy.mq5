@@ -168,6 +168,37 @@ bool RunCandidateAndEviction(void)
    return(evicted_after >= 1.0f && inactive_after <= 1.0f);
   }
 //+------------------------------------------------------------------+
+//| A promoted DirectionMagnitude candidate keeps scale as its norm. |
+//+------------------------------------------------------------------+
+bool RunDirectionMagnitudePromotion(void)
+  {
+   CD2SkillBank bank;
+   if(!bank.Init(D2_STUDY_DIM, 250, g_net.GetOpenCL(), D2_STUDY_SLOTS, ADAM, 1) ||
+      !bank.SetThresholds(0.80f, -1.00f) || !bank.SetLifecycle(2, 0, 2) ||
+      !bank.SetMaxCorrection(10.00f) || !bank.SetUtilityPolicy(false, -1.00f) ||
+      !bank.SetEnabled(true) || !Train(bank, 1.00f, 0.00f) ||
+      !Train(bank, 1.00f, 1.00f) || !Put(g_source.getOutput(), 1.00f, 0.00f) ||
+      !bank.FeedForward(g_source.AsObject()) || !ReadSelection(bank) ||
+      !bank.Directions().BufferRead() || !bank.Scales().BufferRead())
+      ReturnFalse;
+   const int slot = (int)bank.SelectedSlot()[0];
+   if(slot < 0 || slot >= (int)D2_STUDY_SLOTS)
+      ReturnFalse;
+   const int offset = slot * (int)D2_STUDY_DIM;
+   const float direction_norm = (float)MathSqrt(bank.Directions()[offset] *
+                                bank.Directions()[offset] + bank.Directions()[offset + 1] *
+                                bank.Directions()[offset + 1]);
+   const float correction_norm = (float)MathSqrt(bank.SelectedCorrection()[0] *
+                                 bank.SelectedCorrection()[0] + bank.SelectedCorrection()[1] *
+                                 bank.SelectedCorrection()[1]);
+   const float scale = bank.Scales()[slot];
+   PrintFormat("D2SkillBankStudy: direction_magnitude slot=%d direction_norm=%.8f "
+               "correction_norm=%.8f scale=%.8f", slot, direction_norm,
+               correction_norm, scale);
+   return(MathAbs(direction_norm - 1.00f) <= D2_STUDY_EPSILON &&
+          MathAbs(correction_norm - scale) <= D2_STUDY_EPSILON);
+  }
+//+------------------------------------------------------------------+
 //| Protected slots reject an unrelated confirmed candidate.        |
 //+------------------------------------------------------------------+
 bool RunProtectedRejection(void)
@@ -260,12 +291,13 @@ int OnInit(void)
    if(!CreateHost() ||
       !g_source.Init(0, 10, g_net.GetOpenCL(), D2_STUDY_DIM, ADAM, 1) ||
       !RunCorrectionSelection() || !RunCandidateAndEviction() ||
+      !RunDirectionMagnitudePromotion() ||
       !RunProtectedRejection() || !RunNoSkill() || !RunPersistenceWinner())
      {
       PrintFormat("D2SkillBankStudy: FAIL error=%d", GetLastError());
       return(INIT_FAILED);
      }
-   Print("D2SkillBankStudy: PASS corrections candidate protected eviction noskill persistence");
+   Print("D2SkillBankStudy: PASS corrections candidate direction protected eviction noskill persistence");
    g_completed = true;
    if(!EventSetMillisecondTimer(1))
       return(INIT_FAILED);
