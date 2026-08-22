@@ -3099,6 +3099,18 @@ union uaLongChar
 #define def_k_d2de_slots                             6
 #define def_k_d2de_dimension                         7
 #define def_k_d2de_beta_direction                    8
+#define def_k_d2de_partials                          9
+#define def_k_d2de_phase                            10
+#define def_k_D2SkillNormalizeDirection             316
+#define def_k_d2nd_directions                         0
+#define def_k_d2nd_selected_slot                      1
+#define def_k_d2nd_used                               2
+#define def_k_d2nd_state                              3
+#define def_k_d2nd_partials                           4
+#define def_k_d2nd_reduced_norm                       5
+#define def_k_d2nd_slots                              6
+#define def_k_d2nd_dimension                          7
+#define def_k_d2nd_phase                              8
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+

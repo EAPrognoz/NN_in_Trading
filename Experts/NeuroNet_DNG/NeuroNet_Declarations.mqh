@@ -13933,6 +13933,7 @@ public:
    bool              UpdateDirectionFromGradient(CBufferFloat *gradient);
    bool              UpdateUtility(const float delta_j);
    bool              ResetEpisodeInfluence(void);
+   uint              D2LaunchLocalSize(const uint work_items) const;
    uint              Slots(void) const;
    uint              Dimension(void) const;
    uint              ActiveSlot(void) const;

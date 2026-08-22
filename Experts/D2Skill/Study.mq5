@@ -11,6 +11,11 @@
 input group                       "---- D2Skill training ----"
 input ENUM_D2SKILL_STAGE          InpD2SkillStage = D2Skill_D2_STAGE_FORMATION; //Lifecycle stage
 input ENUM_D2SKILL_MODE           InpD2SkillExecutionMode = D2_COLLECT; //Bank execution mode
+input ED2SkillRepresentation      InpD2SkillRepresentation = D2SkillDirectionMagnitude; //Bank representation
+input bool                        InpD2SkillResetBanksOnRepresentationMismatch =
+   false; //Reset incompatible banks
+input bool                        InpD2SkillRecreateIncompatibleCheckpoint =
+   false; //Recreate incompatible policy checkpoint
 //---
 input group                       "---- Actor-Critic training ----"
 input datetime                    Start         = D'2024.01.01'; //Training period start
@@ -232,9 +237,11 @@ bool BuildPairedTransition(const int position, const bool trace_td, bool &termin
 //+------------------------------------------------------------------+
 //| Implements TrainTransition.                                      |
 //+------------------------------------------------------------------+
-bool TrainTransition(const int position, const int iteration, bool &terminal)
+bool TrainTransition(const int position, const int iteration, bool &skill_terminal,
+                     bool &pair_terminal)
   {
-   terminal = false;
+   skill_terminal = false;
+   pair_terminal = false;
    const bool trace_td = (iteration < 8 || iteration % 10000 == 0);
    if(!D2SkillForwardForecast(position, GetPointer(State), GetPointer(TimeState)))
      { Print("TrainTransition stage=current_forecast"); ReturnFalse; }
@@ -242,9 +249,11 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
    double delta_j = 0;
    bool paired = false;
    bool baseline_terminal = false;
-   if(!BuildPairedTransition(position, trace_td, terminal, reward, delta_j, paired,
+   if(!BuildPairedTransition(position, trace_td, skill_terminal, reward, delta_j, paired,
                              baseline_terminal))
       ReturnFalse;
+   pair_terminal = (paired && D2SkillPairReachedTerminal(baseline_terminal,
+                    skill_terminal));
    const double balance = MathMax(0.0, double(Account[0]) * EtalonBalance);
    const double buy_lot = MathMax(0.0, double(CurrentAction[0] - CurrentAction[3]));
    const double sell_lot = MathMax(0.0, double(CurrentAction[3] - CurrentAction[0]));
@@ -264,7 +273,8 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
                   iteration, reward, target_value, double(NextAccount[0])*EtalonBalance,
                   double(NextAccount[2])*balance, double(NextAccount[6])*MathMax(double(NextAccount[0])*EtalonBalance, 1.0),
                   double(NextAccount[7])*MathMax(double(NextAccount[0])*EtalonBalance, 1.0),
-                  double(NextAccount[4]), double(NextAccount[5]), (terminal ? "true" : "false"));
+                  double(NextAccount[4]), double(NextAccount[5]),
+                  (skill_terminal ? "true" : "false"));
    if(!MathIsValidNumber(target_value) || !ScalarTarget.BufferInit(1, 0) ||
       !ScalarTarget.Update(0, float(target_value)))
      { Print("TrainTransition stage=scalar_target"); ReturnFalse; }
@@ -433,11 +443,12 @@ void TrainD2SkillActorCritic(void)
                                     !D2SkillCaptureActorForwardState(BaselineActorForwardState)))
             break;
         }
-      bool terminal = false;
+      bool skill_terminal = false;
+      bool pair_terminal = false;
       //+------------------------------------------------------------------+
       //| Function if.                                                     |
       //+------------------------------------------------------------------+
-      if(!TrainTransition(position, iteration, terminal))
+      if(!TrainTransition(position, iteration, skill_terminal, pair_terminal))
         {
          failed_iteration = iteration;
          failed_position = position;
@@ -464,34 +475,41 @@ void TrainD2SkillActorCritic(void)
       //+------------------------------------------------------------------+
       //| Function if.                                                     |
       //+------------------------------------------------------------------+
-      if(position < first || terminal || episode >= MathMax(1, EpisodeBars))
+      const bool episode_limit = (position < first ||
+                                  episode >= MathMax(1, EpisodeBars));
+      double terminal_delta = 0.0;
+      bool utility_applied = false;
+      bool influence_reset = false;
+      bool episode_closed = false;
+      if(!D2SkillCloseOfflineEpisode(Actor, PairedEpisodeActive, pair_terminal,
+                                     episode_limit, BaselineEpisodeOutcome,
+                                     SkillEpisodeOutcome, terminal_delta,
+                                     utility_applied, influence_reset,
+                                     episode_closed))
+        {
+         failed_iteration = iteration;
+         failed_position = position;
+         episode_reset_failed = true;
+         break;
+        }
+      if(episode_closed &&
+         (!influence_reset || (PairedEpisodeActive && !utility_applied)))
+        {
+         failed_iteration = iteration;
+         failed_position = position;
+         episode_reset_failed = true;
+         break;
+        }
+      if(episode_closed)
         {
          if(PairedEpisodeActive)
            {
-            double terminal_delta = 0.0;
-            if(!D2SkillComputePairedEpisodeDelta(BaselineEpisodeOutcome,
-                                                  SkillEpisodeOutcome,
-                                                  terminal_delta) ||
-               !D2SkillUpdateD2UtilityDelta(Actor, terminal_delta))
-              {
-               failed_iteration = iteration;
-               failed_position = position;
-               episode_reset_failed = true;
-               break;
-              }
             PairedTransitions++;
             PairedDeltaSum += terminal_delta;
             PrintFormat("D2Skill paired terminal JBase=%.8f JSkill=%.8f DeltaJ=%.8f base_balance=%.2f skill_balance=%.2f base_duration=%u skill_duration=%u",
                         BaselineEpisodeOutcome.Outcome(), SkillEpisodeOutcome.Outcome(), terminal_delta,
                         BaselineEpisodeOutcome.Balance(), SkillEpisodeOutcome.Balance(),
                         BaselineEpisodeOutcome.Duration(), SkillEpisodeOutcome.Duration());
-           }
-         if(!ResetD2SkillEpisodeInfluence(Actor))
-           {
-            failed_iteration = iteration;
-            failed_position = position;
-            episode_reset_failed = true;
-            break;
            }
          if(position < first)
             position = last;
@@ -546,7 +564,10 @@ int OnInit()
    ResetLastError();
    if(!D2SkillConfigureRuntime(InpD2SkillStage, InpD2SkillMode,
                                InpD2SkillExecutionMode, InpD2SkillUtilityAware,
-                               InpD2SkillMinUtility, InpD2SkillUtilityScale) ||
+                               InpD2SkillMinUtility, InpD2SkillUtilityScale,
+                               false, false, InpD2SkillRepresentation,
+                               InpD2SkillResetBanksOnRepresentationMismatch,
+                               InpD2SkillRecreateIncompatibleCheckpoint) ||
       !D2SkillInitIndicators() || !D2SkillLoadForecastInference() || !LoadOrCreateD2SkillPolicies() ||
       !D2SkillConfigureActorCriticUpdates(Actor, Q1, Q2) ||
 //+------------------------------------------------------------------+

@@ -1015,7 +1015,7 @@ bool CD2SkillItem::EnsureItemScratch(void)
    if((m_item_partials.GetOpenCL() != OpenCL || m_item_partials.GetIndex() < 0) &&
       !m_item_partials.BufferCreate(OpenCL))
       ReturnFalse;
-   if(m_item_reduced_norm.Total() != 1 && !m_item_reduced_norm.BufferInit(1, 0.0f))
+   if(m_item_reduced_norm.Total() != 2 && !m_item_reduced_norm.BufferInit(2, 0.0f))
       ReturnFalse;
    if((m_item_reduced_norm.GetOpenCL() != OpenCL || m_item_reduced_norm.GetIndex() < 0) &&
       !m_item_reduced_norm.BufferCreate(OpenCL))
@@ -1192,19 +1192,36 @@ bool CD2SkillItem::Clear(void)
           (m_item_reduced_norm.Total() == 0 || m_item_reduced_norm.Fill(0)));
   }
 //+------------------------------------------------------------------+
+//| Choose a D2 local size without changing the generic RAG width. |
+//+------------------------------------------------------------------+
+uint CD2SkillBank::D2LaunchLocalSize(const uint work_items) const
+  {
+   if(!OpenCL || work_items == 0)
+      ReturnFalse;
+   const long device_limit = MathMin(OpenCL.GetMaxWorkGroupSize(),
+                                     OpenCL.GetMaxLocalSize(0));
+   if(device_limit <= 0)
+      ReturnFalse;
+   const ulong capped_items = MathMin((ulong)device_limit,
+                                      (ulong)MathMax(work_items, (uint)32));
+   if(capped_items == 0)
+      ReturnFalse;
+   uint local_size = 1;
+   while(local_size <= (uint)capped_items / 2)
+      local_size *= 2;
+   return(local_size);
+  }
+//+------------------------------------------------------------------+
 bool CD2SkillBank::RetrievalLaunchLayout(uint &local_size, uint &partial_count) const
   {
    if(!OpenCL || m_slots == 0 || m_dimension == 0 || m_slots > RAG_FLOAT_INDEX_LIMIT ||
       OpenCL.GetMaxWorkGroupSize() < RAG_TOPK_LOCAL_WIDTH ||
       OpenCL.GetMaxLocalSize(0) < RAG_TOPK_LOCAL_WIDTH)
       ReturnFalse;
-   long limit = OpenCL.GetMaxWorkGroupSize();
-   limit = MathMin(limit, OpenCL.GetMaxLocalSize(0));
-   if(limit <= 0)
+   const ulong score_items = (ulong)m_slots * m_dimension;
+   if(score_items == 0 || score_items > UINT_MAX)
       ReturnFalse;
-   local_size = 1;
-   while(local_size <= (uint)limit / 2)
-      local_size *= 2;
+   local_size = D2LaunchLocalSize((uint)score_items);
    partial_count = (m_slots + RAG_TOPK_LOCAL_WIDTH - 1) / RAG_TOPK_LOCAL_WIDTH;
    return(local_size > 0 && partial_count > 0);
   }
@@ -1266,7 +1283,6 @@ bool CD2SkillBank::RunStagedReduction(CBufferFloat &partials, CBufferFloat &redu
    uint input_offset = 0;
    uint output_offset = batches * items * fields;
    uint offset[1] = {0};
-   uint local[1] = {local_size};
    const int kernel = def_k_D2SkillMetricReduce;
    while(input_count > 0)
      {
@@ -1283,10 +1299,16 @@ bool CD2SkillBank::RunStagedReduction(CBufferFloat &partials, CBufferFloat &redu
       setArgument(kernel, def_k_d2mr_max_field_b, max_field_b)
       setArgument(kernel, def_k_d2mr_final_output, final_output)
       const ulong active = (ulong)batches * output_count * fields;
-      const ulong padded = ((active + local_size - 1) / local_size) * local_size;
-      if(active == 0 || padded > UINT_MAX)
+      if(active == 0 || active > UINT_MAX)
+         ReturnFalse;
+      const uint stage_local_size = D2LaunchLocalSize((uint)active);
+      if(stage_local_size == 0)
+         ReturnFalse;
+      const ulong padded = ((active + stage_local_size - 1) / stage_local_size) * stage_local_size;
+      if(padded > UINT_MAX)
          ReturnFalse;
       uint global[1] = {(uint)padded};
+      uint local[1] = {stage_local_size};
       kernelExecuteLoc(kernel, offset, global, local)
       if(final_output != 0)
          break;
@@ -1579,10 +1601,14 @@ bool CD2SkillBank::Retrieve(CBufferFloat *state, const bool mark_retrieved)
    setArgument(finalize_kernel, def_k_d2sf_utility_weight, m_utility_weight)
    setArgument(finalize_kernel, def_k_d2sf_min_utility, m_min_utility)
    setArgument(finalize_kernel, def_k_d2sf_utility_policy, (int)m_utility_aware)
-   const uint finalize_padded = ((m_slots + score_local_size - 1) /
-                                 score_local_size) * score_local_size;
+   const uint finalize_local_size = D2LaunchLocalSize(m_slots);
+   if(finalize_local_size == 0)
+      ReturnFalse;
+   const uint finalize_padded = ((m_slots + finalize_local_size - 1) /
+                                 finalize_local_size) * finalize_local_size;
    uint finalize_global[1] = {finalize_padded};
-   kernelExecuteLoc(finalize_kernel, offset, finalize_global, score_local)
+   uint finalize_local[1] = {finalize_local_size};
+   kernelExecuteLoc(finalize_kernel, offset, finalize_global, finalize_local)
 //--- Reuse the generic RAG Top-1 contracts without changing their data
 //--- layout: float scores become float2(slot, score) ping-pong candidates.
    const uint block_size = RAG_TOPK_LOCAL_WIDTH;
@@ -1728,8 +1754,28 @@ bool CD2SkillBank::UpdateDirectionFromGradient(CBufferFloat *gradient)
    uint local_size = 0;
    uint groups = 0;
    uint partial_count = 0;
-   if(!ItemLaunchLayout(local_size, groups, partial_count) ||
-      !CalculateItemNorm(gradient, local_size, groups))
+   if(!ItemLaunchLayout(local_size, groups, partial_count))
+      ReturnFalse;
+   const int normalize_kernel = def_k_D2SkillNormalizeDirection;
+   setBuffer(normalize_kernel, def_k_d2nd_directions, m_directions.GetIndex())
+   setBuffer(normalize_kernel, def_k_d2nd_selected_slot, m_selected_slot.GetIndex())
+   setBuffer(normalize_kernel, def_k_d2nd_used, m_used.GetIndex())
+   setBuffer(normalize_kernel, def_k_d2nd_state, m_state.GetIndex())
+   setBuffer(normalize_kernel, def_k_d2nd_partials, m_item_partials.GetIndex())
+   setBuffer(normalize_kernel, def_k_d2nd_reduced_norm, m_item_reduced_norm.GetIndex())
+   setArgument(normalize_kernel, def_k_d2nd_slots, (int)m_slots)
+   setArgument(normalize_kernel, def_k_d2nd_dimension, (int)m_dimension)
+   setArgument(normalize_kernel, def_k_d2nd_phase, 0)
+   uint offset[1] = {0};
+   uint global[1] = {groups * local_size};
+   uint local[1] = {local_size};
+   kernelExecuteLoc(normalize_kernel, offset, global, local)
+   if(!RunStagedReduction(m_item_partials, m_item_reduced_norm, m_dimension, 1, 1,
+                          local_size))
+      ReturnFalse;
+   setArgument(normalize_kernel, def_k_d2nd_phase, 1)
+   kernelExecuteLoc(normalize_kernel, offset, global, local)
+   if(!CalculateItemNorm(gradient, local_size, groups))
       ReturnFalse;
    const int kernel = def_k_D2SkillDirectionEMA;
    setBuffer(kernel, def_k_d2de_gradient, gradient.GetIndex())
@@ -1738,12 +1784,16 @@ bool CD2SkillBank::UpdateDirectionFromGradient(CBufferFloat *gradient)
    setBuffer(kernel, def_k_d2de_used, m_used.GetIndex())
    setBuffer(kernel, def_k_d2de_state, m_state.GetIndex())
    setBuffer(kernel, def_k_d2de_reduced_norm, m_item_reduced_norm.GetIndex())
+   setBuffer(kernel, def_k_d2de_partials, m_item_partials.GetIndex())
    setArgument(kernel, def_k_d2de_slots, (int)m_slots)
    setArgument(kernel, def_k_d2de_dimension, (int)m_dimension)
    setArgument(kernel, def_k_d2de_beta_direction, m_beta_direction)
-   uint offset[1] = {0};
-   uint global[1] = {groups * local_size};
-   uint local[1] = {local_size};
+   setArgument(kernel, def_k_d2de_phase, 0)
+   kernelExecuteLoc(kernel, offset, global, local)
+   if(!RunStagedReduction(m_item_partials, m_item_reduced_norm, m_dimension, 1, 1,
+                          local_size))
+      ReturnFalse;
+   setArgument(kernel, def_k_d2de_phase, 1)
    kernelExecuteLoc(kernel, offset, global, local)
    return(true);
   }
@@ -2074,7 +2124,7 @@ bool CD2SkillBank::Clear(void)
    if(!CNeuronBaseOCL::Clear())
       ReturnFalse;
    m_active_slot = UINT_MAX;
-   if(!(m_used.Fill(0) && m_retrieved.Fill(0) && m_influence.Fill(0) &&
+   if(!(m_retrieved.Fill(0) && m_influence.Fill(0) &&
         m_influence_total.Fill(0) && m_gradient_influence_total.Fill(0) &&
         m_selected_correction.Fill(0) && m_selected_slot.Fill(-1.0f) &&
         m_selected_score.Fill(-3.402823e+38f) && m_diagnostics.Fill(0) &&

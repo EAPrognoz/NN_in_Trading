@@ -10,6 +10,11 @@
 input group                       "---- D2Skill OOS ----"
 input ENUM_D2SKILL_STAGE          InpD2SkillStage = D2Skill_D2_STAGE_AUGMENTED; //Lifecycle stage
 input ENUM_D2SKILL_MODE           InpD2SkillExecutionMode = D2_INFERENCE; //Bank execution mode
+input ED2SkillRepresentation      InpD2SkillRepresentation = D2SkillDirectionMagnitude; //Bank representation
+input bool                        InpD2SkillResetBanksOnRepresentationMismatch =
+   false; //Reset incompatible banks
+input bool                        InpD2SkillRecreateIncompatibleCheckpoint =
+   false; //Recreate incompatible policy checkpoint
 datetime Start = 0;
 datetime End = 0;
 int Epochs = 0;
@@ -455,7 +460,10 @@ int OnInit(void)
    D2SkillTestInitialized = false;
    if(!D2SkillConfigureRuntime(InpD2SkillStage, InpD2SkillMode,
                                InpD2SkillExecutionMode, InpD2SkillUtilityAware,
-                               InpD2SkillMinUtility, InpD2SkillUtilityScale))
+                               InpD2SkillMinUtility, InpD2SkillUtilityScale,
+                               false, false, InpD2SkillRepresentation,
+                               InpD2SkillResetBanksOnRepresentationMismatch,
+                               InpD2SkillRecreateIncompatibleCheckpoint))
      { Print("D2Skill test init: runtime configuration=FAIL"); return INIT_FAILED; }
    if(!D2SkillInitIndicators())
      { Print("D2Skill test init: indicators=FAIL"); return INIT_FAILED; }

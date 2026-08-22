@@ -16811,14 +16811,16 @@ __kernel void D2SkillVectorUpdate(__global const float *query,
 //| It intentionally does not touch keys, correction, scale or lifecycle. |
 //+------------------------------------------------------------------+
 __kernel void D2SkillDirectionEMA(__global const float *gradient,
-                                  __global float *directions,
-                                  __global const float *selected_slot,
-                                  __global const float *used,
-                                  __global const float *state,
-                                  __global const float *reduced_norm,
-                                  const int slots,
-                                  const int dimension,
-                                  const float beta_direction)
+                                   __global float *directions,
+                                   __global const float *selected_slot,
+                                   __global const float *used,
+                                   __global const float *state,
+                                   __global float *reduced_norm,
+                                   const int slots,
+                                   const int dimension,
+                                   const float beta_direction,
+                                   __global float *partials,
+                                   const int phase)
   {
    const int component = get_global_id(0);
    if(component < 0 || component >= dimension || slots <= 0)
@@ -16830,18 +16832,74 @@ __kernel void D2SkillDirectionEMA(__global const float *gradient,
    if(slot_state == D2SKILL_FREE || slot_state == D2SKILL_CANDIDATE ||
       slot_state == D2SKILL_INACTIVE)
       return;
-   const float norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
-   if(norm <= 1.0e-12f)
+   const int index = slot * dimension + component;
+   float gradient_squared = IsNaNOrInf(reduced_norm[0], 0.0f);
+   if(phase == 0 && component == 0)
+      reduced_norm[1] = gradient_squared;
+   if(phase == 1)
+      gradient_squared = IsNaNOrInf(reduced_norm[1], 0.0f);
+   const float gradient_norm = sqrt(fmax(gradient_squared, 0.0f));
+   const float unit = (gradient_norm > 1.0e-12f ?
+                       IsNaNOrInf(gradient[component], 0.0f) / gradient_norm : 0.0f);
+   const float candidate = IsNaNOrInf((1.0f - beta_direction) *
+                                      IsNaNOrInf(directions[index], 0.0f) +
+                                      beta_direction * unit, 0.0f);
+   if(phase == 0)
+     {
+      partials[component] = IsNaNOrInf(candidate * candidate, 0.0f);
+      return;
+     }
+   if(phase == 1)
+     {
+      const float candidate_norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
+      if(candidate_norm > 1.0e-12f)
+         directions[index] = IsNaNOrInf(candidate / candidate_norm, 0.0f);
+     }
+   }
+//+------------------------------------------------------------------+
+//| Reduces and normalizes only the retrieved stable direction row.  |
+//| Phase 0 emits per-component squares; phase 1 consumes its staged |
+//| reduction.  No durable buffer except directions is written.      |
+//+------------------------------------------------------------------+
+__kernel void D2SkillNormalizeDirection(__global float *directions,
+                                         __global const float *selected_slot,
+                                         __global const float *used,
+                                         __global const float *state,
+                                         __global float *partials,
+                                         __global const float *reduced_norm,
+                                         const int slots,
+                                         const int dimension,
+                                         const int phase)
+  {
+   const int component = get_global_id(0);
+   if(component < 0 || component >= dimension || slots <= 0)
+      return;
+   const int slot = (int)round(IsNaNOrInf(selected_slot[0], -1.0f));
+   if(slot < 0 || slot >= slots || IsNaNOrInf(used[slot], 0.0f) <= 0.5f)
+      return;
+   const int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE);
+   if(slot_state == D2SKILL_FREE || slot_state == D2SKILL_CANDIDATE ||
+      slot_state == D2SKILL_INACTIVE)
       return;
    const int index = slot * dimension + component;
-   const float unit = IsNaNOrInf(gradient[component], 0.0f) / norm;
-   directions[index] = IsNaNOrInf((1.0f - beta_direction) *
-                                   IsNaNOrInf(directions[index], 0.0f) +
-                                   beta_direction * unit, 0.0f);
+   if(phase == 0)
+     {
+      const float value = IsNaNOrInf(directions[index], 0.0f);
+      partials[component] = IsNaNOrInf(value * value, 0.0f);
+      return;
+     }
+   if(phase == 1)
+     {
+       const float norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
+       if(norm > 1.0e-12f)
+          directions[index] = IsNaNOrInf(directions[index] / norm, 0.0f);
+       else
+          directions[index] = (component == 0 ? 1.0f : 0.0f);
+      }
   }
 //+------------------------------------------------------------------+
 __kernel void D2SkillBankVectorPartial(__global const float *corrections,
-                                       __global const float *directions,
+                                        __global const float *directions,
                                        __global const float *decision,
                                        __global float *partials,
                                        const int dimension,

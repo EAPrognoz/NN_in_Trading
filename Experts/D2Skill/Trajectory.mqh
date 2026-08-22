@@ -204,6 +204,36 @@ bool D2SkillComputePairedEpisodeDelta(const SD2SkillEpisodeOutcome &base,
    return(MathIsValidNumber(delta_j));
   }
 //+------------------------------------------------------------------+
+//| Validates a complete, synchronous paired terminal outcome.       |
+//+------------------------------------------------------------------+
+bool D2SkillValidatePairedEpisode(const SD2SkillEpisodeOutcome &base,
+                                  const SD2SkillEpisodeOutcome &skill)
+  {
+   if(!MathIsValidNumber(base.Outcome()) || !MathIsValidNumber(skill.Outcome()) ||
+      base.Duration() == 0 || skill.Duration() == 0 ||
+      base.Duration() != skill.Duration())
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Returns whether a checkpoint requests a later boundary save.     |
+//+------------------------------------------------------------------+
+bool D2SkillCheckpointDue(const ulong transitions, const int checkpoint_interval)
+  {
+   return(checkpoint_interval > 0 && transitions > 0 &&
+          transitions % (ulong)checkpoint_interval == 0);
+  }
+//+------------------------------------------------------------------+
+//| DeltaJ may close only at a terminal or configured pair horizon.  |
+//+------------------------------------------------------------------+
+bool D2SkillOnlinePairBoundary(const bool real_terminal, const bool virtual_terminal,
+                               const ulong pair_transitions, const int pair_horizon)
+  {
+   if(real_terminal || virtual_terminal)
+      return(true);
+   return(pair_horizon > 0 && pair_transitions >= (ulong)pair_horizon);
+  }
+//+------------------------------------------------------------------+
 //| An independent pair ends as soon as either branch is terminal.  |
 //+------------------------------------------------------------------+
 bool D2SkillPairReachedTerminal(const bool base_terminal, const bool skill_terminal)
@@ -1411,7 +1441,7 @@ const string         D2Skill_ACTOR_FILE = "D2SkillActor.nnw";
 const string         D2Skill_Q1_FILE = "D2SkillQ1.nnw";
 const string         D2Skill_Q2_FILE = "D2SkillQ2.nnw";
 const string         D2Skill_AC_MANIFEST_FILE = "D2SkillActorCritic.manifest";
-const uint           D2Skill_AC_FORMAT_VERSION = 12;
+const uint           D2Skill_AC_FORMAT_VERSION = 13;
 const string         D2Skill_OOS_FILE = "D2SkillOOS.csv";
 const string         D2Skill_OOS_MANIFEST_FILE = "D2SkillOOS.manifest";
 //--- Utility is defined only by the counterfactual paired terminal outcome.
@@ -1555,6 +1585,10 @@ bool                 D2SkillD2UtilityAware = false;
 double               D2SkillD2UtilityScale = 1.0;
 double               D2SkillD2MinUtility = -1.0;
 bool                 D2SkillD2OnlineDirectionUpdate = false;
+bool                 D2SkillD2OnlineCriticUpdate = false;
+ED2SkillRepresentation D2SkillD2Representation = D2SkillDirectionMagnitude;
+bool                 D2SkillD2ResetBanksOnRepresentationMismatch = false;
+bool                 D2SkillD2RecreateIncompatibleCheckpoint = false;
 int                  D2SkillD2UtilityMode = D2Skill_D2_UTILITY_PAIRED_HINDSIGHT;
 ulong                D2SkillD2PairedUtilityUpdates = 0;
 //+------------------------------------------------------------------+
@@ -1562,13 +1596,18 @@ ulong                D2SkillD2PairedUtilityUpdates = 0;
 //+------------------------------------------------------------------+
 bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage, const ENUM_D2SKILL_BANK_MODE mode,
                              const ENUM_D2SKILL_MODE execution_mode,
-                             const bool utility_aware, const double min_utility,
-                             const double utility_scale,
-                             const bool online_direction_update = false)
+                              const bool utility_aware, const double min_utility,
+                              const double utility_scale,
+                              const bool online_direction_update = false,
+                              const bool online_critic_update = false,
+                              const ED2SkillRepresentation representation = D2SkillDirectionMagnitude,
+                              const bool reset_banks_on_representation_mismatch = false,
+                              const bool recreate_incompatible_checkpoint = false)
   {
    if(stage < D2Skill_D2_STAGE_BASE || stage > D2Skill_D2_STAGE_ONLINE ||
       mode < D2Skill_D2_MODE_BASE || mode > D2Skill_D2_MODE_FULL ||
       execution_mode < D2_DISABLED || execution_mode > D2_ONLINE_CALIBRATION ||
+      representation < D2SkillFullResidual || representation > D2SkillDirectionMagnitude ||
       !MathIsValidNumber(min_utility) || !MathIsValidNumber(utility_scale) ||
       min_utility < -1.0 || min_utility > 1.0 || utility_scale < 0.0)
       ReturnFalse;
@@ -1579,6 +1618,10 @@ bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage, const ENUM_D2SKILL_
    D2SkillD2MinUtility = min_utility;
    D2SkillD2UtilityScale = utility_scale;
    D2SkillD2OnlineDirectionUpdate = online_direction_update;
+   D2SkillD2OnlineCriticUpdate = online_critic_update;
+   D2SkillD2Representation = representation;
+   D2SkillD2ResetBanksOnRepresentationMismatch = reset_banks_on_representation_mismatch;
+   D2SkillD2RecreateIncompatibleCheckpoint = recreate_incompatible_checkpoint;
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -3498,6 +3541,7 @@ bool D2SkillWriteACManifest(const ulong forecast_signature)
       ReturnFalse;
    FileWrite(handle, "format=D2Skill_ACTOR_CRITIC");
    FileWrite(handle, StringFormat("version=%u", D2Skill_AC_FORMAT_VERSION));
+   FileWrite(handle, StringFormat("d2_representation=%u", D2SkillD2Representation));
    FileWrite(handle, StringFormat("forecast_signature=%I64u", forecast_signature));
    FileWrite(handle, StringFormat("actor_context=%u", (3 * EmbeddingSize)));
    FileWrite(handle, StringFormat("critic_context=%u", (5 * EmbeddingSize)));
@@ -3520,15 +3564,45 @@ bool D2SkillWriteACManifest(const ulong forecast_signature)
 //+------------------------------------------------------------------+
 //| Implements D2SkillValidateACManifest.                              |
 //+------------------------------------------------------------------+
-bool D2SkillValidateACManifest(const bool required)
+bool D2SkillValidateManifestRepresentation(const string manifest_file,
+                                           const bool allow_bank_reset,
+                                           bool &mismatch)
   {
-   if(D2SkillManifestValue(D2Skill_AC_MANIFEST_FILE, "format") == "")
+   mismatch = false;
+   const string actual = D2SkillManifestValue(manifest_file, "d2_representation");
+   const string expected = IntegerToString(D2SkillD2Representation);
+   if(actual != IntegerToString(D2SkillFullResidual) &&
+      actual != IntegerToString(D2SkillDirectionMagnitude))
+     {
+      PrintFormat("D2Skill policy manifest: invalid d2_representation=%s", actual);
+      ReturnFalse;
+     }
+   mismatch = (actual != expected);
+   if(mismatch && !allow_bank_reset)
+     {
+      PrintFormat("D2Skill policy manifest: d2_representation expected=%s actual=%s", expected, actual);
+      ReturnFalse;
+     }
+   if(mismatch)
+      PrintFormat("D2Skill policy manifest: d2_representation expected=%s actual=%s; bank reset requested",
+                  expected, actual);
+   return(true);
+  }
+//+------------------------------------------------------------------+
+bool D2SkillValidateACManifestFile(const bool required, const string manifest_file,
+                                   const bool allow_bank_reset)
+  {
+   if(D2SkillManifestValue(manifest_file, "format") == "")
       return !required;
 #define D2Skill_AC_MANIFEST_EQ(KEY,VALUE) \
-   { const string actual=D2SkillManifestValue(D2Skill_AC_MANIFEST_FILE,KEY); const string expected=(VALUE); \
+   { const string actual=D2SkillManifestValue(manifest_file,KEY); const string expected=(VALUE); \
      if(actual!=expected) { PrintFormat("D2Skill policy manifest: %s expected=%s actual=%s",KEY,expected,actual); ReturnFalse; } }
    D2Skill_AC_MANIFEST_EQ("format", "D2Skill_ACTOR_CRITIC");
    D2Skill_AC_MANIFEST_EQ("version", IntegerToString(D2Skill_AC_FORMAT_VERSION));
+   bool representation_mismatch = false;
+   if(!D2SkillValidateManifestRepresentation(manifest_file, allow_bank_reset,
+                                              representation_mismatch))
+      ReturnFalse;
    D2Skill_AC_MANIFEST_EQ("forecast_signature", StringFormat("%I64u", D2SkillLastSignature));
    D2Skill_AC_MANIFEST_EQ("actor_context", IntegerToString((3 * EmbeddingSize)));
    D2Skill_AC_MANIFEST_EQ("critic_context", IntegerToString((5 * EmbeddingSize)));
@@ -3548,7 +3622,7 @@ bool D2SkillValidateACManifest(const bool required)
 //+------------------------------------------------------------------+
 //| Function if.                                                     |
 //+------------------------------------------------------------------+
-   if(D2SkillManifestValue(D2Skill_AC_MANIFEST_FILE, "generation") == "")
+   if(D2SkillManifestValue(manifest_file, "generation") == "")
      {
       Print("D2Skill policy manifest: generation is absent");
       ReturnFalse;
@@ -3556,13 +3630,60 @@ bool D2SkillValidateACManifest(const bool required)
    return true;
   }
 //+------------------------------------------------------------------+
+bool D2SkillValidateACManifest(const bool required)
+  {
+   return(D2SkillValidateACManifestFile(required, D2Skill_AC_MANIFEST_FILE, false));
+  }
+//+------------------------------------------------------------------+
 //| Implements D2SkillLoadPolicyNet. Shared Actor-Critic lifecycle ... |
+//+------------------------------------------------------------------+
+bool D2SkillConfigureBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
+  {
+   if(!task || !step)
+      ReturnFalse;
+   const bool task_mismatch = (task.Representation() != D2SkillD2Representation);
+   const bool step_mismatch = (step.Representation() != D2SkillD2Representation);
+   if((task_mismatch || step_mismatch) && !D2SkillD2ResetBanksOnRepresentationMismatch)
+     {
+      PrintFormat("D2Skill representation mismatch expected=%d task=%d step=%d",
+                  D2SkillD2Representation, task.Representation(), step.Representation());
+      ReturnFalse;
+     }
+   if((task_mismatch && !task.ResetDurableState()) ||
+      (step_mismatch && !step.ResetDurableState()))
+      ReturnFalse;
+   task.SetRepresentation(D2SkillD2Representation);
+   step.SetRepresentation(D2SkillD2Representation);
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| A newly created policy has no durable checkpoint state to keep. |
+//+------------------------------------------------------------------+
+bool D2SkillSetNewBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
+  {
+   if(!task || !step)
+      ReturnFalse;
+   task.SetRepresentation(D2SkillD2Representation);
+   step.SetRepresentation(D2SkillD2Representation);
+   return(true);
+  }
+//+------------------------------------------------------------------+
+bool D2SkillSetNewPolicyRepresentation(CNet &net)
+  {
+   CNeuronBaseOCL *layer = net.Layer(1);
+   if(!layer || layer.Type() != defNeuronD2Skill)
+      ReturnFalse;
+   CD2Skill *skill = (CD2Skill*)layer;
+   if(!skill || !skill.Ready() || !skill.TaskBank() || !skill.StepBank())
+      ReturnFalse;
+   return(D2SkillSetNewBankRepresentation(skill.TaskBank(), skill.StepBank()));
+  }
 //+------------------------------------------------------------------+
 bool D2SkillLoadPolicyNet(CNet &net, const string file_name)
   {
    float error = 0, undefine = 0, forecast = 0;
    datetime studied = 0;
-   return net.Load(file_name, error, undefine, forecast, studied, true);
+   return(net.Load(file_name, error, undefine, forecast, studied, true));
   }
 //+------------------------------------------------------------------+
 //| Implements D2SkillCreatePolicySet.                                 |
@@ -3597,7 +3718,7 @@ bool D2SkillCreatePolicySet(CNet &actor, CNet &q1, CNet &q2)
       q1.SetOpenCL(D2SkillMarket.GetOpenCL());
       q2.SetOpenCL(D2SkillMarket.GetOpenCL());
      }
-   return result;
+   return(result && D2SkillSetNewPolicyRepresentation(actor));
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -3646,7 +3767,8 @@ bool D2SkillEnableD2Banks(CNet &actor)
    CD2SkillBank *step = skill.StepBank();
    if(!task || !step)
       ReturnFalse;
-   if(!task.SetThresholds(0.65f, 0.0f) || !step.SetThresholds(0.65f, 0.0f) ||
+   if(!D2SkillConfigureBankRepresentation(task, step) ||
+      !task.SetThresholds(0.65f, 0.0f) || !step.SetThresholds(0.65f, 0.0f) ||
       !task.SetLifecycle(3, 32, 256) || !step.SetLifecycle(3, 32, 256) ||
       !task.SetMaxCorrection(10.0f) || !step.SetMaxCorrection(10.0f) ||
       !task.SetAlpha(1.0f) || !step.SetAlpha(1.0f) ||
@@ -3711,23 +3833,85 @@ bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Resets only the selected D2Skill episode influence state.        |
+//+------------------------------------------------------------------+
+bool D2SkillResetEpisodeInfluence(CNet &actor)
+  {
+   CNeuronBaseOCL *layer = actor.Layer(1);
+   if(!layer || layer.Type() != defNeuronD2Skill)
+      ReturnFalse;
+   CD2Skill *skill = (CD2Skill*)layer;
+   if(!skill.Ready() || !skill.ResetEpisodeInfluence())
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Closes the offline episode through paired utility then reset.     |
+//+------------------------------------------------------------------+
+bool D2SkillCloseOfflineEpisode(CNet &actor, const bool paired_active,
+                                const bool pair_terminal, const bool episode_limit,
+                                const SD2SkillEpisodeOutcome &base,
+                                const SD2SkillEpisodeOutcome &skill,
+                                double &terminal_delta, bool &utility_applied,
+                                bool &influence_reset, bool &episode_closed)
+  {
+   terminal_delta = 0.0;
+   utility_applied = false;
+   influence_reset = false;
+   episode_closed = (pair_terminal || episode_limit);
+   if(!episode_closed)
+      return(true);
+   if(paired_active)
+     {
+      if(!D2SkillValidatePairedEpisode(base, skill) ||
+         !D2SkillComputePairedEpisodeDelta(base, skill, terminal_delta) ||
+         !D2SkillUpdateD2UtilityDelta(actor, terminal_delta))
+         ReturnFalse;
+      utility_applied = true;
+     }
+   if(!D2SkillResetEpisodeInfluence(actor))
+      ReturnFalse;
+   influence_reset = true;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool D2SkillLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
-                                  const bool allow_create)
+bool D2SkillCanCreatePolicyCheckpoint(const bool manifest_exists, const bool allow_create)
   {
-   const bool manifest_exists = FileIsExist(D2Skill_AC_MANIFEST_FILE, FILE_COMMON);
-   const bool loaded = (manifest_exists && D2SkillValidateACManifest(true) &&
-                        D2SkillLoadPolicyNet(actor, D2Skill_ACTOR_FILE) &&
-                        D2SkillLoadPolicyNet(q1, D2Skill_Q1_FILE) && D2SkillLoadPolicyNet(q2, D2Skill_Q2_FILE));
+   if(!manifest_exists)
+      return(allow_create);
+   return(D2SkillD2RecreateIncompatibleCheckpoint);
+  }
 //+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+bool D2SkillLoadOrCreatePolicySetFile(CNet &actor, CNet &q1, CNet &q2,
+                                      const bool allow_create, const string manifest_file)
+  {
+   const bool manifest_exists = FileIsExist(manifest_file, FILE_COMMON);
+   bool loaded = false;
+   if(manifest_exists)
+     {
+//--- This persisted metadata preflight runs before CNet::Load can materialize
+//--- a serialized D2Skill bank.  A mismatch loads only on explicit bank reset.
+      loaded = (D2SkillValidateACManifestFile(true, manifest_file,
+                                               D2SkillD2ResetBanksOnRepresentationMismatch) &&
+                D2SkillLoadPolicyNet(actor, D2Skill_ACTOR_FILE) &&
+                D2SkillLoadPolicyNet(q1, D2Skill_Q1_FILE) &&
+                D2SkillLoadPolicyNet(q2, D2Skill_Q2_FILE));
+      if(!loaded && !D2SkillCanCreatePolicyCheckpoint(true, allow_create))
+        {
+         Print("D2Skill policy restore=FAIL; incompatible checkpoint recreation is disabled");
+         ReturnFalse;
+        }
+     }
+   else
+      if(!D2SkillCanCreatePolicyCheckpoint(false, allow_create))
+         ReturnFalse;
    if(!loaded)
      {
       if(manifest_exists)
-         Print("D2Skill policy restore=FAIL; creating new random policy set");
-      if(!allow_create || !D2SkillCreatePolicySet(actor, q1, q2))
+         Print("D2Skill policy restore=FAIL; recreating incompatible policy set by explicit input");
+      if(!D2SkillCreatePolicySet(actor, q1, q2))
          ReturnFalse;
      }
    actor.SetOpenCL(D2SkillMarket.GetOpenCL());
@@ -3744,19 +3928,25 @@ bool D2SkillLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
    return true;
   }
 //+------------------------------------------------------------------+
+bool D2SkillLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
+                                  const bool allow_create)
+  {
+   return(D2SkillLoadOrCreatePolicySetFile(actor, q1, q2, allow_create,
+                                            D2Skill_AC_MANIFEST_FILE));
+  }
+//+------------------------------------------------------------------+
 //| Configures the Actor-Critic write permissions for the D2 mode.  |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureActorCriticUpdates(CNet &actor, CNet &q1, CNet &q2)
   {
-//--- D2_DISABLED is the ordinary Actor-Critic baseline.  Online calibration
-//--- retains the observed-transition Actor-Critic update, while bank direction
-//--- EMA remains separately opt-in through D2SkillD2OnlineDirectionUpdate.
+//--- D2_DISABLED retains its ordinary Actor-Critic baseline.  Online
+//--- calibration freezes Actor by default and permits Critic writes only via
+//--- the explicit runtime opt-in.  Direction EMA remains independently opt-in.
    bool actor_weights = false;
    bool critic_weights = false;
    switch(D2SkillD2ExecutionMode)
      {
       case D2_DISABLED:
-      case D2_ONLINE_CALIBRATION:
          actor_weights = true;
          critic_weights = true;
          break;
@@ -3765,6 +3955,9 @@ bool D2SkillConfigureActorCriticUpdates(CNet &actor, CNet &q1, CNet &q2)
          break;
       case D2_EVALUATE:
       case D2_INFERENCE:
+         break;
+      case D2_ONLINE_CALIBRATION:
+         critic_weights = D2SkillD2OnlineCriticUpdate;
          break;
       default:
          ReturnFalse;
@@ -3796,7 +3989,9 @@ bool D2SkillSavePolicySet(CNet &actor, CNet &q1, CNet &q2)
 //+------------------------------------------------------------------+
 bool D2SkillLoadInferenceActor(CNet &actor)
   {
-   if(!D2SkillValidateACManifest(true) || !D2SkillLoadPolicyNet(actor, D2Skill_ACTOR_FILE))
+   if(!D2SkillValidateACManifestFile(true, D2Skill_AC_MANIFEST_FILE,
+                                     D2SkillD2ResetBanksOnRepresentationMismatch) ||
+      !D2SkillLoadPolicyNet(actor, D2Skill_ACTOR_FILE))
       ReturnFalse;
    actor.SetOpenCL(D2SkillMarket.GetOpenCL());
    if(!D2SkillValidatePolicyShape(actor, false))

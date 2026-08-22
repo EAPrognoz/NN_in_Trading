@@ -10,13 +10,20 @@
 input group                       "---- D2Skill online ----"
 input ENUM_D2SKILL_STAGE          InpD2SkillStage = D2Skill_D2_STAGE_ONLINE; //Lifecycle stage
 input ENUM_D2SKILL_MODE           InpD2SkillExecutionMode = D2_ONLINE_CALIBRATION; //Bank execution mode
+input ED2SkillRepresentation      InpD2SkillRepresentation = D2SkillDirectionMagnitude; //Bank representation
+input bool                        InpD2SkillResetBanksOnRepresentationMismatch =
+   false; //Reset incompatible banks
+input bool                        InpD2SkillRecreateIncompatibleCheckpoint =
+   false; //Recreate incompatible policy checkpoint
 input bool                        InpD2SkillOnlineDirectionUpdate = false; //Update direction EMA
+input bool                        InpD2SkillOnlineCriticUpdate = false; //Update Critic online
 //---
 input group                       "---- Online learning ----"
 input int                         UpdatePolicy  = ActorUpdate; //Actor update interval
 input int                         UpdateTargets = TargetUpdate; //Target-network update interval
 input float                       Tau           = tau; //Target-network smoothing
 input int                         CheckpointTransitions = 256; //Transitions per checkpoint
+input int                         InpD2SkillPairHorizonTransitions = 0; //Zero: terminal pair only
 input double                      MinBalance = 50.0; //Minimum account balance
 datetime Start = 0;
 datetime End = 0;
@@ -141,9 +148,17 @@ bool FinishOnlinePair(void)
    if(!OnlinePairActive)
       return(true);
    double delta_j = 0.0;
-   if(!D2SkillComputePairedEpisodeDelta(BaselineEpisodeOutcome, SkillEpisodeOutcome,
-                                        delta_j) || !D2SkillUpdateD2UtilityDelta(Actor, delta_j) ||
-      !ResetD2SkillEpisodeInfluence(Actor))
+   const bool utility_applied =
+      (D2SkillValidatePairedEpisode(BaselineEpisodeOutcome, SkillEpisodeOutcome) &&
+       D2SkillComputePairedEpisodeDelta(BaselineEpisodeOutcome, SkillEpisodeOutcome, delta_j) &&
+       D2SkillUpdateD2UtilityDelta(Actor, delta_j));
+   if(!ResetD2SkillEpisodeInfluence(Actor))
+      ReturnFalse;
+   OnlinePairActive = false;
+   OnlineVirtualTransitionPending = false;
+   OnlineBaselineTerminal = false;
+   OnlineSkillTerminal = false;
+   if(!utility_applied)
       ReturnFalse;
    PrintFormat("D2Skill online paired terminal JBase=%.8f JSkill=%.8f DeltaJ=%.8f "
                "base_balance=%.2f skill_balance=%.2f base_drawdown=%.2f skill_drawdown=%.2f "
@@ -156,10 +171,6 @@ bool FinishOnlinePair(void)
                BaselineEpisodeOutcome.Risk(), SkillEpisodeOutcome.Risk(),
                BaselineEpisodeOutcome.Duration(), SkillEpisodeOutcome.Duration(),
                OnlineEpisodeTransitions);
-   OnlinePairActive = false;
-   OnlineVirtualTransitionPending = false;
-   OnlineBaselineTerminal = false;
-   OnlineSkillTerminal = false;
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -322,7 +333,8 @@ bool TrainPreviousTransition(const bool terminal)
       !Q1.feedForward(GetPointer(CriticInput), 1, false, GetPointer(D2SkillMarket), -1) ||
       !Q2.feedForward(GetPointer(CriticInput), 1, false, GetPointer(D2SkillMarket), -1))
       ReturnFalse;
-   if(UpdatePolicy > 0 && Transition > 0 && Transition % (ulong)UpdatePolicy == 0 &&
+   if(Actor.WeightsUpdateEnabled() && UpdatePolicy > 0 && Transition > 0 &&
+      Transition % (ulong)UpdatePolicy == 0 &&
       !PolicyBackward(Actor, Q1, GetPointer(ScalarTarget), GetPointer(D2SkillMarket), -1))
       ReturnFalse;
    if(!Q1.backProp(GetPointer(ScalarTarget), GetPointer(D2SkillMarket), -1) ||
@@ -333,9 +345,9 @@ bool TrainPreviousTransition(const bool terminal)
    if(!D2SkillVerifyFrozenWeightsExact())
       ReturnFalse;
    if(UpdateTargets > 0 && Transition > 0 && Transition % (ulong)UpdateTargets == 0)
-      if(!TargetActor.WeightsUpdate(GetPointer(Actor), Tau) ||
-         !TargetQ1.WeightsUpdate(GetPointer(Q1), Tau) ||
-         !TargetQ2.WeightsUpdate(GetPointer(Q2), Tau))
+      if((Actor.WeightsUpdateEnabled() && !TargetActor.WeightsUpdate(GetPointer(Actor), Tau)) ||
+         (Q1.WeightsUpdateEnabled() && !TargetQ1.WeightsUpdate(GetPointer(Q1), Tau)) ||
+         (Q2.WeightsUpdateEnabled() && !TargetQ2.WeightsUpdate(GetPointer(Q2), Tau)))
          ReturnFalse;
    return(true);
   }
@@ -348,7 +360,11 @@ int OnInit(void)
    if(!D2SkillConfigureRuntime(InpD2SkillStage, InpD2SkillMode,
                                InpD2SkillExecutionMode, InpD2SkillUtilityAware,
                                InpD2SkillMinUtility, InpD2SkillUtilityScale,
-                               InpD2SkillOnlineDirectionUpdate))
+                               InpD2SkillOnlineDirectionUpdate,
+                               InpD2SkillOnlineCriticUpdate,
+                               InpD2SkillRepresentation,
+                               InpD2SkillResetBanksOnRepresentationMismatch,
+                               InpD2SkillRecreateIncompatibleCheckpoint))
      { Print("D2Skill online init: runtime configuration=FAIL"); return INIT_FAILED; }
    if(!D2SkillInitIndicators())
      { Print("D2Skill online init: indicators=FAIL"); return INIT_FAILED; }
@@ -384,15 +400,12 @@ int OnInit(void)
   {
    if(D2SkillOnlineInitialized && !AbortOnlinePair())
       PolicyCheckpointSafe = false;
+   PolicyCheckpointPending = false;
    if(D2SkillOnlineInitialized && !ResetD2SkillEpisodeInfluence(Actor))
      {
       PolicyCheckpointSafe = false;
       PrintFormat("%s -> %d episode influence reset failed", __FUNCTION__, __LINE__);
      }
-//--- Checkpoint only a fully completed transition. The manifest is written last.
-   if(PolicyCheckpointPending && PolicyCheckpointSafe)
-      if(!D2SkillSavePolicySet(Actor, Q1, Q2))
-         PrintFormat("%s -> %d save failed", __FUNCTION__, __LINE__);
    if(D2SkillOnlineInitialized && D2SkillForecast != NULL && !D2SkillVerifyFrozenForecastExact())
       PrintFormat("%s -> %d forecast mutation", __FUNCTION__, __LINE__);
    D2SkillForecast = NULL;
@@ -452,6 +465,7 @@ void OnTick(void)
 //--- A rejected order is recoverable.  Loss of the configured minimum
 //--- deposit is the only financial terminal state for online training.
    const bool terminal = (AccountInfoDouble(ACCOUNT_BALANCE) <= MinBalance);
+   bool online_pair_boundary = false;
 //+------------------------------------------------------------------+
 //| Function if.                                                     |
 //+------------------------------------------------------------------+
@@ -468,33 +482,21 @@ void OnTick(void)
          ExpertRemove();
          return;
         }
-      PolicyCheckpointSafe = true;
-      PolicyCheckpointPending = true;
-      Transition++;
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
-      if(CheckpointTransitions > 0 && Transition % (ulong)CheckpointTransitions == 0)
-        {
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
-         if(!FinishOnlinePair() || !D2SkillSavePolicySet(Actor, Q1, Q2))
-           {
-            PrintFormat("%s -> %d checkpoint failed", __FUNCTION__, __LINE__);
-            ClearPreviousTransition();
-            ExpertRemove();
-           return;
-          }
-         PolicyCheckpointPending = false;
-         if(!StartOnlinePair(GetPointer(Account)))
-           {
-            PrintFormat("%s -> %d paired boundary init", __FUNCTION__, __LINE__);
-            ClearPreviousTransition();
-            ExpertRemove();
-            return;
-           }
-        }
+       PolicyCheckpointSafe = true;
+       Transition++;
+       if(D2SkillCheckpointDue(Transition, CheckpointTransitions))
+          PolicyCheckpointPending = true;
+       if(PolicyCheckpointPending && !OnlinePairActive)
+         {
+          if(!D2SkillSavePolicySet(Actor, Q1, Q2))
+            {
+             PrintFormat("%s -> %d checkpoint failed", __FUNCTION__, __LINE__);
+             ClearPreviousTransition();
+             ExpertRemove();
+             return;
+            }
+          PolicyCheckpointPending = false;
+         }
       //--- Training ended at previous state. A terminal transition has no next
       //--- action, hence it must not rerun the current policy state.
       if(!terminal && (!CreateBuffers(0, GetPointer(State), GetPointer(TimeState), (CBufferFloat*)NULL) ||
@@ -508,26 +510,41 @@ void OnTick(void)
          ExpertRemove();
          return;
         }
-      if(!terminal && OnlinePairActive &&
-         D2SkillPairReachedTerminal(OnlineBaselineTerminal, OnlineSkillTerminal))
-        {
-         if(!FinishOnlinePair() || !StartOnlinePair(GetPointer(Account)))
-           {
-            PrintFormat("%s -> %d paired virtual terminal", __FUNCTION__, __LINE__);
+       online_pair_boundary =
+          (OnlinePairActive && D2SkillOnlinePairBoundary(false,
+           D2SkillPairReachedTerminal(OnlineBaselineTerminal, OnlineSkillTerminal),
+           OnlineEpisodeTransitions, InpD2SkillPairHorizonTransitions));
+       if(!terminal && online_pair_boundary)
+         {
+          if(!FinishOnlinePair() ||
+             (PolicyCheckpointPending && !D2SkillSavePolicySet(Actor, Q1, Q2)))
+            {
+             PrintFormat("%s -> %d paired virtual terminal", __FUNCTION__, __LINE__);
             ClearPreviousTransition();
             ExpertRemove();
-            return;
-           }
-        }
+             return;
+            }
+          PolicyCheckpointPending = false;
+          if(!StartOnlinePair(GetPointer(Account)))
+            {
+             PrintFormat("%s -> %d paired boundary init", __FUNCTION__, __LINE__);
+             ClearPreviousTransition();
+             ExpertRemove();
+             return;
+            }
+         }
      }
 //+------------------------------------------------------------------+
 //| Function if.                                                     |
 //+------------------------------------------------------------------+
    if(terminal)
      {
-      PrintFormat("D2Skill online terminal: balance=%.2f min_balance=%.2f", AccountInfoDouble(ACCOUNT_BALANCE), MinBalance);
-      if(!FinishOnlinePair())
+       PrintFormat("D2Skill online terminal: balance=%.2f "
+                   "min_balance=%.2f", AccountInfoDouble(ACCOUNT_BALANCE), MinBalance);
+       if(!FinishOnlinePair() ||
+          (PolicyCheckpointPending && !D2SkillSavePolicySet(Actor, Q1, Q2)))
          PrintFormat("%s -> %d paired terminal utility", __FUNCTION__, __LINE__);
+       PolicyCheckpointPending = false;
       ClearPreviousTransition();
       ExpertRemove();
       return;

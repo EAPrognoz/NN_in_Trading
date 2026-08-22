@@ -16977,7 +16977,7 @@ bool CNet::OpenCLInit(void)
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(316);
+   opencl.SetKernelsCount(317);
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")
@@ -17294,6 +17294,7 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_D2SkillInfluencePartial, "D2SkillInfluencePartial")
    CreateKernel(def_k_D2SkillInfluenceAccumulate, "D2SkillInfluenceAccumulate")
    CreateKernel(def_k_D2SkillDirectionEMA, "D2SkillDirectionEMA")
+   CreateKernel(def_k_D2SkillNormalizeDirection, "D2SkillNormalizeDirection")
 //---
    return true;
   }
