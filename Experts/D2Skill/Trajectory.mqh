@@ -4296,6 +4296,23 @@ bool PolicyBackward(CNet &actor, CNet &critic, CBufferFloat *actor_target,
    return result;
   }
 //+------------------------------------------------------------------+
+//| Finalizes projected balance before writing terminal account state.|
+//+------------------------------------------------------------------+
+bool D2SkillFinalizeAccountBalance(const double balance, const double realized,
+                                   const double min_balance, double &next_balance,
+                                   bool &terminal)
+  {
+   if(!MathIsValidNumber(balance) || !MathIsValidNumber(realized) ||
+      !MathIsValidNumber(min_balance) || min_balance < 0.0)
+      ReturnFalse;
+   const double projected_balance = balance + realized;
+   if(!MathIsValidNumber(projected_balance))
+      ReturnFalse;
+   terminal = (projected_balance <= min_balance);
+   next_balance = (terminal ? min_balance : projected_balance);
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| One historical-bar account transition.  CheckAction remains the  |
 //+------------------------------------------------------------------+
 bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int position,
@@ -4413,7 +4430,10 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
                next_sell_profit = current_sell_profit + (entry - bar.open) * point_cost * target_sell;
               }
         }
-   const double next_balance = MathMax(0.0, balance + realized);
+   double next_balance = 0.0;
+   bool balance_terminal = false;
+   if(!D2SkillFinalizeAccountBalance(balance, realized, min_balance, next_balance, balance_terminal))
+      ReturnFalse;
    const double current_equity = balance + double(current[6]) * balance + double(current[7]) * balance;
    const double next_equity = next_balance + next_buy_profit + next_sell_profit;
    if(!D2SkillAdvanceAccountTime(current, Rates[position - 1].time, next) ||
@@ -4428,7 +4448,7 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
       !next.Update(7, float(next_sell_profit / MathMax(next_balance, 1.0))) ||
       !next.Update(8, 0.0f))
       ReturnFalse;
-   terminal = (next_balance <= min_balance || next_equity < margin * min_lot);
+   terminal = (balance_terminal || next_equity < margin * min_lot);
    return (next.GetIndex() < 0 || next.BufferWrite());
   }
 //+------------------------------------------------------------------+
