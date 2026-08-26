@@ -13968,6 +13968,8 @@ private:
    CD2SkillBank                 m_task_bank;
    CD2SkillBank                 m_step_bank;
    bool                         m_ready;
+   bool                         m_task_bank_materialized;
+   bool                         m_step_bank_materialized;
    bool                         m_online_direction_update;
    ENUM_D2SKILL_MODE            m_mode;
 

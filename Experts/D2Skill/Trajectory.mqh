@@ -716,7 +716,7 @@ bool IsNewBar(void)
   {
    static datetime last_bar = 0;
    if(last_bar >= iTime(Symb.Name(), TimeFrame, 0))
-      ReturnFalse;
+      return(false);
 //---
    last_bar = iTime(Symb.Name(), TimeFrame, 0);
    return true;

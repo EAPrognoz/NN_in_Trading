@@ -375,8 +375,8 @@ CBufferFloat *CD2SkillBank::Influence(void) { return(GetPointer(m_influence)); }
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Retrieved(void) { return(GetPointer(m_retrieved)); }
 //+------------------------------------------------------------------+
-CD2Skill::CD2Skill(void) : m_ready(false), m_online_direction_update(false),
-   m_mode(D2_DISABLED)
+CD2Skill::CD2Skill(void) : m_ready(false), m_task_bank_materialized(false),
+   m_step_bank_materialized(false), m_online_direction_update(false), m_mode(D2_DISABLED)
   {
   }
 //+------------------------------------------------------------------+
@@ -431,8 +431,18 @@ const CD2SkillBank *CD2Skill::StepBank(void) const
 //+------------------------------------------------------------------+
 bool CD2Skill::Enable(const bool task, const bool step)
   {
-   if(!m_ready)
+   if(!m_ready || !OpenCL)
       ReturnFalse;
+   if(task && !m_task_bank_materialized)
+     {
+      m_task_bank.SetOpenCL(OpenCL);
+      m_task_bank_materialized = true;
+     }
+   if(step && !m_step_bank_materialized)
+     {
+      m_step_bank.SetOpenCL(OpenCL);
+      m_step_bank_materialized = true;
+     }
    m_task_bank.SetEnabled(task);
    m_step_bank.SetEnabled(step);
    return(true);
@@ -493,6 +503,8 @@ bool CD2Skill::Init(uint numOutputs, uint myIndex, COpenCLMy *opencl,
       ReturnFalse;
    if(!InitBanks(optimization_type, batch))
       ReturnFalse;
+   m_task_bank_materialized = true;
+   m_step_bank_materialized = true;
    m_task_bank.SetEnabled(false);
    m_step_bank.SetEnabled(false);
    m_ready = true;
@@ -809,8 +821,12 @@ bool CD2Skill::Load(const int file_handle)
    if(format != D2SKILL_LAYER_FORMAT || bCritic || !OpenCL)
       ReturnFalse;
    m_ready = false;
-   m_task_bank.SetOpenCL(OpenCL);
-   m_step_bank.SetOpenCL(OpenCL);
+   m_task_bank_materialized = false;
+   m_step_bank_materialized = false;
+//--- Serialized bank shapes are restored by Load().  SetOpenCL() creates
+//--- scratch and is invalid before those dimensions exist.
+   m_task_bank.AttachOpenCL(OpenCL);
+   m_step_bank.AttachOpenCL(OpenCL);
    if(FileReadInteger(file_handle, INT_VALUE) != defNeuronD2SkillBank ||
       !m_task_bank.Load(file_handle) ||
       FileReadInteger(file_handle, INT_VALUE) != defNeuronD2SkillBank ||
@@ -836,8 +852,14 @@ bool CD2Skill::Load(const int file_handle, COpenCLMy *opencl)
 void CD2Skill::SetOpenCL(COpenCLMy *opencl)
   {
    CNeuronScenarioCrossAttention::SetOpenCL(opencl);
-   m_task_bank.SetOpenCL(opencl);
-   m_step_bank.SetOpenCL(opencl);
+//--- Disabled checkpoint banks retain their host state but defer GPU scratch
+//--- until the runtime mode explicitly enables the respective branch.  Do not
+//--- AttachOpenCL() here: it would replace only the bank pointer, causing the
+//--- later SetOpenCL() to skip the inherited Output/Gradient rebind.
+   if(m_task_bank_materialized)
+      m_task_bank.SetOpenCL(opencl);
+   if(m_step_bank_materialized)
+      m_step_bank.SetOpenCL(opencl);
   }
 //+------------------------------------------------------------------+
 void CD2Skill::TrainMode(bool flag)
@@ -1944,6 +1966,10 @@ bool CD2SkillBank::UpdateUtility(const float delta_j)
 //+------------------------------------------------------------------+
 bool CD2SkillBank::ResetEpisodeInfluence(void)
   {
+//--- BASE/disabled banks have no influence buffer by design.  Episode cleanup
+//--- is therefore a successful no-op and must not materialize one.
+   if(!m_enabled)
+      return(true);
    if(!OpenCL || m_slots == 0 || m_influence.GetIndex() < 0)
       ReturnFalse;
    const int kernel = def_k_D2SkillResetInfluence;
@@ -1957,6 +1983,10 @@ bool CD2SkillBank::ResetEpisodeInfluence(void)
 //+------------------------------------------------------------------+
 bool CD2SkillBank::RefreshDiagnostics(void)
   {
+//--- OOS reporting may inspect every branch.  Disabled branches report their
+//--- caller-provided zero counters without allocating diagnostics scratch.
+   if(!m_enabled)
+      return(true);
    if(!OpenCL || !ValidateBuffers() || !EnsureUpdateScratch())
       ReturnFalse;
    uint local_size = 0;
@@ -2093,16 +2123,15 @@ bool CD2SkillBank::Load(const int file_handle)
       if(!InitBuffer(m_diagnostics, D2SKILL_DIAGNOSTICS))
          ReturnFalse;
    if(!m_utility_distribution.Load(file_handle) ||
-      !m_usage_distribution.Load(file_handle) || !InitBuffer(m_influence_total, 1) ||
-      !InitBuffer(m_gradient_influence_total, 1) ||
-      !InitBuffer(m_retrieved, (int)m_slots))
+      !m_usage_distribution.Load(file_handle) || !m_influence_total.BufferInit(1, 0.0f) ||
+      !m_gradient_influence_total.BufferInit(1, 0.0f) ||
+      !m_retrieved.BufferInit((int)m_slots, 0.0f))
       ReturnFalse;
    if(total > 2147483647 || !ValidateBuffers())
       ReturnFalse;
-   SetOpenCL(OpenCL);
-   if(!EnsureRetrievalScratch() || !EnsureUpdateScratch() ||
-      !SetCorrectionBuffer(GetPointer(m_selected_correction)))
-      ReturnFalse;
+//--- Device attachment is intentionally deferred to CD2Skill::Enable().
+//--- This keeps disabled Task/Step banks out of a baseline checkpoint load.
+   m_correction = NULL;
    return(true);
   }
 //+------------------------------------------------------------------+

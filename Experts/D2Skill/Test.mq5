@@ -136,7 +136,13 @@ bool D2SkillReadD2Selection(const bool task_bank, int &selected_slot, float &sel
    if(!skill || !skill.Ready())
       ReturnFalse;
    CD2SkillBank *bank = (task_bank ? skill.TaskBank() : skill.StepBank());
-   if(!bank || !bank.SelectedSlot() || !bank.SelectedScore())
+   if(!bank)
+      ReturnFalse;
+//--- BASE/disabled branches intentionally expose no device selection state.
+//--- OOS renders this normal control flow as selection_unavailable / NA.
+   if(!bank.Enabled())
+      return(false);
+   if(!bank.SelectedSlot() || !bank.SelectedScore())
       ReturnFalse;
    if(!bank.SelectedSlot().BufferRead() || !bank.SelectedScore().BufferRead() ||
       bank.SelectedSlot().Total() != 1 || bank.SelectedScore().Total() != 1)
@@ -165,7 +171,14 @@ bool D2SkillReadD2OOSBankStats(const bool task_bank, ulong &retrievals,
    if(!skill || !skill.Ready())
       ReturnFalse;
    CD2SkillBank *bank = (task_bank ? skill.TaskBank() : skill.StepBank());
-   if(!bank || !bank.RefreshDiagnostics() || !bank.Diagnostics() ||
+//--- Base/disabled branches intentionally have no device diagnostics.  Their
+//--- counters remain zero and OOS reporting must not allocate scratch to read
+//--- them.
+   if(!bank)
+      ReturnFalse;
+   if(!bank.Enabled())
+      return(true);
+   if(!bank.RefreshDiagnostics() || !bank.Diagnostics() ||
       !bank.Diagnostics().BufferRead() || bank.Diagnostics().Total() != D2SKILL_DIAGNOSTICS)
       ReturnFalse;
    CBufferFloat *diagnostics = bank.Diagnostics();
