@@ -406,6 +406,14 @@ int OnInit(void)
       PolicyCheckpointSafe = false;
       PrintFormat("%s -> %d episode influence reset failed", __FUNCTION__, __LINE__);
      }
+   if(D2SkillD2ExecutionMode == D2_ONLINE_CALIBRATION)
+     {
+      if(!D2SkillOnlineCalibrationHasClosedUtilityUpdates())
+         Print("D2Skill online calibration terminal utility guard: FAIL closed_updates=0");
+      else
+         PrintFormat("D2Skill online calibration terminal utility guard: PASS closed_updates=%I64u",
+                     D2SkillD2PairedUtilityUpdates);
+     }
    if(D2SkillOnlineInitialized && D2SkillForecast != NULL && !D2SkillVerifyFrozenForecastExact())
       PrintFormat("%s -> %d forecast mutation", __FUNCTION__, __LINE__);
    D2SkillForecast = NULL;

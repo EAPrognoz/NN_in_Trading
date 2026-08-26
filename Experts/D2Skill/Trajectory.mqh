@@ -1592,6 +1592,13 @@ bool                 D2SkillD2RecreateIncompatibleCheckpoint = false;
 int                  D2SkillD2UtilityMode = D2Skill_D2_UTILITY_PAIRED_HINDSIGHT;
 ulong                D2SkillD2PairedUtilityUpdates = 0;
 //+------------------------------------------------------------------+
+//| Reports completed terminal utility updates for online calibration. |
+//+------------------------------------------------------------------+
+bool D2SkillOnlineCalibrationHasClosedUtilityUpdates(void)
+  {
+   return(D2SkillD2PairedUtilityUpdates > 0);
+  }
+//+------------------------------------------------------------------+
 //| Configures D2Skill execution without preprocessor injection.     |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage, const ENUM_D2SKILL_BANK_MODE mode,
