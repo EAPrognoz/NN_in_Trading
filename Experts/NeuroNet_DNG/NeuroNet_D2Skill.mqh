@@ -163,6 +163,7 @@ bool CD2SkillBank::ValidateBuffers(void)
           m_age.Total() == (int)m_slots &&
           m_protection.Total() == (int)m_slots &&
           m_influence.Total() == (int)m_slots &&
+          m_utility_applied.Total() == (int)m_slots &&
           m_gradient_influence_total.Total() == 1 &&
           m_retrieved.Total() == (int)m_slots &&
           m_selected_correction.Total() == (int)m_dimension &&
@@ -468,18 +469,32 @@ bool CD2Skill::StepUpdate(CBufferFloat *state, CBufferFloat *gradient)
    return(m_ready && m_step_bank.UpdateFromGradient(state, gradient));
   }
 //+------------------------------------------------------------------+
-bool CD2Skill::TaskUtility(const float delta_j)
+bool CD2Skill::TaskUtility(const float delta_j, bool &applied)
   {
+   applied = false;
    if(!m_ready || (m_mode != D2_EVALUATE && m_mode != D2_ONLINE_CALIBRATION))
       ReturnFalse;
-   return(m_task_bank.UpdateUtility(delta_j));
+   return(m_task_bank.UpdateUtility(delta_j, applied));
+  }
+//+------------------------------------------------------------------+
+bool CD2Skill::TaskUtility(const float delta_j)
+  {
+   bool applied = false;
+   return(TaskUtility(delta_j, applied));
+  }
+//+------------------------------------------------------------------+
+bool CD2Skill::StepUtility(const float delta_j, bool &applied)
+  {
+   applied = false;
+   if(!m_ready || (m_mode != D2_EVALUATE && m_mode != D2_ONLINE_CALIBRATION))
+      ReturnFalse;
+   return(m_step_bank.UpdateUtility(delta_j, applied));
   }
 //+------------------------------------------------------------------+
 bool CD2Skill::StepUtility(const float delta_j)
   {
-   if(!m_ready || (m_mode != D2_EVALUATE && m_mode != D2_ONLINE_CALIBRATION))
-      ReturnFalse;
-   return(m_step_bank.UpdateUtility(delta_j));
+   bool applied = false;
+   return(StepUtility(delta_j, applied));
   }
 //+------------------------------------------------------------------+
 bool CD2Skill::BackwardSecond(CNeuronBaseOCL *source, CNeuronBaseOCL *forecast)
@@ -773,8 +788,9 @@ bool CD2Skill::updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL,
    if(!NeuronOCL || !Forecast || Forecast.Type() != defNeuronScenarioForecast)
       ReturnFalse;
 //--- Collection records bank observations but freezes the Actor highway.
-//--- Evaluation and inference are read-only for Actor and market weights.
-   if(m_mode == D2_COLLECT || m_mode == D2_EVALUATE || m_mode == D2_INFERENCE)
+//--- Evaluation, inference, and online calibration are read-only for Actor weights.
+   if(m_mode == D2_COLLECT || m_mode == D2_EVALUATE || m_mode == D2_INFERENCE ||
+      m_mode == D2_ONLINE_CALIBRATION)
       return(true);
    CNeuronScenarioForecast *forecast = Forecast;
    if(!forecast.GetLogU())
@@ -1341,6 +1357,28 @@ bool CD2SkillBank::RunStagedReduction(CBufferFloat &partials, CBufferFloat &redu
    return(true);
   }
 //+------------------------------------------------------------------+
+bool CD2SkillBank::RunStagedReduction(CBufferFloat &source, CBufferFloat &partials,
+                                       CBufferFloat &reduced, const uint items,
+                                       const uint batches, const uint fields,
+                                       const uint local_size, const int max_field_a,
+                                       const int max_field_b)
+  {
+   if(!OpenCL || items == 0 || source.GetOpenCL() != OpenCL ||
+      source.GetIndex() < 0 || source.Total() != (int)items)
+      ReturnFalse;
+   if(source.GetIndex() != partials.GetIndex())
+     {
+      uint offset[1] = {0};
+      uint global[1] = {items};
+      setBuffer(def_k_CopyBufferRaw, def_k_copy_raw_source, source.GetIndex())
+      setBuffer(def_k_CopyBufferRaw, def_k_copy_raw_destination, partials.GetIndex())
+      setArgument(def_k_CopyBufferRaw, def_k_copy_raw_total, (int)items)
+      kernelExecute(def_k_CopyBufferRaw, offset, global)
+     }
+   return(RunStagedReduction(partials, reduced, items, batches, fields,
+                             local_size, max_field_a, max_field_b));
+  }
+//+------------------------------------------------------------------+
 bool CD2SkillBank::EnsureRetrievalScratch(void)
   {
    uint local_size = 0;
@@ -1518,7 +1556,8 @@ bool CD2SkillBank::Init(uint dimension, uint myIndex, COpenCLMy *open_cl,
       !InitBuffer(m_uses, (int)m_slots) || !InitBuffer(m_mass, (int)m_slots) ||
       !InitBuffer(m_used, (int)m_slots) || !InitBuffer(m_state, (int)m_slots) ||
       !InitBuffer(m_age, (int)m_slots) || !InitBuffer(m_protection, (int)m_slots) ||
-      !InitBuffer(m_influence, (int)m_slots) || !InitBuffer(m_influence_total, 1) ||
+      !InitBuffer(m_influence, (int)m_slots) || !InitBuffer(m_utility_applied, (int)m_slots) ||
+      !InitBuffer(m_influence_total, 1) ||
       !InitBuffer(m_gradient_influence_total, 1) ||
       !InitBuffer(m_retrieved, (int)m_slots) ||
       !InitBuffer(m_selected_correction, (int)m_dimension) ||
@@ -1550,6 +1589,7 @@ void CD2SkillBank::SetOpenCL(COpenCLMy *obj)
    RebindBuffer(m_age, obj);
    RebindBuffer(m_protection, obj);
    RebindBuffer(m_influence, obj);
+   RebindBuffer(m_utility_applied, obj);
    RebindBuffer(m_influence_total, obj);
    RebindBuffer(m_influence_partials, obj);
    RebindBuffer(m_gradient_influence_total, obj);
@@ -1928,8 +1968,9 @@ bool CD2SkillBank::UpdateFromGradient(CBufferFloat *state, CBufferFloat *gradien
    return(true);
   }
 //+------------------------------------------------------------------+
-bool CD2SkillBank::UpdateUtility(const float delta_j)
+bool CD2SkillBank::UpdateUtility(const float delta_j, bool &applied)
   {
+   applied = false;
    if(!m_enabled || !OpenCL || !MathIsValidNumber(delta_j) || !EnsureUpdateScratch())
       ReturnFalse;
    uint local_size = 0;
@@ -1957,11 +1998,23 @@ bool CD2SkillBank::UpdateUtility(const float delta_j)
    setBuffer(kernel, def_k_d2ut_used, m_used.GetIndex())
    setBuffer(kernel, def_k_d2ut_state, m_state.GetIndex())
    setBuffer(kernel, def_k_d2ut_diagnostics, m_diagnostics.GetIndex())
+   setBuffer(kernel, def_k_d2ut_applied, m_utility_applied.GetIndex())
    setArgument(kernel, def_k_d2ut_delta, delta_j)
    setArgument(kernel, def_k_d2ut_beta, m_beta_utility)
    setArgument(kernel, def_k_d2ut_slots, (int)m_slots)
    kernelExecuteLoc(kernel, offset, slot_global, local)
+   if(!RunStagedReduction(m_utility_applied, m_influence_partials,
+                          m_influence_total, m_slots, 1, 1,
+                          local_size) || !m_influence_total.BufferRead())
+      ReturnFalse;
+   applied = (m_influence_total[0] > 0.5f);
    return(true);
+  }
+//+------------------------------------------------------------------+
+bool CD2SkillBank::UpdateUtility(const float delta_j)
+  {
+   bool applied = false;
+   return(UpdateUtility(delta_j, applied));
   }
 //+------------------------------------------------------------------+
 bool CD2SkillBank::ResetEpisodeInfluence(void)
@@ -2123,7 +2176,8 @@ bool CD2SkillBank::Load(const int file_handle)
       if(!InitBuffer(m_diagnostics, D2SKILL_DIAGNOSTICS))
          ReturnFalse;
    if(!m_utility_distribution.Load(file_handle) ||
-      !m_usage_distribution.Load(file_handle) || !m_influence_total.BufferInit(1, 0.0f) ||
+      !m_usage_distribution.Load(file_handle) || !m_utility_applied.BufferInit((int)m_slots, 0.0f) ||
+      !m_influence_total.BufferInit(1, 0.0f) ||
       !m_gradient_influence_total.BufferInit(1, 0.0f) ||
       !m_retrieved.BufferInit((int)m_slots, 0.0f))
       ReturnFalse;
@@ -2153,7 +2207,7 @@ bool CD2SkillBank::Clear(void)
    if(!CNeuronBaseOCL::Clear())
       ReturnFalse;
    m_active_slot = UINT_MAX;
-   if(!(m_retrieved.Fill(0) && m_influence.Fill(0) &&
+   if(!(m_retrieved.Fill(0) && m_influence.Fill(0) && m_utility_applied.Fill(0) &&
         m_influence_total.Fill(0) && m_gradient_influence_total.Fill(0) &&
         m_selected_correction.Fill(0) && m_selected_slot.Fill(-1.0f) &&
         m_selected_score.Fill(-3.402823e+38f) && m_diagnostics.Fill(0) &&
@@ -2191,6 +2245,7 @@ bool CD2SkillBank::ResetDurableState(void)
         m_scales.Fill(0) && m_utility.Fill(0) && m_observations.Fill(0) &&
         m_uses.Fill(0) && m_mass.Fill(0) && m_used.Fill(0) && m_state.Fill(0) &&
         m_age.Fill(0) && m_protection.Fill(0) && m_influence.Fill(0) &&
+        m_utility_applied.Fill(0) &&
         m_influence_total.Fill(0) && m_gradient_influence_total.Fill(0) &&
         m_retrieved.Fill(0) &&
         m_selected_correction.Fill(0) && m_selected_slot.Fill(-1.0f) &&

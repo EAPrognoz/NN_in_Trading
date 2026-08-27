@@ -17114,20 +17114,29 @@ __kernel void D2SkillUtility(__global float *influence,
                               const float delta_j,
                               const float beta,
                               const int slots,
-                              __global float *diagnostics)
+                              __global float *diagnostics,
+                              __global float *utility_applied)
   {
    const int slot = get_global_id(0);
    if(slot < 0 || slot >= slots || slots <= 0)
       return;
+   utility_applied[slot] = 0.0f;
    const float mass = fmax(IsNaNOrInf(influence[slot], 0.0f), 0.0f);
    const float total = fmax(IsNaNOrInf(influence_total[0], 0.0f), 0.0f);
    const bool eligible = (IsNaNOrInf(used[slot], 0.0f) > 0.5f &&
                           (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE) != D2SKILL_CANDIDATE);
-   if(eligible && total > 1.0e-12f && mass > 0.0f && fabs(delta_j) > 1.0e-12f)
-      utility[slot] = (1.0f - beta) * IsNaNOrInf(utility[slot], 0.0f) +
-                      beta * clamp(IsNaNOrInf(delta_j, 0.0f), -1.0f, 1.0f) * mass / total;
+   if(eligible && total > 0.0f && mass > 0.0f && fabs(delta_j) > 0.0f)
+     {
+      const float utility_before = utility[slot];
+      const float utility_current = IsNaNOrInf(utility_before, 0.0f);
+      const float utility_target = clamp(IsNaNOrInf(delta_j, 0.0f), -1.0f, 1.0f) * mass / total;
+      const float utility_proposed = (1.0f - beta) * utility_current + beta * utility_target;
+      utility[slot] = utility_proposed;
+      if(utility_before != utility_proposed)
+         utility_applied[slot] = 1.0f;
+     }
    influence[slot] = 0.0f;
-   if(slot == 0 && total > 1.0e-12f && fabs(delta_j) > 1.0e-12f)
+   if(slot == 0 && total > 0.0f && fabs(delta_j) > 0.0f)
       diagnostics[6] = IsNaNOrInf(diagnostics[6], 0.0f) + 1.0f;
   }
 //+------------------------------------------------------------------+

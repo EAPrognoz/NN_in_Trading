@@ -13848,6 +13848,7 @@ protected:
    CBufferFloat                 m_age;
    CBufferFloat                 m_protection;
    CBufferFloat                 m_influence;
+   CBufferFloat                 m_utility_applied;
    CBufferFloat                 m_influence_total;
    CBufferFloat                 m_influence_partials;
    CBufferFloat                 m_gradient_influence_total;
@@ -13887,6 +13888,11 @@ protected:
                                            const uint fields, uint &total) const;
    bool              RunStagedReduction(CBufferFloat &partials, CBufferFloat &reduced,
                                         const uint items, const uint batches, const uint fields,
+                                        const uint local_size, const int max_field_a = -1,
+                                        const int max_field_b = -1);
+   bool              RunStagedReduction(CBufferFloat &source, CBufferFloat &partials,
+                                        CBufferFloat &reduced, const uint items,
+                                        const uint batches, const uint fields,
                                         const uint local_size, const int max_field_a = -1,
                                         const int max_field_b = -1);
    bool              EnsureRetrievalScratch(void);
@@ -13931,6 +13937,7 @@ public:
    bool              AccumulateInfluenceFromGradient(CBufferFloat *gradient);
    bool              UpdateFromGradient(CBufferFloat *state, CBufferFloat *gradient);
    bool              UpdateDirectionFromGradient(CBufferFloat *gradient);
+   bool              UpdateUtility(const float delta_j, bool &applied);
    bool              UpdateUtility(const float delta_j);
    bool              ResetEpisodeInfluence(void);
    uint              D2LaunchLocalSize(const uint work_items) const;
@@ -14021,7 +14028,9 @@ public:
    bool              StepFeedForward(CNeuronBaseOCL *source);
    bool              TaskUpdate(CBufferFloat *state, CBufferFloat *gradient);
    bool              StepUpdate(CBufferFloat *state, CBufferFloat *gradient);
+   bool              TaskUtility(const float delta_j, bool &applied);
    bool              TaskUtility(const float delta_j);
+   bool              StepUtility(const float delta_j, bool &applied);
    bool              StepUtility(const float delta_j);
    bool              BackwardSecond(CNeuronBaseOCL *source, CNeuronBaseOCL *forecast);
   };

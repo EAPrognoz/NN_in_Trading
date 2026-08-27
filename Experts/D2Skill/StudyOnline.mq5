@@ -148,23 +148,26 @@ bool FinishOnlinePair(void)
    if(!OnlinePairActive)
       return(true);
    double delta_j = 0.0;
-   const bool utility_applied =
+   bool utility_mutated = false;
+   const bool utility_operation_ok =
       (D2SkillValidatePairedEpisode(BaselineEpisodeOutcome, SkillEpisodeOutcome) &&
        D2SkillComputePairedEpisodeDelta(BaselineEpisodeOutcome, SkillEpisodeOutcome, delta_j) &&
-       D2SkillUpdateD2UtilityDelta(Actor, delta_j));
+       D2SkillUpdateD2UtilityDelta(Actor, delta_j, utility_mutated));
    if(!ResetD2SkillEpisodeInfluence(Actor))
       ReturnFalse;
    OnlinePairActive = false;
    OnlineVirtualTransitionPending = false;
    OnlineBaselineTerminal = false;
    OnlineSkillTerminal = false;
-   if(!utility_applied)
+   if(!utility_operation_ok)
       ReturnFalse;
    PrintFormat("D2Skill online paired terminal JBase=%.8f JSkill=%.8f DeltaJ=%.8f "
+               "utility_mutated=%s "
                "base_balance=%.2f skill_balance=%.2f base_drawdown=%.2f skill_drawdown=%.2f "
                "base_cost=%.2f skill_cost=%.2f base_risk=%.2f skill_risk=%.2f "
                "base_duration=%u skill_duration=%u transitions=%I64u",
                BaselineEpisodeOutcome.Outcome(), SkillEpisodeOutcome.Outcome(), delta_j,
+               (utility_mutated ? "true" : "false"),
                BaselineEpisodeOutcome.Balance(), SkillEpisodeOutcome.Balance(),
                BaselineEpisodeOutcome.Drawdown(), SkillEpisodeOutcome.Drawdown(),
                BaselineEpisodeOutcome.Cost(), SkillEpisodeOutcome.Cost(),
@@ -333,7 +336,9 @@ bool TrainPreviousTransition(const bool terminal)
       !Q1.feedForward(GetPointer(CriticInput), 1, false, GetPointer(D2SkillMarket), -1) ||
       !Q2.feedForward(GetPointer(CriticInput), 1, false, GetPointer(D2SkillMarket), -1))
       ReturnFalse;
-   if(Actor.WeightsUpdateEnabled() && UpdatePolicy > 0 && Transition > 0 &&
+   const bool bank_gradient_backward = D2SkillRequiresBankGradientBackward();
+   const bool actor_backward = (Actor.WeightsUpdateEnabled() || bank_gradient_backward);
+   if(actor_backward && UpdatePolicy > 0 && Transition > 0 &&
       Transition % (ulong)UpdatePolicy == 0 &&
       !PolicyBackward(Actor, Q1, GetPointer(ScalarTarget), GetPointer(D2SkillMarket), -1))
       ReturnFalse;

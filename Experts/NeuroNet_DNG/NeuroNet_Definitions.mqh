@@ -2886,6 +2886,7 @@ union uaLongChar
 #define def_k_d2ut_beta                            6
 #define def_k_d2ut_slots                           7
 #define def_k_d2ut_diagnostics                     8
+#define def_k_d2ut_applied                         9
 #define def_k_D2SkillItemPartial                 286
 #define def_k_d2ip_source                          0
 #define def_k_d2ip_partials                        1

@@ -1599,6 +1599,16 @@ bool D2SkillOnlineCalibrationHasClosedUtilityUpdates(void)
    return(D2SkillD2PairedUtilityUpdates > 0);
   }
 //+------------------------------------------------------------------+
+bool D2SkillRequiresBankGradientBackward(void)
+  {
+   if(D2SkillD2Mode == D2Skill_D2_MODE_BASE)
+      return(false);
+
+   return(D2SkillD2ExecutionMode == D2_COLLECT ||
+          D2SkillD2ExecutionMode == D2_EVALUATE ||
+          D2SkillD2ExecutionMode == D2_ONLINE_CALIBRATION);
+  }
+//+------------------------------------------------------------------+
 //| Configures D2Skill execution without preprocessor injection.     |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage, const ENUM_D2SKILL_BANK_MODE mode,
@@ -3794,8 +3804,9 @@ bool D2SkillEnableD2Banks(CNet &actor)
 //+------------------------------------------------------------------+
 //| Applies one normalized utility observation to selected banks.    |
 //+------------------------------------------------------------------+
-bool D2SkillApplyD2Utility(CNet &actor, const double value)
+bool D2SkillApplyD2Utility(CNet &actor, const double value, bool &applied)
   {
+   applied = false;
    if((D2SkillD2ExecutionMode != D2_EVALUATE &&
        D2SkillD2ExecutionMode != D2_ONLINE_CALIBRATION) ||
       !MathIsValidNumber(value))
@@ -3812,21 +3823,25 @@ bool D2SkillApplyD2Utility(CNet &actor, const double value)
       ReturnFalse;
    bool task_enabled = false;
    bool step_enabled = false;
+   bool task_applied = false;
+   bool step_applied = false;
    D2SkillD2BankFlags(task_enabled, step_enabled);
    if(task_enabled)
-      if(!skill.TaskUtility((float)normalized))
+      if(!skill.TaskUtility((float)normalized, task_applied))
          ReturnFalse;
    if(step_enabled)
-      if(!skill.StepUtility((float)normalized))
+      if(!skill.StepUtility((float)normalized, step_applied))
          ReturnFalse;
+   applied = (task_applied || step_applied);
    return(true);
   }
 //+------------------------------------------------------------------+
 //| Applies paired hindsight delta JSkill-JBase to selected skills.  |
 //| Utility is separate from Actor gradients and pseudo-residuals.  |
 //+------------------------------------------------------------------+
-bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j)
+bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j, bool &applied)
   {
+   applied = false;
    if((D2SkillD2ExecutionMode != D2_EVALUATE &&
        D2SkillD2ExecutionMode != D2_ONLINE_CALIBRATION) ||
       D2SkillD2Mode == D2Skill_D2_MODE_BASE)
@@ -3834,10 +3849,17 @@ bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j)
    if(D2SkillD2UtilityMode != D2Skill_D2_UTILITY_PAIRED_HINDSIGHT ||
       !MathIsValidNumber(delta_j))
       ReturnFalse;
-   if(!D2SkillApplyD2Utility(actor, delta_j))
+   if(!D2SkillApplyD2Utility(actor, delta_j, applied))
       ReturnFalse;
-   D2SkillD2PairedUtilityUpdates++;
-   return true;
+   if(applied)
+      D2SkillD2PairedUtilityUpdates++;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j)
+  {
+   bool applied = false;
+   return(D2SkillUpdateD2UtilityDelta(actor, delta_j, applied));
   }
 //+------------------------------------------------------------------+
 //| Resets only the selected D2Skill episode influence state.        |
@@ -3872,9 +3894,8 @@ bool D2SkillCloseOfflineEpisode(CNet &actor, const bool paired_active,
      {
       if(!D2SkillValidatePairedEpisode(base, skill) ||
          !D2SkillComputePairedEpisodeDelta(base, skill, terminal_delta) ||
-         !D2SkillUpdateD2UtilityDelta(actor, terminal_delta))
+         !D2SkillUpdateD2UtilityDelta(actor, terminal_delta, utility_applied))
          ReturnFalse;
-      utility_applied = true;
      }
    if(!D2SkillResetEpisodeInfluence(actor))
       ReturnFalse;

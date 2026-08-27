@@ -492,8 +492,7 @@ void TrainD2SkillActorCritic(void)
          episode_reset_failed = true;
          break;
         }
-      if(episode_closed &&
-         (!influence_reset || (PairedEpisodeActive && !utility_applied)))
+      if(episode_closed && !influence_reset)
         {
          failed_iteration = iteration;
          failed_position = position;
@@ -506,8 +505,9 @@ void TrainD2SkillActorCritic(void)
            {
             PairedTransitions++;
             PairedDeltaSum += terminal_delta;
-            PrintFormat("D2Skill paired terminal JBase=%.8f JSkill=%.8f DeltaJ=%.8f base_balance=%.2f skill_balance=%.2f base_duration=%u skill_duration=%u",
+            PrintFormat("D2Skill paired terminal JBase=%.8f JSkill=%.8f DeltaJ=%.8f utility_mutated=%s base_balance=%.2f skill_balance=%.2f base_duration=%u skill_duration=%u",
                         BaselineEpisodeOutcome.Outcome(), SkillEpisodeOutcome.Outcome(), terminal_delta,
+                        (utility_applied ? "true" : "false"),
                         BaselineEpisodeOutcome.Balance(), SkillEpisodeOutcome.Balance(),
                         BaselineEpisodeOutcome.Duration(), SkillEpisodeOutcome.Duration());
            }
