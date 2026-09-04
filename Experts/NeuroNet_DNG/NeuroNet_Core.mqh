@@ -1,13 +1,15 @@
 //+------------------------------------------------------------------+
-//|                                                      ProjectName |
-//|                                      Copyright 2020, CompanyName |
-//|                                       http://www.companyname.net |
+//|                                                 NeuroNet_Core.mqh|
+//|         Core: layers, buffers, base classes and network assembly.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
 //+------------------------------------------------------------------+
+
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
-//| Logical method implementations generated from NeuroNet.mqh: Core
+//| Logical method implementations generated from NeuroNet.mqh: Core |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -60,9 +62,9 @@ bool CArrayCon::CreateElement(int index)
    return (true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| float CNeuronBase::lr=0.0000001;   // net learning rate        |
+//| float CNeuronBase::lr=0.0000001;   // net learning rate          |
 float CNeuronBase::alpha = (float)0.8;     // momentum
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -250,6 +252,8 @@ bool CLayer::CreateElement(int index)
    CNeuronDropoutOCL *temp_drop_ocl = NULL;
    CNeuronBatchNormOCL *temp_batch_ocl = NULL;
    CVAE *vae = NULL;
+   CNeuronBayesianLinearOCL *bayesian_linear = NULL;
+   CNeuronOMPBOCL *ompb = NULL;
    CNeuronLSTMOCL *lstm = NULL;
    CNeuronSoftMaxOCL *softmax = NULL;
    CNeuronFQF *fqf = NULL;
@@ -735,6 +739,22 @@ bool CLayer::CreateElement(int index)
                return true;
               }
             break;
+         case defNeuronBayesianLinearOCL:
+            if(!OpenCL)
+               ReturnFalse;
+            bayesian_linear = new CNeuronBayesianLinearOCL();
+            if(!bayesian_linear || !bayesian_linear.Init(iOutputs, index, OpenCL, 1, 1, 1, 1, ADAM, 1))
+               break;
+            m_data[index] = bayesian_linear;
+            return true;
+         case defNeuronOMPBOCL:
+            if(!OpenCL)
+               ReturnFalse;
+            ompb = new CNeuronOMPBOCL();
+            if(!ompb || !ompb.Init(iOutputs, index, OpenCL, 1, 1, 1, 1, 1, ADAM, 1))
+               break;
+            m_data[index] = ompb;
+            return true;
          case defNeuronLSTMOCL:
             if(!OpenCL)
                ReturnFalse;
@@ -4611,6 +4631,8 @@ bool CNet::Create(CArrayObj *Description)
          CNeuronDropoutOCL *dropout = NULL;
          CNeuronBatchNormOCL *batch = NULL;
          CVAE *vae = NULL;
+         CNeuronBayesianLinearOCL *bayesian_linear = NULL;
+         CNeuronOMPBOCL *ompb = NULL;
          CNeuronLSTMOCL *lstm = NULL;
          CNeuronSoftMaxOCL *softmax = NULL;
          CNeuronFQF *fqf = NULL;
@@ -5224,6 +5246,34 @@ bool CNet::Create(CArrayObj *Description)
                   ReturnFalse;
                  }
                vae = NULL;
+               break;
+            case defNeuronBayesianLinearOCL:
+               if(desc.variables == 0 || desc.window == 0 || desc.count == 0)
+                  DeleteObjAndFalse(temp);
+               bayesian_linear = new CNeuronBayesianLinearOCL();
+               if(!bayesian_linear || !bayesian_linear.Init(outputs, 0, opencl, desc.variables, desc.window, desc.count, MathMax(desc.layers, 1), desc.optimization, desc.batch))
+                  DeleteObjAndFalse(temp);
+               if(!temp.Add(bayesian_linear))
+                 {
+                  delete bayesian_linear;
+                  DeleteObjAndFalse(temp);
+                 }
+               bayesian_linear = NULL;
+               break;
+            case defNeuronOMPBOCL:
+               if(desc.window == 0 || desc.count == 0 || desc.layers == 0 || ArraySize(desc.units) < 2 ||
+                  desc.units[0] == 0 || desc.units[1] == 0)
+                  DeleteObjAndFalse(temp);
+               ompb = new CNeuronOMPBOCL();
+               if(!ompb || !ompb.Init(outputs, 0, opencl, desc.window, desc.count, desc.layers,
+                                      desc.units[0], desc.units[1], desc.optimization, desc.batch))
+                  DeleteObjAndFalse(temp);
+               if(!temp.Add(ompb))
+                 {
+                  delete ompb;
+                  DeleteObjAndFalse(temp);
+                 }
+               ompb = NULL;
                break;
             case defNeuronLSTMOCL:
                lstm = new CNeuronLSTMOCL();
@@ -12451,13 +12501,13 @@ bool CNeuronBaseOCL::UpdateInputWeightsSecond(CObject *SourceObject, CNeuronBase
    return updateInputWeightsSecond(temp, SecondNeuron);
   }
 //+------------------------------------------------------------------+
-//| Append one trainable device buffer to the diagnostic fingerprint. |
+//| Append one trainable device buffer to the diagnostic fingerprint.|
 //+------------------------------------------------------------------+
 bool CNeuronBaseOCL::AppendParameterBufferFingerprint(CBufferFloat *buffer,
-                                                       ulong &fingerprint,
-                                                       const uint tag,
-                                                       const uint skip,
-                                                       const uint stride)
+      ulong &fingerprint,
+      const uint tag,
+      const uint skip,
+      const uint stride)
   {
    fingerprint = (fingerprint ^ ulong(tag)) * ulong(1099511628211);
    if(!buffer)
@@ -12488,7 +12538,7 @@ bool CNeuronBaseOCL::AppendParameterBufferFingerprint(CBufferFloat *buffer,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Append direct trainable parameters and optimizer buffers only.    |
+//| Append direct trainable parameters and optimizer buffers only.   |
 //+------------------------------------------------------------------+
 bool CNeuronBaseOCL::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -13414,7 +13464,7 @@ bool CNeuronConvOCL::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Append convolution parameters and optimizer buffers.              |
+//| Append convolution parameters and optimizer buffers.             |
 //+------------------------------------------------------------------+
 bool CNeuronConvOCL::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -13714,23 +13764,27 @@ bool CNeuronBaseOCL::IdentDifferentGrad(CBufferFloat* tensor, CBufferFloat* out,
 bool CNeuronBaseOCL::SumVecMatrix(CBufferFloat *vector_in, CBufferFloat *matrix_in,
                                   CBufferFloat *out, uint dimension, uint variables,
                                   uint shift_in1 = 0, uint shift_in2 = 0,
-                                  uint shift_out = 0, float multiplyer = 1.0f)
+                                  uint shift_out = 0, float multiplyer = 1.0f,
+                                  uint rows = 0)
   {
    if(CheckPointer(OpenCL) == POINTER_INVALID || CheckPointer(vector_in) == POINTER_INVALID ||
       CheckPointer(matrix_in) == POINTER_INVALID || CheckPointer(out) == POINTER_INVALID)
       ReturnFalse;
    if(variables < 1)
       ReturnFalse;
-   if(vector_in.GetIndex() < 0 || vector_in.Total() < int((shift_in1 + dimension)*variables))
+   ulong slice = ulong(dimension) * variables;
+   if(slice == 0 || vector_in.GetIndex() < 0 ||
+      vector_in.Total() < int(ulong(shift_in1) + slice))
       ReturnFalse;
-   if(matrix_in.GetIndex() < 0 || matrix_in.Total() < int((shift_in2 + dimension)*variables))
+   if(matrix_in.GetIndex() < 0 || matrix_in.Total() < int(ulong(shift_in2) + slice))
       ReturnFalse;
-   if(out.GetIndex() < 0 || out.Total() < int((shift_out + dimension)*variables))
+   if(out.GetIndex() < 0 || out.Total() < int(ulong(shift_out) + slice))
       ReturnFalse;
 //---
-   int size = MathMin(matrix_in.Total() / int((shift_in2 + dimension) * variables),
-                      out.Total() / int((shift_out + dimension) * variables));
-   if(size < 1)
+   int available = MathMin((matrix_in.Total() - int(shift_in2)) / int(slice),
+                           (out.Total() - int(shift_out)) / int(slice));
+   int size = (rows == 0 ? available : int(rows));
+   if(size < 1 || size > available)
       ReturnFalse;
    uint global_work_offset[3] = {0};
    uint global_work_size[3] = {size, dimension, variables};
@@ -13757,23 +13811,27 @@ bool CNeuronBaseOCL::SumVecMatrix(CBufferFloat *vector_in, CBufferFloat *matrix_
 bool CNeuronBaseOCL::SumVecMatrixGrad(CBufferFloat *vector_in, CBufferFloat *matrix_in,
                                       CBufferFloat *out, uint dimension, uint variables,
                                       uint shift_in1 = 0, uint shift_in2 = 0,
-                                      uint shift_out = 0, float multiplyer = 1.0f)
+                                      uint shift_out = 0, float multiplyer = 1.0f,
+                                      uint rows = 0)
   {
    if(CheckPointer(OpenCL) == POINTER_INVALID || CheckPointer(vector_in) == POINTER_INVALID ||
       CheckPointer(matrix_in) == POINTER_INVALID || CheckPointer(out) == POINTER_INVALID)
       ReturnFalse;
    if(variables < 1)
       ReturnFalse;
-   if(vector_in.GetIndex() < 0 || vector_in.Total() < int((shift_in1 + dimension)*variables))
+   ulong slice = ulong(dimension) * variables;
+   if(slice == 0 || vector_in.GetIndex() < 0 ||
+      vector_in.Total() < int(ulong(shift_in1) + slice))
       ReturnFalse;
-   if(matrix_in.GetIndex() < 0 || matrix_in.Total() < int((shift_in2 + dimension)*variables))
+   if(matrix_in.GetIndex() < 0 || matrix_in.Total() < int(ulong(shift_in2) + slice))
       ReturnFalse;
-   if(out.GetIndex() < 0 || out.Total() < int((shift_out + dimension)*variables))
+   if(out.GetIndex() < 0 || out.Total() < int(ulong(shift_out) + slice))
       ReturnFalse;
 //---
-   int size = MathMin(matrix_in.Total() / int((shift_in2 + dimension) * variables),
-                      out.Total() / int((shift_out + dimension) * variables));
-   if(size < 1)
+   int available = MathMin((matrix_in.Total() - int(shift_in2)) / int(slice),
+                           (out.Total() - int(shift_out)) / int(slice));
+   int size = (rows == 0 ? available : int(rows));
+   if(size < 1 || size > available)
       ReturnFalse;
    uint global_work_offset[3] = {0};
    uint global_work_size[3] = {size, dimension, variables};
@@ -13875,10 +13933,16 @@ bool CNeuronBaseOCL::ConcatVecMatrixGrad(CBufferFloat *vector_in, CBufferFloat *
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool CNeuronBaseOCL::MatMul(const CBufferFloat* matr1, const CBufferFloat* matr2, CBufferFloat* result, const int rows1, const int cols1, const int cols2, const int variables = 1, const bool mult_var_second = true)
+bool CNeuronBaseOCL::MatMul(const CBufferFloat* matr1, const CBufferFloat* matr2,
+                            CBufferFloat* result, const int rows1, const int cols1,
+                            const int cols2, const int variables = 1,
+                            const bool mult_var_second = true, const uint offset_matr1 = 0,
+                            const uint offset_matr2 = 0, const uint offset_result = 0)
   {
+   //--- Validate OpenCL ownership before configuring the matrix kernel.
    if(!OpenCL)
       ReturnFalse;
+//--- Bind matrices, dimensions, and optional raw-buffer offsets.
    uint global_work_offset[3] = {0, 0, 0};
    uint global_work_size[3] = {rows1, cols2, variables};
    setBuffer(def_k_MatMult, def_k_mm_matr1, matr1.GetIndex())
@@ -13886,22 +13950,33 @@ bool CNeuronBaseOCL::MatMul(const CBufferFloat* matr1, const CBufferFloat* matr2
    setBuffer(def_k_MatMult, def_k_mm_result, result.GetIndex())
    setArgument(def_k_MatMult, def_k_mm_dimension, (int)cols1)
    setArgument(def_k_MatMult, def_k_mm_multvarsecond, (int)mult_var_second)
-//---
+   setArgument(def_k_MatMult, def_k_mm_offset_matr1, (int)offset_matr1)
+   setArgument(def_k_MatMult, def_k_mm_offset_matr2, (int)offset_matr2)
+   setArgument(def_k_MatMult, def_k_mm_offset_result, (int)offset_result)
+//--- Execute the matrix multiplication kernel.
    kernelExecute(def_k_MatMult, global_work_offset, global_work_size)
 #ifdef  _DEBUG
    if(!result.BufferRead())
       ReturnFalse;
 #endif
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-bool CNeuronBaseOCL::MatMulGrad(const CBufferFloat* matr1, CBufferFloat* matr1_gr, const CBufferFloat* matr2, CBufferFloat* matr2_gr, const CBufferFloat* result_gr, const int rows1, const int cols1, const int cols2, const int variables = 1, const bool mult_var_second = true)
+bool CNeuronBaseOCL::MatMulGrad(const CBufferFloat* matr1, CBufferFloat* matr1_gr,
+                                const CBufferFloat* matr2, CBufferFloat* matr2_gr,
+                                const CBufferFloat* result_gr, const int rows1,
+                                const int cols1, const int cols2, const int variables = 1,
+                                const bool mult_var_second = true, const uint offset_matr1 = 0,
+                                const uint offset_matr1_gr = 0, const uint offset_matr2 = 0,
+                                const uint offset_matr2_gr = 0, const uint offset_result_gr = 0)
   {
+   //--- Validate OpenCL ownership before configuring the gradient kernel.
    if(!OpenCL)
       ReturnFalse;
+//--- Bind matrices, gradients, dimensions, and optional raw-buffer offsets.
    uint global_work_offset[3] = {0, 0, 0};
    uint global_work_size[3] = {rows1, cols2, variables};
    setBuffer(def_k_MatMultGrad, def_k_mmg_matr1, matr1.GetIndex())
@@ -13911,14 +13986,48 @@ bool CNeuronBaseOCL::MatMulGrad(const CBufferFloat* matr1, CBufferFloat* matr1_g
    setBuffer(def_k_MatMultGrad, def_k_mmg_result_gr, result_gr.GetIndex())
    setArgument(def_k_MatMultGrad, def_k_mmg_dimension, (int)cols1)
    setArgument(def_k_MatMultGrad, def_k_mmg_multvarsecond, (int)mult_var_second)
-//---
+   setArgument(def_k_MatMultGrad, def_k_mmg_offset_matr1, (int)offset_matr1)
+   setArgument(def_k_MatMultGrad, def_k_mmg_offset_matr1_gr, (int)offset_matr1_gr)
+   setArgument(def_k_MatMultGrad, def_k_mmg_offset_matr2, (int)offset_matr2)
+   setArgument(def_k_MatMultGrad, def_k_mmg_offset_matr2_gr, (int)offset_matr2_gr)
+   setArgument(def_k_MatMultGrad, def_k_mmg_offset_result_gr, (int)offset_result_gr)
+//--- Execute the matrix-gradient kernel.
    kernelExecute(def_k_MatMultGrad, global_work_offset, global_work_size)
 #ifdef  _DEBUG
    if(!matr1_gr.BufferRead())
       ReturnFalse;
 #endif
 //---
-   return true;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CNeuronBaseOCL::CalcDistance(const CBufferFloat *data, CBufferFloat *distance,
+                                  uint dimension, uint samples, uint groups = 1,
+                                  bool normalize = true)
+  {
+   //--- Validate grouped distance inputs before launching the kernel.
+   if(!OpenCL || !data || !distance || dimension == 0 || samples == 0 || groups == 0)
+      ReturnFalse;
+//--- Configure the grouped [samples,samples] distance layout.
+   uint global_work_offset[3] = {0, 0, 0};
+   uint global_work_size[3] = {samples, samples, groups};
+   uint local_work_size[3] = {1, samples, 1};
+   int kernel = def_k_CalcDistance;
+   setBuffer(kernel, def_k_cd_data, data.GetIndex())
+   setBuffer(kernel, def_k_cd_distance, distance.GetIndex())
+   setArgument(kernel, def_k_cd_dimension, (int)dimension)
+   setArgument(kernel, def_k_cd_groups, (int)groups)
+   setArgument(kernel, def_k_cd_normalize, (int)normalize)
+//--- Execute the normalized or raw distance calculation.
+   kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
+#ifdef  _DEBUG
+   if(!distance.BufferRead())
+      ReturnFalse;
+#endif
+//--- Distance calculation completed successfully.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -14606,7 +14715,7 @@ bool CNeuronBatchNormOCL::Save(const int file_handle)
    return BatchOptions.Save(file_handle);
   }
 //+------------------------------------------------------------------+
-//| Append batch-normalization parameters and optimizer buffers.      |
+//| Append batch-normalization parameters and optimizer buffers.     |
 //+------------------------------------------------------------------+
 bool CNeuronBatchNormOCL::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -14688,7 +14797,7 @@ bool CNet::GetLayerOutput(uint layer, CBufferFloat *&result)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Return the existing device output; caller does not own it.      |
+//| Return the existing device output; caller does not own it.       |
 //+------------------------------------------------------------------+
 bool CNet::GetLayerOutputDevice(uint layer, CBufferFloat *&result)
   {
@@ -14711,7 +14820,7 @@ bool CNet::GetLayerOutputDevice(uint layer, CBufferFloat *&result)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Return the first neuron object of a layer without a host copy.    |
+//| Return the first neuron object of a layer without a host copy.   |
 //+------------------------------------------------------------------+
 CNeuronBaseOCL *CNet::Layer(int layer)
   {
@@ -16977,7 +17086,7 @@ bool CNet::OpenCLInit(void)
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(317);
+   opencl.SetKernelsCount(320);
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")
@@ -17295,6 +17404,9 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_D2SkillInfluenceAccumulate, "D2SkillInfluenceAccumulate")
    CreateKernel(def_k_D2SkillDirectionEMA, "D2SkillDirectionEMA")
    CreateKernel(def_k_D2SkillNormalizeDirection, "D2SkillNormalizeDirection")
+   CreateKernel(def_k_OMPBDisagreement, "OMPBDisagreement")
+   CreateKernel(def_k_OMPBDisagreementGrad, "OMPBDisagreementGrad")
+   CreateKernel(def_k_OMPBGaussianKL, "OMPBGaussianKL")
 //---
    return true;
   }
@@ -17563,7 +17675,7 @@ bool CNeuronLearnabledPE::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Append learnable positional encoder parameters.                   |
+//| Append learnable positional encoder parameters.                  |
 //+------------------------------------------------------------------+
 bool CNeuronLearnabledPE::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -19358,6 +19470,14 @@ bool CParams::WeightsUpdate(CNeuronBaseOCL* source, float tau)
       ReturnFalse;
 //---
    return true;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CParams::AppendParameterFingerprint(ulong &fingerprint)
+  {
+   fingerprint = (fingerprint ^ ulong(Type())) * ulong(1099511628211);
+   return(cOne.AppendParameterFingerprint(fingerprint));
   }
 //+------------------------------------------------------------------+
 //|                                                                  |

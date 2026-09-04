@@ -1,3 +1,10 @@
+//+------------------------------------------------------------------+
+//|                                             NeuroNet_AgentsRL.mqh|
+//|           Reinforcement learning agents: FQF, SAC, PLR, MacroHFT.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
+//+------------------------------------------------------------------+
+
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
@@ -4680,3 +4687,5 @@ void CNeuronHiSSDLowLevelControler::SetOpenCL(COpenCLMy * obj)
       cActionDecoder[i].SetOpenCL(OpenCL);
   }
 
+
+//+------------------------------------------------------------------+

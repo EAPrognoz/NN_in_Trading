@@ -12,11 +12,18 @@
 #endif
 #define class_vae
 //---
+enum ENUM_VAE_SAMPLE_MODE
+  {
+   VAE_SAMPLE_RANDOM = 0,
+   VAE_SAMPLE_MEAN
+  };
+//---
 class CVAE : public CNeuronBaseOCL
   {
 protected:
    float             m_fKLD_Mult;
    CBufferFloat*     m_cRandom;
+   ENUM_VAE_SAMPLE_MODE  m_eSampleMode;
    ///\ingroup neuron_base_ff
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::VAE().@param NeuronOCL Pointer to previos layer.
 
@@ -29,7 +36,15 @@ public:
                     ~CVAE();
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual void      SetKLDMult(float value) { m_fKLD_Mult = value;}
+   virtual void      SetKLDMult(float value) { m_fKLD_Mult = value; }
+   virtual void      SetSampleMode(ENUM_VAE_SAMPLE_MODE mode)
+     {
+      m_eSampleMode = mode;
+     }
+   virtual ENUM_VAE_SAMPLE_MODE SampleMode(void) const
+     {
+      return(m_eSampleMode);
+     }
    ///< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object. #param[in] numNeurons Number of neurons in layer @param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    ///\ingroup neuron_base_gr
    ///@{
@@ -43,14 +58,16 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Construct the VAE sampler with random sampling as the default.   |
 //+------------------------------------------------------------------+
-CVAE::CVAE()   : m_fKLD_Mult(0.01f)
+CVAE::CVAE()
+  : m_fKLD_Mult(0.01f),
+    m_eSampleMode(VAE_SAMPLE_RANDOM)
   {
    m_cRandom = new CBufferFloat();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Release the VAE random sampling buffer.                          |
 //+------------------------------------------------------------------+
 CVAE::~CVAE()
   {
@@ -58,59 +75,69 @@ CVAE::~CVAE()
       delete m_cRandom;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initialize the VAE layer and its sampling buffer.                |
 //+------------------------------------------------------------------+
 bool CVAE::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
+   //--- Initialize the inherited layer before allocating the random source.
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, numNeurons, optimization_type, batch))
-      return false;
-//---
+      return(false);
+   //--- Allocate the deterministic/random sampling buffer.
    if(!m_cRandom)
      {
       m_cRandom = new CBufferFloat();
       if(!m_cRandom)
-         return false;
+         return(false);
      }
    if(!m_cRandom.BufferInit(numNeurons, 0.0))
-      return false;
+      return(false);
    if(!m_cRandom.BufferCreate(OpenCL))
-      return false;
-//---
-   return true;
+      return(false);
+   //--- Initialization completed successfully.
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Execute one deterministic or random VAE forward sample.          |
 //+------------------------------------------------------------------+
 bool CVAE::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
+   //--- Validate the posterior input layout.
    if(!OpenCL || !NeuronOCL)
-      return false;
+      return(false);
    if(NeuronOCL.Neurons() % 2 != 0 ||
       NeuronOCL.Neurons() / 2 != Neurons())
-      return false;
-//---
-   double random[];
-   if(!MathRandomNormal(0, 1, m_cRandom.Total(), random))
-      return false;
-   if(!m_cRandom.AssignArray(random))
-      return false;
-   if(!m_cRandom.BufferWrite())
-      return false;
-//---
+      return(false);
+   //--- Select the deterministic mean sampler or generate random samples.
+   if(m_eSampleMode == VAE_SAMPLE_MEAN)
+     {
+      if(!m_cRandom.Fill(0.0f))
+         return(false);
+     }
+   else
+     {
+      double random[];
+      if(!MathRandomNormal(0, 1, m_cRandom.Total(), random))
+         return(false);
+      if(!m_cRandom.AssignArray(random))
+         return(false);
+      if(!m_cRandom.BufferWrite())
+         return(false);
+     }
+   //--- Execute the selected sample through the VAE kernel.
    if(!OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_inputs, NeuronOCL.getOutput().GetIndex()))
-      return false;
+      return(false);
    if(!OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_random, m_cRandom.GetIndex()))
-      return false;
+      return(false);
    if(!OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_outputd, Output.GetIndex()))
-      return false;
+      return(false);
    uint off_set[] = {0};
    uint NDrange[] = {Neurons()};
    if(!OpenCL.Execute(def_k_VAEFeedForward, 1, off_set, NDrange))
-      return false;
-   //if(!Output.BufferRead())
-   //   return false;
-//---
-   return true;
+      return(false);
+   //--- if(!Output.BufferRead())
+   //---    return(false);
+   //--- VAE forward execution completed successfully.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //|                                                                  |

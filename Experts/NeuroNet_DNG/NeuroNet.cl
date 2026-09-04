@@ -1,3 +1,9 @@
+//+------------------------------------------------------------------+
+//|                                                       NeuroNet.cl|
+//|                              OpenCL kernels library for NeuroNet.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
+//+------------------------------------------------------------------+
 /// \file
 /// \brief NeuroNet.cl
 /// Library consist OpenCL kernels
@@ -33,7 +39,8 @@
 //---
 #define BarrierLoc      barrier(CLK_LOCAL_MEM_FENCE);
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Sanitizes the input, replacing NaN or infinite values with the   |
+//| fallback value.                                                  |
 //+------------------------------------------------------------------+
 inline float IsNaNOrInf(const float value, const float def_value)
   {
@@ -42,7 +49,8 @@ inline float IsNaNOrInf(const float value, const float def_value)
    return value;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Sanitizes the input, replacing NaN or infinite values with the   |
+//| fallback value.                                                  |
 //+------------------------------------------------------------------+
 inline float2 IsNaNOrInf2(const float2 value, const float2 def_value)
   {
@@ -52,7 +60,8 @@ inline float2 IsNaNOrInf2(const float2 value, const float2 def_value)
    return value;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Sanitizes the input, replacing NaN or infinite values with the   |
+//| fallback value.                                                  |
 //+------------------------------------------------------------------+
 inline float4 IsNaNOrInf4(const float4 value, const float def_value)
   {
@@ -64,7 +73,7 @@ inline float4 IsNaNOrInf4(const float4 value, const float def_value)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Applies the selected activation function to a scalar value.      |
 //+------------------------------------------------------------------+
 float fActivation(const float value, const int function)
   {
@@ -101,7 +110,8 @@ float fActivation(const float value, const int function)
    return IsNaNOrInf(result, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Applies the derivative of the activation function to an output   |
+//| gradient.                                                        |
 //+------------------------------------------------------------------+
 float Deactivation(const float grad, const float inp_value, const int function)
   {
@@ -145,7 +155,8 @@ float Deactivation(const float grad, const float inp_value, const int function)
    return clamp(IsNaNOrInf(result, 0), -MAX_GRAD, MAX_GRAD);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Maps the row/column indices of a tensor to its flat buffer       |
+//| offset.                                                          |
 //+------------------------------------------------------------------+
 inline int RCtoFlat(const int row,
                     const int col,
@@ -156,7 +167,7 @@ inline int RCtoFlat(const int row,
    return (variable * total_rows + row) * total_cols + col;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the vget4 helper on the GPU.                          |
 //+------------------------------------------------------------------+
 inline float vget4(float4 v, int idx)
   {
@@ -179,7 +190,7 @@ inline float vget4(float4 v, int idx)
    return val;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs a local reduction (local max) over the work-group items.|
 //+------------------------------------------------------------------+
 float LocalMax(const float value, const int loc, __local float* Temp)
   {
@@ -213,7 +224,7 @@ float LocalMax(const float value, const int loc, __local float* Temp)
    return Temp[0];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs a local reduction (local min) over the work-group items.|
 //+------------------------------------------------------------------+
 float LocalMin(const float value, const int loc, __local float* Temp)
   {
@@ -247,7 +258,7 @@ float LocalMin(const float value, const int loc, __local float* Temp)
    return Temp[0];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs a local reduction (local sum) over the work-group items.|
 //+------------------------------------------------------------------+
 float LocalSum(const float value, const int loc, __local float* Temp)
   {
@@ -287,7 +298,8 @@ float LocalSum(const float value, const int loc, __local float* Temp)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs a local reduction (local sum4) over the work-group      |
+//| items.                                                           |
 //+------------------------------------------------------------------+
 float4 LocalSum4(const float4 value, const int loc, __local float4* Temp)
   {
@@ -328,7 +340,8 @@ float4 LocalSum4(const float4 value, const int loc, __local float4* Temp)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the numerically stable softmax over the local work-group|
+//| items.                                                           |
 //+------------------------------------------------------------------+
 float LocalSoftMax(const float value, const int loc, __local float* Temp)
   {
@@ -347,7 +360,7 @@ float LocalSoftMax(const float value, const int loc, __local float* Temp)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the local softmax gradient contribution for one item.   |
 //+------------------------------------------------------------------+
 float LocalSoftMaxGrad(const float value, const float grad, const int loc, __local float* Temp)
   {
@@ -559,6 +572,9 @@ __kernel void UpdateWeightsAdam(__global float *matrix_w, ///<[in,out] Weights m
 /// Base (#CNeuronBaseOCL).
 //\details Detailed description on <A
 // HREF="https://www.mql5.com/ru/articles/8598#para31">the link.</A>
+//+------------------------------------------------------------------+
+//| Updates the trainable weights of the update weights ls step using|
+//| the optimizer rule.                                              |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsLS(__global float *matrix_w, ///<[in,out] Weights matrix (m+1)*n, where m -
                               ///< number of neurons in previous layer and n -
@@ -1310,7 +1326,7 @@ __kernel void ConcatenateBuffers(__global float *input1, int window1,
       output[shift + i] = IsNaNOrInf(input4[shift_in + i], 0);
   }
 //+------------------------------------------------------------------+
-//| Copies raw 32-bit buffer payloads without float sanitization.     |
+//| Copies raw 32-bit buffer payloads without float sanitization.    |
 //+------------------------------------------------------------------+
 __kernel void CopyBufferRaw(__global const uint *source,
                             __global uint *destination,
@@ -1747,7 +1763,7 @@ __kernel void UpdateBatchOptionsAdam(__global float *options,     ///<[in,out] O
    options[shift + 8] = vt.s1;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the vae feed forward feed-forward pass on the GPU.          |
 //+------------------------------------------------------------------+
 __kernel void VAE_FeedForward(__global float *inputs, __global float *random,
                               __global float *outputs)
@@ -1757,7 +1773,8 @@ __kernel void VAE_FeedForward(__global float *inputs, __global float *random,
    outputs[i] = IsNaNOrInf(inputs[i], 0) + IsNaNOrInf(exp(0.5f * inputs[i + total]), 0) * random[i];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the vae calc hidden gradient gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void VAE_CalcHiddenGradient(__global float *inputs,
                                      __global float *inp_grad,
@@ -1769,14 +1786,17 @@ __kernel void VAE_CalcHiddenGradient(__global float *inputs,
    uint total = (uint)get_global_size(0);
    float log_var = IsNaNOrInf(inputs[i + total], 0);
    float mean = IsNaNOrInf(inputs[i], 0);
-   float kld =
-      kld_mult * 0.5f * (log_var - exp(log_var) - mean * mean + 1);
+   float sigma = exp(0.5f * log_var);
+   float variance = exp(log_var);
    float grad = clamp(IsNaNOrInf(gradient[i], 0), -MAX_GRAD, MAX_GRAD);
-   inp_grad[i] = IsNaNOrInf(grad / exp(0.5f * log_var) + kld * mean, 0);
-   inp_grad[i + total] = IsNaNOrInf(0.5f * (grad * random[i] - kld * (1 - exp(log_var))), 0);
+// gradient stores the negative downstream derivative used by additive updates.
+// Add the negative derivative of kld_mult * KL(N(mean,variance)||N(0,1)).
+   inp_grad[i] = IsNaNOrInf(grad - kld_mult * mean, 0);
+   inp_grad[i + total] = IsNaNOrInf(0.5f * grad * sigma * random[i] -
+                                    0.5f * kld_mult * (variance - 1.0f), 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the lstm feed forward feed-forward pass on the GPU.         |
 //+------------------------------------------------------------------+
 __kernel void LSTM_FeedForward(__global const float *inputs, int inputs_size,
                                __global const float *weights,
@@ -1843,7 +1863,8 @@ __kernel void LSTM_FeedForward(__global const float *inputs, int inputs_size,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the lstm concatenated gradient gradient contributions on|
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void LSTM_ConcatenatedGradient(__global float *gradient,
                                         __global float *concatenated_gradient,
@@ -1873,7 +1894,8 @@ __kernel void LSTM_ConcatenatedGradient(__global float *gradient,
       memory_gradient * memory[shift_out + id + total_v * total]; // forgat gate
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the lstm hidden gradient gradient contributions on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void LSTM_HiddenGradient(__global float *concatenated_gradient, __global float *inputs_gradient,
                                   __global float *weights_gradient, __global float *hidden_state,
@@ -2028,7 +2050,7 @@ __kernel void LSTM_UpdateWeightsAdam(__global float *weights,   ///<[in,out] Wei
    matrix_v[wi] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the soft max feed forward feed-forward pass on the GPU.     |
 //+------------------------------------------------------------------+
 __kernel void SoftMax_FeedForward(__global float *inputs,
                                   __global float *outputs)
@@ -2043,7 +2065,8 @@ __kernel void SoftMax_FeedForward(__global float *inputs,
    outputs[shift_head + l] = LocalSoftMax(IsNaNOrInf(inputs[shift_head + l], MIN_VALUE), 0, Temp);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the soft max hidden gradient gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void SoftMax_HiddenGradient(__global float *outputs,
                                      __global float *output_gr,
@@ -2060,7 +2083,8 @@ __kernel void SoftMax_HiddenGradient(__global float *outputs,
    input_gr[shift + i] = LocalSoftMaxGrad(output, grad, 0, Temp);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the soft max output gradient gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void SoftMax_OutputGradient(__global float *outputs,
                                      __global float *targets,
@@ -2070,7 +2094,7 @@ __kernel void SoftMax_OutputGradient(__global float *outputs,
    output_gr[i] = (outputs[i] == 0 ? 0 : targets[i] / outputs[i]);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the fqf cosine kernel on the GPU.                           |
 //+------------------------------------------------------------------+
 __kernel void FQF_Cosine(__global float *softmax, __global float *output)
   {
@@ -2087,7 +2111,7 @@ __kernel void FQF_Cosine(__global float *softmax, __global float *output)
    output[shift + i] = cos(i * M_PI_F * result);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the fqf output kernel on the GPU.                           |
 //+------------------------------------------------------------------+
 __kernel void FQF_Output(__global float *quantiles, __global float *delta_taus,
                          __global float *output, int total)
@@ -2102,7 +2126,8 @@ __kernel void FQF_Output(__global float *quantiles, __global float *delta_taus,
    output[action] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the fqf output gradient gradient contributions on the   |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void FQF_OutputGradient(__global float *quantiles,
                                  __global float *delta_taus,
@@ -2120,7 +2145,8 @@ __kernel void FQF_OutputGradient(__global float *quantiles,
    taus_gr[shift + i] = gradient * quantiles[shift + i];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the fqf quantile gradient gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void FQF_QuantileGradient(__global float *state_embeding,
                                    __global float *taus_embeding,
@@ -2138,7 +2164,8 @@ __kernel void FQF_QuantileGradient(__global float *state_embeding,
    taus_gr[shift + i] = gradient * state_embeding[shift + i];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the fqf cosine gradient gradient contributions on the   |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void FQF_CosineGradient(__global float *softmax,
                                  __global float *output_gr,
@@ -2262,7 +2289,7 @@ __kernel void MHSparseAttentionScore(__global float *qkv,     ///<[in] Matrix of
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh sparse attention out kernel on the GPU.        |
 //+------------------------------------------------------------------+
 __kernel void MHSparseAttentionOut(__global float *scores, ///<[in] Matrix of Scores
                                    __global float *qkv,   ///<[in] Matrix of Values
@@ -2293,7 +2320,7 @@ __kernel void MHSparseAttentionOut(__global float *scores, ///<[in] Matrix of Sc
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward multi models feed-forward pass on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardMultiModels(__global float *matrix_w,   ///<[in] Weights matrix (m+1)*n, where m - number of neurons in layer and n - number of outputs (neurons in next layer)
                                      __global float *matrix_i, ///<[in] Inputs tensor
@@ -2354,7 +2381,8 @@ __kernel void FeedForwardMultiModels(__global float *matrix_w,   ///<[in] Weight
    matrix_o[shift_out + i] = fActivation(sum, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the calc hidden gradient multi models gradient          |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void CalcHiddenGradientMultiModels(__global float *matrix_w, ///<[in] Weights matrix (m+1)*n, where m - number
       ///< of neurons in previous layer and n - number
@@ -2420,7 +2448,8 @@ __kernel void CalcHiddenGradientMultiModels(__global float *matrix_w, ///<[in] W
    matrix_ig[shift_in + i] = Deactivation(sum, out, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the update weights adam multi   |
+//| models step using the optimizer rule.                            |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsAdamMultiModels(
    __global float *matrix_w, ///<[in,out] Weights matrix (m+1)*n, where m -
@@ -2517,7 +2546,7 @@ __kernel void UpdateWeightsAdamMultiModels(
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the concat feed forward feed-forward pass on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void Concat_FeedForward(__global float *matrix_w,   ///<[in] Weights matrix (m+1)*n, where m - number
                                  ///< of neurons in layer and n - number of outputs
@@ -2605,7 +2634,8 @@ __kernel void Concat_FeedForward(__global float *matrix_w,   ///<[in] Weights ma
    matrix_o[i] = fActivation(sum, activation);;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the concat hidden gradient gradient contributions on the|
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void Concat_HiddenGradient(__global float *matrix_w,    ///<[in] Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
                                     __global float *matrix_g, ///<[in] Tensor of gradients at current layer
@@ -2665,7 +2695,8 @@ __kernel void Concat_HiddenGradient(__global float *matrix_w,    ///<[in] Weight
       matrix_ig2[i - inputs1] = Deactivation(sum, out, activation2);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the concat update weights       |
+//| momentum step using the optimizer rule.                          |
 //+------------------------------------------------------------------+
 __kernel void Concat_UpdateWeightsMomentum(__global float *matrix_w,    ///<[in,out] Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
       __global float *matrix_g, ///<[in] Tensor of gradients at current layer
@@ -2694,7 +2725,8 @@ __kernel void Concat_UpdateWeightsMomentum(__global float *matrix_w,    ///<[in,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the concat update weights adam  |
+//| step using the optimizer rule.                                   |
 //+------------------------------------------------------------------+
 __kernel void Concat_UpdateWeightsAdam(__global float *matrix_w,   ///<[in,out] Weights matrix (m+1)*n, where m -
                                        ///< number of neurons in previous layer and n -
@@ -2732,7 +2764,7 @@ __kernel void Concat_UpdateWeightsAdam(__global float *matrix_w,   ///<[in,out] 
    matrix_v[wi] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the soft update kernel on the GPU.                    |
 //+------------------------------------------------------------------+
 __kernel void SoftUpdate(__global float *target, ///<[in,out] Target matrix
                          __global const float *source, ///<[in] Source matrix
@@ -2743,7 +2775,8 @@ __kernel void SoftUpdate(__global float *target, ///<[in,out] Target matrix
    target[i] = source[i] * tau + (1.0f - tau) * target[i];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the soft update adam step using |
+//| the optimizer rule.                                              |
 //+------------------------------------------------------------------+
 __kernel void SoftUpdateAdam(__global float *target, __global const float *source,
                              __global float *matrix_m, ///<[in,out] Matrix of first momentum
@@ -2768,7 +2801,7 @@ __kernel void SoftUpdateAdam(__global float *target, __global const float *sourc
    matrix_v[i] = v;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the sac alpha log probs kernel on the GPU.            |
 //+------------------------------------------------------------------+
 __kernel void SAC_AlphaLogProbs(__global float *outputs,
                                 __global float *quantiles,
@@ -2801,7 +2834,8 @@ __kernel void SAC_AlphaLogProbs(__global float *outputs,
    log_probs[i] = -alphas[i] * log(prob);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the sac alpha gradients gradient contributions on the   |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void SAC_AlphaGradients(__global float *outputs,
                                  __global float *gradient,
@@ -2817,7 +2851,8 @@ __kernel void SAC_AlphaGradients(__global float *outputs,
    alphas_grad[i] = Deactivation(grad, out, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the sac output gradient gradient contributions on the   |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void SAC_OutputGradient(__global float *quantiles, __global float *delta_taus,
                                  __global float *output_gr, __global float *quantiles_gr,
@@ -2861,7 +2896,7 @@ __kernel void SAC_OutputGradient(__global float *quantiles, __global float *delt
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the sac calc log probs kernel on the GPU.             |
 //+------------------------------------------------------------------+
 __kernel void SAC_CalcLogProbs(__global float *outputs,
                                __global float *quantiles, __global float *probs,
@@ -2897,7 +2932,7 @@ __kernel void SAC_CalcLogProbs(__global float *outputs,
    log_probs[i] = -alphas[i] * log(prob);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the embedding kernel on the GPU.                      |
 //+------------------------------------------------------------------+
 __kernel void Embedding(__global float *inputs, __global float *outputs,
                         __global float *weights, __global int *windows,
@@ -2987,7 +3022,8 @@ __kernel void Embedding(__global float *inputs, __global float *outputs,
       std[emb] = sqrt(temp[0]);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the embedding hidden gradient gradient contributions on |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void EmbeddingHiddenGradient(__global float *inputs_gradient,
                                       __global float *outputs_gradient,
@@ -3019,7 +3055,8 @@ __kernel void EmbeddingHiddenGradient(__global float *inputs_gradient,
    inputs_gradient[pos] = value;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the embedding update weights    |
+//| adam step using the optimizer rule.                              |
 //+------------------------------------------------------------------+
 __kernel void EmbeddingUpdateWeightsAdam(__global float *weights,   ///<[in,out] Weights matrix (m+1)*n, where m -
       ///< number of neurons in previous layer and n -
@@ -3066,7 +3103,7 @@ __kernel void EmbeddingUpdateWeightsAdam(__global float *weights,   ///<[in,out]
    matrix_v[i] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs the transpose data-layout operation on the GPU.         |
 //+------------------------------------------------------------------+
 __kernel void Transpose(__global float *matrix_in, ///<[in] Input matrix
                         __global float *matrix_out ///<[out] Output matrix
@@ -3080,7 +3117,7 @@ __kernel void Transpose(__global float *matrix_in, ///<[in] Input matrix
    matrix_out[c * rows + r] = matrix_in[r * cols + c];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh2 attention out kernel on the GPU.              |
 //+------------------------------------------------------------------+
 __kernel void MH2AttentionOut(__global float *q,    ///<[in] Matrix of Querys
                               __global float *kv,   ///<[in] Matrix of Keys
@@ -3129,7 +3166,8 @@ __kernel void MH2AttentionOut(__global float *q,    ///<[in] Matrix of Querys
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mh2 attention inside gradients gradient             |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void MH2AttentionInsideGradients(__global float *q, __global float *q_g,
       __global float *kv, __global float *kv_g,
@@ -3217,7 +3255,8 @@ __kernel void MH2AttentionInsideGradients(__global float *q, __global float *q_g
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cg conv hidden gradient gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void CGConv_HiddenGradient(__global const float *matrix_g,    ///<[in] Tensor of gradients at current layer
                                     __global const float *matrix_f, ///<[in] Previous layer Output tensor
@@ -3241,7 +3280,7 @@ __kernel void CGConv_HiddenGradient(__global const float *matrix_g,    ///<[in] 
    matrix_sg[i] = Deactivation(sg, s, activations);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the x ci t feed forward feed-forward pass on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void XCiTFeedForward(__global float *qkv, __global float *score,
                               __global float *out)
@@ -3358,7 +3397,8 @@ __kernel void XCiTFeedForward(__global float *qkv, __global float *score,
    out[shift_out] = sum;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the x ci t inside gradients gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void XCiTInsideGradients(__global float *qkv, __global float *qkv_g,
                                   __global float *scores,
@@ -3414,7 +3454,7 @@ __kernel void XCiTInsideGradients(__global float *qkv, __global float *qkv_g,
    qkv_g[shift_k + d] = grad / sqrt((float)units);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the dot feed forward feed-forward pass on the GPU.          |
 //+------------------------------------------------------------------+
 __kernel void DOTFeedForward(__global float *qkv, __global float *score,
                              __global float *rpb, __global float *out)
@@ -3496,7 +3536,8 @@ __kernel void DOTFeedForward(__global float *qkv, __global float *score,
    out[shift_out] = sum;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the dot inside gradients gradient contributions on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void DOTInsideGradients(__global float *qkv, __global float *qkv_g,
                                  __global float *scores, __global float *rpb,
@@ -3590,7 +3631,8 @@ __kernel void DOTInsideGradients(__global float *qkv, __global float *qkv_g,
    qkv_g[shift_k] = grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the rpb update adam step using  |
+//| the optimizer rule.                                              |
 //+------------------------------------------------------------------+
 __kernel void RPBUpdateAdam(__global float *target, __global const float *gradient,
                             __global float *matrix_m, ///<[in,out] Matrix of first momentum
@@ -3613,7 +3655,7 @@ __kernel void RPBUpdateAdam(__global float *target, __global const float *gradie
    matrix_v[i] = v;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the gte feed forward feed-forward pass on the GPU.          |
 //+------------------------------------------------------------------+
 __kernel void GTEFeedForward(__global float *qkv, __global float *score,
                              __global float *out, int dimension)
@@ -3731,7 +3773,8 @@ __kernel void GTEFeedForward(__global float *qkv, __global float *score,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the gte inside gradients gradient contributions on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void GTEInsideGradients(__global float *qkv, __global float *qkv_g,
                                  __global float *scores,
@@ -3832,7 +3875,7 @@ __kernel void GTEInsideGradients(__global float *qkv, __global float *qkv_g,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward nodef feed-forward pass on the GPU.        |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardNODEF(__global float *matrix_w,   ///<[in] Weights matrix (m+1)*n, where m - input
                                ///< window and n - output window
@@ -3867,7 +3910,7 @@ __kernel void FeedForwardNODEF(__global float *matrix_w,   ///<[in] Weights matr
    matrix_o[output_shift] = fActivation(sum, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward node inp k feed-forward pass on the GPU.   |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardNODEInpK(__global float *matrix_i,   ///<[in] Inputs tensor
                                   __global float *matrix_k1,  ///<[in] K1 tensor
@@ -3921,7 +3964,8 @@ __kernel void FeedForwardNODEInpK(__global float *matrix_i,   ///<[in] Inputs te
    matrix_o[i] = sum;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the hidden gradient node inp k gradient contributions on|
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void HiddenGradientNODEInpK(__global float *matrix_ig,  ///<[in] Inputs tensor
                                      __global float *matrix_k1g, ///<[in] K1 tensor
@@ -3968,7 +4012,8 @@ __kernel void HiddenGradientNODEInpK(__global float *matrix_ig,  ///<[in] Inputs
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the hidden gradient nodef gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void HiddenGradientNODEF(__global float *matrix_w,    ///<[in] Weights matrix (m+1)*n, where m - input
                                   ///< window and n - output window
@@ -4005,7 +4050,8 @@ __kernel void HiddenGradientNODEF(__global float *matrix_w,    ///<[in] Weights 
    matrix_ig[input_shift] = Deactivation(sum, out, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the nodef update weights adam   |
+//| step using the optimizer rule.                                   |
 //+------------------------------------------------------------------+
 __kernel void NODEF_UpdateWeightsAdam(__global float *matrix_w,   ///<[in,out] Weights matrix (m+1)*n, where m -
                                       ///< number of neurons in previous layer and n -
@@ -4084,7 +4130,7 @@ __kernel void NODEF_UpdateWeightsAdam(__global float *matrix_w,   ///<[in,out] W
    matrix_v[weight_shift] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the time derivative kernel on the GPU.                |
 //+------------------------------------------------------------------+
 __kernel void TimeDerivative(__global float *qkv, __global float *dqkv,
                              int dimension)
@@ -4143,7 +4189,8 @@ __kernel void TimeDerivative(__global float *qkv, __global float *dqkv,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the hidden gradient time derivative gradient            |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void HiddenGradientTimeDerivative(__global float *qkv_g,
       __global float *dqkv_g,
@@ -4205,7 +4252,7 @@ __kernel void HiddenGradientTimeDerivative(__global float *qkv_g,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward cont att feed-forward pass on the GPU.     |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardContAtt(__global float *qkv, __global float *dqkv,
                                  __global float *score, __global float *out,
@@ -4283,7 +4330,8 @@ __kernel void FeedForwardContAtt(__global float *qkv, __global float *dqkv,
 //---
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the hidden gradient cont att gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void HiddenGradientContAtt(__global float *qkv, __global float *qkv_g,
                                     __global float *dqkv,
@@ -4400,7 +4448,7 @@ __kernel void HiddenGradientContAtt(__global float *qkv, __global float *qkv_g,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the rev in feed forward feed-forward pass on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void RevInFeedForward(__global float *inputs, __global float *options,
                                __global float *output, int options_size,
@@ -4421,7 +4469,7 @@ __kernel void RevInFeedForward(__global float *inputs, __global float *options,
    output[n] = res;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the rev in hidden graddient kernel on the GPU.        |
 //+------------------------------------------------------------------+
 __kernel void RevInHiddenGraddient(__global float *inputs, __global float *inputs_gr,
                                    __global float *options, __global float *output_gr,
@@ -4445,7 +4493,7 @@ __kernel void RevInHiddenGraddient(__global float *inputs, __global float *input
    inputs_gr[n] = Deactivation(res, inp, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the activation kernel on the GPU.                     |
 //+------------------------------------------------------------------+
 __kernel void Activation(__global const float *inputs,
                          __global float *outputs,
@@ -4458,7 +4506,7 @@ __kernel void Activation(__global const float *inputs,
    outputs[n] = fActivation(res, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the de activation kernel on the GPU.                  |
 //+------------------------------------------------------------------+
 __kernel void DeActivation(__global const float *inputs, __global float *inputs_gr,
                            __global const float *output_gr, const int activation)
@@ -4471,7 +4519,7 @@ __kernel void DeActivation(__global const float *inputs, __global float *inputs_
    inputs_gr[n] = Deactivation(res, inp, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the patch create kernel on the GPU.                   |
 //+------------------------------------------------------------------+
 __kernel void PatchCreate(__global float *inputs,
                           __global float *weights,
@@ -4503,7 +4551,8 @@ __kernel void PatchCreate(__global float *inputs,
    outputs[shift_out] = fActivation(res, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the patch hidden gradient gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void PatchHiddenGradient(__global float *inputs,
                                   __global float *inputs_gr,
@@ -4545,7 +4594,8 @@ __kernel void PatchHiddenGradient(__global float *inputs,
    inputs_gr[i * variables + v] = Deactivation(grad, inp, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the patch update weights adam   |
+//| step using the optimizer rule.                                   |
 //+------------------------------------------------------------------+
 __kernel void PatchUpdateWeightsAdam(__global float *weights,
                                      __global const float *outputs_gr,
@@ -4595,13 +4645,16 @@ __kernel void PatchUpdateWeightsAdam(__global float *weights,
    weights_v[shift_weights] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mat mult kernel on the GPU.                       |
 //+------------------------------------------------------------------+
 __kernel void MatMult(__global const float *matr1,
                       __global const float *matr2,
                       __global float *result,
                       int dimension,
-                      int multvarsecond)
+                      int multvarsecond,
+                      int offset_matr1,
+                      int offset_matr2,
+                      int offset_result)
   {
    size_t row = get_global_id(0);
    size_t col = get_global_id(1);
@@ -4609,9 +4662,9 @@ __kernel void MatMult(__global const float *matr1,
    size_t rows = get_global_size(0);
    size_t cols = get_global_size(1);
 //---
-   int shift1 = RCtoFlat(row, 0, rows, dimension, var);
-   int shift2 = RCtoFlat(0, col, dimension, cols, multvarsecond * var);
-   int shift_out = RCtoFlat(row, col, rows, cols, var);
+   int shift1 = offset_matr1 + RCtoFlat(row, 0, rows, dimension, var);
+   int shift2 = offset_matr2 + RCtoFlat(0, col, dimension, cols, multvarsecond * var);
+   int shift_out = offset_result + RCtoFlat(row, col, rows, cols, var);
 //---
    float res = 0;
 //---
@@ -4621,7 +4674,7 @@ __kernel void MatMult(__global const float *matr1,
    result[shift_out] = res;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mat mult grad gradient contributions on the GPU.    |
 //+------------------------------------------------------------------+
 __kernel void MatMultGrad(__global const float *matr1,
                           __global float *matr1_gr,
@@ -4629,7 +4682,12 @@ __kernel void MatMultGrad(__global const float *matr1,
                           __global float *matr2_gr,
                           __global const float *result_gr,
                           int dimension,
-                          int multvarsecond)
+                          int multvarsecond,
+                          int offset_matr1,
+                          int offset_matr1_gr,
+                          int offset_matr2,
+                          int offset_matr2_gr,
+                          int offset_result_gr)
   {
    size_t row = get_global_id(0);
    size_t col = get_global_id(1);
@@ -4637,9 +4695,11 @@ __kernel void MatMultGrad(__global const float *matr1,
    size_t rows = get_global_size(0);
    size_t cols = get_global_size(1);
 //---
-   int shift1 = (row  + var * rows) * dimension;
-   int shift2 = var * dimension * cols * multvarsecond;
-   int shift_out = (row + var * rows) * cols;
+   int shift1 = offset_matr1 + (row  + var * rows) * dimension;
+   int shift1_gr = offset_matr1_gr + (row + var * rows) * dimension;
+   int shift2 = offset_matr2 + var * dimension * cols * multvarsecond;
+   int shift2_gr = offset_matr2_gr + var * dimension * cols * multvarsecond;
+   int shift_out = offset_result_gr + (row + var * rows) * cols;
 //---
    for(int c = 0; c < dimension; c += cols)
      {
@@ -4648,24 +4708,24 @@ __kernel void MatMultGrad(__global const float *matr1,
       float grad = 0;
       for(int i = 0; i < cols; i++)
          grad += IsNaNOrInf(result_gr[shift_out + i] * matr2[shift2 + c * cols + i], 0);
-      matr1_gr[shift1 + c] = IsNaNOrInf(grad, 0);
+      matr1_gr[shift1_gr + c] = IsNaNOrInf(grad, 0);
      }
 //---
-   shift_out = var * rows * cols + col;
+   shift_out = offset_result_gr + var * rows * cols + col;
 //---
    for(int r = 0; r < dimension; r += rows)
      {
       if((r + row) >= dimension)
          continue;
-      shift1 = var * rows * dimension + r;
+      shift1 = offset_matr1 + var * rows * dimension + r;
       float grad = 0;
       for(int i = 0; i < rows; i++)
          grad += IsNaNOrInf(result_gr[shift_out + i * cols] * matr1[shift1 + i * dimension], 0);
-      matr2_gr[shift2 + col + r * cols] = IsNaNOrInf(grad, 0);
+      matr2_gr[shift2_gr + col + r * cols] = IsNaNOrInf(grad, 0);
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the fft kernel on the GPU.                                  |
 //+------------------------------------------------------------------+
 __kernel void FFT(__global float *inputs_re,
                   __global float *inputs_im,
@@ -4749,7 +4809,7 @@ __kernel void FFT(__global float *inputs_re,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex layer kernel on the GPU.                  |
 //+------------------------------------------------------------------+
 __kernel void ComplexLayer(__global float *inputs_re,
                            __global float *inputs_im,
@@ -4767,7 +4827,8 @@ __kernel void ComplexLayer(__global float *inputs_re,
    outputs_im[shift] = inputs_im[shift] + inputs_re[shift];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the complex layer gradient gradient contributions on the|
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void ComplexLayerGradient(__global float *inputs_re,
                                    __global float *inputs_im,
@@ -4785,7 +4846,7 @@ __kernel void ComplexLayerGradient(__global float *inputs_re,
    inputs_im[shift] = outputs_im[shift] - outputs_re[shift];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the gradient msa gradient contributions on the GPU.     |
 //+------------------------------------------------------------------+
 __kernel void GradientMSA(__global float *matrix_t, ///<[in] Target tensor
                           __global float *matrix_o, ///<[in] Forecast tensor
@@ -4796,7 +4857,8 @@ __kernel void GradientMSA(__global float *matrix_t, ///<[in] Target tensor
    matrix_g[i] = matrix_t[i] - matrix_o[i];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cumulative gradient gradient contributions on the   |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void CumulativeGradient(__global float *gradient1,
                                  __global float *gradient2,
@@ -4808,7 +4870,7 @@ __kernel void CumulativeGradient(__global float *gradient1,
    gradient_out[i] = alpha * gradient1[i] + (1 - alpha) * gradient2[i];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex mul helper on the GPU.                    |
 //+------------------------------------------------------------------+
 inline float2 ComplexMul(const float2 a, const float2 b)
   {
@@ -4818,7 +4880,7 @@ inline float2 ComplexMul(const float2 a, const float2 b)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex div helper on the GPU.                    |
 //+------------------------------------------------------------------+
 inline float2 ComplexDiv(const float2 a, const float2 b)
   {
@@ -4832,14 +4894,14 @@ inline float2 ComplexDiv(const float2 a, const float2 b)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex abs helper on the GPU.                    |
 //+------------------------------------------------------------------+
 inline float ComplexAbs(float2 a)
   {
    return sqrt(IsNaNOrInf(a.x * a.x + a.y * a.y, 0));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex sqrt helper on the GPU.                   |
 //+------------------------------------------------------------------+
 inline float2 ComplexSqrt(float2 a)
   {
@@ -4853,7 +4915,7 @@ inline float2 ComplexSqrt(float2 a)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex exp helper on the GPU.                    |
 //+------------------------------------------------------------------+
 inline float2 ComplexExp(float2 a)
   {
@@ -4863,7 +4925,7 @@ inline float2 ComplexExp(float2 a)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex tanh helper on the GPU.                   |
 //+------------------------------------------------------------------+
 inline float2 ComplexTanh(float2 a)
   {
@@ -4882,7 +4944,7 @@ inline float2 ComplexTanh(float2 a)
    return ComplexDiv(sinh_a, cosh_a);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward complex conv feed-forward pass on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardComplexConv(__global const float2* __attribute__((aligned(8))) matrix_w, ///<[in] Weights matrix (m+1)*n, where m - input
                                      ///< window and n - output window
@@ -4934,7 +4996,8 @@ __kernel void FeedForwardComplexConv(__global const float2* __attribute__((align
    matrix_o[out + shift_out] = sum;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the calc hidden gradient complex conv gradient          |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void CalcHiddenGradientComplexConv(__global const float2* __attribute__((aligned(8))) matrix_w,    ///<[in] Weights matrix (m+1)*n, where m - input
       ///< window and n - output window
@@ -4997,7 +5060,8 @@ __kernel void CalcHiddenGradientComplexConv(__global const float2* __attribute__
    matrix_ig[i] = clamp(sum, (float2)(-MAX_GRAD), (float2)MAX_GRAD);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the update weights complex conv |
+//| momentum step using the optimizer rule.                          |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsComplexConvMomentum(__global float2* __attribute__((aligned(8))) matrix_w,   ///<[in,out] Weights matrix (m+1)*n, where m -
       ///< input window and n - output window
@@ -5038,7 +5102,8 @@ __kernel void UpdateWeightsComplexConvMomentum(__global float2* __attribute__((a
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the update weights complex conv |
+//| adam step using the optimizer rule.                              |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsComplexConvAdam(__global float2* __attribute__((aligned(8))) matrix_w,   ///<[in,out] Weights matrix (m+1)*n, where m -
       ///< input window and n - output window
@@ -5085,7 +5150,8 @@ __kernel void UpdateWeightsComplexConvAdam(__global float2* __attribute__((align
    matrix_v[i + total_w * var] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the complex soft max feed forward feed-forward pass on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void ComplexSoftMax_FeedForward(__global float2* __attribute__((aligned(8))) inputs,
       __global float2* __attribute__((aligned(8))) outputs, const int total)
@@ -5151,7 +5217,8 @@ __kernel void ComplexSoftMax_FeedForward(__global float2* __attribute__((aligned
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the complex soft max hidden gradient gradient           |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void ComplexSoftMax_HiddenGradient(__global float2* __attribute__((aligned(8))) outputs,
       __global float2* __attribute__((aligned(8))) output_gr,
@@ -5169,7 +5236,8 @@ __kernel void ComplexSoftMax_HiddenGradient(__global float2* __attribute__((alig
    input_gr[shift + i] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the complex soft max output gradient gradient           |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void ComplexSoftMax_OutputGradient(__global float2* __attribute__((aligned(8))) outputs,
       __global float2* __attribute__((aligned(8))) targets,
@@ -5182,7 +5250,7 @@ __kernel void ComplexSoftMax_OutputGradient(__global float2* __attribute__((alig
       output_gr[i] = ComplexDiv(targets[i], outputs[i]);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex mh attention score kernel on the GPU.     |
 //+------------------------------------------------------------------+
 __kernel void ComplexMHAttentionScore(__global float2* __attribute__((aligned(8))) qkv,  ///<[in] Matrix of Querys, Keys, Values
                                       __global float2* __attribute__((aligned(8))) score, ///<[out] Matrix of Scores
@@ -5228,7 +5296,7 @@ __kernel void ComplexMHAttentionScore(__global float2* __attribute__((aligned(8)
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex mh attention out kernel on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void ComplexMHAttentionOut(__global float2* __attribute__((aligned(8))) scores, ///<[in] Matrix of Scores
                                     __global float2* __attribute__((aligned(8))) qkv,   ///<[in] Matrix of Values
@@ -5257,7 +5325,8 @@ __kernel void ComplexMHAttentionOut(__global float2* __attribute__((aligned(8)))
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the complex mh attention gradients gradient             |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void ComplexMHAttentionGradients(__global float2* __attribute__((aligned(8))) qkv,
       __global float2* __attribute__((aligned(8))) qkv_g,
@@ -5328,7 +5397,7 @@ __kernel void ComplexMHAttentionGradients(__global float2* __attribute__((aligne
    qkv_g[shift_k + d] = grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex normalize kernel on the GPU.              |
 //+------------------------------------------------------------------+
 __kernel void ComplexNormalize(__global float2* __attribute__((aligned(8))) inputs,
                                __global float2* __attribute__((aligned(8))) outputs,
@@ -5365,7 +5434,8 @@ __kernel void ComplexNormalize(__global float2* __attribute__((aligned(8))) inpu
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the complex normalize gradient gradient contributions on|
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void ComplexNormalizeGradient(__global float2* __attribute__((aligned(8))) inputs_gr,
                                        __global float2* __attribute__((aligned(8))) outputs_gr,
@@ -5390,7 +5460,7 @@ __kernel void ComplexNormalizeGradient(__global float2* __attribute__((aligned(8
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the complex un normalize kernel on the GPU.           |
 //+------------------------------------------------------------------+
 __kernel void ComplexUnNormalize(__global float2* __attribute__((aligned(8))) inputs,
                                  __global float2* __attribute__((aligned(8))) outputs,
@@ -5417,7 +5487,8 @@ __kernel void ComplexUnNormalize(__global float2* __attribute__((aligned(8))) in
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the complex un normalize gradient gradient contributions|
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void ComplexUnNormalizeGradient(__global float2* __attribute__((aligned(8))) inputs_gr,
       __global float2* __attribute__((aligned(8))) outputs_gr,
@@ -5443,7 +5514,7 @@ __kernel void ComplexUnNormalizeGradient(__global float2* __attribute__((aligned
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the main freq weight kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void MainFreqWeight(__global float2* __attribute__((aligned(8))) freq,
                              __global float *weight,
@@ -5469,7 +5540,7 @@ __kernel void MainFreqWeight(__global float2* __attribute__((aligned(8))) freq,
    weight[n] = max_f / (total > 0 ? total : 1);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the weighted sum kernel on the GPU.                   |
 //+------------------------------------------------------------------+
 __kernel void WeightedSum(__global float *inputs1,
                           __global float *inputs2,
@@ -5490,7 +5561,8 @@ __kernel void WeightedSum(__global float *inputs1,
       outputs[shift + i] = inputs1[shift + i] * w + inputs2[shift + i] * (1 - w);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the weighted sum gradient gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void WeightedSumGradient(__global float *inputs_gr1,
                                   __global float *inputs_gr2,
@@ -5516,7 +5588,7 @@ __kernel void WeightedSumGradient(__global float *inputs_gr1,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward s3 feed-forward pass on the GPU.           |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardS3(__global float *inputs,
                             __global float *probability,
@@ -5567,7 +5639,8 @@ __kernel void FeedForwardS3(__global float *inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the inside gradient s3 gradient contributions on the    |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void InsideGradientS3(__global float *inputs,
                                __global float *inputs_gr,
@@ -5603,7 +5676,8 @@ __kernel void InsideGradientS3(__global float *inputs,
    probability_gr[segment] = grad / prob;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the weight gradient s3 gradient contributions on the    |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void WeightGradientS3(__global float *inputs,
                                __global float *positions,
@@ -5654,7 +5728,7 @@ __kernel void WeightGradientS3(__global float *inputs,
       weights_gr[w] = temp[0];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh2 pyr attention out kernel on the GPU.          |
 //+------------------------------------------------------------------+
 __kernel void MH2PyrAttentionOut(__global float *q,
                                  __global float *kv,
@@ -5731,7 +5805,7 @@ __kernel void MH2PyrAttentionOut(__global float *q,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the plr kernel on the GPU.                            |
 //+------------------------------------------------------------------+
 __kernel void PLR(__global const float *inputs,
                   __global float *outputs,
@@ -5880,7 +5954,7 @@ __kernel void PLR(__global const float *inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the plr gradient gradient contributions on the GPU.     |
 //+------------------------------------------------------------------+
 __kernel void PLRGradient(__global float *inputs_gr,
                           __global const float *outputs,
@@ -5932,7 +6006,8 @@ __kernel void PLRGradient(__global float *inputs_gr,
    inputs_gr[shift_in] = grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the update weights adam mini    |
+//| step using the optimizer rule.                                   |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsAdamMini(__global float *matrix_w, ///<[in,out] Weights matrix (m+1)*n, where m -
                                     ///< number of neurons in previous layer and n -
@@ -6018,7 +6093,8 @@ __kernel void UpdateWeightsAdamMini(__global float *matrix_w, ///<[in,out] Weigh
    matrix_m[wi] = m;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the update weights conv adam    |
+//| mini step using the optimizer rule.                              |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsConvAdamMini(__global float *matrix_w,   ///<[in,out] Weights matrix (m+1)*n, where m -
                                         ///< input window and n - output window
@@ -6121,7 +6197,7 @@ __kernel void UpdateWeightsConvAdamMini(__global float *matrix_w,   ///<[in,out]
    matrix_m[shift_w] = mt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cut trend and other kernel on the GPU.            |
 //+------------------------------------------------------------------+
 __kernel void CutTrendAndOther(__global const float *inputs,
                                __global const float *plr,
@@ -6160,7 +6236,8 @@ __kernel void CutTrendAndOther(__global const float *inputs,
    other[shift_in] = other_i;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cut trend and other gradient gradient contributions |
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void CutTrendAndOtherGradient(__global float *inputs_gr,
                                        __global const float *plr,
@@ -6202,7 +6279,7 @@ __kernel void CutTrendAndOtherGradient(__global float *inputs_gr,
    inputs_gr[shift_in] = other_i_gr;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cut one from another kernel on the GPU.           |
 //+------------------------------------------------------------------+
 __kernel void CutOneFromAnother(__global const float *inputs,
                                 __global const float *cut,
@@ -6214,7 +6291,8 @@ __kernel void CutOneFromAnother(__global const float *inputs,
    other[i] = inputs[i] - cut[i];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cut one from another gradient gradient contributions|
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void CutOneFromAnotherGradient(__global float *inputs_gr,
                                         __global float *cut_gr,
@@ -6228,7 +6306,7 @@ __kernel void CutOneFromAnotherGradient(__global float *inputs_gr,
    cut_gr[i] = (-gr);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the uni traj prepare kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void UniTrajPrepare(__global const float *history,
                              __global const float *h_mask,
@@ -6272,7 +6350,8 @@ __kernel void UniTrajPrepare(__global const float *history,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the uni traj prepare grad gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void UniTrajPrepareGrad(__global float *history_gr,
                                  __global float *future_gr,
@@ -6323,7 +6402,7 @@ __kernel void UniTrajPrepareGrad(__global float *history_gr,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the uni traj bts kernel on the GPU.                   |
 //+------------------------------------------------------------------+
 __kernel void UniTrajBTS(__global const float *concat_inp,
                          __global float *d_forw,
@@ -6363,7 +6442,7 @@ __kernel void UniTrajBTS(__global const float *concat_inp,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs the rotate data-layout operation on the GPU.            |
 //+------------------------------------------------------------------+
 float2 Rotate(const float x, const float cos_theta, const float sin_theta)
   {
@@ -6373,7 +6452,7 @@ float2 Rotate(const float x, const float cos_theta, const float sin_theta)
    return result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the hi vt prepare kernel on the GPU.                  |
 //+------------------------------------------------------------------+
 __kernel void HiVTPrepare(__global const float *data,
                           __global float2* __attribute__((aligned(8))) output
@@ -6402,7 +6481,7 @@ __kernel void HiVTPrepare(__global const float *data,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the gate element mul kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void GateElementMul(__global const float *inputs1,
                              __global const float *inputs2,
@@ -6424,7 +6503,8 @@ __kernel void GateElementMul(__global const float *inputs1,
    out[i] = IsNaNOrInf(result, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the gate element mul grad gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void GateElementMulGrad(__global const float *inputs1,
                                  __global float *inputs1_gr,
@@ -6454,7 +6534,7 @@ __kernel void GateElementMulGrad(__global const float *inputs1,
    gate_gr[i] = Deactivation(g_gr, g, activ_gate);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs the transpose rcd data-layout operation on the GPU.     |
 //+------------------------------------------------------------------+
 __kernel void TransposeRCD(__global const float *matrix_in, ///<[in] Input matrix
                            __global float *matrix_out ///<[out] Output matrix
@@ -6470,7 +6550,7 @@ __kernel void TransposeRCD(__global const float *matrix_in, ///<[in] Input matri
    matrix_out[(c * rows + r)*dimension + d] = matrix_in[(r * cols + c) * dimension + d];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the orthoganal loss kernel on the GPU.                |
 //+------------------------------------------------------------------+
 __kernel void OrthoganalLoss(__global const float *data,
                              __global float *grad,
@@ -6523,22 +6603,28 @@ __kernel void OrthoganalLoss(__global const float *data,
       grad[shift1] = g;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Calculates calc distance on the GPU.                             |
 //+------------------------------------------------------------------+
 __kernel void CalcDistance(__global const float *data,
                            __global float *distance,
-                           const int dimension
+                           const int dimension,
+                           const int groups,
+                           const int normalize
                           )
   {
    const size_t main = get_global_id(0);
    const size_t slave = get_local_id(1);
+   const size_t group = get_global_id(2);
    const int total = (int)get_local_size(1);
 //---
    __local float Temp[LOCAL_ARRAY_SIZE];
 //---
-   const int shift_main = main * dimension;
-   const int shift_slave = slave * dimension;
-   const int shift_dist = main * total + slave;
+   if(group >= (size_t)groups)
+      return;
+   const int shift_group = (int)group * total;
+   const int shift_main = (shift_group + main) * dimension;
+   const int shift_slave = (shift_group + slave) * dimension;
+   const int shift_dist = shift_group * total + main * total + slave;
 //--- calc distance
    float dist = 0;
    if(main != slave)
@@ -6553,14 +6639,14 @@ __kernel void CalcDistance(__global const float *data,
 //--- Look Max
    float max_dist = LocalMax(dist, 1, Temp);
 //--- Normalize
-   if(max_dist > 0)
+   if(normalize && max_dist > 0)
       dist /= Temp[0];
    dist = IsNaNOrInf(dist, 1);
 //--- result
    distance[shift_dist] = dist;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward local max feed-forward pass on the GPU.    |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardLocalMax(__global const float *matrix_i,
                                   __global const float *distance,
@@ -6588,7 +6674,8 @@ __kernel void FeedForwardLocalMax(__global const float *matrix_i,
    matrix_o[shift_out] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the calc input gradient local max gradient contributions|
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void CalcInputGradientLocalMax(__global const float *matrix_i,
                                         __global float *matrix_ig,
@@ -6617,7 +6704,7 @@ __kernel void CalcInputGradientLocalMax(__global const float *matrix_i,
    matrix_ig[i * dimension + d] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh mask attention out kernel on the GPU.          |
 //+------------------------------------------------------------------+
 __kernel void MHMaskAttentionOut(__global const float *q,     ///<[in] Matrix of Querys
                                  __global const float *kv,    ///<[in] Matrix of Keys
@@ -6667,7 +6754,8 @@ __kernel void MHMaskAttentionOut(__global const float *q,     ///<[in] Matrix of
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mh mask attention inside gradients gradient         |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void MHMaskAttentionInsideGradients(__global const float *q, __global float *q_g,
       __global const float *kv, __global float *kv_g,
@@ -6765,7 +6853,7 @@ __kernel void MHMaskAttentionInsideGradients(__global const float *q, __global f
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Calculates calc position bias on the GPU.                        |
 //+------------------------------------------------------------------+
 __kernel void CalcPositionBias(__global const float *data1,
                                __global const float *data2,
@@ -6797,7 +6885,7 @@ __kernel void CalcPositionBias(__global const float *data1,
    result[shift_out] = res;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh pos bias attention out kernel on the GPU.      |
 //+------------------------------------------------------------------+
 __kernel void MHPosBiasAttentionOut(__global const float *q,        ///<[in] Matrix of Querys
                                     __global const float *k,        ///<[in] Matrix of Keys
@@ -6918,7 +7006,8 @@ __kernel void MHPosBiasAttentionOut(__global const float *q,        ///<[in] Mat
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mh pos bias attention inside gradients gradient     |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void MHPosBiasAttentionInsideGradients(__global const float *q, __global float *q_g,
       __global const float *k, __global float *k_g,
@@ -7007,7 +7096,7 @@ __kernel void MHPosBiasAttentionInsideGradients(__global const float *q, __globa
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the diversity loss kernel on the GPU.                 |
 //+------------------------------------------------------------------+
 __kernel void DiversityLoss(__global const float *data,
                             __global float *grad,
@@ -7059,7 +7148,7 @@ __kernel void DiversityLoss(__global const float *data,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh relative attention out kernel on the GPU.      |
 //+------------------------------------------------------------------+
 __kernel void MHRelativeAttentionOut(__global const float *q,        ///<[in] Matrix of Querys
                                      __global const float *k,        ///<[in] Matrix of Keys
@@ -7189,7 +7278,8 @@ __kernel void MHRelativeAttentionOut(__global const float *q,        ///<[in] Ma
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mh relative attention inside gradients gradient     |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void MHRelativeAttentionInsideGradients(__global const float *q, __global float *q_g,
       __global const float *k, __global float *k_g,
@@ -7283,7 +7373,8 @@ __kernel void MHRelativeAttentionInsideGradients(__global const float *q, __glob
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the calc alignment gradient gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void CalcAlignmentGradient(__global const float *matrix_o1,
                                     __global const float *matrix_o2,
@@ -7310,7 +7401,7 @@ __kernel void CalcAlignmentGradient(__global const float *matrix_o1,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the feature smoothing kernel on the GPU.              |
 //+------------------------------------------------------------------+
 __kernel void FeatureSmoothing(__global const float *feature,
                                __global float *outputs,
@@ -7340,7 +7431,8 @@ __kernel void FeatureSmoothing(__global const float *feature,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the feature smoothing gradient gradient contributions on|
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void FeatureSmoothingGradient(__global float *feature_gr,
                                        __global const float *outputs_gr,
@@ -7375,7 +7467,8 @@ __kernel void FeatureSmoothingGradient(__global float *feature_gr,
    feature_gr[shift_input] = IsNaNOrInf(grad, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the batch feed forward add noise feed-forward pass on the   |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void BatchFeedForwardAddNoise(__global const float *inputs, __global float *options,
                                        __global const float *noise, __global float *output,
@@ -7410,7 +7503,7 @@ __kernel void BatchFeedForwardAddNoise(__global const float *inputs, __global fl
    output[n] = fActivation(gamma * noisex + betta, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the hyper projection kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void HyperProjection(__global const float *inputs,
                               __global float *outputs
@@ -7463,7 +7556,8 @@ __kernel void HyperProjection(__global const float *inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the hyper projection grad gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void HyperProjectionGrad(__global const float *inputs,
                                   __global float *inputs_gr,
@@ -7487,7 +7581,7 @@ __kernel void HyperProjectionGrad(__global const float *inputs,
    inputs_gr[shift_in] = v + grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the log map kernel on the GPU.                        |
 //+------------------------------------------------------------------+
 __kernel void LogMap(__global const float *features,
                      __global const float *centroids,
@@ -7619,7 +7713,7 @@ __kernel void LogMap(__global const float *features,
    outputs[shift_out] = proj_u;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the log map grad gradient contributions on the GPU.     |
 //+------------------------------------------------------------------+
 __kernel void LogMapGrad(__global const float *features, __global float *features_gr,
                          __global const float *centroids, __global float *centroids_gr,
@@ -7821,7 +7915,7 @@ __kernel void LogMapGrad(__global const float *features, __global float *feature
       curvatures_gr[cent] += curv;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Calculates calc epsilon weights on the GPU.                      |
 //+------------------------------------------------------------------+
 __kernel void CalcEpsilonWeights(__global const float *matrix_w,
                                  __global const float *matrix_g,
@@ -7868,7 +7962,7 @@ __kernel void CalcEpsilonWeights(__global const float *matrix_w,
    matrix_epsw[shift_w] = epsw;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Calculates calc epsilon weights conv on the GPU.                 |
 //+------------------------------------------------------------------+
 __kernel void CalcEpsilonWeightsConv(__global const float *matrix_w,
                                      __global const float *matrix_g,
@@ -7936,7 +8030,7 @@ __kernel void CalcEpsilonWeightsConv(__global const float *matrix_w,
    matrix_epsw[shift_w] = epsw;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the plr multi agents kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void PLRMultiAgents(__global const float *inputs,
                              __global float *outputs,
@@ -8088,7 +8182,8 @@ __kernel void PLRMultiAgents(__global const float *inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the plr multi agents gradient gradient contributions on |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void PLRMultiAgentsGradient(__global float *inputs_gr,
                                      __global const float *outputs,
@@ -8146,7 +8241,7 @@ __kernel void PLRMultiAgentsGradient(__global float *inputs_gr,
    inputs_gr[shift_in] = grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward mh conv feed-forward pass on the GPU.      |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardMHConv(__global float *matrix_w,
                                 __global float *matrix_i,
@@ -8325,7 +8420,7 @@ __kernel void UpdateWeightsMHConvAdam(__global float *matrix_w,   ///<[in,out] W
    matrix_v[i] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the more less equal kernel on the GPU.                |
 //+------------------------------------------------------------------+
 __kernel void MoreLessEqual(__global const float *input,
                             __global float *output)
@@ -8343,7 +8438,8 @@ __kernel void MoreLessEqual(__global const float *input,
    output[i] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the multi scale relative attention out kernel on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void MultiScaleRelativeAttentionOut(__global const float *q,        ///<[in] Matrix of Querys
       __global const float *k,        ///<[in] Matrix of Keys
@@ -8479,7 +8575,7 @@ __kernel void MultiScaleRelativeAttentionOut(__global const float *q,        ///
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the ssm2 d feed forward feed-forward pass on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void SSM2D_FeedForward(__global const float *ah,
                                 __global const float *b_time,
@@ -8528,7 +8624,8 @@ __kernel void SSM2D_FeedForward(__global const float *ah,
    y[n * d_total + d] = IsNaNOrInf(value, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the ssm2 d calc hidden gradient gradient contributions  |
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void SSM2D_CalcHiddenGradient(__global const float *ah,
                                        __global       float *grad_ah,         // Gradient with respect to ah
@@ -8608,7 +8705,7 @@ __kernel void SSM2D_CalcHiddenGradient(__global const float *ah,
    grad_b_var[n] += grad_hidden2 * px_var[n * d_total + d];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the p scan kernel on the GPU.                         |
 //+------------------------------------------------------------------+
 __kernel void PScan(__global const float* A,
                     __global const float* X,
@@ -8648,7 +8745,8 @@ __kernel void PScan(__global const float* A,
    X_out[offset] = local_X[idx];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the p scan calc hidden gradient gradient contributions  |
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void PScan_CalcHiddenGradient(__global const float* A,
                                        __global float*  grad_A,
@@ -8701,7 +8799,7 @@ __kernel void PScan_CalcHiddenGradient(__global const float* A,
    grad_H[offset] = local_grad_H[idx];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the diag mat mult kernel on the GPU.                  |
 //+------------------------------------------------------------------+
 __kernel void DiagMatMult(__global const float *diag,
                           __global const float *matr,
@@ -8726,7 +8824,8 @@ __kernel void DiagMatMult(__global const float *diag,
    result[shift] = fActivation(res, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the diag mat mult grad gradient contributions on the    |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void DiagMatMultGrad(__global const float *diag,
                               __global float *grad_diag,
@@ -8787,7 +8886,7 @@ __kernel void DiagMatMultGrad(__global const float *diag,
       grad_diag[row + var * rows] = IsNaNOrInf(local_diag[0], 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the top kgates kernel on the GPU.                     |
 //+------------------------------------------------------------------+
 __kernel void TopKgates(__global const float *inputs,
                         __global const float *noises,
@@ -8838,7 +8937,7 @@ __kernel void TopKgates(__global const float *inputs,
       gates[shift_gate] = MIN_VALUE;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the top kgates grad gradient contributions on the GPU.  |
 //+------------------------------------------------------------------+
 __kernel void TopKgatesGrad(__global const float *inputs,
                             __global float *grad_inputs,
@@ -8869,7 +8968,7 @@ __kernel void TopKgatesGrad(__global const float *inputs,
    grad_inputs[shift_std] = Deactivation(grad, fActivation(inputs[shift_std], 3), 3);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Applies the mask by distance operation to the GPU buffers.       |
 //+------------------------------------------------------------------+
 __kernel void MaskByDistance(__global const float *buf_real,
                              __global const float *buf_imag,
@@ -8929,7 +9028,7 @@ __kernel void MaskByDistance(__global const float *buf_real,
    mask[shift_mask] = 1 - IsNaNOrInf(dist, 1);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Applies the mask attention operation to the GPU buffers.         |
 //+------------------------------------------------------------------+
 __kernel void MaskAttention(__global const float *q,     ///<[in] Matrix of Querys
                             __global const float *kv,    ///<[in] Matrix of Keys
@@ -8982,7 +9081,8 @@ __kernel void MaskAttention(__global const float *q,     ///<[in] Matrix of Quer
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mask attention gradients gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void MaskAttentionGradients(__global const float *q, __global float *q_g,
                                      __global const float *kv, __global float *kv_g,
@@ -9072,7 +9172,7 @@ __kernel void MaskAttentionGradients(__global const float *q, __global float *q_
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward mult win conv feed-forward pass on the GPU.|
 //+------------------------------------------------------------------+
 __kernel void FeedForwardMultWinConv(__global const float *matrix_w,
                                      __global const float *matrix_i,
@@ -9278,7 +9378,7 @@ __kernel void UpdateWeightsMultWinConvAdam(__global float *matrix_w,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Applies the mask attention complex operation to the GPU buffers. |
 //+------------------------------------------------------------------+
 __kernel void MaskAttentionComplex(__global const float2* __attribute__((aligned(8)))q,     ///<[in] Matrix of Querys
                                    __global const float2* __attribute__((aligned(8)))kv,    ///<[in] Matrix of Keys
@@ -9372,7 +9472,8 @@ __kernel void MaskAttentionComplex(__global const float2* __attribute__((aligned
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mask attention gradients complex gradient           |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void MaskAttentionGradientsComplex(__global const float2* __attribute__((aligned(8)))q, __global float2* __attribute__((aligned(8)))q_g,
       __global const float2* __attribute__((aligned(8)))kv, __global float2* __attribute__((aligned(8)))kv_g,
@@ -9471,7 +9572,7 @@ __kernel void MaskAttentionGradientsComplex(__global const float2* __attribute__
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the cslstm feed forward feed-forward pass on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void CSLSTM_FeedForward(__global const float4* __attribute__((aligned(16))) concatenated,
                                  __global float *memory,
@@ -9497,7 +9598,8 @@ __kernel void CSLSTM_FeedForward(__global const float4* __attribute__((aligned(1
    output[shift] = out;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cslstm calc hidden gradient gradient contributions  |
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void CSLSTM_CalcHiddenGradient(__global const float4* __attribute__((aligned(16))) concatenated,    // Input from forward pass (W*x + U*h + b)
                                         __global float4* __attribute__((aligned(16))) grad_concat,           // Output: gradients w.r.t. gate pre-activations
@@ -9538,7 +9640,7 @@ __kernel void CSLSTM_CalcHiddenGradient(__global const float4* __attribute__((al
    grad_concat[shift] = (float4)(fg_g, ig_g, nc_g, og_g);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the prob attention qeury imp kernel on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void ProbAttentionQeuryImp(__global const float* querys,
                                     __global const float2* __attribute__((aligned(8))) keys_values,
@@ -9595,7 +9697,7 @@ __kernel void ProbAttentionQeuryImp(__global const float* querys,
       querys_imp[id_q * total_h + id_h] = IsNaNOrInf(temp[0][1] - temp[0][0] / total_ind, MIN_VALUE);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the top k importance to index kernel on the GPU.      |
 //+------------------------------------------------------------------+
 __kernel void TopKImportanceToIndex(__global const float* importance,
                                     __global float* indexes,
@@ -9625,7 +9727,7 @@ __kernel void TopKImportanceToIndex(__global const float* importance,
       indexes[pos * total_h + id_h] = (float)id_q;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the q index attention kernel on the GPU.              |
 //+------------------------------------------------------------------+
 __kernel void QIndexAttention(__global const float *q,     ///<[in] Matrix of Querys
                               __global const float2* kv,    ///<[in] Matrix of Keys
@@ -9675,7 +9777,8 @@ __kernel void QIndexAttention(__global const float *q,     ///<[in] Matrix of Qu
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the q index attention gradients gradient contributions  |
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void QIndexAttentionGradients(__global const float* q,
                                        __global float* q_g,
@@ -9765,7 +9868,7 @@ __kernel void QIndexAttentionGradients(__global const float* q,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the ts positon encoder kernel on the GPU.             |
 //+------------------------------------------------------------------+
 __kernel void TSPositonEncoder(__global const float2* __attribute__((aligned(8))) data,
                                __global const float* time,
@@ -9788,7 +9891,8 @@ __kernel void TSPositonEncoder(__global const float2* __attribute__((aligned(8))
    output[shift * periods + p] = (float2)(d.s0 + sin(val), d.s1 + cos(val));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward mult win conv w pad feed-forward pass on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardMultWinConvWPad(__global const float *matrix_w,
       __global const float *matrix_i,
@@ -9829,7 +9933,8 @@ __kernel void FeedForwardMultWinConvWPad(__global const float *matrix_w,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the calc hidden gradient mult win conv w pad gradient   |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void CalcHiddenGradientMultWinConvWPad(__global const float *matrix_w,
       __global const float *matrix_i,
@@ -9885,7 +9990,8 @@ __kernel void CalcHiddenGradientMultWinConvWPad(__global const float *matrix_w,
       matrix_ig[v * inputs + id_x] = Deactivation(grad, matrix_i[v * inputs + id_x], activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the update weights mult win conv|
+//| adam w pad step using the optimizer rule.                        |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsMultWinConvAdamWPad(__global float *matrix_w,
       __global const float *matrix_og,
@@ -9988,7 +10094,7 @@ __kernel void UpdateWeightsMultWinConvAdamWPad(__global float *matrix_w,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs the concat diff data-layout operation on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void ConcatDiff(__global const float* data,
                          __global float* output,
@@ -10009,7 +10115,8 @@ __kernel void ConcatDiff(__global const float* data,
    output[2 * shift + v + variables] = diff;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward mask mult win conv feed-forward pass on the|
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardMaskMultWinConv(__global const float *matrix_w,
       __global const float *matrix_i,
@@ -10053,7 +10160,8 @@ __kernel void FeedForwardMaskMultWinConv(__global const float *matrix_w,
    matrix_o[shift_out] = fActivation(sum, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the calc hidden gradient mask mult win conv gradient    |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void CalcHiddenGradientMaskMultWinConv(__global const float *matrix_w,
       __global const float *matrix_i,
@@ -10110,7 +10218,8 @@ __kernel void CalcHiddenGradientMaskMultWinConv(__global const float *matrix_w,
    masks_g[shift_mask] = IsNaNOrInf(sum, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the update weights mask mult win|
+//| conv adam step using the optimizer rule.                         |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsMaskMultWinConvAdam(__global float *matrix_w,
       __global const float *matrix_og,
@@ -10164,7 +10273,7 @@ __kernel void UpdateWeightsMaskMultWinConvAdam(__global float *matrix_w,
    matrix_v[shift_weight] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the main freq kernel on the GPU.                      |
 //+------------------------------------------------------------------+
 __kernel void MainFreq(__global const float* freq_r,
                        __global const float* freq_im,
@@ -10195,7 +10304,7 @@ __kernel void MainFreq(__global const float* freq_r,
    main_freq[n] = max_id;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the feed forward adapt conv feed-forward pass on the GPU.   |
 //+------------------------------------------------------------------+
 __kernel void FeedForwardAdaptConv(__global const float *matrix_w,
                                    __global const float *matrix_i,
@@ -10235,7 +10344,8 @@ __kernel void FeedForwardAdaptConv(__global const float *matrix_w,
    matrix_o[shift_out] = fActivation(sum, activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the calc hidden gradient adapt conv gradient            |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void CalcHiddenGradientAdaptConv(__global const float *matrix_w,
       __global const float *matrix_i,
@@ -10303,7 +10413,8 @@ __kernel void CalcHiddenGradientAdaptConv(__global const float *matrix_w,
    matrix_ig[shift_in] = Deactivation(sum, matrix_i[shift_in], activation);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the trainable weights of the update weights adapt conv   |
+//| adam step using the optimizer rule.                              |
 //+------------------------------------------------------------------+
 __kernel void UpdateWeightsAdaptConvAdam(__global float *matrix_w,
       __global const float *matrix_og,
@@ -10369,7 +10480,7 @@ __kernel void UpdateWeightsAdaptConvAdam(__global float *matrix_w,
    matrix_v[shift_weight] = vt;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the ro pe kernel on the GPU.                          |
 //+------------------------------------------------------------------+
 __kernel void RoPE(__global const float2* __attribute__((aligned(8))) inputs,
                    __global const float2* __attribute__((aligned(8))) position_emb,
@@ -10395,7 +10506,7 @@ __kernel void RoPE(__global const float2* __attribute__((aligned(8))) inputs,
    outputs[shift_in] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Calculates calc hidden grad ro pe on the GPU.                    |
 //+------------------------------------------------------------------+
 __kernel void CalcHiddenGradRoPE(__global float2* __attribute__((aligned(8))) inputs_gr,
                                  __global const float2* __attribute__((aligned(8))) position_emb,
@@ -10421,7 +10532,7 @@ __kernel void CalcHiddenGradRoPE(__global float2* __attribute__((aligned(8))) in
    inputs_gr[shift_in] = grad_x;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the dif matrix kernel on the GPU.                     |
 //+------------------------------------------------------------------+
 __kernel void DifMatrix(__global const float *matrix1,    ///<[in] First matrix
                         __global const float *matrix2,    ///<[in] Second matrix
@@ -10442,7 +10553,7 @@ __kernel void DifMatrix(__global const float *matrix1,    ///<[in] First matrix
       IsNaNOrInf((matrix1[i * shift_in1 + index] - matrix2[i * shift_in2 + index]) * multiplyer, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the dif matrix grad gradient contributions on the GPU.  |
 //+------------------------------------------------------------------+
 __kernel void DifMatrixGrad(__global float *matrix1,    ///<[in] First matrix
                             __global float *matrix2,    ///<[in] Second matrix
@@ -10464,7 +10575,7 @@ __kernel void DifMatrixGrad(__global float *matrix1,    ///<[in] First matrix
    matrix2[i * shift_in2 + index] = -grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the identity sum matrix kernel on the GPU.            |
 //+------------------------------------------------------------------+
 __kernel void IdentitySumMatrix(__global const float *matrix_in,
                                 __global float *matrix_out,
@@ -10483,7 +10594,7 @@ __kernel void IdentitySumMatrix(__global const float *matrix_in,
       IsNaNOrInf(((int)(i == d) + matrix_in[i * shift_in + index]) * multiplyer, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the identity dif matrix kernel on the GPU.            |
 //+------------------------------------------------------------------+
 __kernel void IdentityDifMatrix(__global const float *matrix_in,
                                 __global float *matrix_out,
@@ -10502,7 +10613,8 @@ __kernel void IdentityDifMatrix(__global const float *matrix_in,
       IsNaNOrInf(((int)(i == d) - matrix_in[i * shift_in + index]) * multiplyer, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the identity dif matrix grad gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void IdentityDifMatrixGrad(__global float *matrix_in,
                                     __global const float *matrix_out,
@@ -10520,7 +10632,7 @@ __kernel void IdentityDifMatrixGrad(__global float *matrix_in,
    matrix_in[i * shift_in + index] = IsNaNOrInf(-multiplyer * matrix_out[i * shift_out + index], 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the sum vec matrix kernel on the GPU.                 |
 //+------------------------------------------------------------------+
 __kernel void SumVecMatrix(__global const float *vector_in,
                            __global const float *matrix_in,
@@ -10538,12 +10650,14 @@ __kernel void SumVecMatrix(__global const float *vector_in,
    const int cols = get_global_size(1);
    const int variables = get_global_size(2);
 //---
-   int flat_m = RCtoFlat(r, c, rows, cols, v);
-   int flat_v = RCtoFlat(0, c, 1, cols, v);
-   matrix_out[flat_m] = IsNaNOrInf((vector_in[flat_v] + matrix_in[flat_m]) * multiplyer, 0);
+   int flat_in = shift_in2 + RCtoFlat(r, c, rows, cols, v);
+   int flat_out = shift_out + RCtoFlat(r, c, rows, cols, v);
+   int flat_v = shift_in1 + RCtoFlat(0, c, 1, cols, v);
+   matrix_out[flat_out] = IsNaNOrInf((vector_in[flat_v] + matrix_in[flat_in]) * multiplyer, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the sum vec matrix grad gradient contributions on the   |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void SumVecMatrixGrad(__global float *vector_in,
                                __global float *matrix_in,
@@ -10561,24 +10675,25 @@ __kernel void SumVecMatrixGrad(__global float *vector_in,
    const int cols = get_global_size(1);
    const int variables = get_global_size(2);
 //---
-   int flat_m = RCtoFlat(r, c, rows, cols, v);
-   int flat_v = RCtoFlat(0, c, 1, cols, v);
+   int flat_in = shift_in2 + RCtoFlat(r, c, rows, cols, v);
+   int flat_out = shift_out + RCtoFlat(r, c, rows, cols, v);
+   int flat_v = shift_in1 + RCtoFlat(0, c, 1, cols, v);
 //---
-   float grad = IsNaNOrInf(matrix_out[flat_m] * multiplyer, 0);
-   matrix_in[flat_m] = grad;
+   float grad = IsNaNOrInf(matrix_out[flat_out] * multiplyer, 0);
+   matrix_in[flat_in] = grad;
 //---
    if(r == 0)
      {
       for(int i = 1; i < rows; i++)
         {
-         flat_m += cols;
-         grad += IsNaNOrInf(matrix_out[flat_m] * multiplyer, 0);
+         flat_out += cols;
+         grad += IsNaNOrInf(matrix_out[flat_out] * multiplyer, 0);
         }
       vector_in[flat_v] = IsNaNOrInf(grad / rows, 0);
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the interpolation attention kernel on the GPU.        |
 //+------------------------------------------------------------------+
 __kernel void InterpolationAttention(__global const float* matrix_in,
                                      __global const float* W,
@@ -10643,7 +10758,8 @@ __kernel void InterpolationAttention(__global const float* matrix_in,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the interpolation attention grad gradient contributions |
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void InterpolationAttentionGrad(__global const float* matrix_in,
       __global float* matrix_in_gr,
@@ -10735,7 +10851,7 @@ __kernel void InterpolationAttentionGrad(__global const float* matrix_in,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the period norm kernel on the GPU.                    |
 //+------------------------------------------------------------------+
 __kernel void PeriodNorm(__global const float* inputs,
                          __global float2* mean_stdevs,
@@ -10769,7 +10885,7 @@ __kernel void PeriodNorm(__global const float* inputs,
       outputs[shift_v + shift_i] = IsNaNOrInf(val / stdev, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the period norm grad gradient contributions on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void PeriodNormGrad(__global const float* inputs,
                              __global float* inputs_gr,
@@ -10813,7 +10929,7 @@ __kernel void PeriodNormGrad(__global const float* inputs,
       inputs_gr[shift_v + shift_i] = IsNaNOrInf(inp_gr, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the adapt spatial norm kernel on the GPU.             |
 //+------------------------------------------------------------------+
 __kernel void AdaptSpatialNorm(__global const float* inputs,
                                __global const float* attention,
@@ -10856,7 +10972,8 @@ __kernel void AdaptSpatialNorm(__global const float* inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the adapt spatial norm grad gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void AdaptSpatialNormGrad(__global const float* inputs,
                                    __global float* inputs_gr,
@@ -10932,7 +11049,7 @@ __kernel void AdaptSpatialNormGrad(__global const float* inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the attent norm kernel on the GPU.                    |
 //+------------------------------------------------------------------+
 __kernel void AttentNorm(__global const float* inputs,
                          __global const float* attention,
@@ -10993,7 +11110,7 @@ __kernel void AttentNorm(__global const float* inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the attent norm grad gradient contributions on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void AttentNormGrad(__global const float* inputs,
                              __global float* inputs_gr,
@@ -11091,7 +11208,7 @@ __kernel void AttentNormGrad(__global const float* inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cheb step kernel on the GPU.                      |
 //+------------------------------------------------------------------+
 __kernel void ChebStep(__global const float* support,
                        __global float* outputs,
@@ -11158,7 +11275,7 @@ __kernel void ChebStep(__global const float* support,
    return;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cheb step grad gradient contributions on the GPU.   |
 //+------------------------------------------------------------------+
 __kernel void ChebStepGrad(__global const float* support,
                            __global float* support_g,
@@ -11219,7 +11336,7 @@ __kernel void ChebStepGrad(__global const float* support,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the significant neighbors sampling kernel on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void SignificantNeighborsSampling(__global const float *data,
       __global const float *candidates,
@@ -11375,7 +11492,7 @@ __kernel void SignificantNeighborsSampling(__global const float *data,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the sparse mh scores kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void SparseMHScores(__global const float* data,
                              __global const float* indexes,
@@ -11407,7 +11524,8 @@ __kernel void SparseMHScores(__global const float* data,
    scores[RCtoFlat(slave, head, total_slaves, total_heads, main)] = value;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the sparse mh scores grad gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void SparseMHScoresGrad(__global float* data_gr,
                                  __global const float* indexes,
@@ -11463,7 +11581,7 @@ __kernel void SparseMHScoresGrad(__global float* data_gr,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the sparse mat mult kernel on the GPU.                |
 //+------------------------------------------------------------------+
 __kernel void SparseMatMult(__global const float *sparse_index,
                             __global const float *sparse_data,
@@ -11496,7 +11614,8 @@ __kernel void SparseMatMult(__global const float *sparse_index,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the sparse mat mult grad gradient contributions on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void SparseMatMultGrad(__global const float *sparse_index,
                                 __global const float *sparse_data,
@@ -11572,7 +11691,7 @@ __kernel void SparseMatMultGrad(__global const float *sparse_index,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the random walk kernel on the GPU.                    |
 //+------------------------------------------------------------------+
 __kernel void RandomWalk(__global const float *data,
                          __global float *inv_diag,
@@ -11604,7 +11723,7 @@ __kernel void RandomWalk(__global const float *data,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs the concat by label data-layout operation on the GPU.   |
 //+------------------------------------------------------------------+
 __kernel void ConcatByLabel(__global const float* data,
                             __global const float* label,
@@ -11674,7 +11793,8 @@ __kernel void ConcatByLabel(__global const float* data,
       output[shift_out] = IsNaNOrInf(buffer[shift_in], 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the concat by label grad gradient contributions on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void ConcatByLabelGrad(__global float* data_gr,
                                 __global const float* label,
@@ -11762,7 +11882,7 @@ __kernel void ConcatByLabelGrad(__global float* data_gr,
    buffer[shift_in] = IsNaNOrInf(grad, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the global local attention kernel on the GPU.         |
 //+------------------------------------------------------------------+
 __kernel void GlobalLocalAttention(__global const float *q,
                                    __global const float2* kv,
@@ -11847,7 +11967,8 @@ __kernel void GlobalLocalAttention(__global const float *q,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the global local attention grad gradient contributions  |
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void GlobalLocalAttentionGrad(__global const float *q,
                                        __global float *q_gr,
@@ -12062,7 +12183,7 @@ __kernel void GlobalLocalAttentionGrad(__global const float *q,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Applies the sparse soft max normalization to the input scores.   |
 //+------------------------------------------------------------------+
 __kernel void SparseSoftMax(__global const float *data,
                             __global float *outputs,
@@ -12112,7 +12233,8 @@ __kernel void SparseSoftMax(__global const float *data,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the sparse soft max grad gradient contributions on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void SparseSoftMaxGrad(__global float *data_gr,
                                 __global const float *outputs,
@@ -12162,7 +12284,7 @@ __kernel void SparseSoftMaxGrad(__global float *data_gr,
    data_gr[shift_in] = grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the float to spike kernel on the GPU.                 |
 //+------------------------------------------------------------------+
 __kernel void FloatToSpike(__global float* values,
                            __global const float* levels,
@@ -12186,7 +12308,8 @@ __kernel void FloatToSpike(__global float* values,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the float to spike grad gradient contributions on the   |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void FloatToSpikeGrad(__global const float* values,
                                __global float* values_gr,
@@ -12206,7 +12329,7 @@ __kernel void FloatToSpikeGrad(__global const float* values,
       levels_gr[id] = 0.0f;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the spike mh attention kernel on the GPU.             |
 //+------------------------------------------------------------------+
 __kernel void SpikeMHAttention(__global const float *qkv,
                                __global const float *diag_bias,
@@ -12268,7 +12391,8 @@ __kernel void SpikeMHAttention(__global const float *qkv,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the spike mh attention grad gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void SpikeMHAttentionGrad(__global const float *qkv,
                                    __global float *qkv_gr,
@@ -12387,7 +12511,7 @@ __kernel void SpikeMHAttentionGrad(__global const float *qkv,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the stfs kernel on the GPU.                           |
 //+------------------------------------------------------------------+
 __kernel void STFS(__global const float* inputs,
                    __global const float* mask_time,
@@ -12441,7 +12565,7 @@ __kernel void STFS(__global const float* inputs,
    outputs[shift_out] = IsNaNOrInf(out, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the stfs grad gradient contributions on the GPU.        |
 //+------------------------------------------------------------------+
 __kernel void STFSGrad(__global float* inputs_gr,
                        __global const float* mask_time,
@@ -12495,7 +12619,7 @@ __kernel void STFSGrad(__global float* inputs_gr,
       inputs_gr[shift_in] = grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Applies the add to stack operation to the GPU buffers.           |
 //+------------------------------------------------------------------+
 __kernel void AddToStack(__global const float* inputs,
                          __global float* stack,
@@ -12529,7 +12653,7 @@ __kernel void AddToStack(__global const float* inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the aggregation by time kernel on the GPU.            |
 //+------------------------------------------------------------------+
 __kernel void AggregationByTime(__global const float* inputs,
                                 __global const float* stack,
@@ -12560,7 +12684,8 @@ __kernel void AggregationByTime(__global const float* inputs,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the aggregation by time grad gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void AggregationByTimeGrad(__global float* inputs_gr,
                                     __global const float* outputs_gr,
@@ -12581,7 +12706,7 @@ __kernel void AggregationByTimeGrad(__global float* inputs_gr,
    inputs_gr[RCtoFlat(var, id, variables, dimension, 0)] = IsNaNOrInf(grad, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the gru kernel on the GPU.                                  |
 //+------------------------------------------------------------------+
 __kernel void GRU(__global const float* XH,
                   __global const float* prev_state,
@@ -12609,7 +12734,7 @@ __kernel void GRU(__global const float* XH,
    outputs[RCtoFlat(id, d, units, dimension, 0)] = IsNaNOrInf(out, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the gru grad gradient contributions on the GPU.         |
 //+------------------------------------------------------------------+
 __kernel void GRU_Grad(__global const float* XH,
                        __global float * XH_gr,
@@ -12653,7 +12778,7 @@ __kernel void GRU_Grad(__global const float* XH,
    XH_gr[RCtoFlat(5, d, 6, dimension, id)] = IsNaNOrInf(hh_grad, 0);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the scalar to vector kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void ScalarToVector(__global const float* scalar,
                              __global const float* vector_in,
@@ -12672,7 +12797,8 @@ __kernel void ScalarToVector(__global const float* scalar,
    vector_out[shift] = IsNaNOrInf(sc * v, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the scalar to vector grad gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void ScalarToVectorGrad(__global const float* scalar,
                                  __global float* scalar_gr,
@@ -12708,7 +12834,7 @@ __kernel void ScalarToVectorGrad(__global const float* scalar,
       scalar_gr[vec] = sc_gr;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Calculates calc flow on the GPU.                                 |
 //+------------------------------------------------------------------+
 __kernel void CalcFlow(__global const float* value,
                        __global float* prev_value,
@@ -12724,7 +12850,7 @@ __kernel void CalcFlow(__global const float* value,
    prev_value[id] = v;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the dilated correlation kernel on the GPU.            |
 //+------------------------------------------------------------------+
 __kernel void DilatedCorrelation(__global const float* feature,
                                  __global const int* shifts,
@@ -12762,7 +12888,8 @@ __kernel void DilatedCorrelation(__global const float* feature,
       correlations[RCtoFlat(main, sh, units, total_corr, 0)] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the dilated correlation grad gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void DilatedCorrelationGrad(__global const float* feature,
                                      __global float*       feature_gr,
@@ -12805,7 +12932,7 @@ __kernel void DilatedCorrelationGrad(__global const float* feature,
       feature_gr[RCtoFlat(id, d, units, dimension, 0)] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the dilated difference kernel on the GPU.             |
 //+------------------------------------------------------------------+
 __kernel void DilatedDifference(__global const float* feature,
                                 __global const int* shifts,
@@ -12833,7 +12960,8 @@ __kernel void DilatedDifference(__global const float* feature,
    differences[RCtoFlat(main, d, units, dimension, sh)] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the dilated difference grad gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void DilatedDifferenceGrad(__global const float* feature,
                                     __global float*       feature_gr,
@@ -12869,7 +12997,7 @@ __kernel void DilatedDifferenceGrad(__global const float* feature,
       feature_gr[RCtoFlat(id, d, units, dimension, 0)] = result;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the perturbed matrix kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void PerturbedMatrix(__global const float* inputs,
                               __global const float* perturb,
@@ -12885,7 +13013,8 @@ __kernel void PerturbedMatrix(__global const float* inputs,
    output[shift] = IsNaNOrInf(inputs[shift] + perturb[shift] * perturb_mult, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the perturbed matrix grad gradient contributions on the |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void PerturbedMatrixGrad(__global float*       inputs_gr,
                                   __global float*       perturb_gr,
@@ -12903,7 +13032,7 @@ __kernel void PerturbedMatrixGrad(__global float*       inputs_gr,
    perturb_gr[shift] = IsNaNOrInf(perturb_mult * grad, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the linear upsample kernel on the GPU.                |
 //+------------------------------------------------------------------+
 __kernel void LinearUpsample(__global const float* data,
                              __global float*       upsample)
@@ -12924,7 +13053,8 @@ __kernel void LinearUpsample(__global const float* data,
    upsample[RCtoFlat(id_htr, var, dimension_htr, variables, id_ltr)] = IsNaNOrInf(htr, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the linear upsample grad gradient contributions on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void LinearUpsampleGrad(__global float*         data_gr,
                                  __global const float*   upsample_gr,
@@ -12970,7 +13100,7 @@ __kernel void LinearUpsampleGrad(__global float*         data_gr,
       data_gr[RCtoFlat(id_ltr, var, total, variables, 0)] = grad;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mix experts predict kernel on the GPU.            |
 //+------------------------------------------------------------------+
 __kernel void MixExpertsPredict(__global const float4* __attribute__((aligned(16))) experts,
                                 __global float* outputs
@@ -12988,7 +13118,8 @@ __kernel void MixExpertsPredict(__global const float4* __attribute__((aligned(16
    outputs[id] = IsNaNOrInf(out, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mix experts predict grad gradient contributions on  |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void MixExpertsPredictGrad(__global const float4* __attribute__((aligned(16))) experts,
                                     __global float4* __attribute__((aligned(16))) experts_gr,
@@ -13013,7 +13144,7 @@ __kernel void MixExpertsPredictGrad(__global const float4* __attribute__((aligne
    experts_gr[id] = (float4)(mu_grad, alpha_grad, sigma_grad, txi_grad);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mhfat kernel on the GPU.                          |
 //+------------------------------------------------------------------+
 __kernel void MHFAT(__global const float *q,
                     __global const float *kv,
@@ -13082,7 +13213,7 @@ __kernel void MHFAT(__global const float *q,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mhfat grad gradient contributions on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void MHFATGrad(__global const float *q,
                         __global float *q_gr,
@@ -13230,7 +13361,7 @@ __kernel void MHFATGrad(__global const float *q,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the sparse concatenate kernel on the GPU.             |
 //+------------------------------------------------------------------+
 __kernel void SparseConcatenate(__global const float *sparse_index,
                                 __global const float *sparse_data,
@@ -13256,7 +13387,8 @@ __kernel void SparseConcatenate(__global const float *sparse_index,
    result[shift_out] = res;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the sparse concatenate grad gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void SparseConcatenateGrad(__global const float *sparse_index,
                                     __global const float *sparse_data,
@@ -13329,7 +13461,7 @@ __kernel void SparseConcatenateGrad(__global const float *sparse_index,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh flash attention kernel on the GPU.             |
 //+------------------------------------------------------------------+
 __kernel void MHFlashAttention(__global const float *query,
                                __global const float *key_value,
@@ -13436,7 +13568,8 @@ __kernel void MHFlashAttention(__global const float *query,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mh flash attention grad gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void MHFlashAttentionGrad(__global const float *query,
                                    __global float *query_gr,
@@ -13521,7 +13654,7 @@ __kernel void MHFlashAttentionGrad(__global const float *query,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh flash stca kernel on the GPU.                  |
 //+------------------------------------------------------------------+
 __kernel void MHFlashSTCA(__global const float *query,
                           __global const float *X,
@@ -13628,7 +13761,8 @@ __kernel void MHFlashSTCA(__global const float *query,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mh flash stca grad gradient contributions on the    |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void MHFlashSTCAGrad(__global const float *query,
                               __global float *query_gr,
@@ -13823,7 +13957,7 @@ __kernel void MHFlashSTCAGrad(__global const float *query,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Performs the concat vec matrix data-layout operation on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void ConcatVecMatrix(__global const float *vector_in,
                               __global const float *matrix_in,
@@ -13854,7 +13988,8 @@ __kernel void ConcatVecMatrix(__global const float *vector_in,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the concat vec matrix grad gradient contributions on the|
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void ConcatVecMatrixGrad(__global float *vector_in_gr,
                                   __global float *matrix_in_gr,
@@ -13923,7 +14058,7 @@ __kernel void ConcatVecMatrixGrad(__global float *vector_in_gr,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the inf net bgu kernel on the GPU.                    |
 //+------------------------------------------------------------------+
 __kernel void INFNetBGU(__global const float2*  scal_and_shift,
                         __global const float*   sequence,
@@ -13984,7 +14119,7 @@ __kernel void INFNetBGU(__global const float2*  scal_and_shift,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the inf net bgu grad gradient contributions on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void INFNetBGUGrad(__global const float2* scal_and_shift,
                             __global float2*       scal_and_shift_grad,
@@ -14080,7 +14215,7 @@ __kernel void INFNetBGUGrad(__global const float2* scal_and_shift,
                                                 IsNaNOrInf(d_beta_acc,  0.0f));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mh cross attvs sim kernel on the GPU.             |
 //+------------------------------------------------------------------+
 __kernel void MHCrossAttvsSim(__global const float *query,
                               __global const float *key,
@@ -14224,7 +14359,8 @@ __kernel void MHCrossAttvsSim(__global const float *query,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mh cross attvs sim grad gradient contributions on   |
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void MHCrossAttvsSimGrad(__global const float *query,
                                   __global const float *key,
@@ -14503,7 +14639,7 @@ __kernel void MHCrossAttvsSimGrad(__global const float *query,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the market state density kernel on the GPU.           |
 //+------------------------------------------------------------------+
 __kernel void MarketStateDensity(__global const float* sequence,
                                  __global float* distribution,
@@ -14576,7 +14712,7 @@ __kernel void MarketStateDensity(__global const float* sequence,
       distribution[RCtoFlat(lid, feature, bins, dimension, var)] = ((float)count / sequence_size);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the nll grad gradient contributions on the GPU.         |
 //+------------------------------------------------------------------+
 __kernel void NLLGrad(__global const float* log_b,
                       __global float* grad_in,
@@ -14598,7 +14734,7 @@ __kernel void NLLGrad(__global const float* log_b,
    grad_log_b[i] = -g;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver forecast shift state kernel on the GPU.|
 //+------------------------------------------------------------------+
 __kernel void CogDriverForecastShiftState(__global const float* plan,
       __global const float* confidence,
@@ -14634,7 +14770,7 @@ __kernel void CogDriverForecastShiftState(__global const float* plan,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver forecast build kv kernel on the GPU.   |
 //+------------------------------------------------------------------+
 __kernel void CogDriverForecastBuildKV(__global const float* context,
                                        __global float* context_kv,
@@ -14665,7 +14801,8 @@ __kernel void CogDriverForecastBuildKV(__global const float* context,
    context_kv[v_shift] = value;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cog driver forecast build kv grad gradient          |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void CogDriverForecastBuildKVGrad(__global const float* context_kv_gr,
       __global float* context_gr,
@@ -14694,7 +14831,7 @@ __kernel void CogDriverForecastBuildKVGrad(__global const float* context_kv_gr,
    context_gr[dst_base + dimension + flat_dim] += IsNaNOrInf(context_kv_gr[v_shift], 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver forecast confidence kernel on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void CogDriverForecastConfidence(__global const float* expected_error,
       __global float* confidence,
@@ -14708,7 +14845,7 @@ __kernel void CogDriverForecastConfidence(__global const float* expected_error,
    confidence[id] = 1.0f / (1.0f + error);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver forecast delta norm kernel on the GPU. |
 //+------------------------------------------------------------------+
 __kernel void CogDriverForecastDeltaNorm(__global const float* plan,
       __global const float* shifted_plan,
@@ -14763,14 +14900,14 @@ __kernel void RAGScore(__global const float *embedding,
    scores[scenario] = (isfinite(score) ? score : RAG_INVALID_SCORE);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the rag before helper on the GPU.                     |
 //+------------------------------------------------------------------+
 inline int RAGBefore(const float2 left, const float2 right)
   {
    return (left.y > right.y || (left.y == right.y && left.x < right.x));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the rag sort descending helper on the GPU.            |
 //+------------------------------------------------------------------+
 inline void RAGSortDescending(__local float2 candidates[], const int lane, const int block_size)
   {
@@ -14793,7 +14930,7 @@ inline void RAGSortDescending(__local float2 candidates[], const int lane, const
         }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the rag partial kernel on the GPU.                    |
 //+------------------------------------------------------------------+
 __kernel void RAGPartial(__global const float *scores,
                          __global float2 *partial,
@@ -14818,7 +14955,7 @@ __kernel void RAGPartial(__global const float *scores,
       partial[block * top_k + lane] = candidates[lane];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the rag merge kernel on the GPU.                      |
 //+------------------------------------------------------------------+
 __kernel void RAGMerge(__global const float2 *source,
                        __global float2 *destination,
@@ -14844,7 +14981,7 @@ __kernel void RAGMerge(__global const float2 *source,
       destination[block * top_k + lane] = candidates[lane];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the rag gather kernel on the GPU.                     |
 //+------------------------------------------------------------------+
 __kernel void RAGGather(__global const float2 *top,
                         __global const float *actions,
@@ -14933,7 +15070,7 @@ __kernel void RAGGather(__global const float2 *top,
    tokens[out + action_dimension + 1] = IsNaNOrInf(action_mean_reward[slot], 0.0f);
   }
 //+------------------------------------------------------------------+
-//| Actor-owned differentiable rejection gate. Memory remains raw.  |
+//| Actor-owned differentiable rejection gate. Memory remains raw.   |
 //+------------------------------------------------------------------+
 __kernel void RAGTokenGate(__global const float *tokens,
                            __global float *gated_tokens,
@@ -14973,7 +15110,7 @@ __kernel void RAGTokenGate(__global const float *tokens,
    branch_activity[0] = sigmoid;
   }
 //+------------------------------------------------------------------+
-//| Accumulate only the threshold derivative; memory has no gradient|
+//| Accumulate only the threshold derivative; memory has no gradient |
 //+------------------------------------------------------------------+
 __kernel void RAGTokenGateGrad(__global const float *tokens,
                                __global const float *gated_gradient,
@@ -15016,9 +15153,9 @@ __kernel void RAGTokenGateGrad(__global const float *tokens,
    threshold_gradient[0] = clamp(IsNaNOrInf(gradient, 0.0f), -MAX_GRAD, MAX_GRAD);
   }
 //+------------------------------------------------------------------+
-//| Generic bounded-memory nearest-pair reduction.  One work-group  |
-//| independently reduces one row of candidates; output is float4   |
-//| {squared_distance,left,right,valid}.                            |
+//| Generic bounded-memory nearest-pair reduction.  One work-group   |
+//| independently reduces one row of candidates; output is float4    |
+//| {squared_distance,left,right,valid}.                             |
 //+------------------------------------------------------------------+
 inline void RAGNearestPairIndex(const int pair, const int count, int *left, int *right)
   {
@@ -15048,7 +15185,7 @@ inline void RAGNearestPairIndex(const int pair, const int count, int *left, int 
    *right = (column < (long)count ? (int)column : -1);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the rag nearest before helper on the GPU.             |
 //+------------------------------------------------------------------+
 inline int RAGNearestBefore(const float4 left, const float4 right)
   {
@@ -15065,7 +15202,7 @@ inline int RAGNearestBefore(const float4 left, const float4 right)
    return left.z < right.z;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the rag nearest pair kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void RAGNearestPair(__global const float *centroids,
                              __global const float *used,
@@ -15122,7 +15259,8 @@ __kernel void RAGNearestPair(__global const float *centroids,
       result[batch] = best[0];
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cog driver forecast gradient rms gradient           |
+//| contributions on the GPU.                                        |
 //+------------------------------------------------------------------+
 __kernel void CogDriverForecastGradientRMS(__global const float* gradient,
       __global float* error_target,
@@ -15143,7 +15281,7 @@ __kernel void CogDriverForecastGradientRMS(__global const float* gradient,
    error_target[h] = sqrt(sum / (float)dimension);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the sparse softmax hausdorff kernel on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void SparseSoftmaxHausdorff(__global const float *plan,
                                      __global const float *decis,
@@ -15221,7 +15359,8 @@ __kernel void SparseSoftmaxHausdorff(__global const float *plan,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the sparse softmax hausdorff grad gradient contributions|
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void SparseSoftmaxHausdorffGrad(__global const float *plan,
       __global float *grad_plan,
@@ -15335,7 +15474,7 @@ __kernel void SparseSoftmaxHausdorffGrad(__global const float *plan,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the mom adttm mean scores kernel on the GPU.          |
 //+------------------------------------------------------------------+
 __kernel void MomADTTMMeanScores(__global const float *distance,
                                  __global float *output,
@@ -15355,7 +15494,8 @@ __kernel void MomADTTMMeanScores(__global const float *distance,
    output[plan_id] = IsNaNOrInf(-sum / (float)decisions, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the mom adttm mean scores grad gradient contributions on|
+//| the GPU.                                                         |
 //+------------------------------------------------------------------+
 __kernel void MomADTTMMeanScoresGrad(__global const float *scores_gr,
                                      __global float *distance_gr,
@@ -15371,7 +15511,7 @@ __kernel void MomADTTMMeanScoresGrad(__global const float *scores_gr,
       IsNaNOrInf(-scores_gr[plan_id] / (float)decisions, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver affine stack kernel on the GPU.        |
 //+------------------------------------------------------------------+
 __kernel void CogDriverAffineStack(__global float* stack,
                                    __global float* snapshot,
@@ -15392,7 +15532,8 @@ __kernel void CogDriverAffineStack(__global float* stack,
    stack[shift] = IsNaNOrInf(old * scale + bias, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Computes the cog driver affine stack grad gradient contributions |
+//| on the GPU.                                                      |
 //+------------------------------------------------------------------+
 __kernel void CogDriverAffineStackGrad(__global const float* snapshot,
                                        __global const float* stack_gr,
@@ -15423,7 +15564,8 @@ __kernel void CogDriverAffineStackGrad(__global const float* snapshot,
    affine_gr[modality * 2 + param] = IsNaNOrInf(grad, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver rank tcm insert pending kernel on the  |
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void CogDriverRankTCMInsertPending(__global float* memory,
       __global float* age,
@@ -15518,7 +15660,7 @@ __kernel void CogDriverRankTCMInsertPending(__global float* memory,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver rank tcm build kv kernel on the GPU.   |
 //+------------------------------------------------------------------+
 __kernel void CogDriverRankTCMBuildKV(__global const float* memory,
                                       __global const float* age,
@@ -15559,7 +15701,8 @@ __kernel void CogDriverRankTCMBuildKV(__global const float* memory,
    memory_kv[v_shift] = value;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver rank tcm mean flash score kernel on the|
+//| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void CogDriverRankTCMMeanFlashScore(__global const float* query,
       __global const float* memory_kv,
@@ -15602,7 +15745,7 @@ __kernel void CogDriverRankTCMMeanFlashScore(__global const float* query,
    out_score[state_shift] = IsNaNOrInf(score / (float)heads, 0.0f);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the cog driver rank tcm self kv kernel on the GPU.    |
 //+------------------------------------------------------------------+
 __kernel void CogDriverRankTCMSelfKV(__global const float* source,
                                      __global float* self_kv,
@@ -16193,6 +16336,9 @@ __kernel void ScenarioGradientNormalize(__global float *generator_gradient,
       return;
      }
   }
+//+------------------------------------------------------------------+
+//| Implements the D2Skill item partial kernel on the GPU.           |
+//+------------------------------------------------------------------+
 __kernel void D2SkillItemPartial(__global const float *source,
                                  __global float *partials,
                                  const int dimension,
@@ -16231,6 +16377,9 @@ __kernel void D2SkillItemReduce(__global float *partials,
 #define D2_ITEM_APPLY_UPDATE    0
 #define D2_ITEM_APPLY_CORRECTION 1
 
+//+------------------------------------------------------------------+
+//| Implements the D2Skill item apply kernel on the GPU.             |
+//+------------------------------------------------------------------+
 __kernel void D2SkillItemApply(__global const float *gradient,
                                __global float *correction,
                                __global float *direction,
@@ -16282,7 +16431,7 @@ __kernel void D2SkillItemApply(__global const float *gradient,
                     IsNaNOrInf(direction[id], 0.0f) * inv_direction;
   }
 //+------------------------------------------------------------------+
-//| Write one score contribution per slot/component lane.             |
+//| Write one score contribution per slot/component lane.            |
 //+------------------------------------------------------------------+
 __kernel void D2SkillScoreSlots(__global const float *query,
                                 __global const float *keys,
@@ -16307,7 +16456,7 @@ __kernel void D2SkillScoreSlots(__global const float *query,
    partials[base + 3] = (!isfinite(dot) || !isfinite(query2) || !isfinite(key2) ? 1.0f : 0.0f);
   }
 //+------------------------------------------------------------------+
-//| Finalize one D2Skill score per slot after staged reduction.       |
+//| Finalize one D2Skill score per slot after staged reduction.      |
 //+------------------------------------------------------------------+
 __kernel void D2SkillScoreFinalize(__global const float *metrics,
                                    __global const float *utility,
@@ -16389,9 +16538,9 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
       selected_slot[0] = (valid ? (float)winner : -1.0f);
       selected_score[0] = (valid ? score : RAG_INVALID_SCORE);
       if(valid && mark_retrieved != 0)
-       {
-          uses[winner] = IsNaNOrInf(uses[winner], 0.0f) + 1.0f;
-          retrieved[winner] = 1.0f;
+        {
+         uses[winner] = IsNaNOrInf(uses[winner], 0.0f) + 1.0f;
+         retrieved[winner] = 1.0f;
          diagnostics[0] = IsNaNOrInf(diagnostics[0], 0.0f) + 1.0f;
         }
       else
@@ -16402,7 +16551,7 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| D2Skill metric and decision constants used by the rank kernels.  |
 //+------------------------------------------------------------------+
 #define D2SKILL_METRIC_COUNT       10
 #define D2SKILL_DIAGNOSTIC_PARTIALS 22
@@ -16414,6 +16563,9 @@ __kernel void D2SkillGatherCorrection(__global const float2 *top,
 #define D2SKILL_DECISION_FREE       5
 #define D2SKILL_DECISION_EVICT      6
 
+//+------------------------------------------------------------------+
+//| Implements the D2Skill age lifecycle kernel on the GPU.          |
+//+------------------------------------------------------------------+
 __kernel void D2SkillAgeLifecycle(__global const float *used,
                                   __global float *state,
                                   __global float *age,
@@ -16421,10 +16573,10 @@ __kernel void D2SkillAgeLifecycle(__global const float *used,
                                   __global const float *utility,
                                   __global float *free_scores,
                                   __global float *eviction_scores,
-                                   const int slots,
-                                   const int inactivity_age,
-                                   __global float *retrieved,
-                                   __global float *candidate_scores)
+                                  const int slots,
+                                  const int inactivity_age,
+                                  __global float *retrieved,
+                                  __global float *candidate_scores)
   {
    const int slot = get_global_id(0);
    if(slot >= slots)
@@ -16433,11 +16585,11 @@ __kernel void D2SkillAgeLifecycle(__global const float *used,
    int slot_state = (int)IsNaNOrInf(state[slot], (float)D2SKILL_FREE);
    float slot_age = max(IsNaNOrInf(age[slot], 0.0f), 0.0f);
    float slot_protection = max(IsNaNOrInf(protection[slot], 0.0f), 0.0f);
-    if(is_used > 0.5f && slot_state != D2SKILL_CANDIDATE)
-      {
-       const bool was_retrieved = (IsNaNOrInf(retrieved[slot], 0.0f) > 0.5f);
-       slot_age = (was_retrieved ? 0.0f : min(slot_age + 1.0f, (float)MAX_VALUE));
-       retrieved[slot] = 0.0f;
+   if(is_used > 0.5f && slot_state != D2SKILL_CANDIDATE)
+     {
+      const bool was_retrieved = (IsNaNOrInf(retrieved[slot], 0.0f) > 0.5f);
+      slot_age = (was_retrieved ? 0.0f : min(slot_age + 1.0f, (float)MAX_VALUE));
+      retrieved[slot] = 0.0f;
       slot_protection = max(slot_protection - 1.0f, 0.0f);
       if(slot_state == D2SKILL_PROTECTED && slot_protection <= 0.0f)
          slot_state = D2SKILL_ACTIVE;
@@ -16456,6 +16608,8 @@ __kernel void D2SkillAgeLifecycle(__global const float *used,
    candidate_scores[slot] = (is_used > 0.5f && slot_state == D2SKILL_CANDIDATE ?
                              -(float)slot : RAG_INVALID_SCORE);
   }
+//+------------------------------------------------------------------+
+//| Implements the D2Skill metric partial kernel on the GPU.         |
 //+------------------------------------------------------------------+
 __kernel void D2SkillMetricPartial(__global const float *query,
                                    __global const float *gradient,
@@ -16522,6 +16676,8 @@ inline float D2SkillMetricReducePair(const float left, const float right,
    return(IsNaNOrInf(left + right, 0.0f));
   }
 //+------------------------------------------------------------------+
+//| Implements the D2Skill metric reduce kernel on the GPU.          |
+//+------------------------------------------------------------------+
 __kernel void D2SkillMetricReduce(__global float *partials,
                                   __global float *metrics,
                                   const int batch_count,
@@ -16586,6 +16742,8 @@ __kernel void D2SkillMetricReduce(__global float *partials,
    else
       partials[output_offset + (batch * output_count + output_index) * fields + field] = value;
   }
+//+------------------------------------------------------------------+
+//| Implements the D2Skill candidate leader kernel on the GPU.       |
 //+------------------------------------------------------------------+
 __kernel void D2SkillCandidateLeader(__global const float *selected_slot,
                                      __global float *used,
@@ -16654,35 +16812,35 @@ __kernel void D2SkillCandidateLeader(__global const float *selected_slot,
       decision[1] = D2SKILL_DECISION_MATCH;
       return;
      }
-    const int candidate_index = (int)round(candidate_top[0].x);
-    int candidate = (candidate_index >= 0 && candidate_index < slots &&
-                     candidate_top[0].y > RAG_INVALID_SCORE ? candidate_index : -1);
-    if(candidate < 0)
-      {
-       const int free_slot = (int)round(free_top[0].x);
-       const int evict_slot = (int)round(eviction_top[0].x);
-       const bool free_available = (free_slot >= 0 && free_slot < slots &&
-                                    free_top[0].y > RAG_INVALID_SCORE);
-       const bool evict_available = (evict_slot >= 0 && evict_slot < slots &&
-                                     eviction_top[0].y > RAG_INVALID_SCORE);
-       candidate = (free_available ? free_slot : (evict_available ? evict_slot : -1));
-       if(candidate < 0)
-         {
-          diagnostics[5] = IsNaNOrInf(diagnostics[5], 0.0f) + 1.0f;
-          return;
-         }
-       candidate_valid[candidate] = D2SKILL_CANDIDATE;
-       used[candidate] = 1.0f;
-       candidate_streak[candidate] = 1.0f;
-       candidate_scale[candidate] = gradient_norm;
-       mass[candidate] = gradient_norm;
-       age[candidate] = 0.0f;
-       candidate_protection[candidate] = (free_available ? 0.0f : -1.0f);
-       decision[0] = (float)candidate;
-       decision[1] = D2SKILL_DECISION_SEED;
-       diagnostics[3] = IsNaNOrInf(diagnostics[3], 0.0f) + 1.0f;
-       return;
-      }
+   const int candidate_index = (int)round(candidate_top[0].x);
+   int candidate = (candidate_index >= 0 && candidate_index < slots &&
+                    candidate_top[0].y > RAG_INVALID_SCORE ? candidate_index : -1);
+   if(candidate < 0)
+     {
+      const int free_slot = (int)round(free_top[0].x);
+      const int evict_slot = (int)round(eviction_top[0].x);
+      const bool free_available = (free_slot >= 0 && free_slot < slots &&
+                                   free_top[0].y > RAG_INVALID_SCORE);
+      const bool evict_available = (evict_slot >= 0 && evict_slot < slots &&
+                                    eviction_top[0].y > RAG_INVALID_SCORE);
+      candidate = (free_available ? free_slot : (evict_available ? evict_slot : -1));
+      if(candidate < 0)
+        {
+         diagnostics[5] = IsNaNOrInf(diagnostics[5], 0.0f) + 1.0f;
+         return;
+        }
+      candidate_valid[candidate] = D2SKILL_CANDIDATE;
+      used[candidate] = 1.0f;
+      candidate_streak[candidate] = 1.0f;
+      candidate_scale[candidate] = gradient_norm;
+      mass[candidate] = gradient_norm;
+      age[candidate] = 0.0f;
+      candidate_protection[candidate] = (free_available ? 0.0f : -1.0f);
+      decision[0] = (float)candidate;
+      decision[1] = D2SKILL_DECISION_SEED;
+      diagnostics[3] = IsNaNOrInf(diagnostics[3], 0.0f) + 1.0f;
+      return;
+     }
    const float candidate_key_norm = sqrt(fmax(IsNaNOrInf(metrics[7], 0.0f), 0.0f));
    const float candidate_direction_norm = sqrt(fmax(IsNaNOrInf(metrics[9], 0.0f), 0.0f));
    const float candidate_key_cosine = (query_norm > 1.0e-8f && candidate_key_norm > 1.0e-8f ?
@@ -16701,25 +16859,27 @@ __kernel void D2SkillCandidateLeader(__global const float *selected_slot,
    if(!isfinite(candidate_key_cosine) || candidate_key_cosine < similarity_threshold ||
       direction_rejected)
      {
-       candidate_streak[candidate] = 1.0f;
-       candidate_scale[candidate] = gradient_norm;
-       age[candidate] = 0.0f;
-       decision[0] = (float)candidate;
+      candidate_streak[candidate] = 1.0f;
+      candidate_scale[candidate] = gradient_norm;
+      age[candidate] = 0.0f;
+      decision[0] = (float)candidate;
       decision[1] = D2SKILL_DECISION_RESET;
       return;
      }
-    candidate_streak[candidate] = IsNaNOrInf(candidate_streak[candidate], 0.0f) + 1.0f;
-    candidate_scale[candidate] = clamp((1.0f - beta_magnitude) * IsNaNOrInf(candidate_scale[candidate], 0.0f) +
-                                beta_magnitude * gradient_norm, 0.0f, max_correction);
-    decision[0] = (float)candidate;
-    if(candidate_streak[candidate] < (float)max(1, min_confirmations))
+   candidate_streak[candidate] = IsNaNOrInf(candidate_streak[candidate], 0.0f) + 1.0f;
+   candidate_scale[candidate] = clamp((1.0f - beta_magnitude) * IsNaNOrInf(candidate_scale[candidate], 0.0f) +
+                                      beta_magnitude * gradient_norm, 0.0f, max_correction);
+   decision[0] = (float)candidate;
+   if(candidate_streak[candidate] < (float)max(1, min_confirmations))
      {
       decision[1] = D2SKILL_DECISION_CANDIDATE;
       return;
      }
-    decision[1] = (candidate_protection[candidate] < 0.0f ?
-                   D2SKILL_DECISION_EVICT : D2SKILL_DECISION_FREE);
+   decision[1] = (candidate_protection[candidate] < 0.0f ?
+                  D2SKILL_DECISION_EVICT : D2SKILL_DECISION_FREE);
   }
+//+------------------------------------------------------------------+
+//| Implements the D2Skill vector update kernel on the GPU.          |
 //+------------------------------------------------------------------+
 __kernel void D2SkillVectorUpdate(__global const float *query,
                                   __global const float *gradient,
@@ -16749,30 +16909,30 @@ __kernel void D2SkillVectorUpdate(__global const float *query,
    const float query_value = IsNaNOrInf(query[component], 0.0f);
    const float gradient_value = IsNaNOrInf(gradient[component], 0.0f);
    const float unit = (gradient_norm > 0.0f ? gradient_value / gradient_norm : 0.0f);
-    if(phase == 1)
-      {
-       if((action != D2SKILL_DECISION_MATCH && action != D2SKILL_DECISION_FREE &&
-           action != D2SKILL_DECISION_EVICT) || target < 0)
-          return;
-       const int shift = target * dimension + component;
-       const float vector_norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
-       if(representation == 0)
-         {
-          const float factor = (vector_norm > max_correction && vector_norm > 1.0e-12f ?
-                                max_correction / vector_norm : 1.0f);
-          corrections[shift] = IsNaNOrInf(corrections[shift] * factor, 0.0f);
-         }
-       else
-          {
-           const float factor = (vector_norm > 1.0e-12f ? 1.0f / vector_norm : 0.0f);
-           directions[shift] = IsNaNOrInf(directions[shift] * factor, 0.0f);
-           corrections[shift] = IsNaNOrInf(directions[shift] *
-                                           fmin(scales[target], max_correction), 0.0f);
-          }
-       return;
-      }
-    if((action == D2SKILL_DECISION_MATCH || action == D2SKILL_DECISION_FREE ||
-        action == D2SKILL_DECISION_EVICT) && target >= 0)
+   if(phase == 1)
+     {
+      if((action != D2SKILL_DECISION_MATCH && action != D2SKILL_DECISION_FREE &&
+          action != D2SKILL_DECISION_EVICT) || target < 0)
+         return;
+      const int shift = target * dimension + component;
+      const float vector_norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
+      if(representation == 0)
+        {
+         const float factor = (vector_norm > max_correction && vector_norm > 1.0e-12f ?
+                               max_correction / vector_norm : 1.0f);
+         corrections[shift] = IsNaNOrInf(corrections[shift] * factor, 0.0f);
+        }
+      else
+        {
+         const float factor = (vector_norm > 1.0e-12f ? 1.0f / vector_norm : 0.0f);
+         directions[shift] = IsNaNOrInf(directions[shift] * factor, 0.0f);
+         corrections[shift] = IsNaNOrInf(directions[shift] *
+                                         fmin(scales[target], max_correction), 0.0f);
+        }
+      return;
+     }
+   if((action == D2SKILL_DECISION_MATCH || action == D2SKILL_DECISION_FREE ||
+       action == D2SKILL_DECISION_EVICT) && target >= 0)
      {
       const int shift = target * dimension + component;
       keys[shift] = IsNaNOrInf((1.0f - beta_key) * keys[shift] + beta_key * query_value, 0.0f);
@@ -16786,41 +16946,42 @@ __kernel void D2SkillVectorUpdate(__global const float *query,
                                         beta_direction * unit, 0.0f);
       return;
      }
-    if((action == D2SKILL_DECISION_SEED || action == D2SKILL_DECISION_RESET) && target >= 0)
-      {
-       const int shift = target * dimension + component;
-       keys[shift] = query_value;
-       directions[shift] = unit;
-       return;
-      }
-    if((action == D2SKILL_DECISION_CANDIDATE || action == D2SKILL_DECISION_FREE ||
-        action == D2SKILL_DECISION_EVICT) && target >= 0)
-      {
-       const int shift = target * dimension + component;
-       keys[shift] =
-          IsNaNOrInf((1.0f - beta_key) * keys[shift] +
-                     beta_key * query_value, 0.0f);
-       directions[shift] =
-          IsNaNOrInf((1.0f - beta_direction) * directions[shift] +
-                     beta_direction * unit, 0.0f);
-       return;
-      }
+   if((action == D2SKILL_DECISION_SEED || action == D2SKILL_DECISION_RESET) && target >= 0)
+     {
+      const int shift = target * dimension + component;
+      keys[shift] = query_value;
+      directions[shift] = unit;
+      return;
+     }
+   if((action == D2SKILL_DECISION_CANDIDATE || action == D2SKILL_DECISION_FREE ||
+       action == D2SKILL_DECISION_EVICT) && target >= 0)
+     {
+      const int shift = target * dimension + component;
+      keys[shift] =
+         IsNaNOrInf((1.0f - beta_key) * keys[shift] +
+                    beta_key * query_value, 0.0f);
+      directions[shift] =
+         IsNaNOrInf((1.0f - beta_direction) * directions[shift] +
+                    beta_direction * unit, 0.0f);
+      return;
+     }
   }
 //+------------------------------------------------------------------+
-//| Applies the online direction EMA to one retrieved stable slot.  |
-//| It intentionally does not touch keys, correction, scale or lifecycle. |
+//| Applies the online direction EMA to one retrieved stable slot.   |
+//| It intentionally does not touch keys, correction, scale or       |
+//| lifecycle.                                                       |
 //+------------------------------------------------------------------+
 __kernel void D2SkillDirectionEMA(__global const float *gradient,
-                                   __global float *directions,
-                                   __global const float *selected_slot,
-                                   __global const float *used,
-                                   __global const float *state,
-                                   __global float *reduced_norm,
-                                   const int slots,
-                                   const int dimension,
-                                   const float beta_direction,
-                                   __global float *partials,
-                                   const int phase)
+                                  __global float *directions,
+                                  __global const float *selected_slot,
+                                  __global const float *used,
+                                  __global const float *state,
+                                  __global float *reduced_norm,
+                                  const int slots,
+                                  const int dimension,
+                                  const float beta_direction,
+                                  __global float *partials,
+                                  const int phase)
   {
    const int component = get_global_id(0);
    if(component < 0 || component >= dimension || slots <= 0)
@@ -16855,21 +17016,21 @@ __kernel void D2SkillDirectionEMA(__global const float *gradient,
       if(candidate_norm > 1.0e-12f)
          directions[index] = IsNaNOrInf(candidate / candidate_norm, 0.0f);
      }
-   }
+  }
 //+------------------------------------------------------------------+
 //| Reduces and normalizes only the retrieved stable direction row.  |
 //| Phase 0 emits per-component squares; phase 1 consumes its staged |
 //| reduction.  No durable buffer except directions is written.      |
 //+------------------------------------------------------------------+
 __kernel void D2SkillNormalizeDirection(__global float *directions,
-                                         __global const float *selected_slot,
-                                         __global const float *used,
-                                         __global const float *state,
-                                         __global float *partials,
-                                         __global const float *reduced_norm,
-                                         const int slots,
-                                         const int dimension,
-                                         const int phase)
+                                        __global const float *selected_slot,
+                                        __global const float *used,
+                                        __global const float *state,
+                                        __global float *partials,
+                                        __global const float *reduced_norm,
+                                        const int slots,
+                                        const int dimension,
+                                        const int phase)
   {
    const int component = get_global_id(0);
    if(component < 0 || component >= dimension || slots <= 0)
@@ -16890,16 +17051,18 @@ __kernel void D2SkillNormalizeDirection(__global float *directions,
      }
    if(phase == 1)
      {
-       const float norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
-       if(norm > 1.0e-12f)
-          directions[index] = IsNaNOrInf(directions[index] / norm, 0.0f);
-       else
-          directions[index] = (component == 0 ? 1.0f : 0.0f);
-      }
+      const float norm = sqrt(fmax(IsNaNOrInf(reduced_norm[0], 0.0f), 0.0f));
+      if(norm > 1.0e-12f)
+         directions[index] = IsNaNOrInf(directions[index] / norm, 0.0f);
+      else
+         directions[index] = (component == 0 ? 1.0f : 0.0f);
+     }
   }
 //+------------------------------------------------------------------+
+//| Implements the D2Skill bank vector partial kernel on the GPU.    |
+//+------------------------------------------------------------------+
 __kernel void D2SkillBankVectorPartial(__global const float *corrections,
-                                        __global const float *directions,
+                                       __global const float *directions,
                                        __global const float *decision,
                                        __global float *partials,
                                        const int dimension,
@@ -16922,6 +17085,8 @@ __kernel void D2SkillBankVectorPartial(__global const float *corrections,
    partials[output_offset + component] = IsNaNOrInf(value * value, 0.0f);
   }
 //+------------------------------------------------------------------+
+//| Implements the D2Skill promote slot kernel on the GPU.           |
+//+------------------------------------------------------------------+
 __kernel void D2SkillPromoteSlot(__global float *scales,
                                  __global float *utility,
                                  __global float *observations,
@@ -16943,15 +17108,15 @@ __kernel void D2SkillPromoteSlot(__global float *scales,
       return;
    const int action = (int)round(decision[1]);
    const int target = (int)round(decision[0]);
-    if((action != D2SKILL_DECISION_FREE && action != D2SKILL_DECISION_EVICT) ||
-       target < 0 || target >= slots ||
-       (int)IsNaNOrInf(candidate_valid[target], (float)D2SKILL_FREE) != D2SKILL_CANDIDATE)
-       return;
-    scales[target] = IsNaNOrInf(candidate_scale[target], 0.0f);
+   if((action != D2SKILL_DECISION_FREE && action != D2SKILL_DECISION_EVICT) ||
+      target < 0 || target >= slots ||
+      (int)IsNaNOrInf(candidate_valid[target], (float)D2SKILL_FREE) != D2SKILL_CANDIDATE)
+      return;
+   scales[target] = IsNaNOrInf(candidate_scale[target], 0.0f);
    utility[target] = 0.0f;
-    observations[target] = IsNaNOrInf(candidate_streak[target], 1.0f);
+   observations[target] = IsNaNOrInf(candidate_streak[target], 1.0f);
    uses[target] = 0.0f;
-    mass[target] = IsNaNOrInf(candidate_streak[target], 1.0f);
+   mass[target] = IsNaNOrInf(candidate_streak[target], 1.0f);
    used[target] = 1.0f;
    state[target] = D2SKILL_PROTECTED;
    age[target] = 0.0f;
@@ -16962,10 +17127,12 @@ __kernel void D2SkillPromoteSlot(__global float *scales,
       diagnostics[4] = IsNaNOrInf(diagnostics[4], 0.0f) + 1.0f;
   }
 //+------------------------------------------------------------------+
+//| Implements the D2Skill diagnostics norm partial kernel on the GPU|
+//+------------------------------------------------------------------+
 __kernel void D2SkillDiagnosticsNormPartial(__global const float *corrections,
-                                            __global float *partials,
-                                            const int slots,
-                                            const int dimension)
+      __global float *partials,
+      const int slots,
+      const int dimension)
   {
    const int index = get_global_id(0);
    const int total = slots * dimension;
@@ -16974,6 +17141,8 @@ __kernel void D2SkillDiagnosticsNormPartial(__global const float *corrections,
    const float value = IsNaNOrInf(corrections[index], 0.0f);
    partials[index] = IsNaNOrInf(value * value, 0.0f);
   }
+//+------------------------------------------------------------------+
+//| Implements the D2Skill diagnostics partial kernel on the GPU.    |
 //+------------------------------------------------------------------+
 __kernel void D2SkillDiagnosticsPartial(__global const float *norms,
                                         __global const float *utility,
@@ -17014,12 +17183,14 @@ __kernel void D2SkillDiagnosticsPartial(__global const float *norms,
    partials[base + 9] = slot_age;
    partials[base + 10] = slot_usage;
    int utility_bin = clamp((int)floor((clamp(IsNaNOrInf(utility[slot], 0.0f),
-                                                -1.0f, 1.0f) + 1.0f) * 2.5f), 0, 4);
+                                       -1.0f, 1.0f) + 1.0f) * 2.5f), 0, 4);
    const int usage_bin = (slot_usage < 1.0f ? 0 : (slot_usage < 2.0f ? 1 :
-                         (slot_usage < 4.0f ? 2 : (slot_usage < 8.0f ? 3 : 4))));
+                          (slot_usage < 4.0f ? 2 : (slot_usage < 8.0f ? 3 : 4))));
    partials[base + 11 + utility_bin] = 1.0f;
    partials[base + 16 + usage_bin] = 1.0f;
   }
+//+------------------------------------------------------------------+
+//| Implements the D2Skill diagnostics reduce kernel on the GPU.     |
 //+------------------------------------------------------------------+
 __kernel void D2SkillDiagnosticsReduce(__global const float *totals,
                                        __global float *diagnostics,
@@ -17031,19 +17202,45 @@ __kernel void D2SkillDiagnosticsReduce(__global const float *totals,
    const float used_count = IsNaNOrInf(totals[4], 0.0f);
    switch(output)
      {
-      case 0:  diagnostics[8] = (float)slots; break;
-      case 1:  diagnostics[9] = IsNaNOrInf(totals[0], 0.0f); break;
-      case 2:  diagnostics[10] = (IsNaNOrInf(totals[21], 0.0f) > 0.0f ? 1.0f : 0.0f); break;
-      case 3:  diagnostics[11] = IsNaNOrInf(totals[1], 0.0f); break;
-      case 4:  diagnostics[12] = IsNaNOrInf(totals[2], 0.0f); break;
-      case 5:  diagnostics[13] = IsNaNOrInf(totals[3], 0.0f); break;
-      case 6:  diagnostics[14] = (used_count > 0.0f ? totals[5] / used_count : 0.0f); break;
-      case 7:  diagnostics[15] = (used_count > 0.0f ? totals[6] / used_count : 0.0f); break;
-      case 8:  diagnostics[16] = (diagnostics[19] > 0.0f ? diagnostics[20] / diagnostics[19] : 0.0f); break;
-      case 9:  diagnostics[17] = (used_count > 0.0f ? totals[7] / used_count : 0.0f); break;
-      case 10: diagnostics[18] = (used_count > 0.0f ? totals[8] / used_count : 0.0f); break;
-      case 11: diagnostics[21] = IsNaNOrInf(totals[9], 0.0f); break;
-      case 12: diagnostics[22] = IsNaNOrInf(totals[10], 0.0f); break;
+      case 0:
+         diagnostics[8] = (float)slots;
+         break;
+      case 1:
+         diagnostics[9] = IsNaNOrInf(totals[0], 0.0f);
+         break;
+      case 2:
+         diagnostics[10] = (IsNaNOrInf(totals[21], 0.0f) > 0.0f ? 1.0f : 0.0f);
+         break;
+      case 3:
+         diagnostics[11] = IsNaNOrInf(totals[1], 0.0f);
+         break;
+      case 4:
+         diagnostics[12] = IsNaNOrInf(totals[2], 0.0f);
+         break;
+      case 5:
+         diagnostics[13] = IsNaNOrInf(totals[3], 0.0f);
+         break;
+      case 6:
+         diagnostics[14] = (used_count > 0.0f ? totals[5] / used_count : 0.0f);
+         break;
+      case 7:
+         diagnostics[15] = (used_count > 0.0f ? totals[6] / used_count : 0.0f);
+         break;
+      case 8:
+         diagnostics[16] = (diagnostics[19] > 0.0f ? diagnostics[20] / diagnostics[19] : 0.0f);
+         break;
+      case 9:
+         diagnostics[17] = (used_count > 0.0f ? totals[7] / used_count : 0.0f);
+         break;
+      case 10:
+         diagnostics[18] = (used_count > 0.0f ? totals[8] / used_count : 0.0f);
+         break;
+      case 11:
+         diagnostics[21] = IsNaNOrInf(totals[9], 0.0f);
+         break;
+      case 12:
+         diagnostics[22] = IsNaNOrInf(totals[10], 0.0f);
+         break;
       default:
          if(output >= 13 && output < 18)
             utility_distribution[output - 13] = IsNaNOrInf(totals[output - 2], 0.0f);
@@ -17054,11 +17251,13 @@ __kernel void D2SkillDiagnosticsReduce(__global const float *totals,
      }
   }
 //+------------------------------------------------------------------+
+//| Implements the D2Skill influence total kernel on the GPU.        |
+//+------------------------------------------------------------------+
 __kernel void D2SkillInfluenceTotal(__global const float *influence,
-                                     __global const float *used,
-                                     __global const float *state,
-                                     __global float *partials,
-                                     const int slots)
+                                    __global const float *used,
+                                    __global const float *state,
+                                    __global float *partials,
+                                    const int slots)
   {
    const int slot = get_global_id(0);
    if(slot < 0 || slot >= slots)
@@ -17068,7 +17267,7 @@ __kernel void D2SkillInfluenceTotal(__global const float *influence,
    partials[slot] = (eligible ? fmax(IsNaNOrInf(influence[slot], 0.0f), 0.0f) : 0.0f);
   }
 //+------------------------------------------------------------------+
-//| Gradient contribution for the selected forward correction.      |
+//| Gradient contribution for the selected forward correction.       |
 //+------------------------------------------------------------------+
 __kernel void D2SkillInfluencePartial(__global const float *gradient,
                                       __global const float *correction,
@@ -17082,12 +17281,12 @@ __kernel void D2SkillInfluencePartial(__global const float *gradient,
                                     IsNaNOrInf(correction[component], 0.0f), 0.0f);
   }
 //+------------------------------------------------------------------+
-//| Single writer after staged reduction: no atomics are required.  |
+//| Single writer after staged reduction: no atomics are required.   |
 //+------------------------------------------------------------------+
 __kernel void D2SkillInfluenceAccumulate(__global const float *selected_slot,
-                                         __global const float *reduced_influence,
-                                         __global float *influence,
-                                         const int slots)
+      __global const float *reduced_influence,
+      __global float *influence,
+      const int slots)
   {
    if(get_global_id(0) != 0 || slots <= 0)
       return;
@@ -17098,24 +17297,28 @@ __kernel void D2SkillInfluenceAccumulate(__global const float *selected_slot,
                      IsNaNOrInf(reduced_influence[0], 0.0f);
   }
 //+------------------------------------------------------------------+
+//| Implements the D2Skill reset influence kernel on the GPU.        |
+//+------------------------------------------------------------------+
 __kernel void D2SkillResetInfluence(__global float *influence,
-                                     const int slots)
+                                    const int slots)
   {
    const int slot = get_global_id(0);
    if(slot < slots)
       influence[slot] = 0.0f;
   }
 //+------------------------------------------------------------------+
+//| Implements the D2Skill utility kernel on the GPU.                |
+//+------------------------------------------------------------------+
 __kernel void D2SkillUtility(__global float *influence,
-                              __global const float *influence_total,
-                              __global float *utility,
-                              __global const float *used,
-                              __global const float *state,
-                              const float delta_j,
-                              const float beta,
-                              const int slots,
-                              __global float *diagnostics,
-                              __global float *utility_applied)
+                             __global const float *influence_total,
+                             __global float *utility,
+                             __global const float *used,
+                             __global const float *state,
+                             const float delta_j,
+                             const float beta,
+                             const int slots,
+                             __global float *diagnostics,
+                             __global float *utility_applied)
   {
    const int slot = get_global_id(0);
    if(slot < 0 || slot >= slots || slots <= 0)
@@ -17138,5 +17341,97 @@ __kernel void D2SkillUtility(__global float *influence,
    influence[slot] = 0.0f;
    if(slot == 0 && total > 0.0f && fabs(delta_j) > 0.0f)
       diagnostics[6] = IsNaNOrInf(diagnostics[6], 0.0f) + 1.0f;
+  }
+//+------------------------------------------------------------------+
+//| OMPB regularizers: elementwise reductions only                   |
+//+------------------------------------------------------------------+
+__kernel void OMPBDisagreement(__global const float *reference,
+                               __global const float *current,
+                               __global float *output,
+                               const int source_states,
+                               const int target_states,
+                               const int samples)
+  {
+   const int variable = (int)get_global_id(0);
+   if(variable >= 0 && source_states > 0 && target_states > 0 && samples > 1)
+     {
+      const int pairs = samples * (samples - 1) / 2;
+      float source_sum = 0.0f;
+      float target_sum = 0.0f;
+      for(int state = 0; state < source_states; state++)
+        {
+         const int base = (variable * source_states + state) * samples * samples;
+         for(int left = 0; left < samples; left++)
+            for(int right = left + 1; right < samples; right++)
+               source_sum += IsNaNOrInf(reference[base + left * samples + right], 0.0f);
+        }
+      for(int state = 0; state < target_states; state++)
+        {
+         const int base = (variable * target_states + state) * samples * samples;
+         for(int left = 0; left < samples; left++)
+            for(int right = left + 1; right < samples; right++)
+               target_sum += IsNaNOrInf(current[base + left * samples + right], 0.0f);
+        }
+      const float source_mean = source_sum / (float)(source_states * pairs);
+      const float target_mean = target_sum / (float)(target_states * pairs);
+      output[variable] = IsNaNOrInf(source_mean - target_mean, 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+//| Computes the OMPB disagreement grad gradient contributions on the|
+//| GPU.                                                             |
+//+------------------------------------------------------------------+
+__kernel void OMPBDisagreementGrad(__global const float *corrections,
+                                   __global const float *distance,
+                                   __global const float *disagreement,
+                                   __global float *gradient,
+                                   const int states,
+                                   const int samples,
+                                   const int dimension,
+                                   const int source_sign,
+                                   const float multiplier)
+  {
+   const int group = (int)get_global_id(0);
+   const int sample = (int)get_global_id(1);
+   const int coordinate = (int)get_global_id(2);
+   if(group < 0 || sample < 0 || coordinate < 0 || states <= 0 || samples <= 1 || dimension <= 0)
+      return;
+   const int variable = group / states;
+   const int pairs = samples * (samples - 1) / 2;
+   const int distance_base = group * samples * samples;
+   const int correction_base = (group * samples + sample) * dimension + coordinate;
+   const float delta = IsNaNOrInf(disagreement[variable], 0.0f);
+   const float sign_delta = (delta > 0.0f ? 1.0f : (delta < 0.0f ? -1.0f : 0.0f));
+   float value = 0.0f;
+   for(int other = 0; other < samples; other++)
+     {
+      if(other == sample)
+         continue;
+      const int didx = distance_base + sample * samples + other;
+      const float pair_distance = distance[didx];
+      //--- A non-finite or explicitly clipped pair contributes no gradient.
+      if(isinf(pair_distance) || isnan(pair_distance) || pair_distance < 0.0f || pair_distance >= MAX_GRAD)
+         continue;
+      const int other_index = (group * samples + other) * dimension + coordinate;
+      value += 2.0f * (IsNaNOrInf(corrections[correction_base], 0.0f) -
+                       IsNaNOrInf(corrections[other_index], 0.0f));
+     }
+   value *= multiplier * (float)source_sign * sign_delta / (float)(states * pairs);
+   gradient[correction_base] = clamp(IsNaNOrInf(value, 0.0f), -MAX_GRAD, MAX_GRAD);
+  }
+//+------------------------------------------------------------------+
+//| Implements the OMPB gaussian kl kernel on the GPU.               |
+//+------------------------------------------------------------------+
+__kernel void OMPBGaussianKL(__global const float *mean,
+                             __global const float *logvar,
+                             __global float *output, const int total)
+  {
+   const int id = (int)get_global_id(0);
+   if(id < total)
+     {
+      const float mu = IsNaNOrInf(mean[id], 0.0f);
+      const float lv = clamp(IsNaNOrInf(logvar[id], 0.0f), -30.0f, 30.0f);
+      output[id] = 0.5f * (exp(lv) + mu * mu - 1.0f - lv);
+     }
   }
 //+------------------------------------------------------------------+

@@ -1,8 +1,10 @@
 //+------------------------------------------------------------------+
-//|                                                      ProjectName |
-//|                                      Copyright 2020, CompanyName |
-//|                                       http://www.companyname.net |
+//|                                          NeuroNet_Definitions.mqh|
+//|                           Base definitions and standard includes.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
 //+------------------------------------------------------------------+
+
 #ifndef NEURONET_DEFINITIONS_MQH
 #define NEURONET_DEFINITIONS_MQH
 /// \file
@@ -24,7 +26,7 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| Include standart libraries |
+//| Include standart libraries                                       |
 //+------------------------------------------------------------------+
 #include <Arrays\ArrayFloat.mqh>
 #include <Arrays\ArrayInt.mqh>
@@ -84,7 +86,9 @@ uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRan
                                                          ReturnFalse; }
 
 #define ReturnFalse  { printf("Error at %s line %d", __FUNCTION__, __LINE__); \
-                                                         return false; }
+                                                         return(false); }
+#define ReturnFalseEx(context)  { printf("Error at %s line %d: %s", __FUNCTION__, __LINE__, context); \
+                                  return(false); }
 #define DeleteObj(obj)  if(!!obj) delete obj;
 #define DeleteObjAndFalse(obj)  { DeleteObj(obj) \
                                   ReturnFalse }
@@ -164,6 +168,8 @@ union uaLongChar
 #define  defNeuronDropoutOCL           0x7890   ///<Dropout neuron OpenCL \details Identified class #CNeuronDropoutOCL
 #define  defNeuronBatchNormOCL         0x7891   ///<Batchnorm neuron OpenCL \details Identified class #CNeuronBatchNormOCL
 #define  defNeuronVAEOCL               0x7892   ///<VAE neuron OpenCL \details Identified class #CVAE
+#define  defNeuronBayesianLinearOCL     0x811F   ///<Bayesian linear neuron OpenCL
+#define  defNeuronOMPBOCL               0x8120   ///<Online posterior mean bridge OpenCL
 #define  defNeuronLSTMOCL              0x7893   ///<LSTM Neuron \details Identified class #CNeuronLSTMOCL
 #define  defNeuronSoftMaxOCL           0x7894   ///<SoftMax layer \details Identified class #CNeuronSoftMaxOCL
 #define  defNeuronFQF                  0x7895   ///<FQF layer \details Identified class #CNeuronFQF
@@ -1280,6 +1286,9 @@ union uaLongChar
 #define def_k_mm_result                2
 #define def_k_mm_dimension             3
 #define def_k_mm_multvarsecond         4
+#define def_k_mm_offset_matr1          5
+#define def_k_mm_offset_matr2          6
+#define def_k_mm_offset_result         7
 //---
 #define def_k_FFT                      89
 #define def_k_fft_inputs_re            0
@@ -1499,6 +1508,11 @@ union uaLongChar
 #define def_k_mmg_result_gr                     4
 #define def_k_mmg_dimension                     5
 #define def_k_mmg_multvarsecond                 6
+#define def_k_mmg_offset_matr1                  7
+#define def_k_mmg_offset_matr1_gr               8
+#define def_k_mmg_offset_matr2                  9
+#define def_k_mmg_offset_matr2_gr               10
+#define def_k_mmg_offset_result_gr              11
 //---
 #define def_k_OrthoganalLoss                    131
 #define def_k_ol_data                           0
@@ -1509,6 +1523,8 @@ union uaLongChar
 #define def_k_cd_data                           0
 #define def_k_cd_distance                       1
 #define def_k_cd_dimension                      2
+#define def_k_cd_groups                         3
+#define def_k_cd_normalize                      4
 //---
 #define def_k_FeedForwardLocalMax               133
 #define def_k_fflm_matrix_i                     0
@@ -3112,10 +3128,47 @@ union uaLongChar
 #define def_k_d2nd_slots                              6
 #define def_k_d2nd_dimension                          7
 #define def_k_d2nd_phase                              8
+//--- OMPB owns exactly these three device kernels.  All affine, gate and
+//--- history operations deliberately reuse the generic library primitives.
+#define def_k_OMPBDisagreement                        317
+#define def_k_ompbd_reference                           0
+#define def_k_ompbd_current                             1
+#define def_k_ompbd_output                              2
+#define def_k_ompbd_source_states                       3
+#define def_k_ompbd_target_states                       4
+#define def_k_ompbd_samples                             5
+#define def_k_ompbd_inv_tau2                            6
+#define def_k_OMPBDisagreementGrad                    318
+#define def_k_ompbdg_corrections                        0
+#define def_k_ompbdg_distance                           1
+#define def_k_ompbdg_disagreement                       2
+#define def_k_ompbdg_gradient                           3
+#define def_k_ompbdg_states                             4
+#define def_k_ompbdg_samples                             5
+#define def_k_ompbdg_dimension                           6
+#define def_k_ompbdg_variables                         7
+#define def_k_ompbdg_source_sign                        8
+#define def_k_ompbdg_multiplier                         9
+#define def_k_ompbdg_inv_tau2                          10
+#define def_k_OMPBGaussianKL                          319
+#define def_k_ompbkl_mean                               0
+#define def_k_ompbkl_logvar                             1
+#define def_k_ompbkl_output                             2
+#define def_k_ompbkl_total                              3
+//+------------------------------------------------------------------+
+//| OMPB runtime mode                                                |
+//+------------------------------------------------------------------+
+enum ENUM_OMPB_MODE
+  {
+   OMPB_BYPASS = 0,
+   OMPB_REFERENCE,
+   OMPB_CALIBRATE,
+   OMPB_INFERENCE
+  };
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| Enum of activation formula used
+//| Enum of activation formula used                                  |
 //+------------------------------------------------------------------+
 //--- OpenCL program resource.
 #resource "NeuroNet.cl" as string cl_program

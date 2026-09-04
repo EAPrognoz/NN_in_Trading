@@ -1,11 +1,18 @@
+//+------------------------------------------------------------------+
+//|                                                 NeuroNet_Misc.mqh|
+//|    Miscellaneous: Diffusion, Bayesian, HyperProjection, PSformer.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
+//+------------------------------------------------------------------+
+
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
-//| Logical method implementations generated from NeuroNet.mqh: Misc
+//| Logical method implementations generated from NeuroNet.mqh: Misc |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Release the runtime-only posterior samplers.                    |
 //+------------------------------------------------------------------+
 bool CNeuronMultiModel::Init(uint numInputs, uint myIndex, COpenCLMy * open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, int models)
   {
@@ -94,7 +101,7 @@ bool CNeuronMultiModel::Init(uint numInputs, uint myIndex, COpenCLMy * open_cl, 
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Assemble the posterior parameter tensor.                        |
 //+------------------------------------------------------------------+
 bool CNeuronMultiModel::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
@@ -2650,3 +2657,612 @@ void CNeuronMultiScaleExcitation::TrainMode(bool flag)
    cExcitation.TrainMode(bTrain);
   }
 
+//+------------------------------------------------------------------+
+bool CNeuronBayesianSampler::SetSample(const vector<float> &sample)
+  {
+   if(!m_cRandom || m_cRandom.Total() != sample.Size() ||
+      !m_cRandom.AssignArray(sample) || !m_cRandom.BufferWrite())
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Feed the existing VAE kernel from a caller-owned local draw.     |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianSampler::feedForward(CNeuronBaseOCL *NeuronOCL)
+  {
+   if(!OpenCL || !NeuronOCL || !m_cRandom || NeuronOCL.Neurons() % 2 != 0 ||
+      NeuronOCL.Neurons() / 2 != Neurons())
+      ReturnFalse;
+   if(!OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_inputs,
+                                NeuronOCL.getOutput().GetIndex()) ||
+      !OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_random,
+                                m_cRandom.GetIndex()) ||
+      !OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_outputd,
+                                Output.GetIndex()))
+      ReturnFalse;
+   uint offset[] = {0};
+   uint range[] = {Neurons()};
+   return(OpenCL.Execute(def_k_VAEFeedForward, 1, offset, range));
+  }
+//+------------------------------------------------------------------+
+CNeuronBayesianLinearOCL::CNeuronBayesianLinearOCL(void)
+  : iVariables(0),
+    iInputs(0),
+    iOutputs(0),
+    iSamples(0),
+    iSampleState(1),
+    m_fKLDMult(0.01f),
+    bSamplesGradientReady(false),
+    bSamplesPrepared(false)
+  {
+   cRandomSamplers.FreeMode(true);
+  }
+//+------------------------------------------------------------------+
+//| Release the runtime-only posterior samplers.                    |
+//+------------------------------------------------------------------+
+CNeuronBayesianLinearOCL::~CNeuronBayesianLinearOCL(void)
+  {
+   cRandomSamplers.Clear();
+  }
+//+------------------------------------------------------------------+
+void CNeuronBayesianLinearOCL::SetKLDMult(float value)
+  {
+   m_fKLDMult = value;
+   cMeanSampler.SetKLDMult(m_fKLDMult);
+  }
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::CreateTemporary(void)
+  {
+   //--- Allocate the deterministic posterior and posterior-sample work layers.
+   uint w = iVariables * iInputs * iOutputs;
+   uint b = iVariables * iOutputs;
+   if(!OpenCL)
+      ReturnFalseEx("Bayesian temporary: OpenCL context");
+   if(!iSamples)
+      ReturnFalseEx("Bayesian temporary: sample count");
+   if(!cPosterior.Init(0, 0, OpenCL, 2 * (w + b), optimization, iBatch))
+      ReturnFalseEx("Bayesian temporary: posterior");
+   if(!cSampleWeights.Init(0, 0, OpenCL, w, optimization, iBatch))
+      ReturnFalseEx("Bayesian temporary: sampled weights");
+   if(!cSampleBias.Init(0, 0, OpenCL, b, optimization, iBatch))
+      ReturnFalseEx("Bayesian temporary: sampled bias");
+   if(!cSampleOutput.Init(0, 0, OpenCL, b, optimization, iBatch))
+      ReturnFalseEx("Bayesian temporary: sampled output");
+   if(!cInputGradient.Init(0, 0, OpenCL, iVariables * iInputs, optimization, iBatch))
+      ReturnFalseEx("Bayesian temporary: input gradient");
+   if(!cPosteriorGradient.Init(0, 0, OpenCL, 2 * (w + b), optimization, iBatch))
+      ReturnFalseEx("Bayesian temporary: posterior gradient");
+   if(!cMeanSampler.Init(0, 0, OpenCL, w + b, optimization, iBatch))
+      ReturnFalseEx("Bayesian temporary: mean sampler");
+
+   //--- The production forward path always evaluates the posterior mean.
+   cMeanSampler.SetSampleMode(VAE_SAMPLE_MEAN);
+   cMeanSampler.SetKLDMult(m_fKLDMult);
+   cRandomSamplers.Clear();
+
+   //--- Create the stochastic samplers retained exclusively for regularization.
+   for(uint i = 0; i < iSamples; i++)
+     {
+      CNeuronBayesianSampler *s = new CNeuronBayesianSampler();
+      if(!s)
+         ReturnFalseEx("Bayesian temporary: random sampler allocation");
+      if(!s.Init(0, 0, OpenCL, w + b, optimization, iBatch))
+        {
+         delete s;
+         ReturnFalseEx("Bayesian temporary: random sampler initialization");
+        }
+      if(!cRandomSamplers.Add(s))
+        {
+         delete s;
+         ReturnFalseEx("Bayesian temporary: random sampler registry");
+        }
+      s.SetKLDMult(0.0f);
+     }
+
+   //--- Finalize the complete temporary state.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Create GPU-only accumulation buffers for an internal history.    |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::CreateBatchTemporary(uint rows_per_group)
+  {
+   if(!OpenCL || rows_per_group == 0)
+      ReturnFalseEx("Bayesian batch temporary: arguments");
+
+   //--- Allocate GPU-only buffers used to accumulate the sample gradients.
+   uint sample_total = iVariables * rows_per_group * iOutputs;
+   uint input_total = iVariables * rows_per_group * iInputs;
+   if(!cBatchSampleGradient.BufferInit(sample_total, 0.0f))
+      ReturnFalseEx("Bayesian batch temporary: sample gradient host buffer");
+   if(!cBatchSampleGradient.BufferCreate(OpenCL))
+      ReturnFalseEx("Bayesian batch temporary: sample gradient GPU buffer");
+   if(!cBatchInputGradient.BufferInit(input_total, 0.0f))
+      ReturnFalseEx("Bayesian batch temporary: input gradient host buffer");
+   if(!cBatchInputGradient.BufferCreate(OpenCL))
+      ReturnFalseEx("Bayesian batch temporary: input gradient GPU buffer");
+   if(!cBatchInputGradientAccum.BufferInit(input_total, 0.0f))
+      ReturnFalseEx("Bayesian batch temporary: accumulated gradient host buffer");
+   if(!cBatchInputGradientAccum.BufferCreate(OpenCL))
+      ReturnFalseEx("Bayesian batch temporary: accumulated gradient GPU buffer");
+
+   //--- Finalize the batch-local accumulation state.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Assemble the posterior parameter tensor.                        |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::BuildPosterior(void)
+  {
+   //--- Refresh the trainable posterior parameters before concatenation.
+   if(bTrain && !cWeights.FeedForward())
+      ReturnFalseEx("Bayesian posterior: weights forward");
+   if(bTrain && !cBias.FeedForward())
+      ReturnFalseEx("Bayesian posterior: bias forward");
+
+   //--- Assemble [mu | logvar] for weights and bias.
+   if(!Concat(cWeights.getOutput(), cBias.getOutput(), cPosterior.getOutput(),
+              iVariables * iInputs * iOutputs, iVariables * iOutputs, 2))
+      ReturnFalseEx("Bayesian posterior: parameter concatenation");
+
+   //--- Finalize the assembled posterior tensor.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Advance the deterministic sampler noise generator.              |
+//+------------------------------------------------------------------+
+uint CNeuronBayesianLinearOCL::NextSampleRandom(void)
+  {
+   iSampleState ^= iSampleState << 13;
+   iSampleState ^= iSampleState >> 17;
+   iSampleState ^= iSampleState << 5;
+   return(iSampleState);
+  }
+//+------------------------------------------------------------------+
+//| Set reparameterization noise for one posterior sampler.         |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::SetSample(CVAE *sampler)
+  {
+   if(!sampler)
+      ReturnFalseEx("Bayesian sample: sampler");
+
+   //--- Fill the sampler's reparameterization noise with deterministic pseudo-random normals.
+   vector<float> sample = vector<float>::Zeros(iVariables * (iInputs * iOutputs + iOutputs));
+   for(uint i = 0; i < sample.Size(); i += 2)
+     {
+      double u1 = (double(NextSampleRandom()) + 1.0) / 4294967297.0;
+      double u2 = (double(NextSampleRandom()) + 1.0) / 4294967297.0;
+      double radius = MathSqrt(-2.0 * MathLog(u1));
+      sample[i] = (float)(radius * MathCos(2.0 * M_PI * u2));
+      if(i + 1 < sample.Size())
+         sample[i + 1] = (float)(radius * MathSin(2.0 * M_PI * u2));
+     }
+   CNeuronBayesianSampler *random_sampler = sampler;
+   if(!random_sampler.SetSample(sample))
+      ReturnFalseEx("Bayesian sample: reparameterization noise");
+
+   //--- The sampler holds the noise for the next posterior draw.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Apply one grouped posterior affine transformation.               |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::Affine(CNeuronBaseOCL *n, CVAE *s, CNeuronBaseOCL *r)
+  {
+   if(!n || !s || !r)
+      ReturnFalseEx("Bayesian affine: layer arguments");
+
+   //--- Split the sampled posterior into grouped affine weights and bias.
+   uint w = iVariables * iInputs * iOutputs;
+   uint b = iVariables * iOutputs;
+   if(!DeConcat(cSampleWeights.getOutput(), cSampleBias.getOutput(), s.getOutput(), w, b, 1))
+      ReturnFalseEx("Bayesian affine: sampled posterior split");
+   if(!MatMul(n.getOutput(), cSampleWeights.getOutput(), r.getOutput(), 1, iInputs, iOutputs,
+              iVariables, true))
+      ReturnFalseEx("Bayesian affine: grouped matrix multiplication");
+   if(!SumVecMatrix(cSampleBias.getOutput(), r.getOutput(), r.getOutput(), iOutputs, iVariables))
+      ReturnFalseEx("Bayesian affine: bias addition");
+
+   //--- The sampled affine output is ready for the caller.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Initialize grouped posterior parameters and runtime samplers.    |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::Init(uint no, uint mi, COpenCLMy *oc, uint v, uint in, uint out, uint k,
+                                    ENUM_OPTIMIZATION opt, uint batch)
+  {
+   if(!v || !in || !out || !k)
+      ReturnFalseEx("Bayesian init: dimensions");
+   if(!CNeuronBaseOCL::Init(no, mi, oc, v * out, opt, batch))
+      ReturnFalseEx("Bayesian init: base layer");
+
+   //--- Store the grouped affine contract before allocating posterior parameters.
+   iVariables = v;
+   iInputs = in;
+   iOutputs = out;
+   iSamples = k;
+   iSampleState = 1;
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+   activation = None;
+   uint w = v * in * out;
+   uint b = v * out;
+   if(!cWeights.Init(0, 0, OpenCL, 2 * w, opt, iBatch))
+      ReturnFalseEx("Bayesian init: posterior weights");
+   if(!cBias.Init(0, 0, OpenCL, 2 * b, opt, iBatch))
+      ReturnFalseEx("Bayesian init: posterior bias");
+   if(!cWeights.getWeightsParams().Fill(0.0f))
+      ReturnFalseEx("Bayesian init: posterior weight initialization");
+   if(!cBias.getWeightsParams().Fill(0.0f))
+      ReturnFalseEx("Bayesian init: posterior bias initialization");
+   if(!cWeights.FeedForward())
+      ReturnFalseEx("Bayesian init: posterior weights forward");
+   if(!cBias.FeedForward())
+      ReturnFalseEx("Bayesian init: posterior bias forward");
+   if(!CreateTemporary())
+      ReturnFalseEx("Bayesian init: temporary state");
+
+   //--- Finalize the initialized posterior layer.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Generate deterministic output and optional posterior samples.   |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::feedForward(CNeuronBaseOCL *n)
+  {
+   if(!n || n.Neurons() != int(iVariables * iInputs))
+      ReturnFalseEx("Bayesian forward: input shape");
+   if(!BuildPosterior())
+      ReturnFalseEx("Bayesian forward: posterior assembly");
+
+   //--- Generate the deterministic production output from the posterior mean.
+   CVAE *mean = GetPointer(cMeanSampler);
+   if(!mean)
+      ReturnFalseEx("Bayesian forward: mean sampler");
+   if(!mean.FeedForward(cPosterior.AsObject()))
+      ReturnFalseEx("Bayesian forward: mean sample");
+   if(!Affine(n, mean, GetPointer(this)))
+      ReturnFalseEx("Bayesian forward: mean affine");
+   if(!bTrain)
+     {
+      bSamplesPrepared = false;
+      return(true);
+     }
+
+   //--- Stochastic states are retained exclusively for regularizers.
+   //--- The CNet output remains the posterior mean.
+   for(uint i = 0; i < iSamples; i++)
+     {
+      CVAE *sample = cRandomSamplers.At(i);
+      if(!sample)
+         ReturnFalseEx("Bayesian forward: random sampler");
+      if(!SetSample(sample))
+         ReturnFalseEx("Bayesian forward: random sample");
+      if(!sample.FeedForward(cPosterior.AsObject()))
+         ReturnFalseEx("Bayesian forward: random sampler forward");
+     }
+
+   //--- Mark the regularizer samples valid for the next backward pass.
+   bSamplesGradientReady = false;
+   bSamplesPrepared = true;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Backpropagate the deterministic posterior-mean path.            |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::calcInputGradients(CNeuronBaseOCL *n)
+  {
+   if(!bTrain)
+      return(true);
+   //--- Accumulate the mean affine path into the posterior gradient.
+   uint w = iVariables * iInputs * iOutputs;
+   uint b = iVariables * iOutputs;
+   uint p = w + b;
+   if(!n)
+      ReturnFalseEx("Bayesian backward: input layer");
+   if(!n.getGradient().Fill(0.0f))
+      ReturnFalseEx("Bayesian backward: input gradient reset");
+   if(!bSamplesGradientReady && !cPosteriorGradient.getGradient().Fill(0.0f))
+      ReturnFalseEx("Bayesian backward: posterior gradient reset");
+   CVAE *mean = GetPointer(cMeanSampler);
+   if(!mean)
+      ReturnFalseEx("Bayesian backward: mean sampler");
+   if(!DeConcat(cSampleWeights.getOutput(), cSampleBias.getOutput(), mean.getOutput(), w, b, 1))
+      ReturnFalseEx("Bayesian backward: mean posterior split");
+   if(!cSampleOutput.getGradient().Fill(Gradient))
+      ReturnFalseEx("Bayesian backward: output gradient");
+   if(!SumVecMatrixGrad(cSampleBias.getGradient(), cSampleOutput.getGradient(),
+                        cSampleOutput.getGradient(), iOutputs, iVariables))
+      ReturnFalseEx("Bayesian backward: bias gradient");
+   if(!MatMulGrad(n.getOutput(), cInputGradient.getGradient(), cSampleWeights.getOutput(),
+                  cSampleWeights.getGradient(), cSampleOutput.getGradient(), 1, iInputs, iOutputs,
+                  iVariables, true))
+      ReturnFalseEx("Bayesian backward: grouped affine gradient");
+   if(!SumAndNormalize(cInputGradient.getGradient(), n.getGradient(), n.getGradient(), iInputs,
+                       false, 0, 0, 0, 1.0f))
+      ReturnFalseEx("Bayesian backward: input gradient accumulation");
+   if(!Concat(cSampleWeights.getGradient(), cSampleBias.getGradient(), mean.getGradient(), w, b, 1))
+      ReturnFalseEx("Bayesian backward: mean gradient assembly");
+   if(!cPosterior.CalcHiddenGradients(mean))
+      ReturnFalseEx("Bayesian backward: mean sampler gradient");
+   if(!SumAndNormalize(cPosterior.getGradient(), cPosteriorGradient.getGradient(),
+                       cPosteriorGradient.getGradient(), p, false, 0, 0, 0, 1.0f))
+      ReturnFalseEx("Bayesian backward: posterior gradient accumulation");
+   if(!DeConcat(cWeights.getGradient(), cBias.getGradient(), cPosteriorGradient.getGradient(), w, b, 2))
+      ReturnFalseEx("Bayesian backward: posterior gradient split");
+
+   //--- Invalidate the stochastic-gradient cache and pass the mean gradient upstream.
+   bSamplesGradientReady = false;
+   if(n.Activation() != None &&
+      !DeActivation(n.getOutput(), n.getGradient(), n.getGradient(), n.Activation()))
+      ReturnFalseEx("Bayesian backward: input deactivation");
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Generate K posterior-affine samples for one internal history.    |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::ForwardSamplesBatch(CBufferFloat *batch_input,
+      CBufferFloat *output,
+      uint rows_per_group)
+  {
+   //--- Validate the grouped history buffers before using their OpenCL offsets.
+   uint w = iVariables * iInputs * iOutputs;
+   uint b = iVariables * iOutputs;
+   uint sample_total = iVariables * rows_per_group * iOutputs;
+   if(!bTrain || !bSamplesPrepared || !batch_input || !output || rows_per_group == 0 ||
+      batch_input.GetOpenCL() != OpenCL || output.GetOpenCL() != OpenCL ||
+      batch_input.GetIndex() < 0 || output.GetIndex() < 0 ||
+      batch_input.Total() != int(iVariables * rows_per_group * iInputs) ||
+      output.Total() != int(iSamples * sample_total))
+      ReturnFalseEx("Bayesian batch forward: input or output contract");
+   if(!BuildPosterior())
+      ReturnFalseEx("Bayesian batch forward: posterior assembly");
+
+   //--- Evaluate every posterior sample into its strided output segment.
+   for(uint i = 0; i < iSamples; i++)
+     {
+      CVAE *sample = cRandomSamplers.At(i);
+      if(!sample)
+         ReturnFalseEx("Bayesian batch forward: random sampler");
+      if(!DeConcat(cSampleWeights.getOutput(), cSampleBias.getOutput(), sample.getOutput(), w, b, 1))
+         ReturnFalseEx("Bayesian batch forward: sampled posterior split");
+      if(!MatMul(batch_input, cSampleWeights.getOutput(), output, rows_per_group, iInputs, iOutputs,
+                 iVariables, true, 0, 0, i * sample_total))
+         ReturnFalseEx("Bayesian batch forward: grouped matrix multiplication");
+      if(!SumVecMatrix(cSampleBias.getOutput(), output, output, iOutputs, iVariables,
+                       0, i * sample_total, i * sample_total, 1.0f, rows_per_group))
+         ReturnFalseEx("Bayesian batch forward: bias addition");
+     }
+
+   //--- The next backward pass must derive a fresh stochastic-gradient cache.
+   bSamplesGradientReady = false;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Accumulate posterior sample gradients for one internal history.  |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::BackwardSamplesBatch(CBufferFloat *batch_input,
+      CBufferFloat *sample_gradients,
+      uint rows_per_group)
+  {
+   //--- Validate and reset per-history buffers before accumulating all samples.
+   uint w = iVariables * iInputs * iOutputs;
+   uint b = iVariables * iOutputs;
+   uint p = w + b;
+   uint sample_total = iVariables * rows_per_group * iOutputs;
+   if(!bTrain || !batch_input || !sample_gradients || rows_per_group == 0 ||
+      batch_input.GetOpenCL() != OpenCL || sample_gradients.GetOpenCL() != OpenCL ||
+      batch_input.GetIndex() < 0 || sample_gradients.GetIndex() < 0 ||
+      batch_input.Total() != int(iVariables * rows_per_group * iInputs) ||
+      sample_gradients.Total() != int(iSamples * sample_total))
+      ReturnFalseEx("Bayesian batch backward: input or gradient contract");
+   if(!CreateBatchTemporary(rows_per_group))
+      ReturnFalseEx("Bayesian batch backward: temporary buffers");
+   if(!bSamplesGradientReady && !cPosteriorGradient.getGradient().Fill(0.0f))
+      ReturnFalseEx("Bayesian batch backward: posterior gradient reset");
+   if(!cBatchInputGradientAccum.Fill(0.0f))
+      ReturnFalseEx("Bayesian batch backward: input gradient reset");
+
+   //--- Accumulate every random posterior sample into the common posterior gradient.
+   for(uint i = 0; i < iSamples; i++)
+     {
+      CVAE *sample = cRandomSamplers.At(i);
+      if(!sample)
+         ReturnFalseEx("Bayesian batch backward: random sampler");
+      if(!DeConcat(cSampleWeights.getOutput(), cSampleBias.getOutput(), sample.getOutput(), w, b, 1))
+         ReturnFalseEx("Bayesian batch backward: sampled posterior split");
+      if(!SumVecMatrixGrad(cSampleBias.getGradient(), &cBatchSampleGradient,
+                           sample_gradients, iOutputs, iVariables, 0, 0, i * sample_total, 1.0f,
+                           rows_per_group))
+         ReturnFalseEx("Bayesian batch backward: bias gradient");
+      if(!MatMulGrad(batch_input, &cBatchInputGradient, cSampleWeights.getOutput(),
+                     cSampleWeights.getGradient(), &cBatchSampleGradient, rows_per_group,
+                     iInputs, iOutputs, iVariables, true))
+         ReturnFalseEx("Bayesian batch backward: grouped affine gradient");
+      if(!SumAndNormalize(&cBatchInputGradient, &cBatchInputGradientAccum,
+                          &cBatchInputGradientAccum, iInputs, false, 0, 0, 0, 1.0f))
+         ReturnFalseEx("Bayesian batch backward: input gradient accumulation");
+      if(!Concat(cSampleWeights.getGradient(), cSampleBias.getGradient(), sample.getGradient(), w, b, 1))
+         ReturnFalseEx("Bayesian batch backward: sampled gradient assembly");
+      if(!cPosterior.CalcHiddenGradients(sample))
+         ReturnFalseEx("Bayesian batch backward: random sampler gradient");
+      if(!SumAndNormalize(cPosterior.getGradient(), cPosteriorGradient.getGradient(),
+                          cPosteriorGradient.getGradient(), p, false, 0, 0, 0, 1.0f))
+         ReturnFalseEx("Bayesian batch backward: posterior gradient accumulation");
+     }
+   if(!DeConcat(cWeights.getGradient(), cBias.getGradient(),
+                cPosteriorGradient.getGradient(), w, b, 2))
+      ReturnFalseEx("Bayesian batch backward: posterior gradient split");
+
+   //--- Mark the accumulated sample gradients ready for the parameter update.
+   bSamplesGradientReady = true;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Update posterior parameters after gradient accumulation.        |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::updateInputWeights(CNeuronBaseOCL *n)
+  {
+   if(!bTrain)
+      return(true);
+
+   //--- Apply the posterior updates once after all sample gradients are accumulated.
+   if(!cWeights.UpdateInputWeights())
+      ReturnFalseEx("Bayesian update: posterior weights");
+   if(!cBias.UpdateInputWeights())
+      ReturnFalseEx("Bayesian update: posterior bias");
+
+   //--- Finalize the inherited update contract.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Save posterior parameters and deterministic configuration.       |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::Save(const int h)
+  {
+   //--- Persist only posterior parameters and deterministic layer configuration.
+   if(!CNeuronBaseOCL::Save(h))
+      ReturnFalseEx("Bayesian save: base layer");
+   if(FileWriteInteger(h, iVariables, INT_VALUE) < INT_VALUE)
+      ReturnFalseEx("Bayesian save: variables");
+   if(FileWriteInteger(h, iInputs, INT_VALUE) < INT_VALUE)
+      ReturnFalseEx("Bayesian save: inputs");
+   if(FileWriteInteger(h, iOutputs, INT_VALUE) < INT_VALUE)
+      ReturnFalseEx("Bayesian save: outputs");
+   if(FileWriteInteger(h, iSamples, INT_VALUE) < INT_VALUE)
+      ReturnFalseEx("Bayesian save: samples");
+   if(FileWriteFloat(h, m_fKLDMult) < sizeof(float))
+      ReturnFalseEx("Bayesian save: KLD multiplier");
+   if(!cWeights.Save(h))
+      ReturnFalseEx("Bayesian save: posterior weights");
+   if(!cBias.Save(h))
+      ReturnFalseEx("Bayesian save: posterior bias");
+
+   //--- Finalize the posterior checkpoint.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Load posterior parameters and rebuild transient samplers.        |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::Load(const int h)
+  {
+   if(!CNeuronBaseOCL::Load(h))
+      ReturnFalseEx("Bayesian load: base layer");
+
+   //--- Restore the deterministic dimensions and reset runtime-only sampling state.
+   iVariables = (uint)FileReadInteger(h, INT_VALUE);
+   iInputs = (uint)FileReadInteger(h, INT_VALUE);
+   iOutputs = (uint)FileReadInteger(h, INT_VALUE);
+   iSamples = (uint)FileReadInteger(h, INT_VALUE);
+   m_fKLDMult = FileReadFloat(h);
+   iSampleState = 1;
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+   if(!iVariables || !iInputs || !iOutputs || !iSamples)
+      ReturnFalseEx("Bayesian load: dimensions");
+   if(!LoadInsideLayer(h, cWeights.AsObject()))
+      ReturnFalseEx("Bayesian load: posterior weights");
+   if(!LoadInsideLayer(h, cBias.AsObject()))
+      ReturnFalseEx("Bayesian load: posterior bias");
+   if(!CreateTemporary())
+      ReturnFalseEx("Bayesian load: temporary state");
+
+   //--- Recreate transient samplers; stochastic samples are not serialized.
+   return(true);
+  }
+void CNeuronBayesianLinearOCL::SetOpenCL(COpenCLMy *o)
+  {
+   //--- Rebind every persistent buffer and sampler to the replacement device.
+   CNeuronBaseOCL::SetOpenCL(o);
+   cWeights.SetOpenCL(OpenCL);
+   cBias.SetOpenCL(OpenCL);
+   cPosterior.SetOpenCL(OpenCL);
+   cSampleWeights.SetOpenCL(OpenCL);
+   cSampleBias.SetOpenCL(OpenCL);
+   cSampleOutput.SetOpenCL(OpenCL);
+   cInputGradient.SetOpenCL(OpenCL);
+   cPosteriorGradient.SetOpenCL(OpenCL);
+   cMeanSampler.SetOpenCL(OpenCL);
+   if(cBatchSampleGradient.Total() > 0)
+      cBatchSampleGradient.BufferCreate(OpenCL);
+   if(cBatchInputGradient.Total() > 0)
+      cBatchInputGradient.BufferCreate(OpenCL);
+   if(cBatchInputGradientAccum.Total() > 0)
+      cBatchInputGradientAccum.BufferCreate(OpenCL);
+   for(int i = 0; i < cRandomSamplers.Total(); i++)
+     {
+      CVAE *s = cRandomSamplers.At(i);
+      if(s)
+         s.SetOpenCL(OpenCL);
+     }
+
+   //--- Existing stochastic gradients cannot cross device contexts.
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+  }
+//+------------------------------------------------------------------+
+//| Switch posterior parameters between training and inference.      |
+//+------------------------------------------------------------------+
+void CNeuronBayesianLinearOCL::TrainMode(bool f)
+  {
+   //--- Propagate the mode to posterior parameters and discard stochastic state.
+   CNeuronBaseOCL::TrainMode(f);
+   cWeights.TrainMode(bTrain);
+   cBias.TrainMode(bTrain);
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+  }
+//+------------------------------------------------------------------+
+//| Copy posterior parameters from a compatible source layer.       |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
+  {
+   if(!source || source.Type() != Type())
+      ReturnFalseEx("Bayesian weight copy: source layer type");
+
+   //--- Synchronize the posterior parameters and invalidate stochastic runtime state.
+   CNeuronBayesianLinearOCL *Source = source;
+   if(!cWeights.WeightsUpdate(Source.cWeights.AsObject(), tau))
+      ReturnFalseEx("Bayesian weight copy: posterior weights");
+   if(!cBias.WeightsUpdate(Source.cBias.AsObject(), tau))
+      ReturnFalseEx("Bayesian weight copy: posterior bias");
+   iSampleState = Source.iSampleState;
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+
+   //--- Finalize the inherited weight-copy contract.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Append posterior state to the parameter fingerprint.             |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::AppendParameterFingerprint(ulong &f)
+  {
+   //--- Include the Bayesian type tag before the posterior parameter state.
+   f = (f ^ ulong(Type())) * ulong(1099511628211);
+   if(!cWeights.AppendParameterFingerprint(f))
+      ReturnFalseEx("Bayesian fingerprint: posterior weights");
+   if(!cBias.AppendParameterFingerprint(f))
+      ReturnFalseEx("Bayesian fingerprint: posterior bias");
+
+   //--- Finalize the posterior fingerprint.
+   return(true);
+  }
+CLayerDescription *CNeuronBayesianLinearOCL::GetLayerInfo(void)
+  {
+   //--- Report the grouped affine and sampling contract to the graph description.
+   CLayerDescription *r = CNeuronBaseOCL::GetLayerInfo();
+   if(r)
+     {
+      r.count = iOutputs;
+      r.window = iInputs;
+      r.variables = iVariables;
+      r.layers = iSamples;
+     }
+
+   //--- Return the inherited description when its allocation succeeded.
+   return(r);
+  }
+
+//+------------------------------------------------------------------+

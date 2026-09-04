@@ -1,3 +1,10 @@
+//+------------------------------------------------------------------+
+//|                                            NeuroNet_SpikeFlow.mqh|
+//|            Spike flows, spiking networks and optical flow models.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
+//+------------------------------------------------------------------+
+
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
@@ -7035,7 +7042,7 @@ bool CNeuronSpikeConvBlock::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Append the trainable spike-convolution block graph.               |
+//| Append the trainable spike-convolution block graph.              |
 //+------------------------------------------------------------------+
 bool CNeuronSpikeConvBlock::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -7225,7 +7232,7 @@ bool CNeuronMSRes::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Append the trainable residual-flow graph.                          |
+//| Append the trainable residual-flow graph.                        |
 //+------------------------------------------------------------------+
 bool CNeuronMSRes::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -7246,8 +7253,8 @@ bool CNeuronMSRes::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
       ReturnFalse;
-   //--- cFlow is reconstructed from the serialized layer list.  It must use
-   //--- the parent context while CLayer creates each nested OpenCL neuron.
+//--- cFlow is reconstructed from the serialized layer list.  It must use
+//--- the parent context while CLayer creates each nested OpenCL neuron.
    cFlow.SetOpenCL(OpenCL);
    if(!cFlow.Load(file_handle))
       ReturnFalse;
@@ -19271,3 +19278,5 @@ void CNeuronResFlowLattice::TrainMode(bool flag)
   }
 //+------------------------------------------------------------------+
 
+
+//+------------------------------------------------------------------+

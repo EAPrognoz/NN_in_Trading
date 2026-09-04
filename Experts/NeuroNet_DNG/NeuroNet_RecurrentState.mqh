@@ -1,3 +1,10 @@
+//+------------------------------------------------------------------+
+//|                                       NeuroNet_RecurrentState.mqh|
+//|                 Recurrent architectures: LSTM, SSM, Mamba, 2DSSM.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
+//+------------------------------------------------------------------+
+
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
@@ -706,7 +713,7 @@ bool CNeuronLSTMOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Append LSTM parameters and optimizer buffers.                     |
+//| Append LSTM parameters and optimizer buffers.                    |
 //+------------------------------------------------------------------+
 bool CNeuronLSTMOCL::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -2213,3 +2220,5 @@ void CMamba4CastEmbeding::SetOpenCL(COpenCLMy * obj)
    cProjectionWithTE.SetOpenCL(OpenCL);
   }
 
+
+//+------------------------------------------------------------------+

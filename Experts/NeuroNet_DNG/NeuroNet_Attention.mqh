@@ -1,8 +1,10 @@
 //+------------------------------------------------------------------+
-//|                                                      ProjectName |
-//|                                      Copyright 2020, CompanyName |
-//|                                       http://www.companyname.net |
+//|                                            NeuroNet_Attention.mqh|
+//| Attention architectures: Attention, MHA, XCiT, Conformer, Mamba2.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
 //+------------------------------------------------------------------+
+
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
@@ -1822,7 +1824,7 @@ bool CNeuronMLMHAttentionOCL::ConvolutuionUpdateWeights(CBufferFloat* weights, C
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_i, inputs.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_m, momentum1.GetIndex())
          setBuffer(def_k_UpdateWeightsConvAdam, def_k_uwca_matrix_v, momentum2.GetIndex())
-   lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
+         lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_inputs, inputs.Total())
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_l, lt)
          setArgument(def_k_UpdateWeightsConvAdam, def_k_uwca_b1, b1)
@@ -2328,7 +2330,7 @@ bool CNeuronMH2AttentionOCL::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Append the trainable multi-head attention graph.                  |
+//| Append the trainable multi-head attention graph.                 |
 //+------------------------------------------------------------------+
 bool CNeuronMH2AttentionOCL::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -7540,7 +7542,7 @@ bool CNeuronComplexMLMHAttention::ConvolutuionUpdateWeights(CBufferFloat* weight
       setBuffer(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_matrix_i, inputs.GetIndex())
       setBuffer(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_matrix_m, momentum1.GetIndex())
       setBuffer(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_matrix_v, momentum2.GetIndex())
-   float lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
+      float lt = (float)(lr * MathSqrt(1.0 - MathPow((double)b2, (double)t)) / (1.0 - MathPow((double)b1, (double)t)));
       setArgument(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_inputs, int(inputs.Total() / 2))
       setArgument(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_l, lt)
       setArgument(def_k_UpdateWeightsComplexConvAdam, def_k_uwca_b1, b1)
@@ -28118,3 +28120,5 @@ void CNeuronDictionaryCrossAtt::SetOpenCL(COpenCLMy *obj)
   }
 //+------------------------------------------------------------------+
 
+
+//+------------------------------------------------------------------+

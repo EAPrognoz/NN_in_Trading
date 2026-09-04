@@ -1,3 +1,10 @@
+//+------------------------------------------------------------------+
+//|                                          NeuroNet_GraphSparse.mqh|
+//|                  Graph sparse networks: GCN, SCNN, GinAR, HimNet.|
+//|                                               Copyright 2024, DNG|
+//|                                 https://www.mql5.com/ru/users/dng|
+//+------------------------------------------------------------------+
+
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
@@ -5670,3 +5677,5 @@ void CNeuronGlobLocGraphAtt::TrainMode(bool flag)
    cConcat.TrainMode(flag);
   }
 
+
+//+------------------------------------------------------------------+

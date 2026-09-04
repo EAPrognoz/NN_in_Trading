@@ -5,12 +5,13 @@
 #ifndef NEURONET_D2SKILL_MQH
 #define NEURONET_D2SKILL_MQH
 //+------------------------------------------------------------------+
-//--- Reuse boundary: D2Skill keeps its own flat GPU bank because its
-//--- signed corrections, direction agreement, utility/age eviction,
-//--- candidate promotion and Task/Step dual routing are not represented by
-//--- CScenarioCodebook.  RAG score/Top-K and persistence conventions are
-//--- reused where their contracts match; CNeuronRAGMemory is intentionally
-//--- not used because its publish path is CPU copy-on-write plus re-upload.
+//| Reuse boundary: D2Skill keeps its own flat GPU bank because its  |
+//| signed corrections, direction agreement, utility/age eviction,   |
+//| candidate promotion and Task/Step dual routing are not           |
+//| represented by CScenarioCodebook. RAG score/Top-K and persistence|
+//| conventions are reused where their contracts match;              |
+//| CNeuronRAGMemory is intentionally not used because its publish   |
+//| path is CPU copy-on-write plus re-upload.                        |
 //+------------------------------------------------------------------+
 void CD2SkillItem::RebindItemBuffer(CBufferFloat &buffer, COpenCLMy *obj)
   {
@@ -22,7 +23,8 @@ void CD2SkillItem::RebindItemBuffer(CBufferFloat &buffer, COpenCLMy *obj)
       buffer.BufferCreate(obj);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Constructor: initializes the correction pointer, representation  |
+//| mode and EMA smoothing defaults.                                 |
 //+------------------------------------------------------------------+
 void CD2SkillItem::CD2SkillItem(void) : m_correction(NULL),
    m_representation(D2SkillDirectionMagnitude),
@@ -31,9 +33,14 @@ void CD2SkillItem::CD2SkillItem(void) : m_correction(NULL),
   {
   }
 //+------------------------------------------------------------------+
+//| Destructor.                                                      |
+//+------------------------------------------------------------------+
 void CD2SkillItem::~CD2SkillItem(void)
   {
   }
+//+------------------------------------------------------------------+
+//| Initializes the item and allocates its GPU-resident correction,  |
+//| direction, scale, observation and mass buffers.                  |
 //+------------------------------------------------------------------+
 bool CD2SkillItem::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                         uint numNeurons, ENUM_OPTIMIZATION optimization_type,
@@ -46,6 +53,9 @@ bool CD2SkillItem::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
       ReturnFalse;
    return(EnsureItemState());
   }
+//+------------------------------------------------------------------+
+//| Attaches the external correction buffer when its layout matches  |
+//| the item output.                                                 |
 //+------------------------------------------------------------------+
 bool CD2SkillItem::SetCorrectionBuffer(CBufferFloat *correction)
   {
@@ -61,20 +71,29 @@ bool CD2SkillItem::SetCorrectionBuffer(CBufferFloat *correction)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Returns the attached correction buffer.                          |
+//+------------------------------------------------------------------+
 CBufferFloat *CD2SkillItem::GetCorrectionBuffer(void) const
   {
    return(m_correction);
   }
+//+------------------------------------------------------------------+
+//| Sets the representation mode of the item.                        |
 //+------------------------------------------------------------------+
 void CD2SkillItem::SetRepresentation(const ED2SkillRepresentation mode)
   {
    m_representation = mode;
   }
 //+------------------------------------------------------------------+
+//| Returns the current representation mode.                         |
+//+------------------------------------------------------------------+
 ED2SkillRepresentation CD2SkillItem::Representation(void) const
   {
    return(m_representation);
   }
+//+------------------------------------------------------------------+
+//| Sets the EMA smoothing factors for correction, direction and     |
+//| magnitude, clamped to [0,1].                                     |
 //+------------------------------------------------------------------+
 void CD2SkillItem::SetEMA(const float beta_correction, const float beta_direction,
                           const float beta_magnitude)
@@ -84,55 +103,77 @@ void CD2SkillItem::SetEMA(const float beta_correction, const float beta_directio
    m_beta_magnitude = MathMin(MathMax(beta_magnitude, 0.0f), 1.0f);
   }
 //+------------------------------------------------------------------+
+//| Returns the correction EMA smoothing factor.                     |
+//+------------------------------------------------------------------+
 float CD2SkillItem::BetaCorrection(void) const
   {
    return(m_beta_correction);
   }
+//+------------------------------------------------------------------+
+//| Returns the direction EMA smoothing factor.                      |
 //+------------------------------------------------------------------+
 float CD2SkillItem::BetaDirection(void) const
   {
    return(m_beta_direction);
   }
 //+------------------------------------------------------------------+
+//| Returns the magnitude EMA smoothing factor.                      |
+//+------------------------------------------------------------------+
 float CD2SkillItem::BetaMagnitude(void) const
   {
    return(m_beta_magnitude);
   }
+//+------------------------------------------------------------------+
+//| Returns the item correction buffer pointer.                      |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillItem::Correction(void)
   {
    return(m_correction);
   }
 //+------------------------------------------------------------------+
+//| Returns the item direction buffer.                               |
+//+------------------------------------------------------------------+
 CBufferFloat *CD2SkillItem::Direction(void)
   {
    return(GetPointer(m_item_direction));
   }
+//+------------------------------------------------------------------+
+//| Returns the item scale buffer.                                   |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillItem::Scale(void)
   {
    return(GetPointer(m_item_scale));
   }
 //+------------------------------------------------------------------+
+//| Returns the item observation counter buffer.                     |
+//+------------------------------------------------------------------+
 CBufferFloat *CD2SkillItem::Observations(void)
   {
    return(GetPointer(m_item_observations));
   }
+//+------------------------------------------------------------------+
+//| Returns the item mass buffer.                                    |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillItem::Mass(void)
   {
    return(GetPointer(m_item_mass));
   }
 //+------------------------------------------------------------------+
+//| No-op: a skill item exposes no trainable weights.                |
+//+------------------------------------------------------------------+
 bool CD2SkillItem::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Returns the item neuron type identifier (defNeuronD2SkillItem).  |
+//+------------------------------------------------------------------+
 int CD2SkillItem::Type(void) const
   {
    return(defNeuronD2SkillItem);
   }
+//+------------------------------------------------------------------+
+//| Rebinds a bank GPU buffer to the given OpenCL object.            |
 //+------------------------------------------------------------------+
 void CD2SkillBank::RebindBuffer(CBufferFloat &buffer, COpenCLMy *obj)
   {
@@ -142,6 +183,9 @@ void CD2SkillBank::RebindBuffer(CBufferFloat &buffer, COpenCLMy *obj)
       buffer.BufferFree();
    buffer.BufferCreate(obj);
   }
+//+------------------------------------------------------------------+
+//| Checks that every bank buffer matches the required               |
+//| slot-by-dimension layout.                                        |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::ValidateBuffers(void)
   {
@@ -174,10 +218,16 @@ bool CD2SkillBank::ValidateBuffers(void)
           m_usage_distribution.Total() == D2SKILL_DISTRIBUTION_BINS);
   }
 //+------------------------------------------------------------------+
+//| Initializes a bank GPU buffer with the given total and fill      |
+//| value.                                                           |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::InitBuffer(CBufferFloat &buffer, const int total, const float value)
   {
    return(buffer.BufferInit(total, value) && buffer.BufferCreate(OpenCL));
   }
+//+------------------------------------------------------------------+
+//| Constructor: initializes thresholds, EMAs, lifecycle and policy  |
+//| defaults.                                                        |
 //+------------------------------------------------------------------+
 CD2SkillBank::CD2SkillBank(void) : m_slots(0), m_dimension(0), m_enabled(false),
    m_similarity_threshold(0.65f), m_direction_threshold(0.0f),
@@ -190,14 +240,20 @@ CD2SkillBank::CD2SkillBank(void) : m_slots(0), m_dimension(0), m_enabled(false),
   {
   }
 //+------------------------------------------------------------------+
+//| Destructor.                                                      |
+//+------------------------------------------------------------------+
 CD2SkillBank::~CD2SkillBank(void)
   {
   }
+//+------------------------------------------------------------------+
+//| Returns the bank neuron type identifier (defNeuronD2SkillBank).  |
 //+------------------------------------------------------------------+
 int CD2SkillBank::Type(void) const
   {
    return(defNeuronD2SkillBank);
   }
+//+------------------------------------------------------------------+
+//| Enables or disables the bank.                                    |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::SetEnabled(const bool enabled)
   {
@@ -205,10 +261,15 @@ bool CD2SkillBank::SetEnabled(const bool enabled)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Returns whether the bank is enabled.                             |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::Enabled(void) const
   {
    return(m_enabled);
   }
+//+------------------------------------------------------------------+
+//| Sets the similarity and direction thresholds used for slot       |
+//| scoring.                                                         |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::SetThresholds(const float similarity, const float direction)
   {
@@ -219,6 +280,8 @@ bool CD2SkillBank::SetThresholds(const float similarity, const float direction)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Sets the utility weighting applied when scoring slots.           |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::SetUtilityWeight(const float value)
   {
    if(!MathIsValidNumber(value))
@@ -226,6 +289,8 @@ bool CD2SkillBank::SetUtilityWeight(const float value)
    m_utility_weight = value;
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Sets the residual blend factor alpha, clamped to [0,1].          |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::SetAlpha(const float value)
   {
@@ -235,10 +300,14 @@ bool CD2SkillBank::SetAlpha(const float value)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Returns the residual blend factor alpha.                         |
+//+------------------------------------------------------------------+
 float CD2SkillBank::Alpha(void) const
   {
    return(m_alpha);
   }
+//+------------------------------------------------------------------+
+//| Enables utility-aware slot scoring and sets the minimum utility. |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::SetUtilityPolicy(const bool utility_aware, const float min_utility)
   {
@@ -249,15 +318,22 @@ bool CD2SkillBank::SetUtilityPolicy(const bool utility_aware, const float min_ut
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Returns whether utility-aware scoring is enabled.                |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::UtilityAware(void) const
   {
    return(m_utility_aware);
   }
 //+------------------------------------------------------------------+
+//| Returns the minimum utility required for slot selection.         |
+//+------------------------------------------------------------------+
 float CD2SkillBank::MinUtility(void) const
   {
    return(m_min_utility);
   }
+//+------------------------------------------------------------------+
+//| Sets the confirmation, protection and inactivity ages of the slot|
+//| lifecycle.                                                       |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::SetLifecycle(const uint confirmations, const uint protection_age,
                                 const uint inactivity_age)
@@ -270,6 +346,8 @@ bool CD2SkillBank::SetLifecycle(const uint confirmations, const uint protection_
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Sets the maximum magnitude allowed for a slot correction.        |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::SetMaxCorrection(const float value)
   {
    if(!MathIsValidNumber(value) || value < 0.0f)
@@ -278,157 +356,195 @@ bool CD2SkillBank::SetMaxCorrection(const float value)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Returns the maximum allowed correction magnitude.                |
+//+------------------------------------------------------------------+
 float CD2SkillBank::MaxCorrection(void) const
   {
    return(m_max_correction);
   }
+//+------------------------------------------------------------------+
+//| Returns the number of slots in the bank.                         |
 //+------------------------------------------------------------------+
 uint CD2SkillBank::Slots(void) const
   {
    return(m_slots);
   }
 //+------------------------------------------------------------------+
+//| Returns the dimension of each slot vector.                       |
+//+------------------------------------------------------------------+
 uint CD2SkillBank::Dimension(void) const
   {
    return(m_dimension);
   }
+//+------------------------------------------------------------------+
+//| Returns the currently selected slot index (UINT_MAX when none).  |
 //+------------------------------------------------------------------+
 uint CD2SkillBank::ActiveSlot(void) const
   {
    return(m_active_slot);
   }
 //+------------------------------------------------------------------+
+//| Returns the buffer holding the selected slot correction.         |
+//+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::SelectedCorrection(void) { return(GetPointer(m_selected_correction)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the buffer holding the selected slot index.              |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::SelectedSlot(void) { return(GetPointer(m_selected_slot)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the buffer holding the selected slot score.              |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::SelectedScore(void) { return(GetPointer(m_selected_score)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the slot key buffer.                                     |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Keys(void) { return(GetPointer(m_keys)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot correction buffer.                          |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Corrections(void) { return(GetPointer(m_corrections)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot direction buffer.                           |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Directions(void) { return(GetPointer(m_directions)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot scale buffer.                               |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Scales(void) { return(GetPointer(m_scales)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot observation counter buffer.                 |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::ObservationsBank(void) { return(GetPointer(m_observations)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot use counter buffer.                         |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Uses(void) { return(GetPointer(m_uses)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot mass buffer.                                |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::MassBank(void) { return(GetPointer(m_mass)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot utility buffer.                             |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Utility(void) { return(GetPointer(m_utility)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot used flag buffer.                           |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Used(void) { return(GetPointer(m_used)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot state buffer.                               |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::State(void) { return(GetPointer(m_state)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot age buffer.                                 |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Ages(void) { return(GetPointer(m_age)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot protection counter buffer.                  |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Protection(void) { return(GetPointer(m_protection)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the bank diagnostics buffer.                             |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Diagnostics(void) { return(GetPointer(m_diagnostics)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the utility distribution histogram buffer.               |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::UtilityDistribution(void) { return(GetPointer(m_utility_distribution)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the usage distribution histogram buffer.                 |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::UsageDistribution(void) { return(GetPointer(m_usage_distribution)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot influence buffer.                           |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Influence(void) { return(GetPointer(m_influence)); }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Returns the per-slot retrieved flag buffer.                      |
 //+------------------------------------------------------------------+
 CBufferFloat *CD2SkillBank::Retrieved(void) { return(GetPointer(m_retrieved)); }
+//+------------------------------------------------------------------+
+//| Constructor: starts unmaterialized with both banks disabled.     |
 //+------------------------------------------------------------------+
 CD2Skill::CD2Skill(void) : m_ready(false), m_task_bank_materialized(false),
    m_step_bank_materialized(false), m_online_direction_update(false), m_mode(D2_DISABLED)
   {
   }
 //+------------------------------------------------------------------+
+//| Destructor.                                                      |
+//+------------------------------------------------------------------+
 CD2Skill::~CD2Skill(void)
   {
   }
+//+------------------------------------------------------------------+
+//| Returns the skill neuron type identifier (defNeuronD2Skill).     |
 //+------------------------------------------------------------------+
 int CD2Skill::Type(void) const
   {
    return(defNeuronD2Skill);
   }
 //+------------------------------------------------------------------+
+//| Returns the current skill runtime mode.                          |
+//+------------------------------------------------------------------+
 ENUM_D2SKILL_MODE CD2Skill::Mode(void) const
   {
    return(m_mode);
   }
+//+------------------------------------------------------------------+
+//| Returns whether the skill is ready after a successful            |
+//| initialization.                                                  |
 //+------------------------------------------------------------------+
 bool CD2Skill::Ready(void) const
   {
    return(m_ready);
   }
 //+------------------------------------------------------------------+
+//| Returns the Task bank pointer when ready, otherwise NULL.        |
+//+------------------------------------------------------------------+
 CD2SkillBank *CD2Skill::TaskBank(void)
   {
    return(m_ready ? GetPointer(m_task_bank) : NULL);
   }
+//+------------------------------------------------------------------+
+//| Returns the Step bank pointer when ready, otherwise NULL.        |
 //+------------------------------------------------------------------+
 CD2SkillBank *CD2Skill::StepBank(void)
   {
    return(m_ready ? GetPointer(m_step_bank) : NULL);
   }
 //+------------------------------------------------------------------+
+//| Returns the primary (Task) bank pointer when ready, otherwise    |
+//| NULL.                                                            |
+//+------------------------------------------------------------------+
 CD2SkillBank *CD2Skill::Bank(void)
   {
    return(TaskBank());
   }
+//+------------------------------------------------------------------+
+//| Returns the primary (Task) bank pointer (const) when ready,      |
+//| otherwise NULL.                                                  |
 //+------------------------------------------------------------------+
 const CD2SkillBank *CD2Skill::Bank(void) const
   {
    return(TaskBank());
   }
 //+------------------------------------------------------------------+
+//| Returns the Task bank pointer (const) when ready, otherwise NULL.|
+//+------------------------------------------------------------------+
 const CD2SkillBank *CD2Skill::TaskBank(void) const
   {
    return(m_ready ? GetPointer(m_task_bank) : NULL);
   }
 //+------------------------------------------------------------------+
+//| Returns the Step bank pointer (const) when ready, otherwise NULL.|
+//+------------------------------------------------------------------+
 const CD2SkillBank *CD2Skill::StepBank(void) const
   {
    return(m_ready ? GetPointer(m_step_bank) : NULL);
   }
+//+------------------------------------------------------------------+
+//| Enables the Task and/or Step branch, materializing the bank on   |
+//| first use.                                                       |
 //+------------------------------------------------------------------+
 bool CD2Skill::Enable(const bool task, const bool step)
   {
@@ -449,25 +565,36 @@ bool CD2Skill::Enable(const bool task, const bool step)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Runs the Task bank feed-forward on the given source.             |
+//+------------------------------------------------------------------+
 bool CD2Skill::TaskFeedForward(CNeuronBaseOCL *source)
   {
    return(m_ready && m_task_bank.FeedForward(source));
   }
+//+------------------------------------------------------------------+
+//| Runs the Step bank feed-forward on the given source.             |
 //+------------------------------------------------------------------+
 bool CD2Skill::StepFeedForward(CNeuronBaseOCL *source)
   {
    return(m_ready && m_step_bank.FeedForward(source));
   }
 //+------------------------------------------------------------------+
+//| Applies the pseudo-residual update to the Task bank.             |
+//+------------------------------------------------------------------+
 bool CD2Skill::TaskUpdate(CBufferFloat *state, CBufferFloat *gradient)
   {
    return(m_ready && m_task_bank.UpdateFromGradient(state, gradient));
   }
 //+------------------------------------------------------------------+
+//| Applies the pseudo-residual update to the Step bank.             |
+//+------------------------------------------------------------------+
 bool CD2Skill::StepUpdate(CBufferFloat *state, CBufferFloat *gradient)
   {
    return(m_ready && m_step_bank.UpdateFromGradient(state, gradient));
   }
+//+------------------------------------------------------------------+
+//| Applies the utility update to the Task bank; reports whether it  |
+//| was applied.                                                     |
 //+------------------------------------------------------------------+
 bool CD2Skill::TaskUtility(const float delta_j, bool &applied)
   {
@@ -477,11 +604,16 @@ bool CD2Skill::TaskUtility(const float delta_j, bool &applied)
    return(m_task_bank.UpdateUtility(delta_j, applied));
   }
 //+------------------------------------------------------------------+
+//| Applies the utility update to the Task bank.                     |
+//+------------------------------------------------------------------+
 bool CD2Skill::TaskUtility(const float delta_j)
   {
    bool applied = false;
    return(TaskUtility(delta_j, applied));
   }
+//+------------------------------------------------------------------+
+//| Applies the utility update to the Step bank; reports whether it  |
+//| was applied.                                                     |
 //+------------------------------------------------------------------+
 bool CD2Skill::StepUtility(const float delta_j, bool &applied)
   {
@@ -491,16 +623,24 @@ bool CD2Skill::StepUtility(const float delta_j, bool &applied)
    return(m_step_bank.UpdateUtility(delta_j, applied));
   }
 //+------------------------------------------------------------------+
+//| Applies the utility update to the Step bank.                     |
+//+------------------------------------------------------------------+
 bool CD2Skill::StepUtility(const float delta_j)
   {
    bool applied = false;
    return(StepUtility(delta_j, applied));
   }
 //+------------------------------------------------------------------+
+//| Runs the second-pass backward propagation through the skill      |
+//| highway.                                                         |
+//+------------------------------------------------------------------+
 bool CD2Skill::BackwardSecond(CNeuronBaseOCL *source, CNeuronBaseOCL *forecast)
   {
    return(m_ready && calcInputGradientsSecond(source, forecast));
   }
+//+------------------------------------------------------------------+
+//| Initializes the skill, its scenario-attention base and both      |
+//| Task/Step banks.                                                 |
 //+------------------------------------------------------------------+
 bool CD2Skill::Init(uint numOutputs, uint myIndex, COpenCLMy *opencl,
                     uint scenarios, uint horizon, uint latent, bool critic,
@@ -526,6 +666,9 @@ bool CD2Skill::Init(uint numOutputs, uint myIndex, COpenCLMy *opencl,
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Creates the Task and Step banks with dimensions derived from the |
+//| attention layout.                                                |
+//+------------------------------------------------------------------+
 bool CD2Skill::InitBanks(ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    const uint task_dimension = iQueries * iScenarios * iDimension;
@@ -543,6 +686,9 @@ bool CD2Skill::InitBanks(ENUM_OPTIMIZATION optimization_type, uint batch)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Returns whether the Task branch is active in the current runtime |
+//| mode.                                                            |
+//+------------------------------------------------------------------+
 bool CD2Skill::TaskSkillEnabled(void) const
   {
    return(m_ready && m_task_bank.Enabled() &&
@@ -550,12 +696,17 @@ bool CD2Skill::TaskSkillEnabled(void) const
            m_mode == D2_ONLINE_CALIBRATION));
   }
 //+------------------------------------------------------------------+
+//| Returns whether the Step branch is active in the current runtime |
+//| mode.                                                            |
+//+------------------------------------------------------------------+
 bool CD2Skill::StepSkillEnabled(void) const
   {
    return(m_ready && m_step_bank.Enabled() &&
           (m_mode == D2_EVALUATE || m_mode == D2_INFERENCE ||
            m_mode == D2_ONLINE_CALIBRATION));
   }
+//+------------------------------------------------------------------+
+//| Returns whether bank weights are writable (D2_COLLECT mode only).|
 //+------------------------------------------------------------------+
 bool CD2Skill::SkillUpdatesEnabled(void) const
   {
@@ -579,6 +730,9 @@ bool CD2Skill::UpdateOnlineDirection(CD2SkillBank *bank, CBufferFloat *gradient)
       ReturnFalse;
    return(bank.UpdateDirectionFromGradient(gradient));
   }
+//+------------------------------------------------------------------+
+//| Runs the second-pass feed-forward: optional banks, token         |
+//| attention and history gates.                                     |
 //+------------------------------------------------------------------+
 bool CD2Skill::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
                                  CNeuronBaseOCL *Forecast)
@@ -668,6 +822,9 @@ bool CD2Skill::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
       ReturnFalse;
    return(CNeuronMSRes::feedForward(cMHAOutput.AsObject()));
   }
+//+------------------------------------------------------------------+
+//| Back-propagates the second-pass gradients, including bank        |
+//| influence accumulation.                                          |
 //+------------------------------------------------------------------+
 bool CD2Skill::calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL,
                                         CNeuronBaseOCL *Forecast)
@@ -782,6 +939,9 @@ bool CD2Skill::calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL,
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Updates the second-pass attention weights; bank weights stay     |
+//| untouched.                                                       |
+//+------------------------------------------------------------------+
 bool CD2Skill::updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL,
                                         CNeuronBaseOCL *Forecast)
   {
@@ -821,6 +981,8 @@ bool CD2Skill::updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL,
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Saves the skill and both banks to the file handle.               |
+//+------------------------------------------------------------------+
 bool CD2Skill::Save(const int file_handle)
   {
    if(!m_ready || !CNeuronScenarioCrossAttention::Save(file_handle))
@@ -828,6 +990,9 @@ bool CD2Skill::Save(const int file_handle)
    dFileWriteUInt(file_handle, D2SKILL_LAYER_FORMAT);
    return(m_task_bank.Save(file_handle) && m_step_bank.Save(file_handle));
   }
+//+------------------------------------------------------------------+
+//| Restores the skill and both banks, validating restored bank      |
+//| shapes.                                                          |
 //+------------------------------------------------------------------+
 bool CD2Skill::Load(const int file_handle)
   {
@@ -857,6 +1022,9 @@ bool CD2Skill::Load(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Restores the skill from file and attaches the given OpenCL       |
+//| context.                                                         |
+//+------------------------------------------------------------------+
 bool CD2Skill::Load(const int file_handle, COpenCLMy *opencl)
   {
    if(file_handle == INVALID_HANDLE || !opencl || FileReadInteger(file_handle) != Type())
@@ -864,6 +1032,8 @@ bool CD2Skill::Load(const int file_handle, COpenCLMy *opencl)
    OpenCL = opencl;
    return(Load(file_handle));
   }
+//+------------------------------------------------------------------+
+//| Rebinds the skill GPU buffers to the given OpenCL context.       |
 //+------------------------------------------------------------------+
 void CD2Skill::SetOpenCL(COpenCLMy *opencl)
   {
@@ -878,12 +1048,17 @@ void CD2Skill::SetOpenCL(COpenCLMy *opencl)
       m_step_bank.SetOpenCL(opencl);
   }
 //+------------------------------------------------------------------+
+//| Propagates the training flag to the skill and both banks.        |
+//+------------------------------------------------------------------+
 void CD2Skill::TrainMode(bool flag)
   {
    CNeuronScenarioCrossAttention::TrainMode(flag);
    m_task_bank.TrainMode(flag);
    m_step_bank.TrainMode(flag);
   }
+//+------------------------------------------------------------------+
+//| Polyak-averages the base attention weights; bank parameters are  |
+//| excluded.                                                        |
 //+------------------------------------------------------------------+
 bool CD2Skill::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
@@ -906,6 +1081,9 @@ bool CD2Skill::UpdateInputStateSecond(CObject *SourceObject,
    return(updateInputWeightsSecond(source, Forecast));
   }
 //+------------------------------------------------------------------+
+//| Clears the recurrent execution state; banks survive as durable   |
+//| model parameters.                                                |
+//+------------------------------------------------------------------+
 bool CD2Skill::Clear(void)
   {
 //--- Clear resets only the recurrent execution state inherited from the
@@ -917,6 +1095,8 @@ bool CD2Skill::Clear(void)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Sets the skill runtime mode.                                     |
+//+------------------------------------------------------------------+
 bool CD2Skill::SetMode(const ENUM_D2SKILL_MODE mode)
   {
    if(mode < D2_DISABLED || mode > D2_ONLINE_CALIBRATION)
@@ -925,13 +1105,16 @@ bool CD2Skill::SetMode(const ENUM_D2SKILL_MODE mode)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Configures the optional online direction-only EMA.              |
+//|  Configures the optional online direction-only EMA.              |
 //+------------------------------------------------------------------+
 bool CD2Skill::SetOnlineDirectionUpdate(const bool enabled)
   {
    m_online_direction_update = enabled;
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Resets the episode influence counters of both banks.             |
+//+------------------------------------------------------------------+
 bool CD2Skill::ResetEpisodeInfluence(void)
   {
    if(!m_ready || !m_task_bank.ResetEpisodeInfluence() ||
@@ -939,6 +1122,9 @@ bool CD2Skill::ResetEpisodeInfluence(void)
       ReturnFalse;
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Combines the source with the item correction (or the source      |
+//| alone) into the output.                                          |
 //+------------------------------------------------------------------+
 bool CD2SkillItem::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
@@ -955,6 +1141,9 @@ bool CD2SkillItem::feedForward(CNeuronBaseOCL *NeuronOCL)
                           0, 0, 0, 1.0f));
   }
 //+------------------------------------------------------------------+
+//| Passes the incoming gradient through, preserving gradients       |
+//| accumulated by other branches.                                   |
+//+------------------------------------------------------------------+
 bool CD2SkillItem::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || CheckPointer(NeuronOCL) == POINTER_INVALID ||
@@ -970,6 +1159,8 @@ bool CD2SkillItem::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
    return(SumAndNormalize(source_gradient, Gradient, source_gradient,
                           Gradient.Total(), false, 0, 0, 0, 1.0f));
   }
+//+------------------------------------------------------------------+
+//| Allocates and binds all item GPU buffers.                        |
 //+------------------------------------------------------------------+
 bool CD2SkillItem::EnsureItemState(void)
   {
@@ -1013,6 +1204,9 @@ bool CD2SkillItem::EnsureItemState(void)
           m_item_mass.GetIndex() >= 0 && EnsureItemScratch());
   }
 //+------------------------------------------------------------------+
+//| Computes the GPU launch layout and norm-reduction scratch size   |
+//| for the item.                                                    |
+//+------------------------------------------------------------------+
 bool CD2SkillItem::ItemLaunchLayout(uint &local_size, uint &groups,
                                     uint &partial_count) const
   {
@@ -1040,6 +1234,8 @@ bool CD2SkillItem::ItemLaunchLayout(uint &local_size, uint &groups,
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Allocates the item norm-reduction scratch buffers.               |
+//+------------------------------------------------------------------+
 bool CD2SkillItem::EnsureItemScratch(void)
   {
    uint local_size = 0;
@@ -1060,6 +1256,8 @@ bool CD2SkillItem::EnsureItemScratch(void)
       ReturnFalse;
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Runs the staged GPU reduction that computes the item vector norm.|
 //+------------------------------------------------------------------+
 bool CD2SkillItem::CalculateItemNorm(CBufferFloat *source, const uint local_size,
                                      const uint groups)
@@ -1105,6 +1303,9 @@ bool CD2SkillItem::CalculateItemNorm(CBufferFloat *source, const uint local_size
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Applies the EMA update of correction, direction and magnitude    |
+//| from the gradient.                                               |
+//+------------------------------------------------------------------+
 bool CD2SkillItem::UpdateFromGradient(CBufferFloat *gradient)
   {
    if(!gradient || !OpenCL || gradient.GetOpenCL() != OpenCL ||
@@ -1146,6 +1347,8 @@ bool CD2SkillItem::UpdateFromGradient(CBufferFloat *gradient)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Saves the item state to the file handle.                         |
+//+------------------------------------------------------------------+
 bool CD2SkillItem::Save(const int file_handle)
   {
    if(file_handle == INVALID_HANDLE || !CNeuronBaseOCL::Save(file_handle) ||
@@ -1161,6 +1364,8 @@ bool CD2SkillItem::Save(const int file_handle)
           m_item_scale.Save(file_handle) && m_item_observations.Save(file_handle) &&
           m_item_mass.Save(file_handle));
   }
+//+------------------------------------------------------------------+
+//| Restores the item state from the file handle.                    |
 //+------------------------------------------------------------------+
 bool CD2SkillItem::Load(const int file_handle)
   {
@@ -1190,6 +1395,8 @@ bool CD2SkillItem::Load(const int file_handle)
    return(m_correction.GetOpenCL() == OpenCL && m_correction.GetIndex() >= 0);
   }
 //+------------------------------------------------------------------+
+//| Restores the item state and attaches the given OpenCL context.   |
+//+------------------------------------------------------------------+
 bool CD2SkillItem::Load(const int file_handle, COpenCLMy *opencl)
   {
    if(file_handle == INVALID_HANDLE || !opencl ||
@@ -1198,6 +1405,8 @@ bool CD2SkillItem::Load(const int file_handle, COpenCLMy *opencl)
    AttachOpenCL(opencl);
    return(Load(file_handle));
   }
+//+------------------------------------------------------------------+
+//| Rebinds all item GPU buffers to the given OpenCL context.        |
 //+------------------------------------------------------------------+
 void CD2SkillItem::SetOpenCL(COpenCLMy *obj)
   {
@@ -1216,6 +1425,9 @@ void CD2SkillItem::SetOpenCL(COpenCLMy *obj)
       m_correction = GetPointer(m_item_correction);
   }
 //+------------------------------------------------------------------+
+//| Clears all item buffers and drops the external correction        |
+//| reference.                                                       |
+//+------------------------------------------------------------------+
 bool CD2SkillItem::Clear(void)
   {
    m_correction = NULL;
@@ -1230,7 +1442,7 @@ bool CD2SkillItem::Clear(void)
           (m_item_reduced_norm.Total() == 0 || m_item_reduced_norm.Fill(0)));
   }
 //+------------------------------------------------------------------+
-//| Choose a D2 local size without changing the generic RAG width. |
+//|  Choose a D2 local size without changing the generic RAG width.  |
 //+------------------------------------------------------------------+
 uint CD2SkillBank::D2LaunchLocalSize(const uint work_items) const
   {
@@ -1250,6 +1462,8 @@ uint CD2SkillBank::D2LaunchLocalSize(const uint work_items) const
    return(local_size);
   }
 //+------------------------------------------------------------------+
+//| Computes the GPU launch layout for the retrieval and Top-1 stage.|
+//+------------------------------------------------------------------+
 bool CD2SkillBank::RetrievalLaunchLayout(uint &local_size, uint &partial_count) const
   {
    if(!OpenCL || m_slots == 0 || m_dimension == 0 || m_slots > RAG_FLOAT_INDEX_LIMIT ||
@@ -1264,6 +1478,9 @@ bool CD2SkillBank::RetrievalLaunchLayout(uint &local_size, uint &partial_count) 
    return(local_size > 0 && partial_count > 0);
   }
 //+------------------------------------------------------------------+
+//| Ensures a GPU buffer of the given size exists on the bank        |
+//| context.                                                         |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::EnsureRetrievalBuffer(CBufferFloat &buffer, const int total)
   {
    if(!OpenCL || total <= 0)
@@ -1276,6 +1493,8 @@ bool CD2SkillBank::EnsureRetrievalBuffer(CBufferFloat &buffer, const int total)
       buffer.BufferFree();
    return(buffer.BufferCreate(OpenCL));
   }
+//+------------------------------------------------------------------+
+//| Computes the staged radix-8 reduction scratch size.              |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::ReductionScratchCount(const uint items, const uint batches,
       const uint fields, uint &total) const
@@ -1302,6 +1521,9 @@ bool CD2SkillBank::ReductionScratchCount(const uint items, const uint batches,
    total = (uint)required;
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Runs the staged radix-8 GPU reduction from partials into reduced |
+//| metrics.                                                         |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::RunStagedReduction(CBufferFloat &partials, CBufferFloat &reduced,
                                       const uint items, const uint batches, const uint fields,
@@ -1357,6 +1579,9 @@ bool CD2SkillBank::RunStagedReduction(CBufferFloat &partials, CBufferFloat &redu
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Copies the source into the partials buffer, then runs the staged |
+//| reduction.                                                       |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::RunStagedReduction(CBufferFloat &source, CBufferFloat &partials,
                                        CBufferFloat &reduced, const uint items,
                                        const uint batches, const uint fields,
@@ -1379,6 +1604,8 @@ bool CD2SkillBank::RunStagedReduction(CBufferFloat &source, CBufferFloat &partia
                              local_size, max_field_a, max_field_b));
   }
 //+------------------------------------------------------------------+
+//| Allocates all retrieval-stage scratch buffers.                   |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::EnsureRetrievalScratch(void)
   {
    uint local_size = 0;
@@ -1397,6 +1624,8 @@ bool CD2SkillBank::EnsureRetrievalScratch(void)
           EnsureRetrievalBuffer(m_retrieval_top, 2));
   }
 //+------------------------------------------------------------------+
+//| Computes the GPU launch layout for the bank update stage.        |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::UpdateLaunchLayout(uint &local_size, uint &groups) const
   {
    if(!OpenCL || m_dimension == 0)
@@ -1410,6 +1639,8 @@ bool CD2SkillBank::UpdateLaunchLayout(uint &local_size, uint &groups) const
    groups = (m_dimension + local_size - 1) / local_size;
    return(groups > 0);
   }
+//+------------------------------------------------------------------+
+//| Allocates all update-stage scratch buffers.                      |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::EnsureUpdateScratch(void)
   {
@@ -1441,6 +1672,9 @@ bool CD2SkillBank::EnsureUpdateScratch(void)
           EnsureRetrievalBuffer(m_gradient_influence_partials, (int)gradient_influence_scratch) &&
           EnsureRetrievalBuffer(m_gradient_influence_total, 1));
   }
+//+------------------------------------------------------------------+
+//| Finds the best scoring slot using the generic RAG Top-1          |
+//| partial/merge kernels.                                           |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::RunTop1(CBufferFloat &scores, CBufferFloat &top)
   {
@@ -1490,6 +1724,8 @@ bool CD2SkillBank::RunTop1(CBufferFloat &scores, CBufferFloat &top)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Computes the per-slot metrics for the given state and gradient.  |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::RunMetrics(CBufferFloat *state, CBufferFloat *gradient,
                               const uint local_size, const uint groups)
   {
@@ -1516,6 +1752,8 @@ bool CD2SkillBank::RunMetrics(CBufferFloat *state, CBufferFloat *gradient,
                              D2SKILL_METRICS, local_size));
   }
 //+------------------------------------------------------------------+
+//| Computes the bank vector norm for the active representation.     |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::CalculateBankVectorNorm(const uint local_size, const uint groups)
   {
    if(local_size == 0 || groups == 0 || !EnsureItemScratch())
@@ -1537,6 +1775,9 @@ bool CD2SkillBank::CalculateBankVectorNorm(const uint local_size, const uint gro
    return(RunStagedReduction(m_item_partials, m_item_reduced_norm, m_dimension,
                              1, 1, local_size));
   }
+//+------------------------------------------------------------------+
+//| Initializes the bank with the given slot count and dimension,    |
+//| allocating every GPU buffer.                                     |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::Init(uint dimension, uint myIndex, COpenCLMy *open_cl,
                         uint slots, ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -1572,6 +1813,9 @@ bool CD2SkillBank::Init(uint dimension, uint myIndex, COpenCLMy *open_cl,
       ReturnFalse;
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Rebinds every bank GPU buffer to the given OpenCL context and    |
+//| re-exposes the selected correction.                              |
 //+------------------------------------------------------------------+
 void CD2SkillBank::SetOpenCL(COpenCLMy *obj)
   {
@@ -1626,6 +1870,9 @@ void CD2SkillBank::SetOpenCL(COpenCLMy *obj)
       m_selected_correction.GetOpenCL() == obj && m_selected_correction.GetIndex() >= 0)
       m_correction = GetPointer(m_selected_correction);
   }
+//+------------------------------------------------------------------+
+//| Scores all slots against the state and gathers the winning       |
+//| correction into the selected buffers.                            |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::Retrieve(CBufferFloat *state, const bool mark_retrieved)
   {
@@ -1734,6 +1981,9 @@ bool CD2SkillBank::Retrieve(CBufferFloat *state, const bool mark_retrieved)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Retrieves the best correction for the source and applies the item|
+//| residual.                                                        |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || CheckPointer(NeuronOCL) == POINTER_INVALID ||
@@ -1769,7 +2019,7 @@ bool CD2SkillBank::Observe(CNeuronBaseOCL *NeuronOCL)
    return(Retrieve(source, false));
   }
 //+------------------------------------------------------------------+
-//| Accumulates g dot (alpha * correction) for the forward winner.  |
+//|  Accumulates g dot (alpha * correction) for the forward winner.  |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::AccumulateInfluenceFromGradient(CBufferFloat *gradient)
   {
@@ -1805,7 +2055,7 @@ bool CD2SkillBank::AccumulateInfluenceFromGradient(CBufferFloat *gradient)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Updates only the direction EMA of the retrieved stable slot.    |
+//|  Updates only the direction EMA of the retrieved stable slot.    |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::UpdateDirectionFromGradient(CBufferFloat *gradient)
   {
@@ -1859,6 +2109,9 @@ bool CD2SkillBank::UpdateDirectionFromGradient(CBufferFloat *gradient)
    kernelExecuteLoc(kernel, offset, global, local)
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Runs the full bank update: lifecycle ages, metrics, candidate    |
+//| promotion and EMA vector update.                                 |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::UpdateFromGradient(CBufferFloat *state, CBufferFloat *gradient)
   {
@@ -1968,6 +2221,9 @@ bool CD2SkillBank::UpdateFromGradient(CBufferFloat *state, CBufferFloat *gradien
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Applies the utility EMA from episode influence and reports       |
+//| whether it was applied.                                          |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::UpdateUtility(const float delta_j, bool &applied)
   {
    applied = false;
@@ -2011,11 +2267,15 @@ bool CD2SkillBank::UpdateUtility(const float delta_j, bool &applied)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Applies the utility EMA from episode influence.                  |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::UpdateUtility(const float delta_j)
   {
    bool applied = false;
    return(UpdateUtility(delta_j, applied));
   }
+//+------------------------------------------------------------------+
+//| Zeroes the per-slot influence counters for the current episode.  |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::ResetEpisodeInfluence(void)
   {
@@ -2033,6 +2293,9 @@ bool CD2SkillBank::ResetEpisodeInfluence(void)
    kernelExecute(kernel, offset, global)
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Recomputes bank diagnostics, norms and the utility/usage         |
+//| distributions.                                                   |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::RefreshDiagnostics(void)
   {
@@ -2087,6 +2350,8 @@ bool CD2SkillBank::RefreshDiagnostics(void)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Saves the bank state and diagnostics to the file handle.         |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::Save(const int file_handle)
   {
    if(file_handle == INVALID_HANDLE || !RefreshDiagnostics() || !CNeuronBaseOCL::Save(file_handle))
@@ -2122,6 +2387,9 @@ bool CD2SkillBank::Save(const int file_handle)
           m_utility_distribution.Save(file_handle) &&
           m_usage_distribution.Save(file_handle));
   }
+//+------------------------------------------------------------------+
+//| Restores the bank state from the file handle, deferring device   |
+//| attachment.                                                      |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::Load(const int file_handle)
   {
@@ -2189,6 +2457,8 @@ bool CD2SkillBank::Load(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Restores the bank state and attaches the given OpenCL context.   |
+//+------------------------------------------------------------------+
 bool CD2SkillBank::Load(const int file_handle, COpenCLMy *opencl)
   {
    if(file_handle == INVALID_HANDLE || !opencl ||
@@ -2200,6 +2470,8 @@ bool CD2SkillBank::Load(const int file_handle, COpenCLMy *opencl)
    SetOpenCL(opencl);
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Clears all bank buffers and resets the active slot.              |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::Clear(void)
   {
@@ -2235,7 +2507,7 @@ bool CD2SkillBank::Clear(void)
    return(SetCorrectionBuffer(GetPointer(m_selected_correction)));
   }
 //+------------------------------------------------------------------+
-//| Explicit destructive reset used only by isolated fixture tests. |
+//|  Explicit destructive reset used only by isolated fixture tests. |
 //+------------------------------------------------------------------+
 bool CD2SkillBank::ResetDurableState(void)
   {
@@ -2274,3 +2546,4 @@ bool CD2SkillBank::ResetDurableState(void)
    return(SetCorrectionBuffer(GetPointer(m_selected_correction)));
   }
 #endif // NEURONET_D2SKILL_MQH
+

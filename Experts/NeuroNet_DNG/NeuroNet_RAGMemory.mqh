@@ -1560,7 +1560,7 @@ bool CNeuronRAGMemory::ConfirmPendingCorrection(const ulong pendingId, const ulo
   }
 
 //+------------------------------------------------------------------+
-//| Confirm an executed correction for a position in the same plan. |
+//| Confirm an executed correction for a position in the same plan.  |
 //+------------------------------------------------------------------+
 bool CNeuronRAGMemory::ConfirmPendingCorrection(const ulong pendingId,
                                                  const ulong deal,

@@ -12,10 +12,8 @@ input group                       "---- D2Skill training ----"
 input ENUM_D2SKILL_STAGE          InpD2SkillStage = D2Skill_D2_STAGE_FORMATION; //Lifecycle stage
 input ENUM_D2SKILL_MODE           InpD2SkillExecutionMode = D2_COLLECT; //Bank execution mode
 input ED2SkillRepresentation      InpD2SkillRepresentation = D2SkillDirectionMagnitude; //Bank representation
-input bool                        InpD2SkillResetBanksOnRepresentationMismatch =
-   false; //Reset incompatible banks
-input bool                        InpD2SkillRecreateIncompatibleCheckpoint =
-   false; //Recreate incompatible policy checkpoint
+input bool                        InpD2SkillResetBanksOnRepresentationMismatch = false; //Reset incompatible banks
+input bool                        InpD2SkillRecreateIncompatibleCheckpoint = false; //Recreate incompatible policy checkpoint
 //---
 input group                       "---- Actor-Critic training ----"
 input datetime                    Start         = D'2024.01.01'; //Training period start
@@ -24,6 +22,9 @@ input int                         Iterations    = 1000000; //Training iterations
 input int                         EpisodeBars   = 2 * StackSize; //Bars per episode
 input double                      MinBalance    = 50.0; //Minimum account balance
 input int                         UpdatePolicy  = 5; //Actor update interval
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 int            Epochs        = 0;
 CNet Actor;
 CNet Q1;
@@ -311,14 +312,9 @@ bool TrainTransition(const int position, const int iteration, bool &skill_termin
 //--- move Actor back into the executable action manifold.
    const bool executable_action = (IsExecutableOrder(buy_lot, CurrentAction[1], CurrentAction[2]) ||
                                    IsExecutableOrder(sell_lot, CurrentAction[4], CurrentAction[5]));
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//---
    if(iteration > 0 && UpdatePolicy > 0 && iteration % UpdatePolicy == 0)
      {
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
       if(executable_action)
         {
          if(!PolicyBackward())
@@ -337,9 +333,7 @@ bool TrainTransition(const int position, const int iteration, bool &skill_termin
    double teacher_reward = 0;
    if(!BuildTeacherAction(position, GetPointer(Account), GetPointer(TeacherAction), teacher_reward))
      { Print("TrainTransition stage=teacher_action"); ReturnFalse; }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//---
    if(teacher_reward > 0)
      {
       if(trace_td)
@@ -420,9 +414,6 @@ void TrainD2SkillActorCritic(void)
    PairedDeltaSum = 0;
    for(int iteration = 0; iteration < Iterations && !IsStopped(); iteration++)
      {
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
       if(episode == 0)
         {
          if(!ResetD2SkillEpisodeInfluence(Actor) ||
@@ -445,9 +436,7 @@ void TrainD2SkillActorCritic(void)
         }
       bool skill_terminal = false;
       bool pair_terminal = false;
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //---
       if(!TrainTransition(position, iteration, skill_terminal, pair_terminal))
         {
          failed_iteration = iteration;
@@ -457,6 +446,7 @@ void TrainD2SkillActorCritic(void)
          break;
         }
       completed_iterations++;
+      //---
       if((NextAccount.GetIndex() >= 0 && !NextAccount.BufferRead()) || !Account.AssignArray(GetPointer(NextAccount)) ||
          (Account.GetIndex() >= 0 && !Account.BufferWrite()) ||
          (PairedEpisodeActive &&
@@ -472,9 +462,7 @@ void TrainD2SkillActorCritic(void)
         }
       position--;
       episode++;
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //---
       const bool episode_limit = (position < first ||
                                   episode >= MathMax(1, EpisodeBars));
       double terminal_delta = 0.0;
@@ -515,9 +503,7 @@ void TrainD2SkillActorCritic(void)
             position = last;
          episode = 0;
         }
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //---
       if(GetTickCount() - shown > 500)
         {
          const double q1_rmse = MathSqrt(MathMax(0.0, double(Q1.getRecentAverageError()))) / MathMax(EtalonBalance, 1.0);
@@ -533,9 +519,7 @@ void TrainD2SkillActorCritic(void)
    if(!ResetD2SkillEpisodeInfluence(Actor))
       episode_reset_failed = true;
    Comment("");
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//---
    if(completed_iterations != Iterations || episode_reset_failed)
      {
       if(episode_reset_failed)
@@ -570,9 +554,6 @@ int OnInit()
                                InpD2SkillRecreateIncompatibleCheckpoint) ||
       !D2SkillInitIndicators() || !D2SkillLoadForecastInference() || !LoadOrCreateD2SkillPolicies() ||
       !D2SkillConfigureActorCriticUpdates(Actor, Q1, Q2) ||
-//+------------------------------------------------------------------+
-//| Function D2SkillVerifyFrozenForecastExact.                         |
-//+------------------------------------------------------------------+
       !D2SkillVerifyFrozenForecastExact())
      {
       PrintFormat("D2Skill Actor-Critic initialization failed at line %d error=%d", __LINE__, GetLastError());
@@ -617,7 +598,4 @@ void OnTimer(void)
    TrainD2SkillActorCritic();
    ExpertRemove();
   }
-//+------------------------------------------------------------------+
-
-
 //+------------------------------------------------------------------+
