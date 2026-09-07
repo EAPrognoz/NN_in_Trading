@@ -29,7 +29,7 @@ input float                       InpOMPBTau               = 1.0f;
 input float                       InpOMPBLambdaDis         = 0.0f;
 input float                       InpOMPBLambdaKL          = 0.0f;
 input float                       InpOMPBLambdaAlpha       = 0.0f;
-input float                       InpOMPBAlphaPrior        = 0.5f;
+input float                       InpOMPBAlphaPrior        = -6.0f;
 input float                       InpOMPBMaxKL             = 0.0f;
 //---
 input group                       "---- Forecast recovery smoke ----"

@@ -19,5 +19,5 @@ InpOMPBTau=1.0||1.0||0.01||1.0||N
 InpOMPBLambdaDis=0.0||0.0||0.01||10.0||N
 InpOMPBLambdaKL=0.0||0.0||0.01||10.0||N
 InpOMPBLambdaAlpha=0.0||0.0||0.01||10.0||N
-InpOMPBAlphaPrior=0.5||0.5||0.01||0.99||N
+InpOMPBAlphaPrior=-6||-6||1||0||N
 InpOMPBMaxKL=0.0||0.0||0.01||100.0||N

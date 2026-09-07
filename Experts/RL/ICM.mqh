@@ -198,8 +198,8 @@ bool CICM::backProp(int batch, float discount = 0.999000f)
 //---
    if(cReplay.Total() < (int)iMinBufferSize)
       return true;
-   //if(!UpdateTarget(TargetNetFile))
-   //   return false;
+//if(!UpdateTarget(TargetNetFile))
+//   return false;
 //---
    CLayer *currentLayer, *nextLayer, *prevLayer;
    CNeuronBaseOCL *neuron;
@@ -286,6 +286,8 @@ bool CICM::backProp(int batch, float discount = 0.999000f)
                opencl.SetArgumentBuffer(def_k_MatrixSum, def_k_sum_matrix_out, neuron.getGradientIndex());
                opencl.SetArgument(def_k_MatrixSum, def_k_sum_dimension, 1);
                opencl.SetArgument(def_k_MatrixSum, def_k_sum_multiplyer, 1.0f);
+               opencl.SetArgumentBuffer(def_k_MatrixSum, def_k_sum_numeric_flags, neuron.getGradientIndex());
+               opencl.SetArgument(def_k_MatrixSum, def_k_sum_flags_enabled, 0);
                if(!opencl.Execute(def_k_MatrixSum, 1, global_work_offset, global_work_size))
                  {
                   printf("Error of execution kernel MatrixSum: %d", GetLastError());
@@ -541,3 +543,5 @@ void CICM::SetBufferSize(uint min, uint max)
   }
 //+------------------------------------------------------------------+
 
+
+//+------------------------------------------------------------------+

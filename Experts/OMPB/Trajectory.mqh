@@ -1470,6 +1470,16 @@ const string         OMPB_STAGE02_MANIFEST_NEXT_FILE = "OMPBForecast.next.manife
 const string         OMPB_STAGE02_MARKET_PREVIOUS_FILE = "OMPBMarket.previous.nnw";
 const string         OMPB_STAGE02_TARGET_PREVIOUS_FILE = "OMPBTarget.previous.nnw";
 const string         OMPB_STAGE02_MANIFEST_PREVIOUS_FILE = "OMPBForecast.previous.manifest";
+//--- Stage 01 uses an independent transaction namespace.  The short names
+//--- remain the only normal load contract; manifest is its commit record.
+const string         OMPB_STAGE01_MARKET_NEXT_FILE = "OMPBMarket.stage01.next.nnw";
+const string         OMPB_STAGE01_TARGET_NEXT_FILE = "OMPBTarget.stage01.next.nnw";
+const string         OMPB_STAGE01_MANIFEST_NEXT_FILE = "OMPBForecast.stage01.next.manifest";
+const string         OMPB_STAGE01_MARKET_PREVIOUS_FILE = "OMPBMarket.stage01.previous.nnw";
+const string         OMPB_STAGE01_TARGET_PREVIOUS_FILE = "OMPBTarget.stage01.previous.nnw";
+const string         OMPB_STAGE01_MANIFEST_PREVIOUS_FILE = "OMPBForecast.stage01.previous.manifest";
+const string         OMPB_STAGE01_TRANSACTION_FILE = "OMPBForecast.stage01.transaction";
+const uint           OMPB_STAGE01_TRANSACTION_VERSION = 1;
 //--- Legacy generation selectors are migration markers only.  They are never
 //--- resolved by a normal loader, which fails closed until an explicit migration.
 const string         OMPB_STAGE02_ACTIVE_SELECTOR = "OMPBForecast.stage02.active";
@@ -2331,7 +2341,8 @@ bool D2SkillCreateNetworks(void)
 //--- CNet::Create initializes its OpenCL program.  Build each network first,
 //--- then move its device buffers to the Market context; otherwise a later
 //--- Create invalidates buffers belonging to an earlier network.
-   D2SkillTarget.SetOpenCL(D2SkillMarket.GetOpenCL());
+   if(!D2SkillTarget.SetOpenCLChecked(D2SkillMarket.GetOpenCL()))
+      ReturnFalseEx("target OpenCL transfer failed");
 //+------------------------------------------------------------------+
 //| Function if.                                                     |
 //+------------------------------------------------------------------+
@@ -2641,16 +2652,13 @@ bool D2SkillWriteManifest(const uint completed_epochs)
    D2SkillLastSignature = signature;
    return(true);
   }
+bool D2SkillStage01SaveCheckpoint(const uint completed_epochs);
 //+------------------------------------------------------------------+
-//| Implements D2SkillSaveCheckpoint.                                  |
+//| Implements D2SkillSaveCheckpoint.                               |
 //+------------------------------------------------------------------+
 bool D2SkillSaveCheckpoint(const uint completed_epochs)
   {
-   const datetime now = TimeCurrent();
-   if(!D2SkillMarket.Save(D2Skill_MARKET_FILE, 0, 0, 0, now, true) ||
-      !D2SkillTarget.Save(D2Skill_TARGET_FILE, 0, 0, 0, now, true))
-      ReturnFalse;
-   return(D2SkillWriteManifest(completed_epochs));
+   return(D2SkillStage01SaveCheckpoint(completed_epochs));
   }
 //+------------------------------------------------------------------+
 //| Implements D2SkillInitIndicators.                                  |
@@ -3109,7 +3117,7 @@ ulong OMPBStage02ForecastSignature(const string market_file,
   }
 //+------------------------------------------------------------------+
 bool OMPBStage02WriteCandidateManifest(const string market_file, const string target_file,
-                                       const string manifest_file)
+                                       const string manifest_file, const uint completed_epochs)
   {
    const ulong forecast_signature = OMPBStage02ForecastSignature(market_file, D2SkillForecast);
    const ulong target_hash = D2SkillHashFile(ulong(1469598103934665603), target_file);
@@ -3137,7 +3145,7 @@ bool OMPBStage02WriteCandidateManifest(const string market_file, const string ta
                          FileWrite(handle, StringFormat("forecast_signature=%I64u", forecast_signature)) > 0 &&
                          FileWrite(handle, StringFormat("target_hash=%I64u", target_hash)) > 0 &&
                          FileWrite(handle, StringFormat("training_signature=%I64u", training_signature)) > 0 &&
-                         FileWrite(handle, StringFormat("completed_epochs=%u", D2SkillCompletedEpochs)) > 0 &&
+                         FileWrite(handle, StringFormat("completed_epochs=%u", completed_epochs)) > 0 &&
                          FileWrite(handle, StringFormat("training_batches=%I64u", D2SkillBatches)) > 0 &&
                          FileWrite(handle, StringFormat("invalid_batches=%I64u", D2SkillInvalidBatches)) > 0 &&
                          FileWrite(handle, "normalization=OHLC_deltas_from_open;" +
@@ -3194,7 +3202,8 @@ bool OMPBStage02ValidateCandidate(const string market_file, const string target_
    if(!market.Load(market_file, error, undefine, forecast, studied, true) ||
       !target.Load(target_file, error, undefine, forecast, studied, true))
       ReturnFalse;
-   target.SetOpenCL(market.GetOpenCL());
+   if(!target.SetOpenCLChecked(market.GetOpenCL()))
+      ReturnFalseEx("target OpenCL transfer failed");
    CNeuronBaseOCL *rank_tcm = market.Layer(4);
    CNeuronBaseOCL *ompb_layer = market.Layer(5);
    CNeuronBaseOCL *forecast_layer = market.Layer(6);
@@ -3245,7 +3254,8 @@ bool OMPBStage02ValidateCheckpointSet(const string market_file, const string tar
    if(!market.Load(market_file, error, undefine, forecast, studied, true) ||
       !target.Load(target_file, error, undefine, forecast, studied, true))
       ReturnFalse;
-   target.SetOpenCL(market.GetOpenCL());
+   if(!target.SetOpenCLChecked(market.GetOpenCL()))
+      ReturnFalseEx("target OpenCL transfer failed");
    CNeuronBaseOCL *rank_tcm = market.Layer(4);
    CNeuronBaseOCL *ompb_layer = market.Layer(5);
    CNeuronBaseOCL *forecast_layer = market.Layer(6);
@@ -3285,7 +3295,8 @@ bool OMPBStage02CheckpointFingerprints(const string market_file, const string ta
    if(!checkpoint_market.Load(market_file, error, undefine, forecast, studied, true) ||
       !checkpoint_target.Load(target_file, error, undefine, forecast, studied, true))
       ReturnFalse;
-   checkpoint_target.SetOpenCL(checkpoint_market.GetOpenCL());
+   if(!checkpoint_target.SetOpenCLChecked(checkpoint_market.GetOpenCL()))
+      ReturnFalseEx("target OpenCL transfer failed");
    CNeuronBaseOCL *ompb_layer = checkpoint_market.Layer(5);
    CNeuronOMPBOCL *checkpoint_ompb =
       (ompb_layer && ompb_layer.Type() == defNeuronOMPBOCL ? (CNeuronOMPBOCL *)ompb_layer : NULL);
@@ -3578,6 +3589,243 @@ bool OMPBStage02RestoreCanonicalTuple(const string market_file, const string tar
           OMPBStage02ValidateCheckpointSet(market_file, target_file, manifest_file));
   }
 //+------------------------------------------------------------------+
+//| Classifies the retained tuple required by one Stage 01 phase.    |
+//+------------------------------------------------------------------+
+bool D2SkillStage01TupleStateValid(const bool market_exists,
+                                   const bool target_exists,
+                                   const bool manifest_exists,
+                                   const bool had_previous,
+                                   const string phase)
+  {
+//--- The first save has no prior tuple; every later phase retains all members.
+   const bool complete = (market_exists && target_exists && manifest_exists);
+   if(phase == "prepared")
+      return(had_previous ? complete : !market_exists && !target_exists && !manifest_exists);
+   if(phase == "previous_ready")
+      return(had_previous && complete);
+   return(false);
+  }
+//+------------------------------------------------------------------+
+//| Removes only files owned by a completed Stage 01 transaction.   |
+//+------------------------------------------------------------------+
+bool D2SkillStage01DeleteFile(const string file_name)
+  {
+   return(!FileIsExist(file_name, FILE_COMMON) || FileDelete(file_name, FILE_COMMON));
+  }
+//+------------------------------------------------------------------+
+bool D2SkillStage01Cleanup(void)
+  {
+//--- Remove the commit marker last; its presence must survive every partial cleanup.
+   return(D2SkillStage01DeleteFile(OMPB_STAGE01_MANIFEST_NEXT_FILE) &&
+          D2SkillStage01DeleteFile(OMPB_STAGE01_TARGET_NEXT_FILE) &&
+          D2SkillStage01DeleteFile(OMPB_STAGE01_MARKET_NEXT_FILE) &&
+          D2SkillStage01DeleteFile(OMPB_STAGE01_MANIFEST_PREVIOUS_FILE) &&
+          D2SkillStage01DeleteFile(OMPB_STAGE01_TARGET_PREVIOUS_FILE) &&
+          D2SkillStage01DeleteFile(OMPB_STAGE01_MARKET_PREVIOUS_FILE) &&
+          D2SkillStage01DeleteFile(OMPB_STAGE01_TRANSACTION_FILE));
+  }
+//+------------------------------------------------------------------+
+//| Writes one durable marker before canonical Stage 01 publication.|
+//+------------------------------------------------------------------+
+bool D2SkillStage01WriteTransaction(const bool had_previous, const string phase,
+                                    const ulong market, const ulong target,
+                                    const ulong posterior)
+  {
+   if((phase != "prepared" && phase != "previous_ready") ||
+      FileIsExist(OMPB_STAGE01_TRANSACTION_FILE, FILE_COMMON))
+      return(false);
+   int handle = FileOpen(OMPB_STAGE01_TRANSACTION_FILE,
+                         FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
+   if(handle == INVALID_HANDLE)
+      return(false);
+//--- The candidate fingerprints identify an already-published complete tuple.
+   const bool written = (FileWrite(handle, "format=OMPB_STAGE01_TRANSACTION") > 0 &&
+                         FileWrite(handle, StringFormat("version=%u", OMPB_STAGE01_TRANSACTION_VERSION)) > 0 &&
+                         FileWrite(handle, StringFormat("phase=%s", phase)) > 0 &&
+                         FileWrite(handle, StringFormat("had_previous=%s",
+                                   (had_previous ? "true" : "false"))) > 0 &&
+                         FileWrite(handle, StringFormat("candidate_market=%I64u", market)) > 0 &&
+                         FileWrite(handle, StringFormat("candidate_target=%I64u", target)) > 0 &&
+                         FileWrite(handle, StringFormat("candidate_posterior=%I64u", posterior)) > 0);
+   if(written)
+      FileFlush(handle);
+   FileClose(handle);
+   return(written);
+  }
+//+------------------------------------------------------------------+
+//| Rewrites only a complete transaction marker state transition.   |
+//+------------------------------------------------------------------+
+bool D2SkillStage01AdvanceTransaction(const bool had_previous, const string phase,
+                                      const ulong market, const ulong target,
+                                      const ulong posterior)
+  {
+   if(!D2SkillStage01DeleteFile(OMPB_STAGE01_TRANSACTION_FILE))
+      return(false);
+   return(D2SkillStage01WriteTransaction(had_previous, phase, market, target, posterior));
+  }
+//+------------------------------------------------------------------+
+//| Reads one strict Stage 01 transaction marker.                   |
+//+------------------------------------------------------------------+
+bool D2SkillStage01ReadTransaction(bool &had_previous, string &phase,
+                                   string &market, string &target, string &posterior)
+  {
+   had_previous = false;
+   phase = "";
+   market = "";
+   target = "";
+   posterior = "";
+   if(!FileIsExist(OMPB_STAGE01_TRANSACTION_FILE, FILE_COMMON))
+      return(false);
+   const string format = D2SkillManifestValue(OMPB_STAGE01_TRANSACTION_FILE, "format");
+   const string version = D2SkillManifestValue(OMPB_STAGE01_TRANSACTION_FILE, "version");
+   const string previous = D2SkillManifestValue(OMPB_STAGE01_TRANSACTION_FILE, "had_previous");
+   phase = D2SkillManifestValue(OMPB_STAGE01_TRANSACTION_FILE, "phase");
+   market = D2SkillManifestValue(OMPB_STAGE01_TRANSACTION_FILE, "candidate_market");
+   target = D2SkillManifestValue(OMPB_STAGE01_TRANSACTION_FILE, "candidate_target");
+   posterior = D2SkillManifestValue(OMPB_STAGE01_TRANSACTION_FILE, "candidate_posterior");
+   if(format != "OMPB_STAGE01_TRANSACTION" ||
+      version != IntegerToString(OMPB_STAGE01_TRANSACTION_VERSION) ||
+      (previous != "true" && previous != "false") ||
+      (phase != "prepared" && phase != "previous_ready") ||
+      market == "" || target == "" || posterior == "")
+      return(false);
+   had_previous = (previous == "true");
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Compares a complete tuple against its transaction marker.       |
+//+------------------------------------------------------------------+
+bool D2SkillStage01TupleMatches(const string market_file, const string target_file,
+                                const string manifest_file, const string market,
+                                const string target, const string posterior)
+  {
+   ulong actual_market = 0, actual_target = 0;
+   ulong actual_posterior = ulong(1469598103934665603);
+   return(OMPBStage02ValidateCheckpointSet(market_file, target_file, manifest_file) &&
+          OMPBStage02CheckpointFingerprints(market_file, target_file, actual_market,
+                                            actual_target, actual_posterior) &&
+          StringFormat("%I64u", actual_market) == market &&
+          StringFormat("%I64u", actual_target) == target &&
+          StringFormat("%I64u", actual_posterior) == posterior);
+  }
+//+------------------------------------------------------------------+
+//| Recovers only an interrupted Stage 01-owned publication.        |
+//+------------------------------------------------------------------+
+bool D2SkillStage01RecoverInterruptedCheckpoint(void)
+  {
+   const bool marker_exists = FileIsExist(OMPB_STAGE01_TRANSACTION_FILE, FILE_COMMON);
+   const bool temporary_exists = (FileIsExist(OMPB_STAGE01_MARKET_NEXT_FILE, FILE_COMMON) ||
+                                  FileIsExist(OMPB_STAGE01_TARGET_NEXT_FILE, FILE_COMMON) ||
+                                  FileIsExist(OMPB_STAGE01_MANIFEST_NEXT_FILE, FILE_COMMON) ||
+                                  FileIsExist(OMPB_STAGE01_MARKET_PREVIOUS_FILE, FILE_COMMON) ||
+                                  FileIsExist(OMPB_STAGE01_TARGET_PREVIOUS_FILE, FILE_COMMON) ||
+                                  FileIsExist(OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, FILE_COMMON));
+   if(!marker_exists)
+     {
+//--- Uncommitted staging never changed canonical names and is safe to discard.
+      if(!temporary_exists)
+         return(true);
+      if(!OMPBStage02ValidateCheckpointSet(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
+                                           D2Skill_MANIFEST_FILE) &&
+         !OMPBStage02CanonicalTupleMissing(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
+                                            D2Skill_MANIFEST_FILE))
+         return(false);
+      return(D2SkillStage01Cleanup());
+     }
+   bool had_previous = false;
+   string phase = "", market = "", target = "", posterior = "";
+   if(!D2SkillStage01ReadTransaction(had_previous, phase, market, target, posterior))
+      return(false);
+//--- A complete candidate published before cleanup is already the committed epoch.
+   if(D2SkillStage01TupleMatches(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
+                                 D2Skill_MANIFEST_FILE, market, target, posterior))
+      return(D2SkillStage01Cleanup());
+//--- Before previous-ready canonical names are still the earlier valid tuple.
+   if(phase == "prepared" && OMPBStage02ValidateCheckpointSet(D2Skill_MARKET_FILE,
+      D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE))
+      return(D2SkillStage01Cleanup());
+   if(had_previous)
+     {
+      if(!D2SkillStage01TupleStateValid(FileIsExist(OMPB_STAGE01_MARKET_PREVIOUS_FILE, FILE_COMMON),
+         FileIsExist(OMPB_STAGE01_TARGET_PREVIOUS_FILE, FILE_COMMON),
+         FileIsExist(OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, FILE_COMMON), true, phase) ||
+         !OMPBStage02RestoreCanonicalTuple(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
+                                           D2Skill_MANIFEST_FILE,
+                                           OMPB_STAGE01_MARKET_PREVIOUS_FILE,
+                                           OMPB_STAGE01_TARGET_PREVIOUS_FILE,
+                                           OMPB_STAGE01_MANIFEST_PREVIOUS_FILE))
+         return(false);
+      return(D2SkillStage01Cleanup());
+     }
+//--- The first publication has no prior checkpoint; remove only marker-owned partial data.
+   if(!D2SkillStage01DeleteFile(D2Skill_MANIFEST_FILE) ||
+      !D2SkillStage01DeleteFile(D2Skill_TARGET_FILE) ||
+      !D2SkillStage01DeleteFile(D2Skill_MARKET_FILE))
+      return(false);
+   return(D2SkillStage01Cleanup());
+  }
+//+------------------------------------------------------------------+
+//| Publishes one fully validated Stage 01 checkpoint transaction.  |
+//+------------------------------------------------------------------+
+bool D2SkillStage01SaveCheckpoint(const uint completed_epochs)
+  {
+   if(FileIsExist(OMPB_STAGE01_TRANSACTION_FILE, FILE_COMMON) ||
+      FileIsExist(OMPB_STAGE01_MARKET_NEXT_FILE, FILE_COMMON) ||
+      FileIsExist(OMPB_STAGE01_TARGET_NEXT_FILE, FILE_COMMON) ||
+      FileIsExist(OMPB_STAGE01_MANIFEST_NEXT_FILE, FILE_COMMON) ||
+      FileIsExist(OMPB_STAGE01_MARKET_PREVIOUS_FILE, FILE_COMMON) ||
+      FileIsExist(OMPB_STAGE01_TARGET_PREVIOUS_FILE, FILE_COMMON) ||
+      FileIsExist(OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, FILE_COMMON))
+      return(false);
+//--- Classify the pre-save canonical state before staging any new model bytes.
+   const bool had_previous = OMPBStage02ValidateCheckpointSet(D2Skill_MARKET_FILE,
+                                                               D2Skill_TARGET_FILE,
+                                                               D2Skill_MANIFEST_FILE);
+   if(!had_previous && !OMPBStage02CanonicalTupleMissing(D2Skill_MARKET_FILE,
+      D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE))
+      return(false);
+//--- The next tuple is self-contained and validated before a commit marker exists.
+   const datetime now = TimeCurrent();
+   if(!D2SkillMarket.Save(OMPB_STAGE01_MARKET_NEXT_FILE, 0.0f, 0.0f, 0.0f, now, true) ||
+      !D2SkillTarget.Save(OMPB_STAGE01_TARGET_NEXT_FILE, 0.0f, 0.0f, 0.0f, now, true) ||
+      !OMPBStage02WriteCandidateManifest(OMPB_STAGE01_MARKET_NEXT_FILE,
+         OMPB_STAGE01_TARGET_NEXT_FILE, OMPB_STAGE01_MANIFEST_NEXT_FILE, completed_epochs) ||
+      !OMPBStage02ValidateCheckpointSet(OMPB_STAGE01_MARKET_NEXT_FILE,
+                                        OMPB_STAGE01_TARGET_NEXT_FILE,
+                                        OMPB_STAGE01_MANIFEST_NEXT_FILE))
+      return(false);
+   ulong market = 0, target = 0;
+   ulong posterior = ulong(1469598103934665603);
+   if(!OMPBStage02CheckpointFingerprints(OMPB_STAGE01_MARKET_NEXT_FILE,
+                                         OMPB_STAGE01_TARGET_NEXT_FILE,
+                                         market, target, posterior) ||
+      !D2SkillStage01WriteTransaction(had_previous, "prepared", market, target, posterior))
+      return(false);
+//--- Retain the old complete tuple before any short canonical file is replaced.
+   if(had_previous &&
+      (!OMPBStage02CopyTuple(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE,
+                              OMPB_STAGE01_MARKET_PREVIOUS_FILE,
+                              OMPB_STAGE01_TARGET_PREVIOUS_FILE,
+                              OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, false) ||
+       !OMPBStage02ValidateCheckpointSet(OMPB_STAGE01_MARKET_PREVIOUS_FILE,
+                                         OMPB_STAGE01_TARGET_PREVIOUS_FILE,
+                                         OMPB_STAGE01_MANIFEST_PREVIOUS_FILE)))
+      return(false);
+   if(!D2SkillStage01AdvanceTransaction(had_previous, "previous_ready", market, target, posterior) ||
+      !OMPBStage02CopyTuple(OMPB_STAGE01_MARKET_NEXT_FILE, OMPB_STAGE01_TARGET_NEXT_FILE,
+                             OMPB_STAGE01_MANIFEST_NEXT_FILE, D2Skill_MARKET_FILE,
+                             D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE, true) ||
+      !D2SkillStage01TupleMatches(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
+                                  D2Skill_MANIFEST_FILE, StringFormat("%I64u", market),
+                                  StringFormat("%I64u", target), StringFormat("%I64u", posterior)))
+      return(false);
+   if(!D2SkillStage01Cleanup())
+      return(false);
+   D2SkillLastSignature = D2SkillForecastSignature(D2Skill_MARKET_FILE);
+   PrintFormat("OMPB_STAGE01_CHECKPOINT_PASS epoch=%u", completed_epochs);
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Proves deterministic serialized parameters without live mutation.|
 //+------------------------------------------------------------------+
 bool OMPBStage02ReloadProofDeterministicTuple(const string market_file,
@@ -3633,6 +3881,13 @@ bool OMPBStage02ResolveActiveCheckpoint(void)
   {
    OMPBStage02RecoveryFailed = false;
    OMPBStage02ResetActiveCheckpointFiles();
+//--- Complete a Stage 01-owned recovery before interpreting canonical files.
+   if(!D2SkillStage01RecoverInterruptedCheckpoint())
+     {
+      OMPBStage02RecoveryFailed = true;
+      Print("OMPB_STAGE01_CHECKPOINT_FAIL reason=recovery");
+      return(false);
+     }
    string sidecar_file = "";
    if(OMPBStage02CanonicalSidecarPresent(sidecar_file))
      {
@@ -3773,7 +4028,8 @@ bool OMPBStage02StageCandidate(void)
       !D2SkillTarget.Save(OMPB_STAGE02_TARGET_NEXT_FILE, 0.0f, 0.0f, 0.0f, now, true) ||
       !OMPBStage02WriteCandidateManifest(OMPB_STAGE02_MARKET_NEXT_FILE,
                                          OMPB_STAGE02_TARGET_NEXT_FILE,
-                                         OMPB_STAGE02_MANIFEST_NEXT_FILE) ||
+                                         OMPB_STAGE02_MANIFEST_NEXT_FILE,
+                                         D2SkillCompletedEpochs) ||
       !OMPBStage02ValidateCandidate(OMPB_STAGE02_MARKET_NEXT_FILE,
                                     OMPB_STAGE02_TARGET_NEXT_FILE,
                                     OMPB_STAGE02_MANIFEST_NEXT_FILE))
@@ -3832,7 +4088,8 @@ bool OMPBStage02LoadExplicitCheckpoint(const string market_file, const string ta
    if(!D2SkillMarket.Load(market_file, error, undefine, forecast, studied, true) ||
       !D2SkillTarget.Load(target_file, error, undefine, forecast, studied, true))
       return(false);
-   D2SkillTarget.SetOpenCL(D2SkillMarket.GetOpenCL());
+   if(!D2SkillTarget.SetOpenCLChecked(D2SkillMarket.GetOpenCL()))
+      ReturnFalseEx("target OpenCL transfer failed");
    D2SkillForecast = (CNeuronScenarioForecast *)D2SkillMarket.Layer(-1);
    if(!D2SkillForecast || D2SkillForecast.Type() != defNeuronScenarioForecast ||
       !ConfigureForecastRecoveryAge() || !D2SkillInitTrainingBuffers() ||
@@ -5101,7 +5358,8 @@ bool D2SkillLoadForecastTraining(void)
    if(!D2SkillMarket.Load(D2SkillActiveMarketFile, error, undefine, forecast, studied, true) ||
       !D2SkillTarget.Load(D2SkillActiveTargetFile, error, undefine, forecast, studied, true))
       ReturnFalse;
-   D2SkillTarget.SetOpenCL(D2SkillMarket.GetOpenCL());
+   if(!D2SkillTarget.SetOpenCLChecked(D2SkillMarket.GetOpenCL()))
+      ReturnFalseEx("target OpenCL transfer failed");
    D2SkillForecast = (CNeuronScenarioForecast*)D2SkillMarket.Layer(-1);
    if(!D2SkillForecast || D2SkillForecast.Type() != defNeuronScenarioForecast)
       ReturnFalse;

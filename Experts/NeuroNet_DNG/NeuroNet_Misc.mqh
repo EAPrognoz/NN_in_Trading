@@ -9,10 +9,13 @@
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
 //+------------------------------------------------------------------+
-//| Logical method implementations generated from NeuroNet.mqh: Misc |
+//| Logical method implementations generated from                    |
+//| NeuroNet.mqh: Misc.                                              |
 //+------------------------------------------------------------------+
+//| Release the runtime-only posterior samplers.                     |
 //+------------------------------------------------------------------+
-//| Release the runtime-only posterior samplers.                    |
+//| Initializes the CNeuronMultiModel layer and allocates its GPU    |
+//| buffers.                                                         |
 //+------------------------------------------------------------------+
 bool CNeuronMultiModel::Init(uint numInputs, uint myIndex, COpenCLMy * open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, int models)
   {
@@ -101,7 +104,7 @@ bool CNeuronMultiModel::Init(uint numInputs, uint myIndex, COpenCLMy * open_cl, 
    return true;
   }
 //+------------------------------------------------------------------+
-//| Assemble the posterior parameter tensor.                        |
+//| Assemble the posterior parameter tensor.                         |
 //+------------------------------------------------------------------+
 bool CNeuronMultiModel::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
@@ -125,7 +128,7 @@ bool CNeuronMultiModel::feedForward(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Handles the CNeuronMultiModel calc hidden gradients operation.   |
 //+------------------------------------------------------------------+
 bool CNeuronMultiModel::calcHiddenGradients(CNeuronBaseOCL* NeuronOCL)
   {
@@ -153,7 +156,8 @@ bool CNeuronMultiModel::calcHiddenGradients(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the CNeuronMultiModel trainable weights from the         |
+//| accumulated gradients.                                           |
 //+------------------------------------------------------------------+
 bool CNeuronMultiModel::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
@@ -188,7 +192,7 @@ bool CNeuronMultiModel::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronMultiModel state to the file handle.            |
 //+------------------------------------------------------------------+
 bool CNeuronMultiModel::Save(const int file_handle)
   {
@@ -200,7 +204,7 @@ bool CNeuronMultiModel::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronMultiModel state from the file handle.       |
 //+------------------------------------------------------------------+
 bool CNeuronMultiModel::Load(const int file_handle)
   {
@@ -211,7 +215,7 @@ bool CNeuronMultiModel::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Constructor: initializes the CNeuronConcatenate layer defaults.  |
 //+------------------------------------------------------------------+
 CNeuronConcatenate::CNeuronConcatenate(void) : i_SecondInputs(0)
   {
@@ -221,7 +225,7 @@ CNeuronConcatenate::CNeuronConcatenate(void) : i_SecondInputs(0)
    ConcSecondMomentum = new CBufferFloat;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Destructor: releases the CNeuronConcatenate GPU resources.       |
 //+------------------------------------------------------------------+
 CNeuronConcatenate::~CNeuronConcatenate()
   {
@@ -231,7 +235,8 @@ CNeuronConcatenate::~CNeuronConcatenate()
    DeleteObj(ConcSecondMomentum);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronConcatenate layer and allocates its GPU   |
+//| buffers.                                                         |
 //+------------------------------------------------------------------+
 bool CNeuronConcatenate::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint numNeurons, uint numInputs1, uint numInputs2, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -302,7 +307,8 @@ bool CNeuronConcatenate::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the CNeuronConcatenate feed-forward pass and writes the     |
+//| layer output.                                                    |
 //+------------------------------------------------------------------+
 bool CNeuronConcatenate::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput)
   {
@@ -333,7 +339,8 @@ bool CNeuronConcatenate::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* Se
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Back-propagates the input gradients through the                  |
+//| CNeuronConcatenate layer.                                        |
 //+------------------------------------------------------------------+
 bool CNeuronConcatenate::calcInputGradients(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput, CBufferFloat* SecondGradient, ENUM_ACTIVATION SecondActivation = None)
   {
@@ -369,7 +376,8 @@ bool CNeuronConcatenate::calcInputGradients(CNeuronBaseOCL* NeuronOCL, CBufferFl
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the CNeuronConcatenate trainable weights from the        |
+//| accumulated gradients.                                           |
 //+------------------------------------------------------------------+
 bool CNeuronConcatenate::updateInputWeights(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput)
   {
@@ -430,7 +438,7 @@ bool CNeuronConcatenate::updateInputWeights(CNeuronBaseOCL* NeuronOCL, CBufferFl
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronConcatenate state to the file handle.           |
 //+------------------------------------------------------------------+
 bool CNeuronConcatenate::Save(const int file_handle)
   {
@@ -457,7 +465,7 @@ bool CNeuronConcatenate::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronConcatenate state from the file handle.      |
 //+------------------------------------------------------------------+
 bool CNeuronConcatenate::Load(const int file_handle)
   {
@@ -486,7 +494,8 @@ bool CNeuronConcatenate::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Rebinds the CNeuronConcatenate GPU buffers to the given OpenCL   |
+//| context.                                                         |
 //+------------------------------------------------------------------+
 void CNeuronConcatenate::SetOpenCL(COpenCLMy * obj)
   {
@@ -509,7 +518,8 @@ void CNeuronConcatenate::SetOpenCL(COpenCLMy * obj)
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Averages the CNeuronConcatenate weights toward the source model  |
+//| with factor tau.                                                 |
 //+------------------------------------------------------------------+
 bool CNeuronConcatenate::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
@@ -553,7 +563,8 @@ bool CNeuronConcatenate::WeightsUpdate(CNeuronBaseOCL* source, float tau)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronCSCMOCL layer and allocates its GPU       |
+//| buffers.                                                         |
 //+------------------------------------------------------------------+
 bool CNeuronCSCMOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint & windows[], uint variables, uint inputs_count, bool need_transpose, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -716,7 +727,8 @@ bool CNeuronCSCMOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, ui
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the CNeuronCSCMOCL feed-forward pass and writes the layer   |
+//| output.                                                          |
 //+------------------------------------------------------------------+
 bool CNeuronCSCMOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
@@ -856,7 +868,8 @@ bool CNeuronCSCMOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Back-propagates the input gradients through the CNeuronCSCMOCL   |
+//| layer.                                                           |
 //+------------------------------------------------------------------+
 bool CNeuronCSCMOCL::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
@@ -932,7 +945,8 @@ bool CNeuronCSCMOCL::calcInputGradients(CNeuronBaseOCL* prevLayer)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the CNeuronCSCMOCL trainable weights from the accumulated|
+//| gradients.                                                       |
 //+------------------------------------------------------------------+
 bool CNeuronCSCMOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
@@ -956,7 +970,7 @@ bool CNeuronCSCMOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronCSCMOCL state to the file handle.               |
 //+------------------------------------------------------------------+
 bool CNeuronCSCMOCL::Save(const int file_handle)
   {
@@ -996,7 +1010,7 @@ bool CNeuronCSCMOCL::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronCSCMOCL state from the file handle.          |
 //+------------------------------------------------------------------+
 bool CNeuronCSCMOCL::Load(const int file_handle)
   {
@@ -1096,7 +1110,8 @@ bool CNeuronCSCMOCL::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Rebinds the CNeuronCSCMOCL GPU buffers to the given OpenCL       |
+//| context.                                                         |
 //+------------------------------------------------------------------+
 void CNeuronCSCMOCL::SetOpenCL(COpenCLMy * obj)
   {
@@ -1127,7 +1142,8 @@ void CNeuronCSCMOCL::SetOpenCL(COpenCLMy * obj)
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Averages the CNeuronCSCMOCL weights toward the source model with |
+//| factor tau.                                                      |
 //+------------------------------------------------------------------+
 bool CNeuronCSCMOCL::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
@@ -1154,7 +1170,8 @@ bool CNeuronCSCMOCL::WeightsUpdate(CNeuronBaseOCL* source, float tau)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronDiffusion layer and allocates its GPU     |
+//| buffers.                                                         |
 //+------------------------------------------------------------------+
 bool CNeuronDiffusion::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint window_key, uint heads, uint units_count, uint layers, uint inside_block, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -1213,7 +1230,8 @@ bool CNeuronDiffusion::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, 
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the CNeuronDiffusion feed-forward pass and writes the layer |
+//| output.                                                          |
 //+------------------------------------------------------------------+
 bool CNeuronDiffusion::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
@@ -1237,7 +1255,8 @@ bool CNeuronDiffusion::feedForward(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Back-propagates the input gradients through the CNeuronDiffusion |
+//| layer.                                                           |
 //+------------------------------------------------------------------+
 bool CNeuronDiffusion::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
@@ -1268,7 +1287,8 @@ bool CNeuronDiffusion::calcInputGradients(CNeuronBaseOCL* prevLayer)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the CNeuronDiffusion trainable weights from the          |
+//| accumulated gradients.                                           |
 //+------------------------------------------------------------------+
 bool CNeuronDiffusion::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
@@ -1288,7 +1308,8 @@ bool CNeuronDiffusion::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Rebinds the CNeuronDiffusion GPU buffers to the given OpenCL     |
+//| context.                                                         |
 //+------------------------------------------------------------------+
 void CNeuronDiffusion::SetOpenCL(COpenCLMy * obj)
   {
@@ -1298,7 +1319,7 @@ void CNeuronDiffusion::SetOpenCL(COpenCLMy * obj)
    cRevIn.SetOpenCL(OpenCL);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronDiffusion state to the file handle.             |
 //+------------------------------------------------------------------+
 bool CNeuronDiffusion::Save(const int file_handle)
   {
@@ -1310,7 +1331,7 @@ bool CNeuronDiffusion::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronDiffusion state from the file handle.        |
 //+------------------------------------------------------------------+
 bool CNeuronDiffusion::Load(const int file_handle)
   {
@@ -1376,7 +1397,8 @@ bool CNeuronDiffusion::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronHyperProjection layer and allocates its   |
+//| GPU buffers.                                                     |
 //+------------------------------------------------------------------+
 bool CNeuronHyperProjection::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint units_count, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -1388,7 +1410,8 @@ bool CNeuronHyperProjection::Init(uint numOutputs, uint myIndex, COpenCLMy * ope
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the CNeuronHyperProjection feed-forward pass and writes the |
+//| layer output.                                                    |
 //+------------------------------------------------------------------+
 bool CNeuronHyperProjection::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
@@ -1412,7 +1435,8 @@ bool CNeuronHyperProjection::feedForward(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Back-propagates the input gradients through the                  |
+//| CNeuronHyperProjection layer.                                    |
 //+------------------------------------------------------------------+
 bool CNeuronHyperProjection::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
@@ -1436,7 +1460,7 @@ bool CNeuronHyperProjection::calcInputGradients(CNeuronBaseOCL* prevLayer)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronHyperProjection state to the file handle.       |
 //+------------------------------------------------------------------+
 bool CNeuronHyperProjection::Save(const int file_handle)
   {
@@ -1450,7 +1474,7 @@ bool CNeuronHyperProjection::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronHyperProjection state from the file handle.  |
 //+------------------------------------------------------------------+
 bool CNeuronHyperProjection::Load(const int file_handle)
   {
@@ -1466,7 +1490,8 @@ bool CNeuronHyperProjection::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronHyperboloids layer and allocates its GPU  |
+//| buffers.                                                         |
 //+------------------------------------------------------------------+
 bool CNeuronHyperboloids::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint units_count, uint centroids, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -1556,7 +1581,7 @@ bool CNeuronHyperboloids::Init(uint numOutputs, uint myIndex, COpenCLMy * open_c
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Handles the CNeuronHyperboloids log map operation.               |
 //+------------------------------------------------------------------+
 bool CNeuronHyperboloids::LogMap(CNeuronBaseOCL* featers, CNeuronBaseOCL* centroids, CNeuronBaseOCL* curvatures, CNeuronBaseOCL* outputs)
   {
@@ -1585,7 +1610,7 @@ bool CNeuronHyperboloids::LogMap(CNeuronBaseOCL* featers, CNeuronBaseOCL* centro
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Handles the CNeuronHyperboloids log map grad operation.          |
 //+------------------------------------------------------------------+
 bool CNeuronHyperboloids::LogMapGrad(CNeuronBaseOCL* featers, CNeuronBaseOCL* centroids, CNeuronBaseOCL* curvatures, CNeuronBaseOCL* outputs)
   {
@@ -1635,7 +1660,8 @@ bool CNeuronHyperboloids::LogMapGrad(CNeuronBaseOCL* featers, CNeuronBaseOCL* ce
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the CNeuronHyperboloids feed-forward pass and writes the    |
+//| layer output.                                                    |
 //+------------------------------------------------------------------+
 bool CNeuronHyperboloids::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
@@ -1666,7 +1692,8 @@ bool CNeuronHyperboloids::feedForward(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Back-propagates the input gradients through the                  |
+//| CNeuronHyperboloids layer.                                       |
 //+------------------------------------------------------------------+
 bool CNeuronHyperboloids::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
@@ -1722,7 +1749,8 @@ bool CNeuronHyperboloids::calcInputGradients(CNeuronBaseOCL* prevLayer)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the CNeuronHyperboloids trainable weights from the       |
+//| accumulated gradients.                                           |
 //+------------------------------------------------------------------+
 bool CNeuronHyperboloids::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
@@ -1751,7 +1779,8 @@ bool CNeuronHyperboloids::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Rebinds the CNeuronHyperboloids GPU buffers to the given OpenCL  |
+//| context.                                                         |
 //+------------------------------------------------------------------+
 void CNeuronHyperboloids::SetOpenCL(COpenCLMy * obj)
   {
@@ -1772,7 +1801,7 @@ void CNeuronHyperboloids::SetOpenCL(COpenCLMy * obj)
    iNormes = OpenCL.AddBuffer(size, CL_MEM_READ_WRITE);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronHyperboloids state to the file handle.          |
 //+------------------------------------------------------------------+
 bool CNeuronHyperboloids::Save(const int file_handle)
   {
@@ -1792,7 +1821,7 @@ bool CNeuronHyperboloids::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronHyperboloids state from the file handle.     |
 //+------------------------------------------------------------------+
 bool CNeuronHyperboloids::Load(const int file_handle)
   {
@@ -1816,7 +1845,7 @@ bool CNeuronHyperboloids::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Sets the training flag of the CNeuronHyperboloids layer.         |
 //+------------------------------------------------------------------+
 void CNeuronHyperboloids::TrainMode(bool flag)
   {
@@ -1840,7 +1869,8 @@ void CNeuronHyperboloids::TrainMode(bool flag)
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronHypDiff layer and allocates its GPU       |
+//| buffers.                                                         |
 //+------------------------------------------------------------------+
 bool CNeuronHypDiff::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint window_key, uint units_count, uint heads, uint layers, uint centroids, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -1938,7 +1968,8 @@ bool CNeuronHypDiff::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, ui
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronPSformer layer and allocates its GPU      |
+//| buffers.                                                         |
 //+------------------------------------------------------------------+
 bool CNeuronPSformer::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint units_count, uint segments, float rho, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -1980,7 +2011,8 @@ bool CNeuronPSformer::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, u
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the CNeuronPSformer feed-forward pass and writes the layer  |
+//| output.                                                          |
 //+------------------------------------------------------------------+
 bool CNeuronPSformer::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
@@ -2010,7 +2042,8 @@ bool CNeuronPSformer::feedForward(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Back-propagates the input gradients through the CNeuronPSformer  |
+//| layer.                                                           |
 //+------------------------------------------------------------------+
 bool CNeuronPSformer::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
@@ -2049,7 +2082,8 @@ bool CNeuronPSformer::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the CNeuronPSformer trainable weights from the           |
+//| accumulated gradients.                                           |
 //+------------------------------------------------------------------+
 bool CNeuronPSformer::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
@@ -2069,7 +2103,8 @@ bool CNeuronPSformer::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Rebinds the CNeuronPSformer GPU buffers to the given OpenCL      |
+//| context.                                                         |
 //+------------------------------------------------------------------+
 void CNeuronPSformer::SetOpenCL(COpenCLMy * obj)
   {
@@ -2084,7 +2119,7 @@ void CNeuronPSformer::SetOpenCL(COpenCLMy * obj)
    cResidual.SetOpenCL(OpenCL);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronPSformer state to the file handle.              |
 //+------------------------------------------------------------------+
 bool CNeuronPSformer::Save(const int file_handle)
   {
@@ -2100,7 +2135,7 @@ bool CNeuronPSformer::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronPSformer state from the file handle.         |
 //+------------------------------------------------------------------+
 bool CNeuronPSformer::Load(const int file_handle)
   {
@@ -2131,7 +2166,7 @@ bool CNeuronPSformer::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronAdaBN layer and allocates its GPU buffers.|
 //+------------------------------------------------------------------+
 bool CNeuronAdaBN::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                         uint window, uint window_out, uint units_count,
@@ -2214,7 +2249,8 @@ bool CNeuronAdaBN::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronTempEmbedding layer and allocates its GPU |
+//| buffers.                                                         |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                 uint units, uint window,
@@ -2243,7 +2279,7 @@ bool CNeuronTempEmbedding::Init(uint numOutputs, uint myIndex, COpenCLMy *open_c
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Handles the CNeuronTempEmbedding concat by label operation.      |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::ConcatByLabel(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
@@ -2281,7 +2317,7 @@ bool CNeuronTempEmbedding::ConcatByLabel(CNeuronBaseOCL *NeuronOCL, CBufferFloat
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Handles the CNeuronTempEmbedding concat by label grad operation. |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::ConcatByLabelGrad(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
@@ -2320,7 +2356,8 @@ bool CNeuronTempEmbedding::ConcatByLabelGrad(CNeuronBaseOCL *NeuronOCL, CBufferF
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the CNeuronTempEmbedding feed-forward pass and writes the   |
+//| layer output.                                                    |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
@@ -2332,7 +2369,8 @@ bool CNeuronTempEmbedding::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *
    return ConcatByLabel(NeuronOCL, SecondInput);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Back-propagates the input gradients through the                  |
+//| CNeuronTempEmbedding layer.                                      |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
       CBufferFloat *SecondInput,
@@ -2345,7 +2383,8 @@ bool CNeuronTempEmbedding::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the CNeuronTempEmbedding trainable weights from the      |
+//| accumulated gradients.                                           |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
@@ -2356,7 +2395,8 @@ bool CNeuronTempEmbedding::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Averages the CNeuronTempEmbedding weights toward the source model|
+//| with factor tau.                                                 |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
@@ -2371,7 +2411,7 @@ bool CNeuronTempEmbedding::WeightsUpdate(CNeuronBaseOCL *source, float tau)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronTempEmbedding state to the file handle.         |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::Save(const int file_handle)
   {
@@ -2399,7 +2439,7 @@ bool CNeuronTempEmbedding::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronTempEmbedding state from the file handle.    |
 //+------------------------------------------------------------------+
 bool CNeuronTempEmbedding::Load(const int file_handle)
   {
@@ -2432,7 +2472,8 @@ bool CNeuronTempEmbedding::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Rebinds the CNeuronTempEmbedding GPU buffers to the given OpenCL |
+//| context.                                                         |
 //+------------------------------------------------------------------+
 void CNeuronTempEmbedding::SetOpenCL(COpenCLMy *obj)
   {
@@ -2442,7 +2483,8 @@ void CNeuronTempEmbedding::SetOpenCL(COpenCLMy *obj)
       caEmbeddings[i].SetOpenCL(OpenCL);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Initializes the CNeuronMultiScaleExcitation layer and allocates  |
+//| its GPU buffers.                                                 |
 //+------------------------------------------------------------------+
 bool CNeuronMultiScaleExcitation::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                        uint dimension, uint units, uint scales, uint bottleneck,
@@ -2522,7 +2564,8 @@ bool CNeuronMultiScaleExcitation::Init(uint numOutputs, uint myIndex, COpenCLMy 
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Runs the CNeuronMultiScaleExcitation feed-forward pass and writes|
+//| the layer output.                                                |
 //+------------------------------------------------------------------+
 bool CNeuronMultiScaleExcitation::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
@@ -2542,7 +2585,8 @@ bool CNeuronMultiScaleExcitation::feedForward(CNeuronBaseOCL *NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Back-propagates the input gradients through the                  |
+//| CNeuronMultiScaleExcitation layer.                               |
 //+------------------------------------------------------------------+
 bool CNeuronMultiScaleExcitation::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
@@ -2573,7 +2617,8 @@ bool CNeuronMultiScaleExcitation::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Updates the CNeuronMultiScaleExcitation trainable weights from   |
+//| the accumulated gradients.                                       |
 //+------------------------------------------------------------------+
 bool CNeuronMultiScaleExcitation::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
@@ -2591,7 +2636,8 @@ bool CNeuronMultiScaleExcitation::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Averages the CNeuronMultiScaleExcitation weights toward the      |
+//| source model with factor tau.                                    |
 //+------------------------------------------------------------------+
 bool CNeuronMultiScaleExcitation::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
@@ -2605,7 +2651,7 @@ bool CNeuronMultiScaleExcitation::WeightsUpdate(CNeuronBaseOCL *source, float ta
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Saves the CNeuronMultiScaleExcitation state to the file handle.  |
 //+------------------------------------------------------------------+
 bool CNeuronMultiScaleExcitation::Save(const int file_handle)
   {
@@ -2617,7 +2663,8 @@ bool CNeuronMultiScaleExcitation::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Restores the CNeuronMultiScaleExcitation state from the file     |
+//| handle.                                                          |
 //+------------------------------------------------------------------+
 bool CNeuronMultiScaleExcitation::Load(const int file_handle)
   {
@@ -2629,7 +2676,8 @@ bool CNeuronMultiScaleExcitation::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Clears the CNeuronMultiScaleExcitation execution state and its   |
+//| GPU buffers.                                                     |
 //+------------------------------------------------------------------+
 bool CNeuronMultiScaleExcitation::Clear(void)
   {
@@ -2641,7 +2689,8 @@ bool CNeuronMultiScaleExcitation::Clear(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Rebinds the CNeuronMultiScaleExcitation GPU buffers to the given |
+//| OpenCL context.                                                  |
 //+------------------------------------------------------------------+
 void CNeuronMultiScaleExcitation::SetOpenCL(COpenCLMy *obj)
   {
@@ -2649,7 +2698,7 @@ void CNeuronMultiScaleExcitation::SetOpenCL(COpenCLMy *obj)
    cExcitation.SetOpenCL(OpenCL);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Sets the training flag of the CNeuronMultiScaleExcitation layer. |
 //+------------------------------------------------------------------+
 void CNeuronMultiScaleExcitation::TrainMode(bool flag)
   {
@@ -2658,11 +2707,27 @@ void CNeuronMultiScaleExcitation::TrainMode(bool flag)
   }
 
 //+------------------------------------------------------------------+
+//| Sets the sample of the CNeuronBayesianSampler.                   |
+//+------------------------------------------------------------------+
 bool CNeuronBayesianSampler::SetSample(const vector<float> &sample)
   {
    if(!m_cRandom || m_cRandom.Total() != sample.Size() ||
       !m_cRandom.AssignArray(sample) || !m_cRandom.BufferWrite())
       ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Clears one retained Bayesian draw without changing its contract. |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianSampler::Clear(void)
+  {
+//--- Clear inherited output and gradient buffers.
+   if(!CNeuronBaseOCL::Clear())
+      ReturnFalseEx("sampler output");
+//--- The local reparameterization noise is execution-only state.
+   if(!m_cRandom || !m_cRandom.Fill(0.0f))
+      ReturnFalseEx("sampler random");
+//--- Finalize the sampler scratch reset.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -2673,47 +2738,79 @@ bool CNeuronBayesianSampler::feedForward(CNeuronBaseOCL *NeuronOCL)
    if(!OpenCL || !NeuronOCL || !m_cRandom || NeuronOCL.Neurons() % 2 != 0 ||
       NeuronOCL.Neurons() / 2 != Neurons())
       ReturnFalse;
-   if(!OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_inputs,
-                                NeuronOCL.getOutput().GetIndex()) ||
-      !OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_random,
-                                m_cRandom.GetIndex()) ||
-      !OpenCL.SetArgumentBuffer(def_k_VAEFeedForward, def_k_vaeff_outputd,
-                                Output.GetIndex()))
-      ReturnFalse;
-   uint offset[] = {0};
-   uint range[] = {Neurons()};
-   return(OpenCL.Execute(def_k_VAEFeedForward, 1, offset, range));
+   return(VAEFeedForward(NeuronOCL, NULL));
   }
 //+------------------------------------------------------------------+
+//| Runs the existing Bayesian local draw with numeric checking.     |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianSampler::FeedForwardChecked(CNeuronBaseOCL *NeuronOCL,
+      CBufferFloat *numeric_flags,
+      CBufferFloat *numeric_ones,
+      CBufferFloat *numeric_scalar,
+      bool &rejected)
+  {
+   rejected = false;
+//--- Preserve the externally prepared local draw without regeneration.
+   if(!ValidateCheckedScratch(NeuronOCL, numeric_flags, numeric_ones, numeric_scalar))
+      return(false);
+//--- Dispatch the caller-supplied draw and reduce its complete output prefix.
+   if(!VAEFeedForward(NeuronOCL, numeric_flags))
+      return(false);
+//--- Finalize the checked Bayesian sampler dispatch.
+   return(ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar,
+                             (uint)Neurons(), rejected));
+  }
+//+------------------------------------------------------------------+
+//| Constructor: initializes the CNeuronBayesianLinearOCL layer      |
+//| defaults.                                                        |
+//+------------------------------------------------------------------+
 CNeuronBayesianLinearOCL::CNeuronBayesianLinearOCL(void)
-  : iVariables(0),
-    iInputs(0),
-    iOutputs(0),
-    iSamples(0),
-    iSampleState(1),
-    m_fKLDMult(0.01f),
-    bSamplesGradientReady(false),
-    bSamplesPrepared(false)
+   : iVariables(0),
+     iInputs(0),
+     iOutputs(0),
+     iSamples(0),
+     iSampleState(1),
+     m_fKLDMult(0.01f),
+     bRegularizersEnabled(true),
+     bSamplesGradientReady(false),
+     bSamplesPrepared(false)
   {
    cRandomSamplers.FreeMode(true);
   }
 //+------------------------------------------------------------------+
-//| Release the runtime-only posterior samplers.                    |
+//| Release the runtime-only posterior samplers.                     |
 //+------------------------------------------------------------------+
 CNeuronBayesianLinearOCL::~CNeuronBayesianLinearOCL(void)
   {
    cRandomSamplers.Clear();
   }
 //+------------------------------------------------------------------+
+//| Sets the kld mult of the CNeuronBayesianLinearOCL.               |
+//+------------------------------------------------------------------+
 void CNeuronBayesianLinearOCL::SetKLDMult(float value)
   {
    m_fKLDMult = value;
-   cMeanSampler.SetKLDMult(m_fKLDMult);
+   cMeanSampler.SetKLDMult(bRegularizersEnabled ? m_fKLDMult : 0.0f);
   }
+//+------------------------------------------------------------------+
+//| Enables or suppresses the runtime posterior regularizers.        |
+//+------------------------------------------------------------------+
+void CNeuronBayesianLinearOCL::SetRegularizersEnabled(bool value)
+  {
+   if(bRegularizersEnabled == value)
+      return;
+//--- Keep the configured multiplier while changing only its effective runtime value.
+   bRegularizersEnabled = value;
+   cMeanSampler.SetKLDMult(bRegularizersEnabled ? m_fKLDMult : 0.0f);
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+  }
+//+------------------------------------------------------------------+
+//| Handles the CNeuronBayesianLinearOCL create temporary operation. |
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::CreateTemporary(void)
   {
-   //--- Allocate the deterministic posterior and posterior-sample work layers.
+//--- Allocate the deterministic posterior and posterior-sample work layers.
    uint w = iVariables * iInputs * iOutputs;
    uint b = iVariables * iOutputs;
    if(!OpenCL)
@@ -2734,13 +2831,11 @@ bool CNeuronBayesianLinearOCL::CreateTemporary(void)
       ReturnFalseEx("Bayesian temporary: posterior gradient");
    if(!cMeanSampler.Init(0, 0, OpenCL, w + b, optimization, iBatch))
       ReturnFalseEx("Bayesian temporary: mean sampler");
-
-   //--- The production forward path always evaluates the posterior mean.
+//--- The production forward path always evaluates the posterior mean.
    cMeanSampler.SetSampleMode(VAE_SAMPLE_MEAN);
-   cMeanSampler.SetKLDMult(m_fKLDMult);
+   cMeanSampler.SetKLDMult(bRegularizersEnabled ? m_fKLDMult : 0.0f);
    cRandomSamplers.Clear();
-
-   //--- Create the stochastic samplers retained exclusively for regularization.
+//--- Create the stochastic samplers retained exclusively for regularization.
    for(uint i = 0; i < iSamples; i++)
      {
       CNeuronBayesianSampler *s = new CNeuronBayesianSampler();
@@ -2758,8 +2853,55 @@ bool CNeuronBayesianLinearOCL::CreateTemporary(void)
         }
       s.SetKLDMult(0.0f);
      }
-
-   //--- Finalize the complete temporary state.
+//--- Finalize the complete temporary state.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Clears Bayesian execution scratch and retained stochastic draws. |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::Clear(void)
+  {
+//--- No stale sample or gradient cache may survive the public Clear boundary.
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+   if(!CNeuronBaseOCL::Clear())
+      ReturnFalseEx("output");
+//--- Keep cached posterior Outputs for inference while clearing only gradients.
+   CBufferFloat *weights_gradient = cWeights.getGradient();
+   if(!weights_gradient || !weights_gradient.Fill(0.0f))
+      ReturnFalseEx("weight gradient");
+   CBufferFloat *bias_gradient = cBias.getGradient();
+   if(!bias_gradient || !bias_gradient.Fill(0.0f))
+      ReturnFalseEx("bias gradient");
+   if(!cPosterior.Clear())
+      ReturnFalseEx("posterior");
+   if(!cSampleWeights.Clear())
+      ReturnFalseEx("sample weights");
+   if(!cSampleBias.Clear())
+      ReturnFalseEx("sample bias");
+   if(!cSampleOutput.Clear())
+      ReturnFalseEx("sample output");
+   if(!cInputGradient.Clear())
+      ReturnFalseEx("input gradient");
+   if(!cPosteriorGradient.Clear())
+      ReturnFalseEx("posterior gradient");
+   if(!cMeanSampler.Clear())
+      ReturnFalseEx("mean sampler");
+//--- Random sampler overrides also clear their owned reparameterization noise.
+   for(int i = 0; i < cRandomSamplers.Total(); i++)
+     {
+      CVAE *sampler = cRandomSamplers.At(i);
+      if(!sampler || !sampler.Clear())
+         ReturnFalseEx("random sampler");
+     }
+//--- Batch-local buffers are optional and remain allocated for reuse.
+   if(cBatchSampleGradient.Total() > 0 && !cBatchSampleGradient.Fill(0.0f))
+      ReturnFalseEx("batch sample gradient");
+   if(cBatchInputGradient.Total() > 0 && !cBatchInputGradient.Fill(0.0f))
+      ReturnFalseEx("batch input gradient");
+   if(cBatchInputGradientAccum.Total() > 0 && !cBatchInputGradientAccum.Fill(0.0f))
+      ReturnFalseEx("batch input accumulation");
+//--- Finalize the retained Bayesian execution-state reset.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -2769,8 +2911,7 @@ bool CNeuronBayesianLinearOCL::CreateBatchTemporary(uint rows_per_group)
   {
    if(!OpenCL || rows_per_group == 0)
       ReturnFalseEx("Bayesian batch temporary: arguments");
-
-   //--- Allocate GPU-only buffers used to accumulate the sample gradients.
+//--- Allocate GPU-only buffers used to accumulate the sample gradients.
    uint sample_total = iVariables * rows_per_group * iOutputs;
    uint input_total = iVariables * rows_per_group * iInputs;
    if(!cBatchSampleGradient.BufferInit(sample_total, 0.0f))
@@ -2785,31 +2926,132 @@ bool CNeuronBayesianLinearOCL::CreateBatchTemporary(uint rows_per_group)
       ReturnFalseEx("Bayesian batch temporary: accumulated gradient host buffer");
    if(!cBatchInputGradientAccum.BufferCreate(OpenCL))
       ReturnFalseEx("Bayesian batch temporary: accumulated gradient GPU buffer");
-
-   //--- Finalize the batch-local accumulation state.
+//--- Finalize the batch-local accumulation state.
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Assemble the posterior parameter tensor.                        |
+//| Assemble the posterior parameter tensor.                         |
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::BuildPosterior(void)
   {
-   //--- Refresh the trainable posterior parameters before concatenation.
+//--- Refresh the trainable posterior parameters before concatenation.
    if(bTrain && !cWeights.FeedForward())
       ReturnFalseEx("Bayesian posterior: weights forward");
    if(bTrain && !cBias.FeedForward())
       ReturnFalseEx("Bayesian posterior: bias forward");
-
-   //--- Assemble [mu | logvar] for weights and bias.
+//--- Assemble [mu | logvar] for weights and bias.
    if(!Concat(cWeights.getOutput(), cBias.getOutput(), cPosterior.getOutput(),
               iVariables * iInputs * iOutputs, iVariables * iOutputs, 2))
       ReturnFalseEx("Bayesian posterior: parameter concatenation");
-
-   //--- Finalize the assembled posterior tensor.
+//--- Finalize the assembled posterior tensor.
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Advance the deterministic sampler noise generator.              |
+//| Assemble posterior parameters and reduce each checked producer. |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::BuildPosteriorChecked(CBufferFloat *numeric_flags,
+      CBufferFloat *numeric_ones, CBufferFloat *numeric_scalar, bool &rejected)
+  {
+   rejected = false;
+//--- Preserve cached inference parameters while checking each raw posterior slice.
+   if(!bTrain)
+     {
+      const uint weights = iVariables * iInputs * iOutputs;
+      const uint bias = iVariables * iOutputs;
+      CBufferFloat *cached_weights = cWeights.getOutput();
+      CBufferFloat *cached_bias = cBias.getOutput();
+      CBufferFloat *posterior = cPosterior.getOutput();
+      if(!cached_weights || !cached_bias || !posterior)
+         return(false);
+      if(!MatMul(numeric_ones, cached_weights, posterior, 1, 1, weights, 1, false,
+                 0, 0, 0, numeric_flags))
+         return(false);
+      if(!ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar, weights, rejected))
+         return(false);
+      if(rejected)
+         return(true);
+      if(!MatMul(numeric_ones, cached_bias, posterior, 1, 1, bias, 1, false,
+                 0, 0, weights, numeric_flags))
+         return(false);
+      if(!ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar, bias, rejected))
+         return(false);
+      if(rejected)
+         return(true);
+      if(!MatMul(numeric_ones, cached_weights, posterior, 1, 1, weights, 1, false,
+                 0, weights, weights + bias, numeric_flags))
+         return(false);
+      if(!ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar, weights, rejected))
+         return(false);
+      if(rejected)
+         return(true);
+      if(!MatMul(numeric_ones, cached_bias, posterior, 1, 1, bias, 1, false,
+                 0, bias, 2 * weights + bias, numeric_flags))
+         return(false);
+      if(!ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar, bias, rejected))
+         return(false);
+      return(true);
+     }
+//--- Refresh both trainable parameter groups before concatenation.
+   if(!cWeights.FeedForwardChecked(numeric_flags, numeric_ones, numeric_scalar, rejected))
+      return(false);
+   if(rejected)
+      return(true);
+   if(!cBias.FeedForwardChecked(numeric_flags, numeric_ones, numeric_scalar, rejected))
+      return(false);
+   if(rejected)
+      return(true);
+//--- Concatenate the existing posterior layout without changing its ABI.
+   if(!Concat(cWeights.getOutput(), cBias.getOutput(), cPosterior.getOutput(),
+              iVariables * iInputs * iOutputs, iVariables * iOutputs, 2))
+      return(false);
+//--- Finalize the checked posterior assembly.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Validates caller scratch before any Bayesian checked dispatch.  |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::ValidateCheckedScratch(CBufferFloat *source_buffer, CBufferFloat *output,
+      uint required_count, CBufferFloat *numeric_flags, CBufferFloat *numeric_ones,
+      CBufferFloat *numeric_scalar)
+  {
+//--- Validate external operands and the complete caller-owned scratch contract.
+   if(!OpenCL || !source_buffer || !output || !numeric_flags || !numeric_ones || !numeric_scalar ||
+      required_count == 0 || required_count > INT_MAX || source_buffer == output ||
+      source_buffer.GetOpenCL() != OpenCL || output.GetOpenCL() != OpenCL ||
+      source_buffer.GetIndex() < 0 || output.GetIndex() < 0 || source_buffer.GetIndex() == output.GetIndex() ||
+      numeric_flags.GetOpenCL() != OpenCL ||
+      numeric_ones.GetOpenCL() != OpenCL || numeric_scalar.GetOpenCL() != OpenCL ||
+      numeric_flags.GetIndex() < 0 || numeric_ones.GetIndex() < 0 || numeric_scalar.GetIndex() < 0 ||
+      numeric_flags.GetIndex() == numeric_ones.GetIndex() || numeric_flags.GetIndex() == numeric_scalar.GetIndex() ||
+      numeric_ones.GetIndex() == numeric_scalar.GetIndex() || numeric_flags.Total() < int(required_count) ||
+      numeric_ones.Total() < int(required_count) || numeric_scalar.Total() != 1)
+      return(false);
+//--- Reject aliases with every operand that the checked forward can read or overwrite.
+   int blocked[] = {source_buffer.GetIndex(), output.GetIndex(), cWeights.getOutput().GetIndex(),
+                    cWeights.getWeightsParams().GetIndex(), cBias.getOutput().GetIndex(),
+                    cBias.getWeightsParams().GetIndex(), cPosterior.getOutput().GetIndex(),
+                    cSampleWeights.getOutput().GetIndex(), cSampleBias.getOutput().GetIndex(),
+                    cSampleOutput.getOutput().GetIndex(), cMeanSampler.getOutput().GetIndex()
+                   };
+   for(int i = 0; i < ArraySize(blocked); i++)
+      if(blocked[i] < 0 || numeric_flags.GetIndex() == blocked[i] || numeric_ones.GetIndex() == blocked[i] ||
+         numeric_scalar.GetIndex() == blocked[i])
+         return(false);
+//--- Reject aliases with every retained stochastic sampler output before mutation.
+   for(uint i = 0; i < iSamples; i++)
+     {
+      CVAE *sample = cRandomSamplers.At(i);
+      CBufferFloat *sample_output = (sample ? sample.getOutput() : NULL);
+      if(!sample_output || sample_output.GetOpenCL() != OpenCL || sample_output.GetIndex() < 0 ||
+         numeric_flags.GetIndex() == sample_output.GetIndex() || numeric_ones.GetIndex() == sample_output.GetIndex() ||
+         numeric_scalar.GetIndex() == sample_output.GetIndex())
+         return(false);
+     }
+//--- Finalize the pre-dispatch alias validation.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Advance the deterministic sampler noise generator.               |
 //+------------------------------------------------------------------+
 uint CNeuronBayesianLinearOCL::NextSampleRandom(void)
   {
@@ -2819,14 +3061,13 @@ uint CNeuronBayesianLinearOCL::NextSampleRandom(void)
    return(iSampleState);
   }
 //+------------------------------------------------------------------+
-//| Set reparameterization noise for one posterior sampler.         |
+//| Set reparameterization noise for one posterior sampler.          |
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::SetSample(CVAE *sampler)
   {
    if(!sampler)
       ReturnFalseEx("Bayesian sample: sampler");
-
-   //--- Fill the sampler's reparameterization noise with deterministic pseudo-random normals.
+//--- Fill the sampler's reparameterization noise with deterministic pseudo-random normals.
    vector<float> sample = vector<float>::Zeros(iVariables * (iInputs * iOutputs + iOutputs));
    for(uint i = 0; i < sample.Size(); i += 2)
      {
@@ -2840,8 +3081,7 @@ bool CNeuronBayesianLinearOCL::SetSample(CVAE *sampler)
    CNeuronBayesianSampler *random_sampler = sampler;
    if(!random_sampler.SetSample(sample))
       ReturnFalseEx("Bayesian sample: reparameterization noise");
-
-   //--- The sampler holds the noise for the next posterior draw.
+//--- The sampler holds the noise for the next posterior draw.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -2851,8 +3091,7 @@ bool CNeuronBayesianLinearOCL::Affine(CNeuronBaseOCL *n, CVAE *s, CNeuronBaseOCL
   {
    if(!n || !s || !r)
       ReturnFalseEx("Bayesian affine: layer arguments");
-
-   //--- Split the sampled posterior into grouped affine weights and bias.
+//--- Split the sampled posterior into grouped affine weights and bias.
    uint w = iVariables * iInputs * iOutputs;
    uint b = iVariables * iOutputs;
    if(!DeConcat(cSampleWeights.getOutput(), cSampleBias.getOutput(), s.getOutput(), w, b, 1))
@@ -2862,8 +3101,34 @@ bool CNeuronBayesianLinearOCL::Affine(CNeuronBaseOCL *n, CVAE *s, CNeuronBaseOCL
       ReturnFalseEx("Bayesian affine: grouped matrix multiplication");
    if(!SumVecMatrix(cSampleBias.getOutput(), r.getOutput(), r.getOutput(), iOutputs, iVariables))
       ReturnFalseEx("Bayesian affine: bias addition");
-
-   //--- The sampled affine output is ready for the caller.
+//--- The sampled affine output is ready for the caller.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Apply one checked grouped posterior affine transformation.      |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::AffineChecked(CNeuronBaseOCL *n, CVAE *s, CNeuronBaseOCL *r,
+      CBufferFloat *numeric_flags, CBufferFloat *numeric_ones, CBufferFloat *numeric_scalar,
+      bool &rejected)
+  {
+   rejected = false;
+   if(!n || !s || !r)
+      return(false);
+//--- Read the raw sampled posterior weights directly from its prefix.
+   uint w = iVariables * iInputs * iOutputs;
+   if(!MatMul(n.getOutput(), s.getOutput(), r.getOutput(), 1, iInputs, iOutputs,
+              iVariables, true, 0, 0, 0, numeric_flags))
+      return(false);
+   if(!ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar, (uint)r.Neurons(), rejected))
+      return(false);
+   if(rejected)
+      return(true);
+   if(!SumVecMatrix(s.getOutput(), r.getOutput(), r.getOutput(), iOutputs, iVariables,
+                    w, 0, 0, 1.0f, 0, numeric_flags))
+      return(false);
+   if(!ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar, (uint)r.Neurons(), rejected))
+      return(false);
+//--- Finalize the checked affine transformation.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -2876,13 +3141,13 @@ bool CNeuronBayesianLinearOCL::Init(uint no, uint mi, COpenCLMy *oc, uint v, uin
       ReturnFalseEx("Bayesian init: dimensions");
    if(!CNeuronBaseOCL::Init(no, mi, oc, v * out, opt, batch))
       ReturnFalseEx("Bayesian init: base layer");
-
-   //--- Store the grouped affine contract before allocating posterior parameters.
+//--- Store the grouped affine contract before allocating posterior parameters.
    iVariables = v;
    iInputs = in;
    iOutputs = out;
    iSamples = k;
    iSampleState = 1;
+   bRegularizersEnabled = true;
    bSamplesGradientReady = false;
    bSamplesPrepared = false;
    activation = None;
@@ -2902,12 +3167,11 @@ bool CNeuronBayesianLinearOCL::Init(uint no, uint mi, COpenCLMy *oc, uint v, uin
       ReturnFalseEx("Bayesian init: posterior bias forward");
    if(!CreateTemporary())
       ReturnFalseEx("Bayesian init: temporary state");
-
-   //--- Finalize the initialized posterior layer.
+//--- Finalize the initialized posterior layer.
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Generate deterministic output and optional posterior samples.   |
+//| Generate deterministic output and optional posterior samples.    |
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::feedForward(CNeuronBaseOCL *n)
   {
@@ -2915,8 +3179,10 @@ bool CNeuronBayesianLinearOCL::feedForward(CNeuronBaseOCL *n)
       ReturnFalseEx("Bayesian forward: input shape");
    if(!BuildPosterior())
       ReturnFalseEx("Bayesian forward: posterior assembly");
-
-   //--- Generate the deterministic production output from the posterior mean.
+//--- Every forward invalidates prior stochastic samples and their gradients.
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+//--- Generate the deterministic production output from the posterior mean.
    CVAE *mean = GetPointer(cMeanSampler);
    if(!mean)
       ReturnFalseEx("Bayesian forward: mean sampler");
@@ -2924,14 +3190,10 @@ bool CNeuronBayesianLinearOCL::feedForward(CNeuronBaseOCL *n)
       ReturnFalseEx("Bayesian forward: mean sample");
    if(!Affine(n, mean, GetPointer(this)))
       ReturnFalseEx("Bayesian forward: mean affine");
-   if(!bTrain)
-     {
-      bSamplesPrepared = false;
+   if(!bTrain || !bRegularizersEnabled)
       return(true);
-     }
-
-   //--- Stochastic states are retained exclusively for regularizers.
-   //--- The CNet output remains the posterior mean.
+//--- Stochastic states are retained exclusively for regularizers.
+//--- The CNet output remains the posterior mean.
    for(uint i = 0; i < iSamples; i++)
      {
       CVAE *sample = cRandomSamplers.At(i);
@@ -2942,20 +3204,98 @@ bool CNeuronBayesianLinearOCL::feedForward(CNeuronBaseOCL *n)
       if(!sample.FeedForward(cPosterior.AsObject()))
          ReturnFalseEx("Bayesian forward: random sampler forward");
      }
-
-   //--- Mark the regularizer samples valid for the next backward pass.
-   bSamplesGradientReady = false;
+//--- Mark the regularizer samples valid for the next backward pass.
    bSamplesPrepared = true;
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Backpropagate the deterministic posterior-mean path.            |
+//| Generates checked mean output and retained posterior samples.   |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::FeedForwardChecked(CNeuronBaseOCL *n,
+      CBufferFloat *numeric_flags, CBufferFloat *numeric_ones, CBufferFloat *numeric_scalar,
+      bool &rejected)
+  {
+   rejected = false;
+   if(!n || !n.getOutput())
+      return(false);
+//--- Derive bounded checked spans before any sampling or kernel dispatch.
+   const ulong source_total = ulong(iVariables) * iInputs;
+   const ulong weight_total = ulong(iVariables) * iInputs * iOutputs;
+   const ulong bias_total = ulong(iVariables) * iOutputs;
+   const ulong posterior_total = 2 * (weight_total + bias_total);
+   const ulong output_total = ulong(iVariables) * iOutputs;
+   const ulong scratch_total = (posterior_total > output_total ? posterior_total : output_total);
+   if(!n || !numeric_flags || !numeric_ones || !numeric_scalar || iVariables == 0 || iInputs == 0 ||
+      iOutputs == 0 || iSamples == 0 || weight_total > INT_MAX || bias_total > INT_MAX ||
+      posterior_total > INT_MAX || output_total > INT_MAX || scratch_total > INT_MAX || source_total > INT_MAX ||
+      n.Neurons() != int(source_total) || n.getOutput().GetOpenCL() != OpenCL ||
+      n.getOutput().GetIndex() < 0 || Output.GetIndex() < 0 || numeric_flags.GetOpenCL() != OpenCL ||
+      numeric_ones.GetOpenCL() != OpenCL || numeric_scalar.GetOpenCL() != OpenCL ||
+      numeric_flags.GetIndex() < 0 || numeric_ones.GetIndex() < 0 || numeric_scalar.GetIndex() < 0 ||
+      numeric_flags.GetIndex() == numeric_ones.GetIndex() || numeric_flags.GetIndex() == numeric_scalar.GetIndex() ||
+      numeric_ones.GetIndex() == numeric_scalar.GetIndex() || numeric_flags.Total() < int(scratch_total) ||
+      numeric_ones.Total() < int(scratch_total) || numeric_scalar.Total() != 1 ||
+      numeric_flags.GetIndex() == n.getOutput().GetIndex() || numeric_flags.GetIndex() == Output.GetIndex() ||
+      numeric_ones.GetIndex() == n.getOutput().GetIndex() || numeric_ones.GetIndex() == Output.GetIndex() ||
+      numeric_scalar.GetIndex() == n.getOutput().GetIndex() || numeric_scalar.GetIndex() == Output.GetIndex() ||
+      numeric_ones.GetIndex() == cWeights.getOutput().GetIndex() ||
+      numeric_ones.GetIndex() == cBias.getOutput().GetIndex() ||
+      numeric_ones.GetIndex() == cPosterior.getOutput().GetIndex() ||
+      numeric_ones.GetIndex() == cSampleWeights.getOutput().GetIndex() ||
+      numeric_ones.GetIndex() == cSampleBias.getOutput().GetIndex() ||
+      numeric_scalar.GetIndex() == cWeights.getOutput().GetIndex() ||
+      numeric_scalar.GetIndex() == cBias.getOutput().GetIndex() ||
+      numeric_scalar.GetIndex() == cPosterior.getOutput().GetIndex() ||
+      numeric_scalar.GetIndex() == cSampleWeights.getOutput().GetIndex() ||
+      numeric_scalar.GetIndex() == cSampleBias.getOutput().GetIndex())
+      return(false);
+   if(!ValidateCheckedScratch(n.getOutput(), Output, (uint)scratch_total, numeric_flags, numeric_ones,
+                              numeric_scalar))
+      return(false);
+//--- Invalidate retained stochastic state until the complete checked forward succeeds.
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+   if(!BuildPosteriorChecked(numeric_flags, numeric_ones, numeric_scalar, rejected))
+      return(false);
+   if(rejected)
+      return(true);
+//--- Evaluate the deterministic mean through the checked VAE and affine paths.
+   CVAE *mean = GetPointer(cMeanSampler);
+   if(!mean || !mean.FeedForwardChecked(cPosterior.AsObject(), numeric_flags, numeric_ones,
+                                        numeric_scalar, rejected))
+      return(false);
+   if(rejected)
+      return(true);
+   if(!AffineChecked(n, mean, GetPointer(this), numeric_flags, numeric_ones, numeric_scalar, rejected))
+      return(false);
+   if(rejected || !bTrain || !bRegularizersEnabled)
+      return(true);
+//--- Prepare each stochastic draw once and retain it for batch reference use.
+   for(uint i = 0; i < iSamples; i++)
+     {
+      CVAE *sample = cRandomSamplers.At(i);
+      if(!sample)
+         return(false);
+      if(!SetSample(sample))
+         return(false);
+      if(!sample.FeedForwardChecked(cPosterior.AsObject(), numeric_flags, numeric_ones,
+                                    numeric_scalar, rejected))
+         return(false);
+      if(rejected)
+         return(true);
+     }
+//--- Mark only fully checked stochastic samples prepared for later regularizers.
+   bSamplesPrepared = true;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Backpropagate the deterministic posterior-mean path.             |
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::calcInputGradients(CNeuronBaseOCL *n)
   {
    if(!bTrain)
       return(true);
-   //--- Accumulate the mean affine path into the posterior gradient.
+//--- Accumulate the mean affine path into the posterior gradient.
    uint w = iVariables * iInputs * iOutputs;
    uint b = iVariables * iOutputs;
    uint p = w + b;
@@ -2970,8 +3310,8 @@ bool CNeuronBayesianLinearOCL::calcInputGradients(CNeuronBaseOCL *n)
       ReturnFalseEx("Bayesian backward: mean sampler");
    if(!DeConcat(cSampleWeights.getOutput(), cSampleBias.getOutput(), mean.getOutput(), w, b, 1))
       ReturnFalseEx("Bayesian backward: mean posterior split");
-   if(!cSampleOutput.getGradient().Fill(Gradient))
-      ReturnFalseEx("Bayesian backward: output gradient");
+   if(!CopyBufferRaw(Gradient, cSampleOutput.getGradient(), b))
+      ReturnFalseEx("output gradient device copy");
    if(!SumVecMatrixGrad(cSampleBias.getGradient(), cSampleOutput.getGradient(),
                         cSampleOutput.getGradient(), iOutputs, iVariables))
       ReturnFalseEx("Bayesian backward: bias gradient");
@@ -2991,8 +3331,7 @@ bool CNeuronBayesianLinearOCL::calcInputGradients(CNeuronBaseOCL *n)
       ReturnFalseEx("Bayesian backward: posterior gradient accumulation");
    if(!DeConcat(cWeights.getGradient(), cBias.getGradient(), cPosteriorGradient.getGradient(), w, b, 2))
       ReturnFalseEx("Bayesian backward: posterior gradient split");
-
-   //--- Invalidate the stochastic-gradient cache and pass the mean gradient upstream.
+//--- Invalidate the stochastic-gradient cache and pass the mean gradient upstream.
    bSamplesGradientReady = false;
    if(n.Activation() != None &&
       !DeActivation(n.getOutput(), n.getGradient(), n.getGradient(), n.Activation()))
@@ -3006,11 +3345,11 @@ bool CNeuronBayesianLinearOCL::ForwardSamplesBatch(CBufferFloat *batch_input,
       CBufferFloat *output,
       uint rows_per_group)
   {
-   //--- Validate the grouped history buffers before using their OpenCL offsets.
+//--- Validate the grouped history buffers before using their OpenCL offsets.
    uint w = iVariables * iInputs * iOutputs;
    uint b = iVariables * iOutputs;
    uint sample_total = iVariables * rows_per_group * iOutputs;
-   if(!bTrain || !bSamplesPrepared || !batch_input || !output || rows_per_group == 0 ||
+   if(!bTrain || !bRegularizersEnabled || !bSamplesPrepared || !batch_input || !output || rows_per_group == 0 ||
       batch_input.GetOpenCL() != OpenCL || output.GetOpenCL() != OpenCL ||
       batch_input.GetIndex() < 0 || output.GetIndex() < 0 ||
       batch_input.Total() != int(iVariables * rows_per_group * iInputs) ||
@@ -3018,8 +3357,7 @@ bool CNeuronBayesianLinearOCL::ForwardSamplesBatch(CBufferFloat *batch_input,
       ReturnFalseEx("Bayesian batch forward: input or output contract");
    if(!BuildPosterior())
       ReturnFalseEx("Bayesian batch forward: posterior assembly");
-
-   //--- Evaluate every posterior sample into its strided output segment.
+//--- Evaluate every posterior sample into its strided output segment.
    for(uint i = 0; i < iSamples; i++)
      {
       CVAE *sample = cRandomSamplers.At(i);
@@ -3034,8 +3372,82 @@ bool CNeuronBayesianLinearOCL::ForwardSamplesBatch(CBufferFloat *batch_input,
                        0, i * sample_total, i * sample_total, 1.0f, rows_per_group))
          ReturnFalseEx("Bayesian batch forward: bias addition");
      }
-
-   //--- The next backward pass must derive a fresh stochastic-gradient cache.
+//--- The next backward pass must derive a fresh stochastic-gradient cache.
+   bSamplesGradientReady = false;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Evaluates retained posterior samples with checked affine output.|
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::ForwardSamplesBatchChecked(CBufferFloat *batch_input,
+      CBufferFloat *output, uint rows_per_group, CBufferFloat *numeric_flags,
+      CBufferFloat *numeric_ones, CBufferFloat *numeric_scalar, bool &rejected)
+  {
+   rejected = false;
+//--- Derive all grouped spans before narrowing OpenCL offsets.
+   const ulong input_total = ulong(iVariables) * rows_per_group * iInputs;
+   const ulong sample_total = ulong(iVariables) * rows_per_group * iOutputs;
+   const ulong output_total = ulong(iSamples) * sample_total;
+   const ulong weight_total = ulong(iVariables) * iInputs * iOutputs;
+   const ulong bias_total = ulong(iVariables) * iOutputs;
+   const ulong parameter_total = 2 * (weight_total + bias_total);
+   const ulong scratch_total = (sample_total > parameter_total ? sample_total : parameter_total);
+   if(!bTrain || !bRegularizersEnabled || !bSamplesPrepared || !batch_input || !output ||
+      !numeric_flags || !numeric_ones || !numeric_scalar || rows_per_group == 0 ||
+      input_total > INT_MAX || sample_total > INT_MAX || output_total > INT_MAX ||
+      weight_total > INT_MAX || bias_total > INT_MAX || parameter_total > INT_MAX || scratch_total > INT_MAX ||
+      batch_input.GetOpenCL() != OpenCL ||
+      output.GetOpenCL() != OpenCL || batch_input.GetIndex() < 0 || output.GetIndex() < 0 ||
+      batch_input.Total() != int(input_total) || output.Total() != int(output_total) ||
+      numeric_flags.GetOpenCL() != OpenCL || numeric_ones.GetOpenCL() != OpenCL ||
+      numeric_scalar.GetOpenCL() != OpenCL || numeric_flags.GetIndex() < 0 ||
+      numeric_ones.GetIndex() < 0 || numeric_scalar.GetIndex() < 0 ||
+      numeric_flags.GetIndex() == numeric_ones.GetIndex() || numeric_flags.GetIndex() == numeric_scalar.GetIndex() ||
+      numeric_ones.GetIndex() == numeric_scalar.GetIndex() || numeric_flags.Total() < int(scratch_total) ||
+      numeric_ones.Total() < int(scratch_total) || numeric_scalar.Total() != 1 ||
+      numeric_flags.GetIndex() == batch_input.GetIndex() || numeric_flags.GetIndex() == output.GetIndex() ||
+      numeric_ones.GetIndex() == batch_input.GetIndex() || numeric_ones.GetIndex() == output.GetIndex() ||
+      numeric_scalar.GetIndex() == batch_input.GetIndex() || numeric_scalar.GetIndex() == output.GetIndex())
+      return(false);
+   if(!ValidateCheckedScratch(batch_input, output, (uint)scratch_total, numeric_flags, numeric_ones,
+                              numeric_scalar))
+      return(false);
+   if(!BuildPosteriorChecked(numeric_flags, numeric_ones, numeric_scalar, rejected))
+      return(false);
+   if(rejected)
+     {
+      bSamplesPrepared = false;
+      return(true);
+     }
+//--- Reuse the retained draws without regenerating stochastic samples.
+   for(uint i = 0; i < iSamples; i++)
+     {
+      CVAE *sample = cRandomSamplers.At(i);
+      if(!sample)
+         return(false);
+      if(!MatMul(batch_input, sample.getOutput(), output, int(rows_per_group), int(iInputs),
+                 int(iOutputs), int(iVariables), true, 0, 0, (uint)(ulong(i) * sample_total), numeric_flags))
+         return(false);
+      if(!ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar, (uint)sample_total, rejected))
+         return(false);
+      if(rejected)
+        {
+         bSamplesPrepared = false;
+         return(true);
+        }
+      if(!SumVecMatrix(sample.getOutput(), output, output, iOutputs, iVariables,
+                       (uint)weight_total, (uint)(ulong(i) * sample_total), (uint)(ulong(i) * sample_total),
+                       1.0f, rows_per_group, numeric_flags))
+         return(false);
+      if(!ReduceNumericFlags(numeric_flags, numeric_ones, numeric_scalar, (uint)sample_total, rejected))
+         return(false);
+      if(rejected)
+        {
+         bSamplesPrepared = false;
+         return(true);
+        }
+     }
+//--- Invalidate only the gradient cache after a successful checked batch.
    bSamplesGradientReady = false;
    return(true);
   }
@@ -3046,12 +3458,12 @@ bool CNeuronBayesianLinearOCL::BackwardSamplesBatch(CBufferFloat *batch_input,
       CBufferFloat *sample_gradients,
       uint rows_per_group)
   {
-   //--- Validate and reset per-history buffers before accumulating all samples.
+//--- Validate and reset per-history buffers before accumulating all samples.
    uint w = iVariables * iInputs * iOutputs;
    uint b = iVariables * iOutputs;
    uint p = w + b;
    uint sample_total = iVariables * rows_per_group * iOutputs;
-   if(!bTrain || !batch_input || !sample_gradients || rows_per_group == 0 ||
+   if(!bTrain || !bRegularizersEnabled || !bSamplesPrepared || !batch_input || !sample_gradients || rows_per_group == 0 ||
       batch_input.GetOpenCL() != OpenCL || sample_gradients.GetOpenCL() != OpenCL ||
       batch_input.GetIndex() < 0 || sample_gradients.GetIndex() < 0 ||
       batch_input.Total() != int(iVariables * rows_per_group * iInputs) ||
@@ -3063,8 +3475,7 @@ bool CNeuronBayesianLinearOCL::BackwardSamplesBatch(CBufferFloat *batch_input,
       ReturnFalseEx("Bayesian batch backward: posterior gradient reset");
    if(!cBatchInputGradientAccum.Fill(0.0f))
       ReturnFalseEx("Bayesian batch backward: input gradient reset");
-
-   //--- Accumulate every random posterior sample into the common posterior gradient.
+//--- Accumulate every random posterior sample into the common posterior gradient.
    for(uint i = 0; i < iSamples; i++)
      {
       CVAE *sample = cRandomSamplers.At(i);
@@ -3094,26 +3505,23 @@ bool CNeuronBayesianLinearOCL::BackwardSamplesBatch(CBufferFloat *batch_input,
    if(!DeConcat(cWeights.getGradient(), cBias.getGradient(),
                 cPosteriorGradient.getGradient(), w, b, 2))
       ReturnFalseEx("Bayesian batch backward: posterior gradient split");
-
-   //--- Mark the accumulated sample gradients ready for the parameter update.
+//--- Mark the accumulated sample gradients ready for the parameter update.
    bSamplesGradientReady = true;
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Update posterior parameters after gradient accumulation.        |
+//| Update posterior parameters after gradient accumulation.         |
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::updateInputWeights(CNeuronBaseOCL *n)
   {
    if(!bTrain)
       return(true);
-
-   //--- Apply the posterior updates once after all sample gradients are accumulated.
+//--- Apply the posterior updates once after all sample gradients are accumulated.
    if(!cWeights.UpdateInputWeights())
       ReturnFalseEx("Bayesian update: posterior weights");
    if(!cBias.UpdateInputWeights())
       ReturnFalseEx("Bayesian update: posterior bias");
-
-   //--- Finalize the inherited update contract.
+//--- Finalize the inherited update contract.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -3121,7 +3529,7 @@ bool CNeuronBayesianLinearOCL::updateInputWeights(CNeuronBaseOCL *n)
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::Save(const int h)
   {
-   //--- Persist only posterior parameters and deterministic layer configuration.
+//--- Persist only posterior parameters and deterministic layer configuration.
    if(!CNeuronBaseOCL::Save(h))
       ReturnFalseEx("Bayesian save: base layer");
    if(FileWriteInteger(h, iVariables, INT_VALUE) < INT_VALUE)
@@ -3138,8 +3546,7 @@ bool CNeuronBayesianLinearOCL::Save(const int h)
       ReturnFalseEx("Bayesian save: posterior weights");
    if(!cBias.Save(h))
       ReturnFalseEx("Bayesian save: posterior bias");
-
-   //--- Finalize the posterior checkpoint.
+//--- Finalize the posterior checkpoint.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -3149,31 +3556,77 @@ bool CNeuronBayesianLinearOCL::Load(const int h)
   {
    if(!CNeuronBaseOCL::Load(h))
       ReturnFalseEx("Bayesian load: base layer");
-
-   //--- Restore the deterministic dimensions and reset runtime-only sampling state.
+//--- Restore the deterministic dimensions and reset runtime-only sampling state.
    iVariables = (uint)FileReadInteger(h, INT_VALUE);
    iInputs = (uint)FileReadInteger(h, INT_VALUE);
    iOutputs = (uint)FileReadInteger(h, INT_VALUE);
    iSamples = (uint)FileReadInteger(h, INT_VALUE);
    m_fKLDMult = FileReadFloat(h);
    iSampleState = 1;
+   bRegularizersEnabled = true;
    bSamplesGradientReady = false;
    bSamplesPrepared = false;
    if(!iVariables || !iInputs || !iOutputs || !iSamples)
       ReturnFalseEx("Bayesian load: dimensions");
+   if(!MathIsValidNumber(m_fKLDMult) || m_fKLDMult < 0.0f)
+      ReturnFalseEx("KLD multiplier is nonfinite or negative");
+   if(iSamples > INT_MAX)
+      ReturnFalseEx("sample count");
+//--- Derive every persisted posterior span with staged signed-buffer bounds.
+   const ulong bias_total = (ulong)iVariables * (ulong)iOutputs;
+   if(bias_total > ulong(INT_MAX) / 4)
+      ReturnFalseEx("bias tensor size");
+   const ulong weights_total = bias_total * (ulong)iInputs;
+   if(weights_total > ulong(INT_MAX) / 4)
+      ReturnFalseEx("weight tensor size");
+   const int expected_output           = (int)bias_total;
+   const int expected_weight_logical   = (int)(2 * weights_total);
+   const int expected_weight_physical  = (int)(4 * weights_total);
+   const int expected_bias_logical     = (int)(2 * bias_total);
+   const int expected_bias_physical    = (int)(4 * bias_total);
+//--- Validate the outer layer before accepting nested parameter owners.
+   CBufferFloat *output_buffer   = getOutput();
+   CBufferFloat *gradient_buffer = getGradient();
+   if(!output_buffer || !gradient_buffer)
+      ReturnFalseEx("outer buffers");
+   if(output_buffer.Total() != expected_output || gradient_buffer.Total() != expected_output)
+      ReturnFalseEx("outer buffer shape");
    if(!LoadInsideLayer(h, cWeights.AsObject()))
       ReturnFalseEx("Bayesian load: posterior weights");
+//--- Confirm all serialized weight owners match the restored affine contract.
+   CBufferFloat *weights_output   = cWeights.getOutput();
+   CBufferFloat *weights_gradient = cWeights.getGradient();
+   CBufferFloat *weights_physical = cWeights.getWeightsParams();
+   if(!weights_output || !weights_gradient || !weights_physical)
+      ReturnFalseEx("weight buffers");
+   if(weights_output.Total() != expected_weight_logical ||
+      weights_gradient.Total() != expected_weight_logical ||
+      weights_physical.Total() != expected_weight_physical)
+      ReturnFalseEx("weight buffer shape");
    if(!LoadInsideLayer(h, cBias.AsObject()))
       ReturnFalseEx("Bayesian load: posterior bias");
+//--- Confirm all serialized bias owners match the restored affine contract.
+   CBufferFloat *bias_output   = cBias.getOutput();
+   CBufferFloat *bias_gradient = cBias.getGradient();
+   CBufferFloat *bias_physical = cBias.getWeightsParams();
+   if(!bias_output || !bias_gradient || !bias_physical)
+      ReturnFalseEx("bias buffers");
+   if(bias_output.Total() != expected_bias_logical ||
+      bias_gradient.Total() != expected_bias_logical ||
+      bias_physical.Total() != expected_bias_physical)
+      ReturnFalseEx("bias buffer shape");
    if(!CreateTemporary())
       ReturnFalseEx("Bayesian load: temporary state");
-
-   //--- Recreate transient samplers; stochastic samples are not serialized.
+//--- Recreate transient samplers; stochastic samples are not serialized.
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Rebinds the CNeuronBayesianLinearOCL GPU buffers to the given    |
+//| OpenCL context.                                                  |
+//+------------------------------------------------------------------+
 void CNeuronBayesianLinearOCL::SetOpenCL(COpenCLMy *o)
   {
-   //--- Rebind every persistent buffer and sampler to the replacement device.
+//--- Rebind every persistent buffer and sampler to the replacement device.
    CNeuronBaseOCL::SetOpenCL(o);
    cWeights.SetOpenCL(OpenCL);
    cBias.SetOpenCL(OpenCL);
@@ -3196,17 +3649,111 @@ void CNeuronBayesianLinearOCL::SetOpenCL(COpenCLMy *o)
       if(s)
          s.SetOpenCL(OpenCL);
      }
-
-   //--- Existing stochastic gradients cannot cross device contexts.
+//--- Existing stochastic gradients cannot cross device contexts.
    bSamplesGradientReady = false;
    bSamplesPrepared = false;
+  }
+//+------------------------------------------------------------------+
+//| Checks checked-transfer support of the complete Bayesian tree.   |
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::SupportsOpenCLChecked(void) const
+  {
+//--- Validate the layer identity and complete stochastic sampler registry.
+   if(Type() != defNeuronBayesianLinearOCL || iSamples == 0 ||
+      (uint)cRandomSamplers.Total() != iSamples)
+      return(false);
+//--- Validate every embedded owner before a checked transfer can begin.
+   if(!cWeights.SupportsOpenCLChecked() || !cBias.SupportsOpenCLChecked() ||
+      !cPosterior.SupportsOpenCLChecked() || !cSampleWeights.SupportsOpenCLChecked() ||
+      !cSampleBias.SupportsOpenCLChecked() || !cSampleOutput.SupportsOpenCLChecked() ||
+      !cInputGradient.SupportsOpenCLChecked() || !cPosteriorGradient.SupportsOpenCLChecked() ||
+      !cMeanSampler.SupportsOpenCLChecked())
+      return(false);
+   for(int i = 0; i < cRandomSamplers.Total(); i++)
+     {
+      CObject *object = cRandomSamplers.At(i);
+      if(!object || object.Type() != defNeuronVAEOCL)
+         return(false);
+      CVAE *sampler = object;
+      if(!sampler.SupportsOpenCLChecked())
+         return(false);
+     }
+//--- Finalize only when the complete embedded hierarchy is transferable.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Transfers Bayesian children before inherited owners publish last.|
+//+------------------------------------------------------------------+
+bool CNeuronBayesianLinearOCL::SetOpenCLChecked(COpenCLMy *obj)
+  {
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      return(false);
+//--- Valid same-context calls also discard stale sampled-gradient state.
+   bSamplesGradientReady = false;
+   bSamplesPrepared = false;
+//--- Transfer each embedded checked owner before the inherited base owner.
+   if(!cWeights.SetOpenCLChecked(obj))
+      ReturnFalseEx("posterior weights context");
+   if(!cBias.SetOpenCLChecked(obj))
+      ReturnFalseEx("posterior bias context");
+   if(!cPosterior.SetOpenCLChecked(obj))
+      ReturnFalseEx("posterior context");
+   if(!cSampleWeights.SetOpenCLChecked(obj))
+      ReturnFalseEx("sample weights context");
+   if(!cSampleBias.SetOpenCLChecked(obj))
+      ReturnFalseEx("sample bias context");
+   if(!cSampleOutput.SetOpenCLChecked(obj))
+      ReturnFalseEx("sample output context");
+   if(!cInputGradient.SetOpenCLChecked(obj))
+      ReturnFalseEx("input gradient context");
+   if(!cPosteriorGradient.SetOpenCLChecked(obj))
+      ReturnFalseEx("posterior gradient context");
+   if(!cMeanSampler.SetOpenCLChecked(obj))
+      ReturnFalseEx("mean sampler context");
+//--- Synchronize direct batch owners independently for safe same-B retry.
+   if(cBatchSampleGradient.Total() > 0 && cBatchSampleGradient.GetIndex() >= 0 &&
+      cBatchSampleGradient.GetOpenCL() != obj && !cBatchSampleGradient.BufferRead())
+      ReturnFalseEx("batch sample gradient read");
+   if(cBatchSampleGradient.Total() > 0 &&
+      (cBatchSampleGradient.GetOpenCL() != obj || cBatchSampleGradient.GetIndex() < 0) &&
+      !cBatchSampleGradient.BufferCreate(obj))
+      ReturnFalseEx("batch sample gradient create");
+   if(cBatchInputGradient.Total() > 0 && cBatchInputGradient.GetIndex() >= 0 &&
+      cBatchInputGradient.GetOpenCL() != obj && !cBatchInputGradient.BufferRead())
+      ReturnFalseEx("batch input gradient read");
+   if(cBatchInputGradient.Total() > 0 &&
+      (cBatchInputGradient.GetOpenCL() != obj || cBatchInputGradient.GetIndex() < 0) &&
+      !cBatchInputGradient.BufferCreate(obj))
+      ReturnFalseEx("batch input gradient create");
+   if(cBatchInputGradientAccum.Total() > 0 && cBatchInputGradientAccum.GetIndex() >= 0 &&
+      cBatchInputGradientAccum.GetOpenCL() != obj && !cBatchInputGradientAccum.BufferRead())
+      ReturnFalseEx("batch input accumulation read");
+   if(cBatchInputGradientAccum.Total() > 0 &&
+      (cBatchInputGradientAccum.GetOpenCL() != obj || cBatchInputGradientAccum.GetIndex() < 0) &&
+      !cBatchInputGradientAccum.BufferCreate(obj))
+      ReturnFalseEx("batch input accumulation create");
+//--- Transfer every validated stochastic sampler before outer publication.
+   for(int i = 0; i < cRandomSamplers.Total(); i++)
+     {
+      CObject *object = cRandomSamplers.At(i);
+      if(!object || object.Type() != defNeuronVAEOCL)
+         ReturnFalseEx("random sampler type");
+      CVAE *sampler = object;
+      if(!sampler.SetOpenCLChecked(obj))
+         ReturnFalseEx("random sampler context");
+     }
+//--- Publish the inherited base owner only after every child succeeded.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited base context");
+//--- Finalize the checked context adoption after all owners succeeded.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Switch posterior parameters between training and inference.      |
 //+------------------------------------------------------------------+
 void CNeuronBayesianLinearOCL::TrainMode(bool f)
   {
-   //--- Propagate the mode to posterior parameters and discard stochastic state.
+//--- Propagate the mode to posterior parameters and discard stochastic state.
    CNeuronBaseOCL::TrainMode(f);
    cWeights.TrainMode(bTrain);
    cBias.TrainMode(bTrain);
@@ -3214,14 +3761,13 @@ void CNeuronBayesianLinearOCL::TrainMode(bool f)
    bSamplesPrepared = false;
   }
 //+------------------------------------------------------------------+
-//| Copy posterior parameters from a compatible source layer.       |
+//| Copy posterior parameters from a compatible source layer.        |
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
       ReturnFalseEx("Bayesian weight copy: source layer type");
-
-   //--- Synchronize the posterior parameters and invalidate stochastic runtime state.
+//--- Synchronize the posterior parameters and invalidate stochastic runtime state.
    CNeuronBayesianLinearOCL *Source = source;
    if(!cWeights.WeightsUpdate(Source.cWeights.AsObject(), tau))
       ReturnFalseEx("Bayesian weight copy: posterior weights");
@@ -3230,8 +3776,7 @@ bool CNeuronBayesianLinearOCL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
    iSampleState = Source.iSampleState;
    bSamplesGradientReady = false;
    bSamplesPrepared = false;
-
-   //--- Finalize the inherited weight-copy contract.
+//--- Finalize the inherited weight-copy contract.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -3239,19 +3784,21 @@ bool CNeuronBayesianLinearOCL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //+------------------------------------------------------------------+
 bool CNeuronBayesianLinearOCL::AppendParameterFingerprint(ulong &f)
   {
-   //--- Include the Bayesian type tag before the posterior parameter state.
+//--- Include the Bayesian type tag before the posterior parameter state.
    f = (f ^ ulong(Type())) * ulong(1099511628211);
    if(!cWeights.AppendParameterFingerprint(f))
       ReturnFalseEx("Bayesian fingerprint: posterior weights");
    if(!cBias.AppendParameterFingerprint(f))
       ReturnFalseEx("Bayesian fingerprint: posterior bias");
-
-   //--- Finalize the posterior fingerprint.
+//--- Finalize the posterior fingerprint.
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Returns the layer info of the CNeuronBayesianLinearOCL.          |
+//+------------------------------------------------------------------+
 CLayerDescription *CNeuronBayesianLinearOCL::GetLayerInfo(void)
   {
-   //--- Report the grouped affine and sampling contract to the graph description.
+//--- Report the grouped affine and sampling contract to the graph description.
    CLayerDescription *r = CNeuronBaseOCL::GetLayerInfo();
    if(r)
      {
@@ -3260,8 +3807,7 @@ CLayerDescription *CNeuronBayesianLinearOCL::GetLayerInfo(void)
       r.variables = iVariables;
       r.layers = iSamples;
      }
-
-   //--- Return the inherited description when its allocation succeeded.
+//--- Return the inherited description when its allocation succeeded.
    return(r);
   }
 

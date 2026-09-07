@@ -380,35 +380,73 @@ __kernel void FeedForward(__global const float *matrix_w, ///<[in] Weights matri
                           ///< of neurons in layer and n - number of outputs
                           ///< (neurons in next layer)
                           __global const float *matrix_i, ///<[in] Inputs tensor
-                          __global float *matrix_o, ///<[out] Output tensor
-                          const int inputs,               ///< Number of inputs
-                          const int activation            ///< Activation type (#ENUM_ACTIVATION)
-                         )
+                           __global float *matrix_o, ///<[out] Output tensor
+                           const int inputs,               ///< Number of inputs
+                           const int activation,           ///< Activation type (#ENUM_ACTIVATION)
+                           __global float *numeric_flags,  ///<[out] One status per output
+                           const int flags_enabled
+                          )
   {
    const int i = get_global_id(0);
    const int total_out = get_global_size(0);
    const int loc = get_local_id(1);
-   const int total_loc = get_local_size(1);
+    const int total_loc = get_local_size(1);
 //---
-   __local float Temp[LOCAL_ARRAY_SIZE];
+    __local float Temp[LOCAL_ARRAY_SIZE];
+    __local float FlagTemp[LOCAL_ARRAY_SIZE];
 //---
-   float sum = 0;
-   float inp;
-   int shift = RCtoFlat(i, 0, total_out, (inputs + 1), 0);
-   for(int k = loc; k < inputs; k += total_loc)
-     {
-      inp = IsNaNOrInf(matrix_i[k], 0.0f);
-      if(inp == 0.0f)
-         continue;
-      sum += IsNaNOrInf(inp * matrix_w[shift + k], 0.0f);
-     }
-   if(loc == 0)
-      sum += IsNaNOrInf(matrix_w[shift + inputs], 0.0f);
-   if(total_loc > 1)
-      sum = LocalSum(sum, 1, Temp);
+    float sum = 0;
+    float inp;
+    float invalid = 0;
+    int shift = RCtoFlat(i, 0, total_out, (inputs + 1), 0);
+    for(int k = loc; k < inputs; k += total_loc)
+      {
+       if(flags_enabled)
+         {
+          const float raw_inp = matrix_i[k];
+          const float raw_weight = matrix_w[shift + k];
+          const float raw_product = raw_inp * raw_weight;
+          invalid += (isnan(raw_inp) || isinf(raw_inp) || isnan(raw_weight) || isinf(raw_weight) ||
+                      isnan(raw_product) || isinf(raw_product));
+         }
+       inp = IsNaNOrInf(matrix_i[k], 0.0f);
+       if(inp == 0.0f)
+          continue;
+       sum += IsNaNOrInf(inp * matrix_w[shift + k], 0.0f);
+      }
+    if(loc == 0)
+      {
+       if(flags_enabled)
+         {
+          const float raw_bias = matrix_w[shift + inputs];
+          invalid += isnan(raw_bias) || isinf(raw_bias);
+         }
+       sum += IsNaNOrInf(matrix_w[shift + inputs], 0.0f);
+      }
+    if(flags_enabled)
+       invalid += isnan(sum) || isinf(sum);
+    if(total_loc > 1)
+       sum = LocalSum(sum, 1, Temp);
+    if(flags_enabled)
+      {
+       if(total_loc > 1)
+          invalid += isnan(Temp[0]) || isinf(Temp[0]);
+       invalid = LocalSum(invalid, 1, FlagTemp);
+      }
 //---
-   if(loc == 0)
-      matrix_o[i] = fActivation(sum, activation);
+    if(loc == 0)
+      {
+       if(flags_enabled)
+          invalid += isnan(sum) || isinf(sum);
+//--- Preserve the activation result for the numerical flag before storing it.
+       const float activation_value = fActivation(sum, activation);
+       if(flags_enabled)
+         {
+          invalid += isnan(activation_value) || isinf(activation_value);
+          numeric_flags[i] = (invalid > 0.0f ? 1.0f : 0.0f);
+         }
+       matrix_o[i] = activation_value;
+      }
   }
 //+------------------------------------------------------------------+
 ///\ingroup neuron_base_gr  Neuron Base Output Gradients Calculation kernel
@@ -1120,17 +1158,29 @@ __kernel void SumMatrix(__global float *matrix1,    ///<[in] First matrix
                         float multiplyer,           ///< Multiplyer for output
                         int shift_in1,              ///< Shift for input 1
                         int shift_in2,              ///< Shift for input 2
-                        int shift_out               ///< Shift for output
+                         int shift_out,              ///< Shift for output
+                         __global float *numeric_flags,
+                         const int flags_enabled
                        )
   {
    const int i = get_global_id(0);
    const int step = get_global_size(0);
 //---
-   for(int k = 0; k < dimension; k++)
-     {
-      int index = i * dimension + k;
-      matrix_out[i * shift_out + index] =
-         IsNaNOrInf((matrix1[i * shift_in1 + index] + matrix2[i * shift_in2 + index]) * multiplyer, 0);
+    for(int k = 0; k < dimension; k++)
+      {
+       int index = i * dimension + k;
+       if(flags_enabled)
+         {
+          const float value1 = matrix1[i * shift_in1 + index];
+          const float value2 = matrix2[i * shift_in2 + index];
+          const float raw_sum = value1 + value2;
+          const float raw_result = raw_sum * multiplyer;
+          const int invalid = isnan(value1) || isinf(value1) || isnan(value2) || isinf(value2) ||
+                              isnan(raw_sum) || isinf(raw_sum) || isnan(raw_result) || isinf(raw_result);
+          numeric_flags[index] = (invalid ? 1.0f : 0.0f);
+         }
+       matrix_out[i * shift_out + index] =
+          IsNaNOrInf((matrix1[i * shift_in1 + index] + matrix2[i * shift_in2 + index]) * multiplyer, 0);
      }
   }
 //+------------------------------------------------------------------+
@@ -1766,10 +1816,27 @@ __kernel void UpdateBatchOptionsAdam(__global float *options,     ///<[in,out] O
 //| Runs the vae feed forward feed-forward pass on the GPU.          |
 //+------------------------------------------------------------------+
 __kernel void VAE_FeedForward(__global float *inputs, __global float *random,
-                              __global float *outputs)
+                              __global float *outputs, __global float *numeric_flags,
+                              const int flags_enabled)
   {
    uint i = (uint)get_global_id(0);
    uint total = (uint)get_global_size(0);
+    if(flags_enabled)
+      {
+//--- Read the raw VAE operands before this work-item updates a potentially aliased output.
+       const float mean = inputs[i];
+       const float log_var = inputs[i + total];
+       const float epsilon = random[i];
+       const float half_log_var = 0.5f * log_var;
+       const float sigma = exp(half_log_var);
+       const float product = IsNaNOrInf(sigma, 0) * epsilon;
+       const float raw_result = IsNaNOrInf(mean, 0) + product;
+       const int invalid = isnan(mean) || isinf(mean) || isnan(log_var) || isinf(log_var) ||
+                           isnan(epsilon) || isinf(epsilon) || isnan(half_log_var) || isinf(half_log_var) ||
+                           isnan(sigma) || isinf(sigma) || isnan(product) || isinf(product) ||
+                           isnan(raw_result) || isinf(raw_result);
+       numeric_flags[i] = (invalid ? 1.0f : 0.0f);
+      }
    outputs[i] = IsNaNOrInf(inputs[i], 0) + IsNaNOrInf(exp(0.5f * inputs[i + total]), 0) * random[i];
   }
 //+------------------------------------------------------------------+
@@ -1789,8 +1856,8 @@ __kernel void VAE_CalcHiddenGradient(__global float *inputs,
    float sigma = exp(0.5f * log_var);
    float variance = exp(log_var);
    float grad = clamp(IsNaNOrInf(gradient[i], 0), -MAX_GRAD, MAX_GRAD);
-// gradient stores the negative downstream derivative used by additive updates.
-// Add the negative derivative of kld_mult * KL(N(mean,variance)||N(0,1)).
+//--- gradient stores the negative downstream derivative used by additive updates.
+//--- Add the negative derivative of kld_mult * KL(N(mean,variance)||N(0,1)).
    inp_grad[i] = IsNaNOrInf(grad - kld_mult * mean, 0);
    inp_grad[i + total] = IsNaNOrInf(0.5f * grad * sigma * random[i] -
                                     0.5f * kld_mult * (variance - 1.0f), 0);
@@ -4651,10 +4718,12 @@ __kernel void MatMult(__global const float *matr1,
                       __global const float *matr2,
                       __global float *result,
                       int dimension,
-                      int multvarsecond,
-                      int offset_matr1,
-                      int offset_matr2,
-                      int offset_result)
+                       int multvarsecond,
+                       int offset_matr1,
+                       int offset_matr2,
+                       int offset_result,
+                       __global float *numeric_flags,
+                       const int flags_enabled)
   {
    size_t row = get_global_id(0);
    size_t col = get_global_id(1);
@@ -4666,12 +4735,31 @@ __kernel void MatMult(__global const float *matr1,
    int shift2 = offset_matr2 + RCtoFlat(0, col, dimension, cols, multvarsecond * var);
    int shift_out = offset_result + RCtoFlat(row, col, rows, cols, var);
 //---
-   float res = 0;
+    float res = 0;
+    int invalid = 0;
 //---
-   for(int i = 0; i < dimension; i++)
-      res += IsNaNOrInf(matr1[shift1 + i] * matr2[shift2 + i * cols], 0);
+    for(int i = 0; i < dimension; i++)
+      {
+       if(flags_enabled)
+         {
+          const float value1 = matr1[shift1 + i];
+          const float value2 = matr2[shift2 + i * cols];
+          const float product = value1 * value2;
+          invalid |= isnan(value1) || isinf(value1) || isnan(value2) || isinf(value2) ||
+                     isnan(product) || isinf(product);
+         }
+//--- Preserve the legacy sanitized accumulation after checking its raw operands.
+       res += IsNaNOrInf(matr1[shift1 + i] * matr2[shift2 + i * cols], 0);
+       if(flags_enabled)
+          invalid |= isnan(res) || isinf(res);
+      }
 //---
-   result[shift_out] = res;
+    if(flags_enabled)
+      {
+       invalid |= isnan(res) || isinf(res);
+       numeric_flags[RCtoFlat(row, col, rows, cols, var)] = (invalid ? 1.0f : 0.0f);
+      }
+    result[shift_out] = res;
   }
 //+------------------------------------------------------------------+
 //| Computes the mat mult grad gradient contributions on the GPU.    |
@@ -4694,34 +4782,51 @@ __kernel void MatMultGrad(__global const float *matr1,
    size_t var = get_global_id(2);
    size_t rows = get_global_size(0);
    size_t cols = get_global_size(1);
-//---
+//--- Tensor offsets select the current row and variable views.
    int shift1 = offset_matr1 + (row  + var * rows) * dimension;
    int shift1_gr = offset_matr1_gr + (row + var * rows) * dimension;
    int shift2 = offset_matr2 + var * dimension * cols * multvarsecond;
    int shift2_gr = offset_matr2_gr + var * dimension * cols * multvarsecond;
    int shift_out = offset_result_gr + (row + var * rows) * cols;
-//---
-   for(int c = 0; c < dimension; c += cols)
+//--- First-matrix gradients use disjoint full-feature lanes.
+   for(int k = 0; k * cols < dimension; k++)
      {
-      if((c + col) >= dimension)
+      int feature = col + k * cols;
+      if(feature >= dimension)
          continue;
       float grad = 0;
       for(int i = 0; i < cols; i++)
-         grad += IsNaNOrInf(result_gr[shift_out + i] * matr2[shift2 + c * cols + i], 0);
-      matr1_gr[shift1_gr + c] = IsNaNOrInf(grad, 0);
+         grad += IsNaNOrInf(result_gr[shift_out + i] * matr2[shift2 + feature * cols + i], 0);
+      matr1_gr[shift1_gr + feature] = IsNaNOrInf(grad, 0);
      }
-//---
-   shift_out = offset_result_gr + var * rows * cols + col;
-//---
-   for(int r = 0; r < dimension; r += rows)
+//--- Second-matrix gradients reduce rows and all shared variables per entry.
+   for(int k = 0; k * rows < dimension; k++)
      {
-      if((r + row) >= dimension)
+      int feature = row + k * rows;
+      if(feature >= dimension)
          continue;
-      shift1 = offset_matr1 + var * rows * dimension + r;
-      float grad = 0;
-      for(int i = 0; i < rows; i++)
-         grad += IsNaNOrInf(result_gr[shift_out + i * cols] * matr1[shift1 + i * dimension], 0);
-      matr2_gr[shift2_gr + col + r * cols] = IsNaNOrInf(grad, 0);
+      if(multvarsecond || var == 0)
+        {
+         float grad = 0;
+         if(multvarsecond)
+           {
+            shift_out = offset_result_gr + var * rows * cols + col;
+            shift1 = offset_matr1 + var * rows * dimension + feature;
+            for(int i = 0; i < rows; i++)
+               grad += IsNaNOrInf(result_gr[shift_out + i * cols] * matr1[shift1 + i * dimension], 0);
+           }
+         else
+           {
+            for(int v = 0; v < get_global_size(2); v++)
+              {
+               shift_out = offset_result_gr + v * rows * cols + col;
+               shift1 = offset_matr1 + v * rows * dimension + feature;
+               for(int i = 0; i < rows; i++)
+                  grad += IsNaNOrInf(result_gr[shift_out + i * cols] * matr1[shift1 + i * dimension], 0);
+              }
+           }
+         matr2_gr[shift2_gr + col + feature * cols] = IsNaNOrInf(grad, 0);
+        }
      }
   }
 //+------------------------------------------------------------------+
@@ -6484,23 +6589,43 @@ __kernel void HiVTPrepare(__global const float *data,
 //| Implements the gate element mul kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void GateElementMul(__global const float *inputs1,
-                             __global const float *inputs2,
-                             __global const float *gate,
-                             __global float *out
+                              __global const float *inputs2,
+                              __global const float *gate,
+                              __global float *out,
+                              __global float *numeric_flags,
+                              const int flags_enabled
                             )
   {
    const int i = get_global_id(0);
 //---
-   const float g = IsNaNOrInf(gate[i], 0.5f);
-   float result = 0;
-   float inp = IsNaNOrInf(inputs1[i], 0.0f);
-   if(inp != 0.0f && g != 0.0f)
-      result += g * inp;
-   inp = IsNaNOrInf(inputs2[i], 0.0f);
-   if(inp != 0.0f && (1 - g) != 0.0f)
-      result += (1 - g) * inp;
+    int invalid = 0;
+    if(flags_enabled)
+      {
+//--- Evaluate raw gate products before their operands are sanitized for legacy output.
+       const float raw_gate = gate[i];
+       const float raw_input1 = inputs1[i];
+       const float raw_input2 = inputs2[i];
+       const float raw_product1 = raw_gate * raw_input1;
+       const float raw_product2 = (1.0f - raw_gate) * raw_input2;
+       invalid = isnan(raw_gate) || isinf(raw_gate) || isnan(raw_input1) || isinf(raw_input1) ||
+                 isnan(raw_input2) || isinf(raw_input2) || isnan(raw_product1) || isinf(raw_product1) ||
+                 isnan(raw_product2) || isinf(raw_product2);
+      }
+    const float g = IsNaNOrInf(gate[i], 0.5f);
+    float result = 0;
+    float inp = IsNaNOrInf(inputs1[i], 0.0f);
+    if(inp != 0.0f && g != 0.0f)
+       result += g * inp;
+    inp = IsNaNOrInf(inputs2[i], 0.0f);
+    if(inp != 0.0f && (1 - g) != 0.0f)
+       result += (1 - g) * inp;
 //---
-   out[i] = IsNaNOrInf(result, 0);
+    if(flags_enabled)
+      {
+       invalid |= isnan(result) || isinf(result);
+       numeric_flags[i] = (invalid ? 1.0f : 0.0f);
+      }
+    out[i] = IsNaNOrInf(result, 0);
   }
 //+------------------------------------------------------------------+
 //| Computes the gate element mul grad gradient contributions on the |
@@ -6607,9 +6732,11 @@ __kernel void OrthoganalLoss(__global const float *data,
 //+------------------------------------------------------------------+
 __kernel void CalcDistance(__global const float *data,
                            __global float *distance,
-                           const int dimension,
-                           const int groups,
-                           const int normalize
+                            const int dimension,
+                            const int groups,
+                            const int normalize,
+                            __global float *numeric_flags,
+                            const int flags_enabled
                           )
   {
    const size_t main = get_global_id(0);
@@ -6626,24 +6753,43 @@ __kernel void CalcDistance(__global const float *data,
    const int shift_slave = (shift_group + slave) * dimension;
    const int shift_dist = shift_group * total + main * total + slave;
 //--- calc distance
-   float dist = 0;
-   if(main != slave)
+    float dist = 0;
+    int invalid = 0;
+    if(flags_enabled)
+       for(int d = 0; d < dimension; d++)
+         {
+          const float value_main = data[shift_main + d];
+          const float value_slave = data[shift_slave + d];
+          invalid |= isnan(value_main) || isinf(value_main) || isnan(value_slave) || isinf(value_slave);
+         }
+    if(main != slave)
      {
       //---
       for(int d = 0; d < dimension; d++)
         {
-         float delta = data[shift_main + d] - data[shift_slave + d];
-         dist += delta * delta;
+          float delta = data[shift_main + d] - data[shift_slave + d];
+          dist += delta * delta;
+          if(flags_enabled)
+            {
+             const float square = delta * delta;
+             invalid |= isnan(delta) || isinf(delta) || isnan(square) || isinf(square);
+            }
         }
      }
 //--- Look Max
-   float max_dist = LocalMax(dist, 1, Temp);
+    float max_dist = LocalMax(dist, 1, Temp);
+    if(flags_enabled)
+       invalid |= isnan(dist) || isinf(dist) || isnan(max_dist) || isinf(max_dist);
 //--- Normalize
-   if(normalize && max_dist > 0)
-      dist /= Temp[0];
-   dist = IsNaNOrInf(dist, 1);
+    if(normalize && max_dist > 0)
+       dist /= Temp[0];
+    if(flags_enabled)
+       invalid |= isnan(dist) || isinf(dist);
+    if(flags_enabled)
+       numeric_flags[shift_dist] = (invalid ? 1.0f : 0.0f);
+    dist = IsNaNOrInf(dist, 1);
 //--- result
-   distance[shift_dist] = dist;
+    distance[shift_dist] = dist;
   }
 //+------------------------------------------------------------------+
 //| Runs the feed forward local max feed-forward pass on the GPU.    |
@@ -10561,7 +10707,7 @@ __kernel void DifMatrixGrad(__global float *matrix1,    ///<[in] First matrix
                             const float multiplyer,           ///< Multiplyer for output
                             const int shift_in1,              ///< Shift for input 1
                             const int shift_in2,              ///< Shift for input 2
-                            const int shift_out               ///< Shift for output
+                             const int shift_out               ///< Shift for output
                            )
   {
    const int i = get_global_id(0);
@@ -10640,7 +10786,9 @@ __kernel void SumVecMatrix(__global const float *vector_in,
                            const float multiplyer,           ///< Multiplyer for output
                            const int shift_in1,              ///< Shift for input 1
                            const int shift_in2,              ///< Shift for input 2
-                           const int shift_out               ///< Shift for output
+                            const int shift_out,              ///< Shift for output
+                            __global float *numeric_flags,
+                            const int flags_enabled
                           )
   {
    const int r = get_global_id(0);
@@ -10653,7 +10801,17 @@ __kernel void SumVecMatrix(__global const float *vector_in,
    int flat_in = shift_in2 + RCtoFlat(r, c, rows, cols, v);
    int flat_out = shift_out + RCtoFlat(r, c, rows, cols, v);
    int flat_v = shift_in1 + RCtoFlat(0, c, 1, cols, v);
-   matrix_out[flat_out] = IsNaNOrInf((vector_in[flat_v] + matrix_in[flat_in]) * multiplyer, 0);
+     if(flags_enabled)
+      {
+       const float vector_value = vector_in[flat_v];
+       const float matrix_value = matrix_in[flat_in];
+       const float raw_sum = vector_value + matrix_value;
+       const float raw_result = raw_sum * multiplyer;
+       const int invalid = isnan(vector_value) || isinf(vector_value) || isnan(matrix_value) || isinf(matrix_value) ||
+                           isnan(raw_sum) || isinf(raw_sum) || isnan(raw_result) || isinf(raw_result);
+       numeric_flags[RCtoFlat(r, c, rows, cols, v)] = (invalid ? 1.0f : 0.0f);
+      }
+    matrix_out[flat_out] = IsNaNOrInf((vector_in[flat_v] + matrix_in[flat_in]) * multiplyer, 0);
   }
 //+------------------------------------------------------------------+
 //| Computes the sum vec matrix grad gradient contributions on the   |
@@ -17350,35 +17508,142 @@ __kernel void OMPBDisagreement(__global const float *reference,
                                __global float *output,
                                const int source_states,
                                const int target_states,
-                               const int samples)
+                               const int samples,
+                               const float inv_tau2,
+                               __global const float *gate,
+                               __global float *alpha_gradient,
+                               const int gate_stride,
+                               const float multiplier,
+                               __global float *numeric_flags,
+                               const int flags_enabled)
   {
-   const int variable = (int)get_global_id(0);
-   if(variable >= 0 && source_states > 0 && target_states > 0 && samples > 1)
+   const int lane = (int)get_local_id(0);
+   const int variable = (int)get_global_id(1);
+   __local float source_scratch[LOCAL_ARRAY_SIZE];
+   __local float target_scratch[LOCAL_ARRAY_SIZE];
+   __local float source_alpha_scratch[LOCAL_ARRAY_SIZE];
+   __local float target_alpha_scratch[LOCAL_ARRAY_SIZE];
+   __local float invalid_scratch[LOCAL_ARRAY_SIZE];
+   float source_sum = 0.0f;
+   float target_sum = 0.0f;
+   float source_alpha = 0.0f;
+   float target_alpha = 0.0f;
+   int invalid = 0;
+   if(source_states > 0 && target_states > 0 && samples > 1 && gate_stride > 0)
      {
-      const int pairs = samples * (samples - 1) / 2;
-      float source_sum = 0.0f;
-      float target_sum = 0.0f;
-      for(int state = 0; state < source_states; state++)
+      const float raw_gate = gate[variable * gate_stride];
+      if(flags_enabled)
+         invalid |= isnan(raw_gate) || isinf(raw_gate) || isnan(inv_tau2) || isinf(inv_tau2) ||
+                    isnan(multiplier) || isinf(multiplier);
+      const float g = IsNaNOrInf(raw_gate, 0.0f);
+      const float gate2 = g * g;
+      const float gate_alpha = 2.0f * gate2 * (1.0f - g);
+      if(flags_enabled)
+         invalid |= isnan(gate2) || isinf(gate2) || isnan(gate_alpha) || isinf(gate_alpha);
+      const int source_total = source_states * samples * samples;
+      const int target_total = target_states * samples * samples;
+      //--- Traverse source states and unordered posterior-sample pairs.
+      for(int index = lane; index < source_total; index += get_local_size(0))
         {
-         const int base = (variable * source_states + state) * samples * samples;
-         for(int left = 0; left < samples; left++)
-            for(int right = left + 1; right < samples; right++)
-               source_sum += IsNaNOrInf(reference[base + left * samples + right], 0.0f);
+         const int sample_index = index % (samples * samples);
+         const int left = sample_index / samples;
+         const int right = sample_index % samples;
+         if(left < right)
+           {
+            const float raw = reference[(variable * source_states * samples * samples) + index];
+            const float raw_scaled = raw * gate2 * inv_tau2;
+            if(flags_enabled)
+               invalid |= isnan(raw) || isinf(raw) || isnan(raw_scaled) || isinf(raw_scaled);
+            const float scaled = IsNaNOrInf(raw_scaled, 1.0f);
+            source_sum += fmin(scaled, 1.0f);
+            if(flags_enabled)
+               invalid |= isnan(source_sum) || isinf(source_sum);
+            if(scaled < 1.0f)
+              {
+               const float raw_alpha = gate_alpha * raw * inv_tau2;
+               if(flags_enabled)
+                  invalid |= isnan(raw_alpha) || isinf(raw_alpha);
+               source_alpha += raw_alpha;
+               if(flags_enabled)
+                  invalid |= isnan(source_alpha) || isinf(source_alpha);
+              }
+           }
         }
-      for(int state = 0; state < target_states; state++)
+      //--- Traverse target states and unordered posterior-sample pairs.
+      for(int index = lane; index < target_total; index += get_local_size(0))
         {
-         const int base = (variable * target_states + state) * samples * samples;
-         for(int left = 0; left < samples; left++)
-            for(int right = left + 1; right < samples; right++)
-               target_sum += IsNaNOrInf(current[base + left * samples + right], 0.0f);
+         const int sample_index = index % (samples * samples);
+         const int left = sample_index / samples;
+         const int right = sample_index % samples;
+         if(left < right)
+           {
+            const float raw = current[(variable * target_states * samples * samples) + index];
+            const float raw_scaled = raw * gate2 * inv_tau2;
+            if(flags_enabled)
+               invalid |= isnan(raw) || isinf(raw) || isnan(raw_scaled) || isinf(raw_scaled);
+            const float scaled = IsNaNOrInf(raw_scaled, 1.0f);
+            target_sum += fmin(scaled, 1.0f);
+            if(flags_enabled)
+               invalid |= isnan(target_sum) || isinf(target_sum);
+            if(scaled < 1.0f)
+              {
+               const float raw_alpha = gate_alpha * raw * inv_tau2;
+               if(flags_enabled)
+                  invalid |= isnan(raw_alpha) || isinf(raw_alpha);
+               target_alpha += raw_alpha;
+               if(flags_enabled)
+                  invalid |= isnan(target_alpha) || isinf(target_alpha);
+              }
+           }
         }
-      const float source_mean = source_sum / (float)(source_states * pairs);
-      const float target_mean = target_sum / (float)(target_states * pairs);
-      output[variable] = IsNaNOrInf(source_mean - target_mean, 0.0f);
+     }
+   //--- Reduce source and target statistics through independent local scratch.
+   source_sum = LocalSum(source_sum, 0, source_scratch);
+   target_sum = LocalSum(target_sum, 0, target_scratch);
+   source_alpha = LocalSum(source_alpha, 0, source_alpha_scratch);
+   target_alpha = LocalSum(target_alpha, 0, target_alpha_scratch);
+   if(flags_enabled)
+     {
+      invalid |= isnan(source_scratch[0]) || isinf(source_scratch[0]) ||
+                 isnan(target_scratch[0]) || isinf(target_scratch[0]) ||
+                 isnan(source_alpha_scratch[0]) || isinf(source_alpha_scratch[0]) ||
+                 isnan(target_alpha_scratch[0]) || isinf(target_alpha_scratch[0]);
+      invalid = (LocalSum((float)invalid, 0, invalid_scratch) > 0.0f ? 1 : 0);
+     }
+   //--- Finalize the per-variable disagreement and alpha update direction.
+   if(lane == 0)
+     {
+      float delta = 0.0f;
+      float alpha_direction = 0.0f;
+      if(source_states > 0 && target_states > 0 && samples > 1 && gate_stride > 0)
+        {
+         const int pairs = samples * (samples - 1) / 2;
+         const float source_mean = source_sum / (float)(source_states * pairs);
+         const float target_mean = target_sum / (float)(target_states * pairs);
+         const float raw_delta = source_mean - target_mean;
+         if(flags_enabled)
+            invalid |= isnan(source_mean) || isinf(source_mean) || isnan(target_mean) ||
+                       isinf(target_mean) || isnan(raw_delta) || isinf(raw_delta);
+         delta = IsNaNOrInf(raw_delta, 0.0f);
+         const float sign_delta = (delta > 0.0f ? 1.0f : (delta < 0.0f ? -1.0f : 0.0f));
+         const float raw_alpha_direction = multiplier * sign_delta *
+                                           (source_alpha / (float)(source_states * pairs) -
+                                            target_alpha / (float)(target_states * pairs));
+         if(flags_enabled)
+            invalid |= isnan(raw_alpha_direction) || isinf(raw_alpha_direction);
+         alpha_direction = raw_alpha_direction;
+        }
+      output[variable] = delta;
+      const float final_alpha = IsNaNOrInf(alpha_direction, 0.0f);
+      if(flags_enabled)
+         invalid |= isnan(final_alpha) || isinf(final_alpha);
+      alpha_gradient[variable] = final_alpha;
+      if(flags_enabled)
+         numeric_flags[variable] = (invalid ? 1.0f : 0.0f);
      }
   }
 //+------------------------------------------------------------------+
-//| Computes the OMPB disagreement grad gradient contributions on the|
+//| Computes the OMPB disagreement grad gradient contributions on    |
 //| GPU.                                                             |
 //+------------------------------------------------------------------+
 __kernel void OMPBDisagreementGrad(__global const float *corrections,
@@ -17386,39 +17651,102 @@ __kernel void OMPBDisagreementGrad(__global const float *corrections,
                                    __global const float *disagreement,
                                    __global float *gradient,
                                    const int states,
+                                   const int variables,
                                    const int samples,
                                    const int dimension,
                                    const int source_sign,
-                                   const float multiplier)
-  {
-   const int group = (int)get_global_id(0);
-   const int sample = (int)get_global_id(1);
-   const int coordinate = (int)get_global_id(2);
-   if(group < 0 || sample < 0 || coordinate < 0 || states <= 0 || samples <= 1 || dimension <= 0)
+                                   const float multiplier,
+                                   const float inv_tau2,
+                                   __global const float *gate,
+                                   const int gate_stride,
+                                   __global float *numeric_flags,
+                                   const int flags_enabled)
+   {
+    const int group = (int)get_global_id(0);
+    const int sample = (int)get_global_id(1);
+    const int coordinate = (int)get_global_id(2);
+    //--- All buffers are indexed as [group, sample, coordinate] with fixed extents.
+    if(states <= 0 || variables <= 0 || samples <= 0 || dimension <= 0 ||
+       group < 0 || sample < 0 || coordinate < 0 ||
+       group >= states * variables || sample >= samples || coordinate >= dimension)
       return;
-   const int variable = group / states;
-   const int pairs = samples * (samples - 1) / 2;
-   const int distance_base = group * samples * samples;
-   const int correction_base = (group * samples + sample) * dimension + coordinate;
-   const float delta = IsNaNOrInf(disagreement[variable], 0.0f);
-   const float sign_delta = (delta > 0.0f ? 1.0f : (delta < 0.0f ? -1.0f : 0.0f));
-   float value = 0.0f;
-   for(int other = 0; other < samples; other++)
-     {
-      if(other == sample)
-         continue;
-      const int didx = distance_base + sample * samples + other;
-      const float pair_distance = distance[didx];
-      //--- A non-finite or explicitly clipped pair contributes no gradient.
-      if(isinf(pair_distance) || isnan(pair_distance) || pair_distance < 0.0f || pair_distance >= MAX_GRAD)
-         continue;
-      const int other_index = (group * samples + other) * dimension + coordinate;
-      value += 2.0f * (IsNaNOrInf(corrections[correction_base], 0.0f) -
-                       IsNaNOrInf(corrections[other_index], 0.0f));
-     }
-   value *= multiplier * (float)source_sign * sign_delta / (float)(states * pairs);
-   gradient[correction_base] = clamp(IsNaNOrInf(value, 0.0f), -MAX_GRAD, MAX_GRAD);
-  }
+    const int variable = group / states;
+    const int distance_base = group * samples * samples;
+    const int correction_base = (group * samples + sample) * dimension + coordinate;
+    int invalid = 0;
+    const float raw_delta = disagreement[variable];
+    const float raw_correction = corrections[correction_base];
+    if(flags_enabled)
+       invalid |= isnan(raw_delta) || isinf(raw_delta) || isnan(raw_correction) ||
+                  isinf(raw_correction) || isnan(multiplier) || isinf(multiplier) ||
+                  isnan(inv_tau2) || isinf(inv_tau2);
+    const float delta = IsNaNOrInf(raw_delta, 0.0f);
+    if(gate_stride <= 0)
+      {
+       if(flags_enabled)
+          numeric_flags[correction_base] = 1.0f;
+       return;
+      }
+    const float raw_gate = gate[variable * gate_stride];
+    if(flags_enabled)
+       invalid |= isnan(raw_gate) || isinf(raw_gate);
+    const float g = IsNaNOrInf(raw_gate, 0.0f);
+    const float gate2 = g * g;
+    if(flags_enabled)
+       invalid |= isnan(gate2) || isinf(gate2);
+    if(samples == 1)
+      {
+       if(flags_enabled)
+          numeric_flags[correction_base] = (invalid ? 1.0f : 0.0f);
+       return;
+      }
+    const int pairs = samples * (samples - 1) / 2;
+    //--- delta = D_S - D_T; its sign drives the pair direction. The buffer is
+    //--- appended (+=) and must be pre-zeroed by the wrapper. In line with the
+    //--- library contract (optimizers add gradient buffers), the multiplier
+    //--- carries the negative derivative of the mismatch penalty.
+    const float sign_delta = (delta > 0.0f ? 1.0f : (delta < 0.0f ? -1.0f : 0.0f));
+    float value = 0.0f;
+    const float correction = IsNaNOrInf(raw_correction, 0.0f);
+    //--- Saturated pair-distance terms do not contribute to gradient.
+    for(int other = 0; other < samples; other++)
+      {
+       if(other == sample)
+          continue;
+       const int didx = distance_base + sample * samples + other;
+       const float raw_distance = distance[didx];
+       const float raw_pair_distance = raw_distance * gate2 * inv_tau2;
+       if(flags_enabled)
+          invalid |= isnan(raw_distance) || isinf(raw_distance) || isnan(raw_pair_distance) ||
+                     isinf(raw_pair_distance);
+       const float pair_distance = IsNaNOrInf(raw_pair_distance, 1.0f);
+       if(pair_distance >= 1.0f)
+          continue;
+       const int other_index = (group * samples + other) * dimension + coordinate;
+       const float raw_other = corrections[other_index];
+       const float raw_difference = raw_correction - raw_other;
+       const float raw_pair_value = 2.0f * gate2 * raw_difference;
+       if(flags_enabled)
+          invalid |= isnan(raw_other) || isinf(raw_other) || isnan(raw_difference) ||
+                     isinf(raw_difference) || isnan(raw_pair_value) || isinf(raw_pair_value);
+       value += 2.0f * gate2 * (correction - IsNaNOrInf(raw_other, 0.0f));
+       if(flags_enabled)
+          invalid |= isnan(value) || isinf(value);
+      }
+    const float direction_factor = multiplier * (float)source_sign * sign_delta * inv_tau2 /
+                                   (float)(states * pairs);
+    const float raw_direction = value * direction_factor;
+    if(flags_enabled)
+       invalid |= isnan(direction_factor) || isinf(direction_factor) ||
+                  isnan(raw_direction) || isinf(raw_direction);
+    const float raw_gradient = gradient[correction_base];
+    const float final_gradient = raw_gradient + clamp(IsNaNOrInf(raw_direction, 0.0f), -MAX_GRAD, MAX_GRAD);
+    if(flags_enabled)
+       invalid |= isnan(raw_gradient) || isinf(raw_gradient) || isnan(final_gradient) || isinf(final_gradient);
+    gradient[correction_base] = final_gradient;
+    if(flags_enabled)
+       numeric_flags[correction_base] = (invalid ? 1.0f : 0.0f);
+   }
 //+------------------------------------------------------------------+
 //| Implements the OMPB gaussian kl kernel on the GPU.               |
 //+------------------------------------------------------------------+
@@ -17430,8 +17758,10 @@ __kernel void OMPBGaussianKL(__global const float *mean,
    if(id < total)
      {
       const float mu = IsNaNOrInf(mean[id], 0.0f);
-      const float lv = clamp(IsNaNOrInf(logvar[id], 0.0f), -30.0f, 30.0f);
-      output[id] = 0.5f * (exp(lv) + mu * mu - 1.0f - lv);
+      const float lv = IsNaNOrInf(logvar[id], 0.0f);
+      //--- expm1(lv) = exp(lv) - 1 avoids cancellation for small lv;
+      //--- the exact KL is non-negative, so guard float round-off.
+      output[id] = fmax(0.5f * (expm1(lv) - lv + mu * mu), 0.0f);
      }
   }
 //+------------------------------------------------------------------+

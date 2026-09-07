@@ -7,6 +7,7 @@
 
 #ifndef NEURONET_DEFINITIONS_MQH
 #define NEURONET_DEFINITIONS_MQH
+#define NEURONET_OPENCL_CHECKED_API
 /// \file
 /// \brief NeuroNet.mqh
 /// Library for creating Neural network for use in MQL5 experts
@@ -117,7 +118,7 @@ uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRan
 #define D2SKILL_ACTIVE                           3
 #define D2SKILL_INACTIVE                         4
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements the pow helper function.                              |
 //+------------------------------------------------------------------+
 template<typename T1, typename T2>
 T1 pow(T2 a, T1 b)
@@ -125,7 +126,7 @@ T1 pow(T2 a, T1 b)
    return (T1)MathPow((T1)a, (T1)b);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Declares the uaLongChar union.                                   |
 //+------------------------------------------------------------------+
 union uaLongChar
   {
@@ -530,6 +531,8 @@ union uaLongChar
 #define  def_k_ff_matrix_o       2  ///< Output tensor
 #define  def_k_ff_inputs         3  ///< Number of inputs
 #define  def_k_ff_activation     4  ///< Activation type (#ENUM_ACTIVATION)
+#define  def_k_ff_numeric_flags  5  ///< Per-logical-output numeric status buffer
+#define  def_k_ff_flags_enabled  6  ///< Nonzero enables numeric status writes
 ///@}
 ///\defgroup neuron_base_gr Gradients Calculation kernels
 /// Describes the process of gradients calculation for the Neuron Base.
@@ -722,6 +725,8 @@ union uaLongChar
 #define  def_k_sum_shift_in1      5
 #define  def_k_sum_shift_in2      6
 #define  def_k_sum_shift_out      7
+#define  def_k_sum_numeric_flags  8
+#define  def_k_sum_flags_enabled  9
 //---
 #define  def_k_Matrix5Sum          19 ///< Index of the kernel for calculation Sum of 2 matrix with multiplyer (#SumMatrix)
 #define  def_k_sum5_matrix1        0  ///< First matrix
@@ -844,6 +849,8 @@ union uaLongChar
 #define def_k_vaeff_inputs                0
 #define def_k_vaeff_random                1
 #define def_k_vaeff_outputd               2
+#define def_k_vaeff_numeric_flags          3
+#define def_k_vaeff_flags_enabled          4
 //---
 #define def_k_VAECalcHiddenGradient      31
 #define def_k_vaehg_input                 0
@@ -1289,6 +1296,8 @@ union uaLongChar
 #define def_k_mm_offset_matr1          5
 #define def_k_mm_offset_matr2          6
 #define def_k_mm_offset_result         7
+#define def_k_mm_numeric_flags          8
+#define def_k_mm_flags_enabled          9
 //---
 #define def_k_FFT                      89
 #define def_k_fft_inputs_re            0
@@ -1481,6 +1490,8 @@ union uaLongChar
 #define def_k_gem_inputs2                       1
 #define def_k_gem_gate                          2
 #define def_k_gem_out                           3
+#define def_k_gem_numeric_flags                  4
+#define def_k_gem_flags_enabled                  5
 //---
 #define def_k_GateElementMulGrad                127
 #define def_k_gemg_inputs1                      0
@@ -1525,6 +1536,8 @@ union uaLongChar
 #define def_k_cd_dimension                      2
 #define def_k_cd_groups                         3
 #define def_k_cd_normalize                      4
+#define def_k_cd_numeric_flags                   5
+#define def_k_cd_flags_enabled                   6
 //---
 #define def_k_FeedForwardLocalMax               133
 #define def_k_fflm_matrix_i                     0
@@ -2081,6 +2094,8 @@ union uaLongChar
 #define  def_k_svecmat_shift_in1                4
 #define  def_k_svecmat_shift_in2                5
 #define  def_k_svecmat_shift_out                6
+#define  def_k_svecmat_numeric_flags            7
+#define  def_k_svecmat_flags_enabled            8
 //---
 #define  def_k_SumVecMatrixGrad                 201
 //---
@@ -3138,18 +3153,28 @@ union uaLongChar
 #define def_k_ompbd_target_states                       4
 #define def_k_ompbd_samples                             5
 #define def_k_ompbd_inv_tau2                            6
+#define def_k_ompbd_gate                                7
+#define def_k_ompbd_alpha_gradient                      8
+#define def_k_ompbd_gate_stride                         9
+#define def_k_ompbd_multiplier                         10
+#define def_k_ompbd_numeric_flags                      11
+#define def_k_ompbd_flags_enabled                      12
 #define def_k_OMPBDisagreementGrad                    318
 #define def_k_ompbdg_corrections                        0
 #define def_k_ompbdg_distance                           1
 #define def_k_ompbdg_disagreement                       2
 #define def_k_ompbdg_gradient                           3
 #define def_k_ompbdg_states                             4
-#define def_k_ompbdg_samples                             5
-#define def_k_ompbdg_dimension                           6
-#define def_k_ompbdg_variables                         7
+#define def_k_ompbdg_variables                         5
+#define def_k_ompbdg_samples                             6
+#define def_k_ompbdg_dimension                           7
 #define def_k_ompbdg_source_sign                        8
 #define def_k_ompbdg_multiplier                         9
 #define def_k_ompbdg_inv_tau2                          10
+#define def_k_ompbdg_gate                              11
+#define def_k_ompbdg_gate_stride                       12
+#define def_k_ompbdg_numeric_flags                     13
+#define def_k_ompbdg_flags_enabled                     14
 #define def_k_OMPBGaussianKL                          319
 #define def_k_ompbkl_mean                               0
 #define def_k_ompbkl_logvar                             1
@@ -3158,6 +3183,8 @@ union uaLongChar
 //+------------------------------------------------------------------+
 //| OMPB runtime mode                                                |
 //+------------------------------------------------------------------+
+//| Declares the ENUM_OMPB_MODE enumeration.                         |
+//+------------------------------------------------------------------+
 enum ENUM_OMPB_MODE
   {
    OMPB_BYPASS = 0,
@@ -3165,9 +3192,6 @@ enum ENUM_OMPB_MODE
    OMPB_CALIBRATE,
    OMPB_INFERENCE
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 //| Enum of activation formula used                                  |
 //+------------------------------------------------------------------+
 //--- OpenCL program resource.

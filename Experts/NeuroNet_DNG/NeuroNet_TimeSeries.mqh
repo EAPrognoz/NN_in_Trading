@@ -22,7 +22,7 @@ CNeuronOMPBOCL::CNeuronOMPBOCL(void) : iDimension(0),
                                        m_fTau(1.0f),
                                        m_fDisagreementMult(0.0f),
                                        m_fKLDMult(0.0f),
-                                       m_fAlphaPrior(0.5f),
+                                       m_fAlphaPrior(-6.0f),
                                        m_fAlphaMult(0.0f),
                                        m_fMaxKL(0.0f),
                                        m_fLastDisagreement(0.0f),
@@ -30,7 +30,9 @@ CNeuronOMPBOCL::CNeuronOMPBOCL(void) : iDimension(0),
                                        m_fLastAlphaPrior(0.0f),
                                        iInvalidFallbacks(0),
                                        iKLRejects(0),
-                                       bSourceAnchor(false)
+                                       bSourceAnchor(false),
+                                       bForwardAccepted(false),
+                                       bNumericRejected(false)
   {
    cReference = NULL;
    cCurrent = NULL;
@@ -52,6 +54,9 @@ bool CNeuronOMPBOCL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint reference_capacity, uint current_capacity,
                           ENUM_OPTIMIZATION optimization_type, uint batch)
   {
+//--- An incomplete reinitialization must not leave an older forward updateable.
+   bForwardAccepted = false;
+   bNumericRejected = false;
 //--- Validate the fixed OMPB tensor dimensions before allocating resources.
    if(dimension == 0)
       ReturnFalseEx("dimension is zero");
@@ -65,6 +70,11 @@ bool CNeuronOMPBOCL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
       ReturnFalseEx("current capacity is zero");
    if(samples > 64)
       ReturnFalseEx("samples exceeds 64");
+//--- Reject every fixed OMPB product before a wrapped value reaches an allocation.
+   uint numeric_total = 0;
+   if(!ValidateRuntimeSizes(dimension, variables, samples, reference_capacity,
+                            current_capacity, numeric_total))
+      ReturnFalseEx("runtime tensor size");
 //--- Initialize the base OMPB neuron storage.
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, dimension * variables,
                             optimization_type, batch))
@@ -80,19 +90,39 @@ bool CNeuronOMPBOCL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
    if(!cResidual.Init(0, 0, OpenCL, variables, dimension, dimension, samples,
                       optimization_type, batch))
       ReturnFalseEx("residual posterior");
-   if(!cAlpha.Init(0, 0, OpenCL, dimension * variables, optimization_type, batch))
+   if(!cAlpha.Init(0, 0, OpenCL, variables, optimization_type, batch))
       ReturnFalseEx("alpha parameters");
-//--- A zero alpha posterior yields the neutral sigmoid gate for a new layer.
-   if(!cAlpha.getWeightsParams().Fill(0.0f))
+//--- CParams stores a logical alpha as an input weight and a bias.
+   CBufferFloat *alpha_weights = cAlpha.getWeightsParams();
+   if(!alpha_weights)
+      ReturnFalseEx("alpha weights are null");
+   if(alpha_weights.Total() != int(2 * variables))
+      ReturnFalseEx("alpha physical shape mismatch");
+   if(!alpha_weights.Fill(0.0f))
       ReturnFalseEx("alpha posterior reset");
+   if(!alpha_weights.BufferRead())
+      ReturnFalseEx("read alpha weights");
+   for(uint index = 0; index < variables; index++)
+      if(!alpha_weights.Update(2 * index, -6.0f))
+         ReturnFalseEx("initialize alpha logit");
+   if(!alpha_weights.BufferWrite())
+      ReturnFalseEx("write alpha weights");
    if(!cAlpha.FeedForward())
       ReturnFalseEx("alpha forward");
    if(!cGate.Init(0, 0, OpenCL, dimension * variables, optimization_type, batch))
       ReturnFalseEx("gate buffer");
+   if(!cCandidate.BufferInit(dimension * variables, 0.0f))
+      ReturnFalseEx("candidate host buffer");
+   if(!cCandidate.BufferCreate(OpenCL))
+      ReturnFalseEx("candidate device buffer");
    if(!cInputGradient.BufferInit(dimension * variables, 0.0f))
       ReturnFalseEx("input gradient host buffer");
    if(!cInputGradient.BufferCreate(OpenCL))
       ReturnFalseEx("input gradient device buffer");
+   if(!InitializeAlphaRuntime())
+      ReturnFalseEx("alpha runtime buffers");
+   if(!InitializeNumericRuntime(numeric_total))
+      ReturnFalseEx("numeric runtime buffers");
 //--- Allocate the fixed-size reference and current history owners.
    if(!cReference)
       cReference = new CNeuronAddToStack();
@@ -225,8 +255,16 @@ bool CNeuronOMPBOCL::SetKLDMult(const float value)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::SetAlphaPrior(const float value)
   {
-   if(value <= 0.0f || value >= 1.0f)
-      ReturnFalseEx("value outside (0, 1)");
+   if(!MathIsValidNumber(value))
+      ReturnFalseEx("value is nonfinite");
+//--- Publish the new configuration only after its device-side constant refreshes.
+   if(cAlphaPriorOffset.Total() > 0)
+     {
+      if(!cAlphaPriorOffset.Update(0, -value))
+         ReturnFalseEx("alpha prior offset");
+      if(!cAlphaPriorOffset.BufferWrite())
+         ReturnFalseEx("write alpha prior offset");
+     }
    m_fAlphaPrior = value;
    return(true);
   }
@@ -235,8 +273,8 @@ bool CNeuronOMPBOCL::SetAlphaPrior(const float value)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::SetAlphaMult(const float value)
   {
-   if(value < 0.0f)
-      ReturnFalseEx("value is negative");
+   if(!MathIsValidNumber(value) || value < 0.0f)
+      ReturnFalseEx("value is nonfinite or negative");
    m_fAlphaMult = value;
    return(true);
   }
@@ -268,13 +306,209 @@ bool CNeuronOMPBOCL::Identity(CNeuronBaseOCL *NeuronOCL)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::PrepareGate(void)
   {
+   bool rejected = false;
+   if(!PrepareGateChecked(rejected))
+      return(false);
+   return(!rejected);
+  }
+//+------------------------------------------------------------------+
+//| Builds the deterministic gate and reports checked rejection.    |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::PrepareGateChecked(bool &rejected)
+  {
+   rejected = false;
 //--- CParams computes the deterministic alpha tensor outside CNet batch sampling.
    cAlpha.TrainMode(true);
-   if(!cAlpha.FeedForward())
-      ReturnFalseEx("alpha forward");
-   if(!Activation(cAlpha.getOutput(), cGate.getOutput(), SIGMOID))
+   if(!cAlpha.FeedForwardChecked(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                                 GetPointer(cNumericScalar), rejected))
+     {
+      cAlpha.TrainMode(bTrain);
+      ReturnFalseEx("checked alpha forward");
+     }
+   if(rejected)
+     {
+      cAlpha.TrainMode(bTrain);
+      return(true);
+     }
+   if(!MatMul(cAlpha.getOutput(), GetPointer(cAlphaOnes), cGate.getOutput(),
+              1, 1, iDimension, iVariables, false, 0, 0, 0, GetPointer(cNumericFlags)))
+     {
+      cAlpha.TrainMode(bTrain);
+      ReturnFalseEx("checked broadcast alpha logits");
+     }
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), iDimension * iVariables, rejected))
+     {
+      cAlpha.TrainMode(bTrain);
+      ReturnFalseEx("broadcast alpha numeric reduction");
+     }
+   if(rejected)
+     {
+      cAlpha.TrainMode(bTrain);
+      return(true);
+     }
+   if(!Activation(cGate.getOutput(), cGate.getOutput(), SIGMOID))
+     {
+      cAlpha.TrainMode(bTrain);
       ReturnFalseEx("sigmoid activation");
+     }
    cAlpha.TrainMode(bTrain);
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Allocates the transient and constant OMPB alpha GPU buffers.    |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::InitializeAlphaRuntime(void)
+  {
+//--- Allocate the feature-gradient scratch used by the gate backward pass.
+   if(!cAlphaGradient.BufferInit(iDimension * iVariables, 0.0f))
+      ReturnFalseEx("alpha feature gradient host buffer");
+   if(!cAlphaGradient.BufferCreate(OpenCL))
+      ReturnFalseEx("alpha feature gradient device buffer");
+//--- Allocate the runtime-only disagreement direction for alpha logits.
+   if(!cAlphaDisagreement.BufferInit(iVariables, 0.0f))
+      ReturnFalseEx("alpha disagreement host buffer");
+   if(!cAlphaDisagreement.BufferCreate(OpenCL))
+      ReturnFalseEx("alpha disagreement device buffer");
+//--- Build the immutable broadcast vector and configurable prior offset.
+   if(!cAlphaOnes.BufferInit(iDimension, 1.0f))
+      ReturnFalseEx("alpha broadcast ones host buffer");
+   if(!cAlphaOnes.BufferCreate(OpenCL))
+      ReturnFalseEx("alpha broadcast ones device buffer");
+   if(!cAlphaPriorOffset.BufferInit(1, -m_fAlphaPrior))
+      ReturnFalseEx("alpha prior offset host buffer");
+   if(!cAlphaPriorOffset.BufferCreate(OpenCL))
+      ReturnFalseEx("alpha prior offset device buffer");
+//--- Allocate the GPU-only prior reduction intermediates.
+   if(!cAlphaDelta.BufferInit(iVariables, 0.0f))
+      ReturnFalseEx("alpha prior delta host buffer");
+   if(!cAlphaDelta.BufferCreate(OpenCL))
+      ReturnFalseEx("alpha prior delta device buffer");
+   if(!cAlphaPriorSum.BufferInit(1, 0.0f))
+      ReturnFalseEx("alpha prior sum host buffer");
+   if(!cAlphaPriorSum.BufferCreate(OpenCL))
+      ReturnFalseEx("alpha prior sum device buffer");
+//--- Finalize alpha runtime allocation.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Multiplies an OMPB allocation span without exceeding INT_MAX.   |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::MultiplyRuntimeSize(const ulong left, const ulong right, ulong &result)
+  {
+//--- Reject a zero or overflowing allocation factor before multiplication.
+   result = 0;
+   if(right == 0 || left > ulong(INT_MAX) / right)
+      return(false);
+//--- Finalize the bounded allocation product.
+   result = left * right;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Validates OMPB allocation products and derives checked scratch. |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::ValidateRuntimeSizes(const uint dimension, const uint variables,
+      const uint samples, const uint reference_capacity, const uint current_capacity,
+      uint &numeric_total)
+  {
+//--- Reset the output span and reject an increment that wraps before multiplication.
+   numeric_total = 0;
+   if(dimension == UINT_MAX)
+      return(false);
+//--- Derive every allocation span with staged INT_MAX guards.
+   ulong output_total              = 0;
+   ulong alpha_total               = 0;
+   ulong weights_total             = 0;
+   ulong bias_total                = 0;
+   ulong posterior_total           = 0;
+   ulong posterior_storage_total   = 0;
+   ulong reference_history_total   = 0;
+   ulong current_history_total     = 0;
+   ulong reference_samples_total   = 0;
+   ulong current_samples_total     = 0;
+   ulong reference_distance_total  = 0;
+   ulong current_distance_total    = 0;
+   ulong reference_transpose_total = 0;
+   ulong current_transpose_total   = 0;
+   ulong kl_values_total           = 0;
+   if(!MultiplyRuntimeSize(dimension, variables, output_total) ||
+      !MultiplyRuntimeSize(2, variables, alpha_total) ||
+      !MultiplyRuntimeSize(variables, dimension, weights_total) ||
+      !MultiplyRuntimeSize(weights_total, dimension, weights_total) ||
+      !MultiplyRuntimeSize(variables, dimension, bias_total) ||
+      !MultiplyRuntimeSize(weights_total + bias_total, 2, posterior_total) ||
+      !MultiplyRuntimeSize(weights_total + bias_total, 4, posterior_storage_total) ||
+      !MultiplyRuntimeSize(reference_capacity, variables, reference_history_total) ||
+      !MultiplyRuntimeSize(reference_history_total, dimension, reference_history_total) ||
+      !MultiplyRuntimeSize(current_capacity, variables, current_history_total) ||
+      !MultiplyRuntimeSize(current_history_total, dimension, current_history_total) ||
+      !MultiplyRuntimeSize(samples, reference_history_total, reference_samples_total) ||
+      !MultiplyRuntimeSize(samples, current_history_total, current_samples_total) ||
+      !MultiplyRuntimeSize(samples, samples, reference_distance_total) ||
+      !MultiplyRuntimeSize(reference_distance_total, variables, reference_distance_total) ||
+      !MultiplyRuntimeSize(reference_distance_total, reference_capacity, reference_distance_total) ||
+      !MultiplyRuntimeSize(samples, samples, current_distance_total) ||
+      !MultiplyRuntimeSize(current_distance_total, variables, current_distance_total) ||
+      !MultiplyRuntimeSize(current_distance_total, current_capacity, current_distance_total) ||
+      !MultiplyRuntimeSize(variables, reference_capacity, reference_transpose_total) ||
+      !MultiplyRuntimeSize(variables, current_capacity, current_transpose_total) ||
+      !MultiplyRuntimeSize(variables, dimension, kl_values_total) ||
+      !MultiplyRuntimeSize(kl_values_total, dimension + 1, kl_values_total))
+      return(false);
+//--- Select the largest current or deferred checked output span.
+   ulong scratch_total = output_total;
+   if(posterior_total > scratch_total)
+      scratch_total = posterior_total;
+   if(reference_samples_total > scratch_total)
+      scratch_total = reference_samples_total;
+   if(current_samples_total > scratch_total)
+      scratch_total = current_samples_total;
+   if(reference_distance_total > scratch_total)
+      scratch_total = reference_distance_total;
+   if(current_distance_total > scratch_total)
+      scratch_total = current_distance_total;
+//--- Finalize the validated scratch capacity for CBufferFloat allocation.
+   numeric_total = (uint)scratch_total;
+   return(numeric_total > 0);
+  }
+//+------------------------------------------------------------------+
+//| Allocates the transient checked numeric status buffers.         |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::InitializeNumericRuntime(const uint total)
+  {
+//--- Validate the previously bounded caller-owned scratch span.
+   if(total == 0)
+      ReturnFalseEx("numeric scratch size is zero");
+//--- Allocate transient device status, unit, and scalar-reduction buffers.
+   if(!cNumericFlags.BufferInit(total, 0.0f))
+      ReturnFalseEx("numeric flags host buffer");
+   if(!cNumericFlags.BufferCreate(OpenCL))
+      ReturnFalseEx("numeric flags device buffer");
+   if(!cNumericOnes.BufferInit(total, 1.0f))
+      ReturnFalseEx("numeric ones host buffer");
+   if(!cNumericOnes.BufferCreate(OpenCL))
+      ReturnFalseEx("numeric ones device buffer");
+   if(!cNumericScalar.BufferInit(1, 0.0f))
+      ReturnFalseEx("numeric scalar host buffer");
+   if(!cNumericScalar.BufferCreate(OpenCL))
+      ReturnFalseEx("numeric scalar device buffer");
+   if(!cKLMetricScalar.BufferInit(1, 0.0f))
+      ReturnFalseEx("KL metric scalar host buffer");
+   if(!cKLMetricScalar.BufferCreate(OpenCL))
+      ReturnFalseEx("KL metric scalar device buffer");
+   if(!cDisagreementPositive.BufferInit(iVariables, 0.0f))
+      ReturnFalseEx("disagreement positive host buffer");
+   if(!cDisagreementPositive.BufferCreate(OpenCL))
+      ReturnFalseEx("disagreement positive device buffer");
+   if(!cDisagreementNegative.BufferInit(iVariables, 0.0f))
+      ReturnFalseEx("disagreement negative host buffer");
+   if(!cDisagreementNegative.BufferCreate(OpenCL))
+      ReturnFalseEx("disagreement negative device buffer");
+   if(!cDisagreementMetricScalar.BufferInit(1, 0.0f))
+      ReturnFalseEx("disagreement metric scalar host buffer");
+   if(!cDisagreementMetricScalar.BufferCreate(OpenCL))
+      ReturnFalseEx("disagreement metric scalar device buffer");
+//--- Finalize numeric runtime allocation without serializing transient state.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -316,16 +550,28 @@ bool CNeuronOMPBOCL::CalculateKL(void)
    setBuffer(def_k_OMPBGaussianKL, def_k_ompbkl_output, cKLValues.GetIndex())
    setArgument(def_k_OMPBGaussianKL, def_k_ompbkl_total, (int)total)
    kernelExecute(def_k_OMPBGaussianKL, global_work_offset, global_work_size)
-   if(!cKLValues.BufferRead())
-      ReturnFalseEx("read KL values");
-   for(uint index = 0; index < total; index++)
+//--- Reduce checked KL values on-device and expose only their scalar sum to the host.
+   bool rejected = false;
+   if(!MatMul(GetPointer(cKLValues), GetPointer(cNumericOnes), GetPointer(cKLMetricScalar),
+              1, total, 1, 1, false, 0, 0, 0, GetPointer(cNumericFlags)))
+      ReturnFalseEx("checked KL sum");
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), 1, rejected))
+      ReturnFalseEx("KL numeric reduction");
+   if(rejected)
      {
-      float value = cKLValues[index];
-      if(!MathIsValidNumber(value))
-         ReturnFalseEx("nonfinite KL value");
-      m_fLastKL += value;
+      bNumericRejected = true;
+      return(true);
      }
-   m_fLastKL /= float(total);
+   if(!cKLMetricScalar.BufferRead())
+      ReturnFalseEx("read KL metric scalar");
+   if(!MathIsValidNumber(cKLMetricScalar[0]))
+     {
+      bNumericRejected = true;
+      return(true);
+     }
+//--- Preserve the full posterior KL sum for the MaxKL contract.
+   m_fLastKL = cKLMetricScalar[0];
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -337,31 +583,28 @@ bool CNeuronOMPBOCL::ApplyAlphaPrior(void)
    m_fLastAlphaPrior = 0.0f;
    if(!bTrain || eMode != OMPB_CALIBRATE || bSourceAnchor || m_fAlphaMult <= 0.0f)
       return(true);
-   CBufferFloat *gate = cGate.getOutput();
    CBufferFloat *gradient = cAlpha.getGradient();
-   if(!gate)
-      ReturnFalseEx("gate output is null");
    if(!gradient)
       ReturnFalseEx("alpha gradient is null");
-   if(!gate.BufferRead())
-      ReturnFalseEx("read gate output");
-   if(!gradient.BufferRead())
-      ReturnFalseEx("read alpha gradient");
-   uint total = iDimension * iVariables;
-   for(uint index = 0; index < total; index++)
-     {
-      float value = gate[index];
-      if(!MathIsValidNumber(value))
-         ReturnFalseEx("nonfinite gate value");
-      float delta = value - m_fAlphaPrior;
-      m_fLastAlphaPrior += delta * delta;
-      //--- The optimizer adds this buffer, hence retain the negative derivative.
-      if(!gradient.Update(index, gradient[index] - m_fAlphaMult * delta * value * (1.0f - value) / float(total)))
-         ReturnFalseEx("update alpha gradient");
-     }
-   m_fLastAlphaPrior /= float(total);
-   if(!gradient.BufferWrite())
-      ReturnFalseEx("write alpha gradient");
+//--- Form alpha-prior, reduce its squared norm, and retain only its scalar metric on host.
+   if(!SumVecMatrix(GetPointer(cAlphaPriorOffset), cAlpha.getOutput(), GetPointer(cAlphaDelta),
+                    1, 1, 0, 0, 0, 1.0f, iVariables))
+      ReturnFalseEx("alpha prior delta");
+   if(!MatMul(GetPointer(cAlphaDelta), GetPointer(cAlphaDelta), GetPointer(cAlphaPriorSum),
+              1, iVariables, 1, 1, false))
+      ReturnFalseEx("alpha prior squared sum");
+   if(!cAlphaPriorSum.BufferRead())
+      ReturnFalseEx("read alpha prior squared sum");
+   if(!MathIsValidNumber(cAlphaPriorSum[0]))
+      ReturnFalseEx("nonfinite alpha prior squared sum");
+   m_fLastAlphaPrior = 0.5f * m_fAlphaMult * cAlphaPriorSum[0];
+//--- The optimizer consumes ascent directions, so add -lambda*(alpha-prior).
+   if(!SumAndNormalize(GetPointer(cAlphaDelta), GetPointer(cAlphaDelta), GetPointer(cAlphaDelta),
+                       iVariables, false, 0, 0, 0, -0.5f * m_fAlphaMult))
+      ReturnFalseEx("alpha prior gradient");
+   if(!SumAndNormalize(gradient, GetPointer(cAlphaDelta), gradient,
+                       iVariables, false, 0, 0, 0, 1.0f))
+      ReturnFalseEx("merge alpha prior gradient");
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -404,16 +647,30 @@ bool CNeuronOMPBOCL::CalculateDistribution(CNeuronAddToStack *history,
       ReturnFalseEx("history output is null");
    if(raw_samples.getOutput() == NULL)
       ReturnFalseEx("sample output is null");
-//--- Transform fixed history into posterior samples and their distance layout.
+//--- Transform fixed history into checked posterior samples and their distance layout.
    if(!history_transpose.FeedForward(history))
       ReturnFalseEx("history transpose");
-   if(!cResidual.ForwardSamplesBatch(history.getOutput(), raw_samples.getOutput(), capacity))
-      ReturnFalseEx("posterior samples");
+   bool rejected = false;
+   if(!cResidual.ForwardSamplesBatchChecked(history.getOutput(), raw_samples.getOutput(), capacity,
+         GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+         GetPointer(cNumericScalar), rejected))
+      ReturnFalseEx("checked posterior samples");
+   if(rejected)
+     {
+      bNumericRejected = true;
+      return(true);
+     }
    if(!samples_transpose.FeedForward(raw_samples))
       ReturnFalseEx("samples transpose");
    if(!CalcDistance(samples_transpose.getOutput(), distance, iDimension, iSamples,
-                    iVariables * capacity, false))
-      ReturnFalseEx("raw grouped distance");
+                    iVariables * capacity, false, GetPointer(cNumericFlags)))
+      ReturnFalseEx("checked raw grouped distance");
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), iVariables * capacity * iSamples * iSamples,
+                          rejected))
+      ReturnFalseEx("distance numeric reduction");
+   if(rejected)
+      bNumericRejected = true;
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -424,23 +681,30 @@ bool CNeuronOMPBOCL::CalculateDistribution(CNeuronAddToStack *history,
 bool CNeuronOMPBOCL::PrepareRegularizers(void)
   {
    m_fLastDisagreement = 0.0f;
+   if(!cAlphaDisagreement.Fill(0.0f))
+      ReturnFalseEx("clear alpha disagreement");
    if(eMode != OMPB_CALIBRATE || bSourceAnchor || !bTrain ||
       iReferenceCount < iReferenceCapacity || iCurrentCount < iCurrentCapacity)
       return(true);
    const float inv_tau2 = 1.0f / MathPow(MathAbs(m_fTau), 2);
-   //--- Build the source and target posterior distributions before disagreement.
+//--- Build the source and target posterior distributions before disagreement.
    if(!CalculateDistribution(cReference, GetPointer(cReferenceHistoryTranspose),
-                            GetPointer(cReferenceSamples),
-                            GetPointer(cReferenceSamplesTranspose), iReferenceCapacity,
-                            GetPointer(cReferenceDistance)))
+                             GetPointer(cReferenceSamples),
+                             GetPointer(cReferenceSamplesTranspose), iReferenceCapacity,
+                             GetPointer(cReferenceDistance)))
       ReturnFalseEx("reference distribution");
+   if(bNumericRejected)
+      return(true);
    if(!CalculateDistribution(cCurrent, GetPointer(cCurrentHistoryTranspose),
-                           GetPointer(cCurrentSamples),
-                           GetPointer(cCurrentSamplesTranspose), iCurrentCapacity,
-                           GetPointer(cCurrentDistance)))
+                             GetPointer(cCurrentSamples),
+                             GetPointer(cCurrentSamplesTranspose), iCurrentCapacity,
+                             GetPointer(cCurrentDistance)))
       ReturnFalseEx("current distribution");
-   uint global_work_offset[1] = {0};
-   uint global_work_size[1] = {iVariables};
+   if(bNumericRejected)
+      return(true);
+   uint global_work_offset[2] = {0, 0};
+   uint global_work_size[2] = {64, iVariables};
+   uint local_work_size[2] = {64, 1};
    setBuffer(def_k_OMPBDisagreement, def_k_ompbd_reference, cReferenceDistance.GetIndex())
    setBuffer(def_k_OMPBDisagreement, def_k_ompbd_current, cCurrentDistance.GetIndex())
    setBuffer(def_k_OMPBDisagreement, def_k_ompbd_output, cDisagreement.GetIndex())
@@ -448,26 +712,82 @@ bool CNeuronOMPBOCL::PrepareRegularizers(void)
    setArgument(def_k_OMPBDisagreement, def_k_ompbd_target_states, (int)iCurrentCapacity)
    setArgument(def_k_OMPBDisagreement, def_k_ompbd_samples, (int)iSamples)
    setArgument(def_k_OMPBDisagreement, def_k_ompbd_inv_tau2, inv_tau2)
-   kernelExecute(def_k_OMPBDisagreement, global_work_offset, global_work_size)
-   if(!cDisagreement.BufferRead())
-      ReturnFalseEx("read disagreement");
-   for(uint variable = 0; variable < iVariables; variable++)
+   setBuffer(def_k_OMPBDisagreement, def_k_ompbd_gate, cGate.getOutputIndex())
+   setBuffer(def_k_OMPBDisagreement, def_k_ompbd_alpha_gradient, cAlphaDisagreement.GetIndex())
+   setArgument(def_k_OMPBDisagreement, def_k_ompbd_gate_stride, (int)iDimension)
+   setArgument(def_k_OMPBDisagreement, def_k_ompbd_multiplier,
+               -m_fDisagreementMult / (float)iVariables)
+   setBuffer(def_k_OMPBDisagreement, def_k_ompbd_numeric_flags, cNumericFlags.GetIndex())
+   setArgument(def_k_OMPBDisagreement, def_k_ompbd_flags_enabled, 1)
+   kernelExecuteLoc(def_k_OMPBDisagreement, global_work_offset, global_work_size, local_work_size)
+//--- Reject the raw kernel status before consuming its sanitized disagreement output.
+   bool rejected = false;
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), iVariables, rejected))
+      ReturnFalseEx("disagreement numeric reduction");
+   if(rejected)
      {
-      float delta = cDisagreement[variable];
-      if(!MathIsValidNumber(delta))
-         ReturnFalseEx("nonfinite disagreement");
-      m_fLastDisagreement += MathAbs(delta);
+      bNumericRejected = true;
+      return(true);
      }
-   m_fLastDisagreement /= float(iVariables);
+//--- Form GPU L1(delta) from paired LReLU transforms without changing the objective.
+   if(!Activation(GetPointer(cDisagreement), GetPointer(cDisagreementPositive), LReLU))
+      ReturnFalseEx("disagreement positive activation");
+   if(!SumAndNormalize(GetPointer(cDisagreement), GetPointer(cDisagreement),
+                       GetPointer(cDisagreementNegative), iVariables, false,
+                       0, 0, 0, -0.5f, GetPointer(cNumericFlags)))
+      ReturnFalseEx("disagreement negative sum");
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), iVariables, rejected))
+      ReturnFalseEx("disagreement negative reduction");
+   if(rejected)
+     {
+      bNumericRejected = true;
+      return(true);
+     }
+   if(!Activation(GetPointer(cDisagreementNegative), GetPointer(cDisagreementNegative), LReLU))
+      ReturnFalseEx("disagreement negative activation");
+   if(!SumAndNormalize(GetPointer(cDisagreementPositive), GetPointer(cDisagreementNegative),
+                       GetPointer(cDisagreementPositive), iVariables, false,
+                       0, 0, 0, 1.0f / 0.99f, GetPointer(cNumericFlags)))
+      ReturnFalseEx("disagreement absolute sum");
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), iVariables, rejected))
+      ReturnFalseEx("disagreement absolute reduction");
+   if(rejected)
+     {
+      bNumericRejected = true;
+      return(true);
+     }
+   if(!MatMul(GetPointer(cDisagreementPositive), GetPointer(cNumericOnes),
+              GetPointer(cDisagreementMetricScalar), 1, iVariables, 1, 1,
+              false, 0, 0, 0, GetPointer(cNumericFlags)))
+      ReturnFalseEx("disagreement metric sum");
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), 1, rejected))
+      ReturnFalseEx("disagreement metric reduction");
+   if(rejected)
+     {
+      bNumericRejected = true;
+      return(true);
+     }
+   if(!cDisagreementMetricScalar.BufferRead())
+      ReturnFalseEx("read disagreement metric scalar");
+   if(!MathIsValidNumber(cDisagreementMetricScalar[0]))
+     {
+      bNumericRejected = true;
+      return(true);
+     }
+   m_fLastDisagreement = cDisagreementMetricScalar[0] / (float)iVariables;
    if(m_fDisagreementMult <= 0.0f)
       return(true);
    if(!cReferenceSamplesTranspose.getGradient().Fill(0.0f))
       ReturnFalseEx("clear reference sample gradient");
    if(!cCurrentSamplesTranspose.getGradient().Fill(0.0f))
       ReturnFalseEx("clear current sample gradient");
-   //--- OpenCLExecute receives the dimensionality from work_size. Its offset
-   //--- must carry the same three dimensions; a one-item offset array leaves
-   //--- dimensions 1/2 invalid for OMPBDisagreementGrad.
+//--- OpenCLExecute receives the dimensionality from work_size. Its offset
+//--- must carry the same three dimensions; a one-item offset array leaves
+//--- dimensions 1/2 invalid for OMPBDisagreementGrad.
    uint source_work_offset[3] = {0, 0, 0};
    uint source_work_size[3] = {iVariables * iReferenceCapacity, iSamples, iDimension};
    setBuffer(def_k_OMPBDisagreementGrad, def_k_ompbdg_corrections, cReferenceSamplesTranspose.getOutputIndex())
@@ -481,13 +801,27 @@ bool CNeuronOMPBOCL::PrepareRegularizers(void)
    setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_source_sign, 1)
    setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_multiplier, -m_fDisagreementMult / (float)iVariables)
    setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_inv_tau2, inv_tau2)
+   setBuffer(def_k_OMPBDisagreementGrad, def_k_ompbdg_gate, cGate.getOutputIndex())
+   setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_gate_stride, (int)iDimension)
+   setBuffer(def_k_OMPBDisagreementGrad, def_k_ompbdg_numeric_flags, cNumericFlags.GetIndex())
+   setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_flags_enabled, 1)
    kernelExecute(def_k_OMPBDisagreementGrad, source_work_offset, source_work_size)
-   //--- The predecessor owns CalcHiddenGradients(next): this dispatches the
-   //--- TransposeRCD inverse kernel into the raw [K, V * N, D] sample gradient.
+//--- Reject source-gradient arithmetic before it can enter posterior backpropagation.
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar),
+                          iVariables * iReferenceCapacity * iSamples * iDimension, rejected))
+      ReturnFalseEx("reference disagreement gradient reduction");
+   if(rejected)
+     {
+      bNumericRejected = true;
+      return(true);
+     }
+//--- The predecessor owns CalcHiddenGradients(next): this dispatches the
+//--- TransposeRCD inverse kernel into the raw [K, V * N, D] sample gradient.
    if(!cReferenceSamples.CalcHiddenGradients(cReferenceSamplesTranspose.AsObject()))
       ReturnFalseEx("reference transpose backward");
    if(!cResidual.BackwardSamplesBatch(cReference.getOutput(), cReferenceSamples.getGradient(),
-                                     iReferenceCapacity))
+                                      iReferenceCapacity))
       ReturnFalseEx("reference posterior backward");
    uint target_work_offset[3] = {0, 0, 0};
    uint target_work_size[3] = {iVariables * iCurrentCapacity, iSamples, iDimension};
@@ -502,11 +836,25 @@ bool CNeuronOMPBOCL::PrepareRegularizers(void)
    setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_source_sign, -1)
    setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_multiplier, -m_fDisagreementMult / (float)iVariables)
    setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_inv_tau2, inv_tau2)
+   setBuffer(def_k_OMPBDisagreementGrad, def_k_ompbdg_gate, cGate.getOutputIndex())
+   setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_gate_stride, (int)iDimension)
+   setBuffer(def_k_OMPBDisagreementGrad, def_k_ompbdg_numeric_flags, cNumericFlags.GetIndex())
+   setArgument(def_k_OMPBDisagreementGrad, def_k_ompbdg_flags_enabled, 1)
    kernelExecute(def_k_OMPBDisagreementGrad, target_work_offset, target_work_size)
+//--- Reject target-gradient arithmetic before it can enter posterior backpropagation.
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar),
+                          iVariables * iCurrentCapacity * iSamples * iDimension, rejected))
+      ReturnFalseEx("current disagreement gradient reduction");
+   if(rejected)
+     {
+      bNumericRejected = true;
+      return(true);
+     }
    if(!cCurrentSamples.CalcHiddenGradients(cCurrentSamplesTranspose.AsObject()))
       ReturnFalseEx("current transpose backward");
    if(!cResidual.BackwardSamplesBatch(cCurrent.getOutput(), cCurrentSamples.getGradient(),
-                                     iCurrentCapacity))
+                                      iCurrentCapacity))
       ReturnFalseEx("current posterior backward");
    return(true);
   }
@@ -516,6 +864,9 @@ bool CNeuronOMPBOCL::PrepareRegularizers(void)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
+//--- Every forward invalidates older updates, including identity-only modes.
+   bForwardAccepted = false;
+   bNumericRejected = false;
    if(!NeuronOCL)
       ReturnFalseEx("source layer is null");
    if(NeuronOCL.Neurons() != int(iDimension * iVariables))
@@ -526,24 +877,64 @@ bool CNeuronOMPBOCL::feedForward(CNeuronBaseOCL *NeuronOCL)
      {
       if(!Identity(NeuronOCL))
          ReturnFalseEx("reference identity output");
-      if(!cReference.FeedForward(NeuronOCL.AsObject()))
-         ReturnFalseEx("reference history update");
-      iReferenceCount = MathMin(iReferenceCount + 1, iReferenceCapacity);
+//--- Freeze the completed reference until an explicit ResetReference call.
+      if(iReferenceCount < iReferenceCapacity)
+        {
+         if(!cReference.FeedForward(NeuronOCL.AsObject()))
+            ReturnFalseEx("reference history update");
+         iReferenceCount++;
+        }
       return(true);
      }
-   if(!cResidual.FeedForward(NeuronOCL.AsObject()))
-      ReturnFalseEx("residual posterior mean");
-   if(!PrepareGate())
-      ReturnFalseEx("prepare gate");
-   if(!GateElementMult(NeuronOCL.getOutput(), cResidual.getOutput(), cGate.getOutput(), getOutput()))
-      ReturnFalseEx("gated output");
-   if(!IsFiniteOutput())
+//--- Source anchors retain mean training while suppressing Bayesian regularizers.
+   cResidual.SetRegularizersEnabled(!bSourceAnchor);
+   bool rejected = false;
+   if(!cResidual.FeedForwardChecked(NeuronOCL.AsObject(), GetPointer(cNumericFlags),
+                                    GetPointer(cNumericOnes), GetPointer(cNumericScalar), rejected))
+      ReturnFalseEx("checked residual posterior mean");
+   if(rejected)
+     {
+      iInvalidFallbacks++;
+      return(Identity(NeuronOCL));
+     }
+   if(!PrepareGateChecked(rejected))
+      ReturnFalseEx("checked prepare gate");
+   if(rejected)
+     {
+      iInvalidFallbacks++;
+      return(Identity(NeuronOCL));
+     }
+//--- Form H + delta without overwriting the posterior residual output.
+   if(!SumAndNormalize(NeuronOCL.getOutput(), cResidual.getOutput(), &cCandidate,
+                       iDimension, false, 0, 0, 0, 1.0f, GetPointer(cNumericFlags)))
+      ReturnFalseEx("checked residual candidate");
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), iDimension * iVariables, rejected))
+      ReturnFalseEx("candidate numeric reduction");
+   if(rejected)
+     {
+      iInvalidFallbacks++;
+      return(Identity(NeuronOCL));
+     }
+//--- Gate the residual candidate against the original input state.
+   if(!GateElementMult(&cCandidate, NeuronOCL.getOutput(), cGate.getOutput(), getOutput(),
+                       GetPointer(cNumericFlags)))
+      ReturnFalseEx("checked gated output");
+   if(!ReduceNumericFlags(GetPointer(cNumericFlags), GetPointer(cNumericOnes),
+                          GetPointer(cNumericScalar), iDimension * iVariables, rejected))
+      ReturnFalseEx("gated output numeric reduction");
+   if(rejected)
      {
       iInvalidFallbacks++;
       return(Identity(NeuronOCL));
      }
    if(!CalculateKL())
-      ReturnFalseEx("KL metric");
+      ReturnFalseEx("KL calculation");
+   if(bNumericRejected)
+     {
+      iInvalidFallbacks++;
+      return(Identity(NeuronOCL));
+     }
    if(m_fMaxKL > 0.0f && m_fLastKL > m_fMaxKL)
      {
       iKLRejects++;
@@ -557,7 +948,14 @@ bool CNeuronOMPBOCL::feedForward(CNeuronBaseOCL *NeuronOCL)
       iCurrentCount = MathMin(iCurrentCount + 1, iCurrentCapacity);
      }
    if(!PrepareRegularizers())
-      ReturnFalseEx("posterior regularizers");
+      ReturnFalseEx("regularizer preparation");
+   if(bNumericRejected)
+     {
+      iInvalidFallbacks++;
+      return(Identity(NeuronOCL));
+     }
+//--- Finalize the residual output after history and regularizer handling.
+   bForwardAccepted = true;
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -574,26 +972,48 @@ bool CNeuronOMPBOCL::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
          ReturnFalseEx("identity gradient copy");
       return(true);
      }
-//--- Reset OMPB gradient buffers before propagating the gated forecast path.
+//--- A rejected forward owns only the direct identity gradient path.
+   if(!bForwardAccepted)
+     {
+      if(!CopyBufferRaw(getGradient(), NeuronOCL.getGradient(), iDimension * iVariables))
+         ReturnFalseEx("rejected identity gradient copy");
+      return(true);
+     }
+//--- Reset OMPB gradient buffers before propagating the gated residual path.
    if(!cInputGradient.Fill(0.0f))
       ReturnFalseEx("clear input gradient");
    if(!cResidual.getGradient().Fill(0.0f))
       ReturnFalseEx("clear residual gradient");
    if(!cAlpha.getGradient().Fill(0.0f))
       ReturnFalseEx("clear alpha gradient");
-   if(!GateElementMultGrad(NeuronOCL.getOutput(), &cInputGradient,
-                           cResidual.getOutput(), cResidual.getGradient(),
-                           cGate.getOutput(), cAlpha.getGradient(), getGradient(),
+   if(!cAlphaGradient.Fill(0.0f))
+      ReturnFalseEx("clear alpha feature gradient");
+//--- Differentiate the gate over candidate=H+delta and the direct H branch.
+   if(!GateElementMultGrad(&cCandidate, cResidual.getGradient(),
+                           NeuronOCL.getOutput(), &cInputGradient,
+                           cGate.getOutput(), GetPointer(cAlphaGradient), getGradient(),
                            None, None, SIGMOID))
       ReturnFalseEx("gated gradient");
-   if(!cResidual.CalcHiddenGradients(NeuronOCL.AsObject()))
+   if(!MatMul(GetPointer(cAlphaGradient), GetPointer(cAlphaOnes), cAlpha.getGradient(),
+              1, iDimension, 1, iVariables, false))
+      ReturnFalseEx("reduce alpha feature gradient");
+//--- Merge the transient disagreement direction after forecast reduction.
+   if(!SumAndNormalize(cAlpha.getGradient(), GetPointer(cAlphaDisagreement), cAlpha.getGradient(),
+                       iVariables, false, 0, 0, 0, 1.0f))
+      ReturnFalseEx("merge alpha disagreement");
+//--- Include candidate's H identity branch before the Bayesian backward pass.
+   if(!SumAndNormalize(&cInputGradient, cResidual.getGradient(), &cInputGradient,
+                       iDimension, false, 0, 0, 0, 1.0f))
+      ReturnFalseEx("candidate input gradient");
+   if(!NeuronOCL.CalcHiddenGradients(cResidual.AsObject()))
       ReturnFalseEx("residual gradient");
+//--- Merge the direct residual identity branch after Bayesian affine propagation.
    if(!SumAndNormalize(&cInputGradient, NeuronOCL.getGradient(), NeuronOCL.getGradient(),
                        iDimension, false, 0, 0, 0, 1.0f))
       ReturnFalseEx("input gradient merge");
    if(!ApplyAlphaPrior())
       ReturnFalseEx("alpha prior");
-//--- Source anchor contributes only the mean Forecast gradient.
+//--- Finalize the calibrated residual gradient after alpha regularization.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -602,8 +1022,9 @@ bool CNeuronOMPBOCL::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
-   if(!bTrain || eMode != OMPB_CALIBRATE || bSourceAnchor ||
-      (m_fMaxKL > 0.0f && m_fLastKL > m_fMaxKL))
+   if(!bForwardAccepted)
+      return(true);
+   if(!bTrain || eMode != OMPB_CALIBRATE || bSourceAnchor)
       return(true);
    if(!NeuronOCL)
       ReturnFalseEx("source layer is null");
@@ -638,6 +1059,7 @@ bool CNeuronOMPBOCL::ResetReference(void)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::Save(const int file_handle)
   {
+//--- Write the established OMPB state before the durable history tail.
    if(!CNeuronBaseOCL::Save(file_handle))
       ReturnFalseEx("base neuron");
    dFileWriteUInt(file_handle, iDimension);
@@ -655,6 +1077,26 @@ bool CNeuronOMPBOCL::Save(const int file_handle)
       ReturnFalseEx("residual posterior");
    if(!cAlpha.Save(file_handle))
       ReturnFalseEx("alpha parameters");
+//--- Persist the canonical newest-first history snapshots with their fill counts.
+   if(!cReference || !cReference.getOutput())
+      ReturnFalseEx("reference history");
+   if(!cCurrent || !cCurrent.getOutput())
+      ReturnFalseEx("current history");
+   if(iReferenceCount > iReferenceCapacity)
+      ReturnFalseEx("reference history count");
+   if(iCurrentCount > iCurrentCapacity)
+      ReturnFalseEx("current history count");
+   if(cReference.getOutput().Total() != int(iReferenceCapacity * iDimension * iVariables))
+      ReturnFalseEx("reference history shape");
+   if(cCurrent.getOutput().Total() != int(iCurrentCapacity * iDimension * iVariables))
+      ReturnFalseEx("current history shape");
+   dFileWriteUInt(file_handle, iReferenceCount);
+   dFileWriteUInt(file_handle, iCurrentCount);
+   if(!cReference.getOutput().Save(file_handle))
+      ReturnFalseEx("reference history data");
+   if(!cCurrent.getOutput().Save(file_handle))
+      ReturnFalseEx("current history data");
+//--- Finalize the symmetric OMPB persistence record.
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -662,6 +1104,9 @@ bool CNeuronOMPBOCL::Save(const int file_handle)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::Load(const int file_handle)
   {
+//--- A partial load cannot retain permission to update from an older forward.
+   bForwardAccepted = false;
+   bNumericRejected = false;
    if(!CNeuronBaseOCL::Load(file_handle))
       ReturnFalseEx("base neuron");
 //--- Read the serialized OMPB configuration in the established field order.
@@ -687,23 +1132,48 @@ bool CNeuronOMPBOCL::Load(const int file_handle)
       ReturnFalseEx("reference capacity is zero");
    if(iCurrentCapacity == 0)
       ReturnFalseEx("current capacity is zero");
-   if(m_fTau <= 0.0f)
-      ReturnFalseEx("tau is non-positive");
-   if(m_fDisagreementMult < 0.0f)
-      ReturnFalseEx("disagreement multiplier is negative");
-   if(m_fKLDMult < 0.0f)
-      ReturnFalseEx("KL multiplier is negative");
-   if(m_fAlphaPrior <= 0.0f || m_fAlphaPrior >= 1.0f)
-      ReturnFalseEx("alpha prior outside (0, 1)");
-   if(m_fAlphaMult < 0.0f)
-      ReturnFalseEx("alpha multiplier is negative");
-   if(m_fMaxKL < 0.0f)
-      ReturnFalseEx("maximum KL is negative");
+   if(!MathIsValidNumber(m_fTau) || m_fTau <= 0.0f)
+      ReturnFalseEx("tau is nonfinite or non-positive");
+   if(!MathIsValidNumber(m_fDisagreementMult) || m_fDisagreementMult < 0.0f)
+      ReturnFalseEx("disagreement multiplier is nonfinite or negative");
+   if(!MathIsValidNumber(m_fKLDMult) || m_fKLDMult < 0.0f)
+      ReturnFalseEx("KL multiplier is nonfinite or negative");
+   if(!MathIsValidNumber(m_fAlphaPrior))
+      ReturnFalseEx("alpha prior is nonfinite");
+   if(!MathIsValidNumber(m_fAlphaMult) || m_fAlphaMult < 0.0f)
+      ReturnFalseEx("alpha multiplier is nonfinite or negative");
+   if(!MathIsValidNumber(m_fMaxKL) || m_fMaxKL < 0.0f)
+      ReturnFalseEx("maximum KL is nonfinite or negative");
+//--- Reject wrapped runtime products before loading nested resources or buffers.
+   uint numeric_total = 0;
+   if(!ValidateRuntimeSizes(iDimension, iVariables, iSamples, iReferenceCapacity,
+                            iCurrentCapacity, numeric_total))
+      ReturnFalseEx("runtime tensor size");
+//--- Require the persisted outer layer to match the validated OMPB output span.
+   const int expected_outer_total = (int)((ulong)iVariables * (ulong)iDimension);
+   CBufferFloat *outer_output     = getOutput();
+   CBufferFloat *outer_gradient   = getGradient();
+   if(!outer_output || !outer_gradient)
+      ReturnFalseEx("outer buffers are null");
+   if(outer_output.Total() != expected_outer_total || outer_gradient.Total() != expected_outer_total)
+      ReturnFalseEx("outer buffer shape mismatch");
    if(!LoadInsideLayer(file_handle, cResidual.AsObject()))
       ReturnFalseEx("residual posterior");
+//--- The nested posterior must share the OMPB variable, affine, and sample contract.
+   if(cResidual.Variables() != iVariables || cResidual.Inputs() != iDimension ||
+      cResidual.Outputs() != iDimension || cResidual.Samples() != iSamples)
+      ReturnFalseEx("residual posterior shape mismatch");
    if(!LoadInsideLayer(file_handle, cAlpha.AsObject()))
       ReturnFalseEx("alpha parameters");
-//--- Reset runtime-only counters and preserve the safe bypass mode after load.
+   CBufferFloat *alpha_output   = cAlpha.getOutput();
+   CBufferFloat *alpha_gradient = cAlpha.getGradient();
+   CBufferFloat *alpha_weights  = cAlpha.getWeightsParams();
+   if(!alpha_output || !alpha_gradient || !alpha_weights)
+      ReturnFalseEx("alpha buffers are null");
+   if(cAlpha.Neurons() != int(iVariables) || alpha_output.Total() != int(iVariables) ||
+      alpha_gradient.Total() != int(iVariables) || alpha_weights.Total() != int(2 * iVariables))
+      ReturnFalseEx("alpha logical shape mismatch");
+//--- Reset diagnostics, invalidate old histories, and preserve safe bypass mode.
    eMode = OMPB_BYPASS;
    bSourceAnchor = false;
    iReferenceCount = 0;
@@ -713,13 +1183,21 @@ bool CNeuronOMPBOCL::Load(const int file_handle)
    m_fLastAlphaPrior = 0.0f;
    iInvalidFallbacks = 0;
    iKLRejects = 0;
-//--- Recreate the deterministic gate and input-gradient buffers.
+//--- Recreate the deterministic gate, residual candidate, and input-gradient buffers.
    if(!cGate.Init(0, 0, OpenCL, iDimension * iVariables, optimization, iBatch))
       ReturnFalseEx("gate buffer");
+   if(!cCandidate.BufferInit(iDimension * iVariables, 0.0f))
+      ReturnFalseEx("candidate host buffer");
+   if(!cCandidate.BufferCreate(OpenCL))
+      ReturnFalseEx("candidate device buffer");
    if(!cInputGradient.BufferInit(iDimension * iVariables, 0.0f))
       ReturnFalseEx("input gradient host buffer");
    if(!cInputGradient.BufferCreate(OpenCL))
       ReturnFalseEx("input gradient device buffer");
+   if(!InitializeAlphaRuntime())
+      ReturnFalseEx("alpha runtime buffers");
+   if(!InitializeNumericRuntime(numeric_total))
+      ReturnFalseEx("numeric runtime buffers");
 //--- Recreate the fixed-size reference and current history owners.
    if(!cReference)
       cReference = new CNeuronAddToStack();
@@ -735,6 +1213,31 @@ bool CNeuronOMPBOCL::Load(const int file_handle)
    if(!cCurrent.Init(0, 0, OpenCL, iCurrentCapacity, iDimension, iVariables,
                      optimization, iBatch))
       ReturnFalseEx("current history");
+//--- Restore the canonical history snapshots directly; AddToStack::Load clears Output.
+   CBufferFloat *reference_history       = cReference.getOutput();
+   CBufferFloat *current_history         = cCurrent.getOutput();
+   if(!reference_history || !current_history)
+      ReturnFalseEx("history buffers are null");
+   const int     reference_history_total = reference_history.Total();
+   const int     current_history_total   = current_history.Total();
+   uint          reference_count         = 0;
+   uint          current_count           = 0;
+   if(FileSize(file_handle) - FileTell(file_handle) < 2 * INT_VALUE)
+      ReturnFalseEx("history counts are missing");
+   dFileReadUInt(file_handle, reference_count);
+   dFileReadUInt(file_handle, current_count);
+   if(reference_count > iReferenceCapacity)
+      ReturnFalseEx("reference history count");
+   if(current_count > iCurrentCapacity)
+      ReturnFalseEx("current history count");
+   if(!reference_history.Load(file_handle))
+      ReturnFalseEx("reference history data");
+   if(!current_history.Load(file_handle))
+      ReturnFalseEx("current history data");
+   if(reference_history.Total() != reference_history_total)
+      ReturnFalseEx("reference history shape");
+   if(current_history.Total() != current_history_total)
+      ReturnFalseEx("current history shape");
 //--- Recreate history transposes and posterior sample holders.
    if(!cReferenceHistoryTranspose.Init(0, 0, OpenCL, iVariables, iReferenceCapacity,
                                        iDimension, optimization, iBatch))
@@ -804,6 +1307,9 @@ bool CNeuronOMPBOCL::Load(const int file_handle)
    cResidual.SetKLDMult(m_fKLDMult);
    if(!PrepareGate())
       ReturnFalseEx("prepare gate");
+//--- Publish durable history counts only after the complete Load has succeeded.
+   iReferenceCount = reference_count;
+   iCurrentCount = current_count;
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -812,6 +1318,9 @@ bool CNeuronOMPBOCL::Load(const int file_handle)
 //+------------------------------------------------------------------+
 void CNeuronOMPBOCL::SetOpenCL(COpenCLMy *obj)
   {
+//--- A context rebind invalidates permission to update from an older forward.
+   bForwardAccepted = false;
+   bNumericRejected = false;
    CNeuronBaseOCL::SetOpenCL(obj);
    cResidual.SetOpenCL(OpenCL);
    cAlpha.SetOpenCL(OpenCL);
@@ -826,8 +1335,36 @@ void CNeuronOMPBOCL::SetOpenCL(COpenCLMy *obj)
    cCurrentSamples.SetOpenCL(OpenCL);
    cReferenceSamplesTranspose.SetOpenCL(OpenCL);
    cCurrentSamplesTranspose.SetOpenCL(OpenCL);
+   if(cCandidate.Total() > 0)
+      cCandidate.BufferCreate(OpenCL);
    if(cInputGradient.Total() > 0)
       cInputGradient.BufferCreate(OpenCL);
+   if(cAlphaGradient.Total() > 0)
+      cAlphaGradient.BufferCreate(OpenCL);
+   if(cAlphaDisagreement.Total() > 0)
+      cAlphaDisagreement.BufferCreate(OpenCL);
+   if(cAlphaOnes.Total() > 0)
+      cAlphaOnes.BufferCreate(OpenCL);
+   if(cAlphaPriorOffset.Total() > 0)
+      cAlphaPriorOffset.BufferCreate(OpenCL);
+   if(cAlphaDelta.Total() > 0)
+      cAlphaDelta.BufferCreate(OpenCL);
+   if(cAlphaPriorSum.Total() > 0)
+      cAlphaPriorSum.BufferCreate(OpenCL);
+   if(cNumericFlags.Total() > 0)
+      cNumericFlags.BufferCreate(OpenCL);
+   if(cNumericOnes.Total() > 0)
+      cNumericOnes.BufferCreate(OpenCL);
+   if(cNumericScalar.Total() > 0)
+      cNumericScalar.BufferCreate(OpenCL);
+   if(cKLMetricScalar.Total() > 0)
+      cKLMetricScalar.BufferCreate(OpenCL);
+   if(cDisagreementPositive.Total() > 0)
+      cDisagreementPositive.BufferCreate(OpenCL);
+   if(cDisagreementNegative.Total() > 0)
+      cDisagreementNegative.BufferCreate(OpenCL);
+   if(cDisagreementMetricScalar.Total() > 0)
+      cDisagreementMetricScalar.BufferCreate(OpenCL);
    if(cReferenceDistance.Total() > 0)
       cReferenceDistance.BufferCreate(OpenCL);
    if(cCurrentDistance.Total() > 0)
@@ -850,6 +1387,228 @@ void CNeuronOMPBOCL::SetOpenCL(COpenCLMy *obj)
       cKLValues.BufferCreate(OpenCL);
   }
 //+------------------------------------------------------------------+
+//| Checks checked-transfer support of the full OMPB ownership tree. |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::SupportsOpenCLChecked(void) const
+  {
+//--- Validate the target identity and every history pointer before mutation.
+   if(Type() != defNeuronOMPBOCL ||
+      CheckPointer(cReference) == POINTER_INVALID ||
+      CheckPointer(cCurrent) == POINTER_INVALID)
+      return(false);
+//--- Validate every nested owner that will transfer before base publication.
+   if(!cResidual.SupportsOpenCLChecked() || !cAlpha.SupportsOpenCLChecked() ||
+      !cGate.SupportsOpenCLChecked() || !cReference.SupportsOpenCLChecked() ||
+      !cCurrent.SupportsOpenCLChecked() ||
+      !cReferenceHistoryTranspose.SupportsOpenCLChecked() ||
+      !cCurrentHistoryTranspose.SupportsOpenCLChecked() ||
+      !cReferenceSamples.SupportsOpenCLChecked() ||
+      !cCurrentSamples.SupportsOpenCLChecked() ||
+      !cReferenceSamplesTranspose.SupportsOpenCLChecked() ||
+      !cCurrentSamplesTranspose.SupportsOpenCLChecked())
+      return(false);
+//--- Finalize only when the complete embedded hierarchy is transferable.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Transfers OMPB children and buffers before inherited publication.|
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate the target and complete ownership tree before state changes.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or tree");
+//--- A valid attempt invalidates outcomes tied to the previous forward pass.
+   bForwardAccepted = false;
+   bNumericRejected = false;
+//--- Transfer the complete nested hierarchy before direct and base owners.
+   if(!cResidual.SetOpenCLChecked(obj))
+      ReturnFalseEx("residual context");
+   if(!cAlpha.SetOpenCLChecked(obj))
+      ReturnFalseEx("alpha context");
+   if(!cGate.SetOpenCLChecked(obj))
+      ReturnFalseEx("gate context");
+   if(!cReference.SetOpenCLChecked(obj))
+      ReturnFalseEx("reference history context");
+   if(!cCurrent.SetOpenCLChecked(obj))
+      ReturnFalseEx("current history context");
+   if(!cReferenceHistoryTranspose.SetOpenCLChecked(obj))
+      ReturnFalseEx("reference history transpose context");
+   if(!cCurrentHistoryTranspose.SetOpenCLChecked(obj))
+      ReturnFalseEx("current history transpose context");
+   if(!cReferenceSamples.SetOpenCLChecked(obj))
+      ReturnFalseEx("reference samples context");
+   if(!cCurrentSamples.SetOpenCLChecked(obj))
+      ReturnFalseEx("current samples context");
+   if(!cReferenceSamplesTranspose.SetOpenCLChecked(obj))
+      ReturnFalseEx("reference samples transpose context");
+   if(!cCurrentSamplesTranspose.SetOpenCLChecked(obj))
+      ReturnFalseEx("current samples transpose context");
+//--- Read foreign allocated direct buffers before their target binding changes.
+   if(cCandidate.Total() > 0 && cCandidate.GetIndex() >= 0 &&
+      cCandidate.GetOpenCL() != obj && !cCandidate.BufferRead())
+      ReturnFalseEx("candidate read");
+   if(cInputGradient.Total() > 0 && cInputGradient.GetIndex() >= 0 &&
+      cInputGradient.GetOpenCL() != obj && !cInputGradient.BufferRead())
+      ReturnFalseEx("input gradient read");
+   if(cAlphaGradient.Total() > 0 && cAlphaGradient.GetIndex() >= 0 &&
+      cAlphaGradient.GetOpenCL() != obj && !cAlphaGradient.BufferRead())
+      ReturnFalseEx("alpha gradient read");
+   if(cAlphaDisagreement.Total() > 0 && cAlphaDisagreement.GetIndex() >= 0 &&
+      cAlphaDisagreement.GetOpenCL() != obj && !cAlphaDisagreement.BufferRead())
+      ReturnFalseEx("alpha disagreement read");
+   if(cAlphaOnes.Total() > 0 && cAlphaOnes.GetIndex() >= 0 &&
+      cAlphaOnes.GetOpenCL() != obj && !cAlphaOnes.BufferRead())
+      ReturnFalseEx("alpha ones read");
+   if(cAlphaPriorOffset.Total() > 0 && cAlphaPriorOffset.GetIndex() >= 0 &&
+      cAlphaPriorOffset.GetOpenCL() != obj && !cAlphaPriorOffset.BufferRead())
+      ReturnFalseEx("alpha prior offset read");
+   if(cAlphaDelta.Total() > 0 && cAlphaDelta.GetIndex() >= 0 &&
+      cAlphaDelta.GetOpenCL() != obj && !cAlphaDelta.BufferRead())
+      ReturnFalseEx("alpha delta read");
+   if(cAlphaPriorSum.Total() > 0 && cAlphaPriorSum.GetIndex() >= 0 &&
+      cAlphaPriorSum.GetOpenCL() != obj && !cAlphaPriorSum.BufferRead())
+      ReturnFalseEx("alpha prior sum read");
+   if(cNumericFlags.Total() > 0 && cNumericFlags.GetIndex() >= 0 &&
+      cNumericFlags.GetOpenCL() != obj && !cNumericFlags.BufferRead())
+      ReturnFalseEx("numeric flags read");
+   if(cNumericOnes.Total() > 0 && cNumericOnes.GetIndex() >= 0 &&
+      cNumericOnes.GetOpenCL() != obj && !cNumericOnes.BufferRead())
+      ReturnFalseEx("numeric ones read");
+   if(cNumericScalar.Total() > 0 && cNumericScalar.GetIndex() >= 0 &&
+      cNumericScalar.GetOpenCL() != obj && !cNumericScalar.BufferRead())
+      ReturnFalseEx("numeric scalar read");
+   if(cKLMetricScalar.Total() > 0 && cKLMetricScalar.GetIndex() >= 0 &&
+      cKLMetricScalar.GetOpenCL() != obj && !cKLMetricScalar.BufferRead())
+      ReturnFalseEx("KL metric scalar read");
+   if(cDisagreementPositive.Total() > 0 && cDisagreementPositive.GetIndex() >= 0 &&
+      cDisagreementPositive.GetOpenCL() != obj && !cDisagreementPositive.BufferRead())
+      ReturnFalseEx("disagreement positive read");
+   if(cDisagreementNegative.Total() > 0 && cDisagreementNegative.GetIndex() >= 0 &&
+      cDisagreementNegative.GetOpenCL() != obj && !cDisagreementNegative.BufferRead())
+      ReturnFalseEx("disagreement negative read");
+   if(cDisagreementMetricScalar.Total() > 0 && cDisagreementMetricScalar.GetIndex() >= 0 &&
+      cDisagreementMetricScalar.GetOpenCL() != obj && !cDisagreementMetricScalar.BufferRead())
+      ReturnFalseEx("disagreement metric scalar read");
+   if(cReferenceDistance.Total() > 0 && cReferenceDistance.GetIndex() >= 0 &&
+      cReferenceDistance.GetOpenCL() != obj && !cReferenceDistance.BufferRead())
+      ReturnFalseEx("reference distance read");
+   if(cCurrentDistance.Total() > 0 && cCurrentDistance.GetIndex() >= 0 &&
+      cCurrentDistance.GetOpenCL() != obj && !cCurrentDistance.BufferRead())
+      ReturnFalseEx("current distance read");
+   if(cDisagreement.Total() > 0 && cDisagreement.GetIndex() >= 0 &&
+      cDisagreement.GetOpenCL() != obj && !cDisagreement.BufferRead())
+      ReturnFalseEx("disagreement read");
+   if(cKLMuWeights.Total() > 0 && cKLMuWeights.GetIndex() >= 0 &&
+      cKLMuWeights.GetOpenCL() != obj && !cKLMuWeights.BufferRead())
+      ReturnFalseEx("KL mu weights read");
+   if(cKLLogVarWeights.Total() > 0 && cKLLogVarWeights.GetIndex() >= 0 &&
+      cKLLogVarWeights.GetOpenCL() != obj && !cKLLogVarWeights.BufferRead())
+      ReturnFalseEx("KL log variance weights read");
+   if(cKLMuBias.Total() > 0 && cKLMuBias.GetIndex() >= 0 &&
+      cKLMuBias.GetOpenCL() != obj && !cKLMuBias.BufferRead())
+      ReturnFalseEx("KL mu bias read");
+   if(cKLLogVarBias.Total() > 0 && cKLLogVarBias.GetIndex() >= 0 &&
+      cKLLogVarBias.GetOpenCL() != obj && !cKLLogVarBias.BufferRead())
+      ReturnFalseEx("KL log variance bias read");
+   if(cKLMu.Total() > 0 && cKLMu.GetIndex() >= 0 &&
+      cKLMu.GetOpenCL() != obj && !cKLMu.BufferRead())
+      ReturnFalseEx("KL mu read");
+   if(cKLLogVar.Total() > 0 && cKLLogVar.GetIndex() >= 0 &&
+      cKLLogVar.GetOpenCL() != obj && !cKLLogVar.BufferRead())
+      ReturnFalseEx("KL log variance read");
+   if(cKLValues.Total() > 0 && cKLValues.GetIndex() >= 0 &&
+      cKLValues.GetOpenCL() != obj && !cKLValues.BufferRead())
+      ReturnFalseEx("KL values read");
+//--- Bind only direct buffers not already allocated on the target context.
+   if(cCandidate.Total() > 0 &&
+      (cCandidate.GetOpenCL() != obj || cCandidate.GetIndex() < 0) && !cCandidate.BufferCreate(obj))
+      ReturnFalseEx("candidate create");
+   if(cInputGradient.Total() > 0 &&
+      (cInputGradient.GetOpenCL() != obj || cInputGradient.GetIndex() < 0) && !cInputGradient.BufferCreate(obj))
+      ReturnFalseEx("input gradient create");
+   if(cAlphaGradient.Total() > 0 &&
+      (cAlphaGradient.GetOpenCL() != obj || cAlphaGradient.GetIndex() < 0) && !cAlphaGradient.BufferCreate(obj))
+      ReturnFalseEx("alpha gradient create");
+   if(cAlphaDisagreement.Total() > 0 &&
+      (cAlphaDisagreement.GetOpenCL() != obj || cAlphaDisagreement.GetIndex() < 0) &&
+      !cAlphaDisagreement.BufferCreate(obj))
+      ReturnFalseEx("alpha disagreement create");
+   if(cAlphaOnes.Total() > 0 &&
+      (cAlphaOnes.GetOpenCL() != obj || cAlphaOnes.GetIndex() < 0) && !cAlphaOnes.BufferCreate(obj))
+      ReturnFalseEx("alpha ones create");
+   if(cAlphaPriorOffset.Total() > 0 &&
+      (cAlphaPriorOffset.GetOpenCL() != obj || cAlphaPriorOffset.GetIndex() < 0) &&
+      !cAlphaPriorOffset.BufferCreate(obj))
+      ReturnFalseEx("alpha prior offset create");
+   if(cAlphaDelta.Total() > 0 &&
+      (cAlphaDelta.GetOpenCL() != obj || cAlphaDelta.GetIndex() < 0) && !cAlphaDelta.BufferCreate(obj))
+      ReturnFalseEx("alpha delta create");
+   if(cAlphaPriorSum.Total() > 0 &&
+      (cAlphaPriorSum.GetOpenCL() != obj || cAlphaPriorSum.GetIndex() < 0) && !cAlphaPriorSum.BufferCreate(obj))
+      ReturnFalseEx("alpha prior sum create");
+   if(cNumericFlags.Total() > 0 &&
+      (cNumericFlags.GetOpenCL() != obj || cNumericFlags.GetIndex() < 0) && !cNumericFlags.BufferCreate(obj))
+      ReturnFalseEx("numeric flags create");
+   if(cNumericOnes.Total() > 0 &&
+      (cNumericOnes.GetOpenCL() != obj || cNumericOnes.GetIndex() < 0) && !cNumericOnes.BufferCreate(obj))
+      ReturnFalseEx("numeric ones create");
+   if(cNumericScalar.Total() > 0 &&
+      (cNumericScalar.GetOpenCL() != obj || cNumericScalar.GetIndex() < 0) && !cNumericScalar.BufferCreate(obj))
+      ReturnFalseEx("numeric scalar create");
+   if(cKLMetricScalar.Total() > 0 &&
+      (cKLMetricScalar.GetOpenCL() != obj || cKLMetricScalar.GetIndex() < 0) && !cKLMetricScalar.BufferCreate(obj))
+      ReturnFalseEx("KL metric scalar create");
+   if(cDisagreementPositive.Total() > 0 &&
+      (cDisagreementPositive.GetOpenCL() != obj || cDisagreementPositive.GetIndex() < 0) &&
+      !cDisagreementPositive.BufferCreate(obj))
+      ReturnFalseEx("disagreement positive create");
+   if(cDisagreementNegative.Total() > 0 &&
+      (cDisagreementNegative.GetOpenCL() != obj || cDisagreementNegative.GetIndex() < 0) &&
+      !cDisagreementNegative.BufferCreate(obj))
+      ReturnFalseEx("disagreement negative create");
+   if(cDisagreementMetricScalar.Total() > 0 &&
+      (cDisagreementMetricScalar.GetOpenCL() != obj || cDisagreementMetricScalar.GetIndex() < 0) &&
+      !cDisagreementMetricScalar.BufferCreate(obj))
+      ReturnFalseEx("disagreement metric scalar create");
+   if(cReferenceDistance.Total() > 0 &&
+      (cReferenceDistance.GetOpenCL() != obj || cReferenceDistance.GetIndex() < 0) &&
+      !cReferenceDistance.BufferCreate(obj))
+      ReturnFalseEx("reference distance create");
+   if(cCurrentDistance.Total() > 0 &&
+      (cCurrentDistance.GetOpenCL() != obj || cCurrentDistance.GetIndex() < 0) && !cCurrentDistance.BufferCreate(obj))
+      ReturnFalseEx("current distance create");
+   if(cDisagreement.Total() > 0 &&
+      (cDisagreement.GetOpenCL() != obj || cDisagreement.GetIndex() < 0) && !cDisagreement.BufferCreate(obj))
+      ReturnFalseEx("disagreement create");
+   if(cKLMuWeights.Total() > 0 &&
+      (cKLMuWeights.GetOpenCL() != obj || cKLMuWeights.GetIndex() < 0) && !cKLMuWeights.BufferCreate(obj))
+      ReturnFalseEx("KL mu weights create");
+   if(cKLLogVarWeights.Total() > 0 &&
+      (cKLLogVarWeights.GetOpenCL() != obj || cKLLogVarWeights.GetIndex() < 0) && !cKLLogVarWeights.BufferCreate(obj))
+      ReturnFalseEx("KL log variance weights create");
+   if(cKLMuBias.Total() > 0 &&
+      (cKLMuBias.GetOpenCL() != obj || cKLMuBias.GetIndex() < 0) && !cKLMuBias.BufferCreate(obj))
+      ReturnFalseEx("KL mu bias create");
+   if(cKLLogVarBias.Total() > 0 &&
+      (cKLLogVarBias.GetOpenCL() != obj || cKLLogVarBias.GetIndex() < 0) && !cKLLogVarBias.BufferCreate(obj))
+      ReturnFalseEx("KL log variance bias create");
+   if(cKLMu.Total() > 0 &&
+      (cKLMu.GetOpenCL() != obj || cKLMu.GetIndex() < 0) && !cKLMu.BufferCreate(obj))
+      ReturnFalseEx("KL mu create");
+   if(cKLLogVar.Total() > 0 &&
+      (cKLLogVar.GetOpenCL() != obj || cKLLogVar.GetIndex() < 0) && !cKLLogVar.BufferCreate(obj))
+      ReturnFalseEx("KL log variance create");
+   if(cKLValues.Total() > 0 &&
+      (cKLValues.GetOpenCL() != obj || cKLValues.GetIndex() < 0) && !cKLValues.BufferCreate(obj))
+      ReturnFalseEx("KL values create");
+//--- Publish inherited output and gradient owners only after every child succeeded.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited base context");
+//--- Finalize the checked context adoption after every owner succeeded.
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Sets the training flag of the CNeuronOMPBOCL layer.              |
 //+------------------------------------------------------------------+
 void CNeuronOMPBOCL::TrainMode(bool flag)
@@ -870,6 +1629,9 @@ void CNeuronOMPBOCL::TrainMode(bool flag)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::Clear(void)
   {
+//--- A partial clear cannot retain permission to update from an older forward.
+   bForwardAccepted = false;
+   bNumericRejected = false;
 //--- Reference history is durable across inference and session clears.
    iCurrentCount = 0;
    m_fLastDisagreement = 0.0f;
@@ -887,8 +1649,41 @@ bool CNeuronOMPBOCL::Clear(void)
       ReturnFalseEx("gate buffer");
    if(cCurrent && !cCurrent.Clear())
       ReturnFalseEx("current history");
+//--- Clear derived histories while retaining the durable raw Reference.
+   if(!cReferenceHistoryTranspose.Clear())
+      ReturnFalseEx("reference history transpose");
+   if(!cReferenceSamples.Clear())
+      ReturnFalseEx("reference samples");
+   if(!cReferenceSamplesTranspose.Clear())
+      ReturnFalseEx("reference samples transpose");
+   if(!cReferenceDistance.Fill(0.0f))
+      ReturnFalseEx("reference distance");
+   if(!cCandidate.Fill(0.0f))
+      ReturnFalseEx("candidate");
    if(!cInputGradient.Fill(0.0f))
       ReturnFalseEx("input gradient");
+   if(!cAlphaGradient.Fill(0.0f))
+      ReturnFalseEx("alpha feature gradient");
+   if(!cAlphaDisagreement.Fill(0.0f))
+      ReturnFalseEx("alpha disagreement");
+   if(!cAlphaDelta.Fill(0.0f))
+      ReturnFalseEx("alpha prior delta");
+   if(!cAlphaPriorSum.Fill(0.0f))
+      ReturnFalseEx("alpha prior sum");
+   if(!cNumericFlags.Fill(0.0f))
+      ReturnFalseEx("numeric flags");
+   if(!cNumericOnes.Fill(1.0f))
+      ReturnFalseEx("numeric ones");
+   if(!cNumericScalar.Fill(0.0f))
+      ReturnFalseEx("numeric scalar");
+   if(!cKLMetricScalar.Fill(0.0f))
+      ReturnFalseEx("KL metric scalar");
+   if(!cDisagreementPositive.Fill(0.0f))
+      ReturnFalseEx("disagreement positive");
+   if(!cDisagreementNegative.Fill(0.0f))
+      ReturnFalseEx("disagreement negative");
+   if(!cDisagreementMetricScalar.Fill(0.0f))
+      ReturnFalseEx("disagreement metric scalar");
    if(!cCurrentHistoryTranspose.Clear())
       ReturnFalseEx("current history transpose");
    if(!cCurrentSamples.Clear())
@@ -14919,6 +15714,32 @@ void CNeuronPeriodNorm::SetOpenCL(COpenCLMy *obj)
    cMeanSTDevs.SetOpenCL(OpenCL);
   }
 //+------------------------------------------------------------------+
+//| Checks checked-transfer support of PeriodNorm nested statistics. |
+//+------------------------------------------------------------------+
+bool CNeuronPeriodNorm::SupportsOpenCLChecked(void) const
+  {
+   return(Type() == defNeuronPeriodNorm &&
+          cMeanSTDevs.SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers owned buffers before inherited context publication.    |
+//+------------------------------------------------------------------+
+bool CNeuronPeriodNorm::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Reject invalid targets and incomplete trees before any mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or period tree");
+//--- Transfer the complete statistics child before outer base publication.
+   if(!cMeanSTDevs.SetOpenCLChecked(obj))
+      ReturnFalseEx("mean standard deviations context");
+//--- Publish inherited outer buffers only after nested statistics succeeded.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited base context");
+//--- Finalize the checked PeriodNorm transfer.
+   return(true);
+  }
+
+//+------------------------------------------------------------------+
 //| Initializes the CNeuronMoEConv layer and allocates its GPU       |
 //| buffers.                                                         |
 //+------------------------------------------------------------------+
@@ -21702,6 +22523,59 @@ void CNeuronCogDriverData::SetOpenCL(COpenCLMy *obj)
    cPrevQuantStack.SetOpenCL(OpenCL);
   }
 //+------------------------------------------------------------------+
+//| Reports inherited checked-transfer support for the MSD layer.    |
+//+------------------------------------------------------------------+
+bool CNeuronUncAD_MSD::SupportsOpenCLChecked(void) const
+  {
+//--- Base owns every MSD device buffer; reject unsupported subtypes.
+   return(Type() == defNeuronUncAD_MSD);
+  }
+//+------------------------------------------------------------------+
+//| Reports support for the complete CogDriverData ownership tree.   |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::SupportsOpenCLChecked(void) const
+  {
+//--- Validate inherited and own owners without the parent type guard.
+   return(Type() == defNeuronCogDriverData &&
+          CheckPointer(BatchOptions) != POINTER_INVALID &&
+          cActivation.SupportsOpenCLChecked() && cConv.SupportsOpenCLChecked() &&
+          cStack.SupportsOpenCLChecked() && cNorm.SupportsOpenCLChecked() &&
+          cStateStack.SupportsOpenCLChecked() && cMSD.SupportsOpenCLChecked() &&
+          cAffine.SupportsOpenCLChecked() && cQuantStack.SupportsOpenCLChecked() &&
+          cPrevQuantStack.SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers CogDriverData children before inherited publication.   |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverData::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Reject unsupported ownership trees before any mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or data ownership tree");
+//--- Preserve normalization parameters and accumulated state.
+   if(!cNorm.SetOpenCLChecked(obj))
+      ReturnFalseEx("normalization context");
+//--- Preserve the raw state history.
+   if(!cStateStack.SetOpenCLChecked(obj))
+      ReturnFalseEx("state stack context");
+//--- Transfer the distribution descriptor buffers.
+   if(!cMSD.SetOpenCLChecked(obj))
+      ReturnFalseEx("distribution descriptor context");
+//--- Preserve affine parameters and optimizer owners.
+   if(!cAffine.SetOpenCLChecked(obj))
+      ReturnFalseEx("affine context");
+//--- Preserve current and previous quantile history.
+   if(!cQuantStack.SetOpenCLChecked(obj))
+      ReturnFalseEx("quantile stack context");
+   if(!cPrevQuantStack.SetOpenCLChecked(obj))
+      ReturnFalseEx("previous quantile stack context");
+//--- Publish inherited owners only after all own children succeeded.
+   if(!CNeuronSpikeConvBlock::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited spike convolution context");
+//--- Finalize without resetting configuration or history.
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Sets the training flag of the CNeuronCogDriverData layer.        |
 //+------------------------------------------------------------------+
 void CNeuronCogDriverData::TrainMode(bool flag)
@@ -22382,6 +23256,136 @@ void CNeuronCogDriverRankTCM::SetOpenCL(COpenCLMy *obj)
    cQueryGateGradient.BufferCreate(OpenCL);
    cGateQueryGradient.BufferCreate(OpenCL);
    cGateContextGradient.BufferCreate(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//| Checks the complete RankTCM ownership tree.                      |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::SupportsOpenCLChecked(void) const
+  {
+   return(Type() == defNeuronCogDriverRankTCM &&
+          cQueryProjection.SupportsOpenCLChecked() &&
+          cGateInput.SupportsOpenCLChecked() &&
+          cGateProjection.SupportsOpenCLChecked() &&
+          cMemoryContext.SupportsOpenCLChecked() &&
+          cSelfContext.SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers RankTCM state before publishing the base context.      |
+//+------------------------------------------------------------------+
+bool CNeuronCogDriverRankTCM::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Reject unsupported ownership before changing any resource.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or RankTCM tree");
+//--- Preserve foreign direct state before any buffer is recreated.
+   if(cMemoryQuery.Total() > 0 && cMemoryQuery.GetIndex() >= 0 &&
+      cMemoryQuery.GetOpenCL() != obj && !cMemoryQuery.BufferRead())
+      ReturnFalseEx("cMemoryQuery read");
+   if(cMemoryAge.Total() > 0 && cMemoryAge.GetIndex() >= 0 &&
+      cMemoryAge.GetOpenCL() != obj && !cMemoryAge.BufferRead())
+      ReturnFalseEx("cMemoryAge read");
+   if(cMemoryScore.Total() > 0 && cMemoryScore.GetIndex() >= 0 &&
+      cMemoryScore.GetOpenCL() != obj && !cMemoryScore.BufferRead())
+      ReturnFalseEx("cMemoryScore read");
+   if(cMemoryValid.Total() > 0 && cMemoryValid.GetIndex() >= 0 &&
+      cMemoryValid.GetOpenCL() != obj && !cMemoryValid.BufferRead())
+      ReturnFalseEx("cMemoryValid read");
+   if(cMemoryKV.Total() > 0 && cMemoryKV.GetIndex() >= 0 &&
+      cMemoryKV.GetOpenCL() != obj && !cMemoryKV.BufferRead())
+      ReturnFalseEx("cMemoryKV read");
+   if(cMemoryKVGradient.Total() > 0 && cMemoryKVGradient.GetIndex() >= 0 &&
+      cMemoryKVGradient.GetOpenCL() != obj && !cMemoryKVGradient.BufferRead())
+      ReturnFalseEx("cMemoryKVGradient read");
+   if(cSelfKV.Total() > 0 && cSelfKV.GetIndex() >= 0 &&
+      cSelfKV.GetOpenCL() != obj && !cSelfKV.BufferRead())
+      ReturnFalseEx("cSelfKV read");
+   if(cSelfKVGradient.Total() > 0 && cSelfKVGradient.GetIndex() >= 0 &&
+      cSelfKVGradient.GetOpenCL() != obj && !cSelfKVGradient.BufferRead())
+      ReturnFalseEx("cSelfKVGradient read");
+   if(cLogSumExp.Total() > 0 && cLogSumExp.GetIndex() >= 0 &&
+      cLogSumExp.GetOpenCL() != obj && !cLogSumExp.BufferRead())
+      ReturnFalseEx("cLogSumExp read");
+   if(cSelfLogSumExp.Total() > 0 && cSelfLogSumExp.GetIndex() >= 0 &&
+      cSelfLogSumExp.GetOpenCL() != obj && !cSelfLogSumExp.BufferRead())
+      ReturnFalseEx("cSelfLogSumExp read");
+   if(cQueryGateGradient.Total() > 0 && cQueryGateGradient.GetIndex() >= 0 &&
+      cQueryGateGradient.GetOpenCL() != obj && !cQueryGateGradient.BufferRead())
+      ReturnFalseEx("cQueryGateGradient read");
+   if(cGateQueryGradient.Total() > 0 && cGateQueryGradient.GetIndex() >= 0 &&
+      cGateQueryGradient.GetOpenCL() != obj && !cGateQueryGradient.BufferRead())
+      ReturnFalseEx("cGateQueryGradient read");
+   if(cGateContextGradient.Total() > 0 && cGateContextGradient.GetIndex() >= 0 &&
+      cGateContextGradient.GetOpenCL() != obj && !cGateContextGradient.BufferRead())
+      ReturnFalseEx("cGateContextGradient read");
+//--- Move nested owners while the source context remains alive.
+   if(!cQueryProjection.SetOpenCLChecked(obj))
+      ReturnFalseEx("cQueryProjection context");
+   if(!cGateInput.SetOpenCLChecked(obj))
+      ReturnFalseEx("cGateInput context");
+   if(!cGateProjection.SetOpenCLChecked(obj))
+      ReturnFalseEx("cGateProjection context");
+   if(!cMemoryContext.SetOpenCLChecked(obj))
+      ReturnFalseEx("cMemoryContext context");
+   if(!cSelfContext.SetOpenCLChecked(obj))
+      ReturnFalseEx("cSelfContext context");
+//--- Preserve already-target GPU state when retrying a partial transfer.
+   if(cMemoryQuery.Total() > 0 &&
+      (cMemoryQuery.GetOpenCL() != obj || cMemoryQuery.GetIndex() < 0) &&
+      !cMemoryQuery.BufferCreate(obj))
+      ReturnFalseEx("cMemoryQuery create");
+   if(cMemoryAge.Total() > 0 &&
+      (cMemoryAge.GetOpenCL() != obj || cMemoryAge.GetIndex() < 0) &&
+      !cMemoryAge.BufferCreate(obj))
+      ReturnFalseEx("cMemoryAge create");
+   if(cMemoryScore.Total() > 0 &&
+      (cMemoryScore.GetOpenCL() != obj || cMemoryScore.GetIndex() < 0) &&
+      !cMemoryScore.BufferCreate(obj))
+      ReturnFalseEx("cMemoryScore create");
+   if(cMemoryValid.Total() > 0 &&
+      (cMemoryValid.GetOpenCL() != obj || cMemoryValid.GetIndex() < 0) &&
+      !cMemoryValid.BufferCreate(obj))
+      ReturnFalseEx("cMemoryValid create");
+   if(cMemoryKV.Total() > 0 &&
+      (cMemoryKV.GetOpenCL() != obj || cMemoryKV.GetIndex() < 0) &&
+      !cMemoryKV.BufferCreate(obj))
+      ReturnFalseEx("cMemoryKV create");
+   if(cMemoryKVGradient.Total() > 0 &&
+      (cMemoryKVGradient.GetOpenCL() != obj || cMemoryKVGradient.GetIndex() < 0) &&
+      !cMemoryKVGradient.BufferCreate(obj))
+      ReturnFalseEx("cMemoryKVGradient create");
+   if(cSelfKV.Total() > 0 &&
+      (cSelfKV.GetOpenCL() != obj || cSelfKV.GetIndex() < 0) &&
+      !cSelfKV.BufferCreate(obj))
+      ReturnFalseEx("cSelfKV create");
+   if(cSelfKVGradient.Total() > 0 &&
+      (cSelfKVGradient.GetOpenCL() != obj || cSelfKVGradient.GetIndex() < 0) &&
+      !cSelfKVGradient.BufferCreate(obj))
+      ReturnFalseEx("cSelfKVGradient create");
+   if(cLogSumExp.Total() > 0 &&
+      (cLogSumExp.GetOpenCL() != obj || cLogSumExp.GetIndex() < 0) &&
+      !cLogSumExp.BufferCreate(obj))
+      ReturnFalseEx("cLogSumExp create");
+   if(cSelfLogSumExp.Total() > 0 &&
+      (cSelfLogSumExp.GetOpenCL() != obj || cSelfLogSumExp.GetIndex() < 0) &&
+      !cSelfLogSumExp.BufferCreate(obj))
+      ReturnFalseEx("cSelfLogSumExp create");
+   if(cQueryGateGradient.Total() > 0 &&
+      (cQueryGateGradient.GetOpenCL() != obj || cQueryGateGradient.GetIndex() < 0) &&
+      !cQueryGateGradient.BufferCreate(obj))
+      ReturnFalseEx("cQueryGateGradient create");
+   if(cGateQueryGradient.Total() > 0 &&
+      (cGateQueryGradient.GetOpenCL() != obj || cGateQueryGradient.GetIndex() < 0) &&
+      !cGateQueryGradient.BufferCreate(obj))
+      ReturnFalseEx("cGateQueryGradient create");
+   if(cGateContextGradient.Total() > 0 &&
+      (cGateContextGradient.GetOpenCL() != obj || cGateContextGradient.GetIndex() < 0) &&
+      !cGateContextGradient.BufferCreate(obj))
+      ReturnFalseEx("cGateContextGradient create");
+//--- Publish the inherited context only after all RankTCM owners succeed.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited base context");
+//--- Retain the pending query and memory count for continued execution.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Sets the training flag of the CNeuronCogDriverRankTCM layer.     |
@@ -24899,6 +25903,69 @@ void CScenarioCodebook::SetOpenCL(COpenCLMy *open_cl)
    cInactivityAge.BufferCreate(OpenCL);
   }
 //+------------------------------------------------------------------+
+//| Transfers codebook buffers before publishing its OpenCL context. |
+//+------------------------------------------------------------------+
+bool CScenarioCodebook::SetOpenCLChecked(COpenCLMy *open_cl)
+  {
+//--- Validate the target and immutable codebook shape before mutation.
+   if(CheckPointer(open_cl) == POINTER_INVALID)
+      ReturnFalseEx("checked codebook target");
+   if(iScenarios == 0)
+      ReturnFalseEx("checked codebook scenarios");
+   if(iDimension == 0)
+      ReturnFalseEx("checked codebook dimension");
+   if(!ValidateContract(iScenarios, iDimension))
+      ReturnFalseEx("checked codebook contract");
+//--- Read every foreign allocated buffer before any target creation.
+   if(cPrototypes.Total() > 0 && cPrototypes.GetIndex() >= 0 &&
+      cPrototypes.GetOpenCL() != open_cl && !cPrototypes.BufferRead())
+      ReturnFalseEx("codebook prototypes read");
+   if(cEMASums.Total() > 0 && cEMASums.GetIndex() >= 0 &&
+      cEMASums.GetOpenCL() != open_cl && !cEMASums.BufferRead())
+      ReturnFalseEx("codebook EMA sums read");
+   if(cEMACounts.Total() > 0 && cEMACounts.GetIndex() >= 0 &&
+      cEMACounts.GetOpenCL() != open_cl && !cEMACounts.BufferRead())
+      ReturnFalseEx("codebook EMA counts read");
+   if(cUsage.Total() > 0 && cUsage.GetIndex() >= 0 &&
+      cUsage.GetOpenCL() != open_cl && !cUsage.BufferRead())
+      ReturnFalseEx("codebook usage read");
+   if(cInactive.Total() > 0 && cInactive.GetIndex() >= 0 &&
+      cInactive.GetOpenCL() != open_cl && !cInactive.BufferRead())
+      ReturnFalseEx("codebook inactive read");
+   if(cInactivityAge.Total() > 0 && cInactivityAge.GetIndex() >= 0 &&
+      cInactivityAge.GetOpenCL() != open_cl && !cInactivityAge.BufferRead())
+      ReturnFalseEx("codebook inactivity age read");
+//--- Create only buffers absent from the target context in declaration order.
+   if(cPrototypes.Total() > 0 &&
+      (cPrototypes.GetOpenCL() != open_cl || cPrototypes.GetIndex() < 0) &&
+      !cPrototypes.BufferCreate(open_cl))
+      ReturnFalseEx("codebook prototypes create");
+   if(cEMASums.Total() > 0 &&
+      (cEMASums.GetOpenCL() != open_cl || cEMASums.GetIndex() < 0) &&
+      !cEMASums.BufferCreate(open_cl))
+      ReturnFalseEx("codebook EMA sums create");
+   if(cEMACounts.Total() > 0 &&
+      (cEMACounts.GetOpenCL() != open_cl || cEMACounts.GetIndex() < 0) &&
+      !cEMACounts.BufferCreate(open_cl))
+      ReturnFalseEx("codebook EMA counts create");
+   if(cUsage.Total() > 0 &&
+      (cUsage.GetOpenCL() != open_cl || cUsage.GetIndex() < 0) &&
+      !cUsage.BufferCreate(open_cl))
+      ReturnFalseEx("codebook usage create");
+   if(cInactive.Total() > 0 &&
+      (cInactive.GetOpenCL() != open_cl || cInactive.GetIndex() < 0) &&
+      !cInactive.BufferCreate(open_cl))
+      ReturnFalseEx("codebook inactive create");
+   if(cInactivityAge.Total() > 0 &&
+      (cInactivityAge.GetOpenCL() != open_cl || cInactivityAge.GetIndex() < 0) &&
+      !cInactivityAge.BufferCreate(open_cl))
+      ReturnFalseEx("codebook inactivity age create");
+//--- Publish the outer owner only after all direct buffers transferred.
+   OpenCL = open_cl;
+//--- Finalize the bounded checked context transfer.
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Validates the GPU launch configuration of the                    |
 //| CNeuronScenarioForecast layer.                                   |
 //+------------------------------------------------------------------+
@@ -25522,6 +26589,164 @@ void CNeuronScenarioForecast::SetOpenCL(COpenCLMy *obj)
    cRouterSoftmax.SetOpenCL(OpenCL);
    cResponsibilityScores.SetOpenCL(OpenCL);
    cTopKSelector.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//| Checks checked-transfer support for ScenarioForecast children.   |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioForecast::SupportsOpenCLChecked(void) const
+  {
+//--- Accept only the exact owner and every embedded neuron capability.
+   return(Type() == defNeuronScenarioForecast &&
+          cGeneratorInput.SupportsOpenCLChecked() &&
+          cRouterInput.SupportsOpenCLChecked() &&
+          cConfidenceInput.SupportsOpenCLChecked() &&
+          cGenerator.SupportsOpenCLChecked() &&
+          cRouter.SupportsOpenCLChecked() &&
+          cConfidenceHead.SupportsOpenCLChecked() &&
+          cRouterSoftmax.SupportsOpenCLChecked() &&
+          cResponsibilityScores.SupportsOpenCLChecked() &&
+          cTopKSelector.SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers ScenarioForecast owners to a checked OpenCL context.   |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioForecast::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate the target and the complete embedded neuron tree first.
+   if(CheckPointer(obj) == POINTER_INVALID)
+      ReturnFalseEx("checked forecast target");
+   if(!SupportsOpenCLChecked())
+      ReturnFalseEx("checked forecast capability");
+//--- Validate the existing codebook contract before any owner changes.
+   if(cCodebook.Scenarios() == 0)
+      ReturnFalseEx("checked forecast codebook scenarios");
+   if(cCodebook.Dimension() == 0)
+      ReturnFalseEx("checked forecast codebook dimension");
+   if(cCodebook.Scenarios() != iScenarios)
+      ReturnFalseEx("checked forecast codebook scenario contract");
+   if(cCodebook.Dimension() != iVariables * iHorizon * iDimension)
+      ReturnFalseEx("checked forecast codebook dimension contract");
+   if(!cCodebook.ValidateContract(iScenarios, iVariables * iHorizon * iDimension))
+      ReturnFalseEx("checked forecast codebook contract");
+//--- Read all foreign direct owners before any context recreation.
+   if(cConfidence.Total() > 0 && cConfidence.GetIndex() >= 0 &&
+      cConfidence.GetOpenCL() != obj && !cConfidence.BufferRead())
+      ReturnFalseEx("forecast confidence read");
+   if(cLogConfidence.Total() > 0 && cLogConfidence.GetIndex() >= 0 &&
+      cLogConfidence.GetOpenCL() != obj && !cLogConfidence.BufferRead())
+      ReturnFalseEx("forecast log confidence read");
+   if(cLogProbabilities.Total() > 0 && cLogProbabilities.GetIndex() >= 0 &&
+      cLogProbabilities.GetOpenCL() != obj && !cLogProbabilities.BufferRead())
+      ReturnFalseEx("forecast log probabilities read");
+   if(cResponsibilities.Total() > 0 && cResponsibilities.GetIndex() >= 0 &&
+      cResponsibilities.GetOpenCL() != obj && !cResponsibilities.BufferRead())
+      ReturnFalseEx("forecast responsibilities read");
+   if(cTarget.Total() > 0 && cTarget.GetIndex() >= 0 &&
+      cTarget.GetOpenCL() != obj && !cTarget.BufferRead())
+      ReturnFalseEx("forecast target read");
+   if(cBatchControl.Total() > 0 && cBatchControl.GetIndex() >= 0 &&
+      cBatchControl.GetOpenCL() != obj && !cBatchControl.BufferRead())
+      ReturnFalseEx("forecast batch control read");
+   if(cRecovery.Total() > 0 && cRecovery.GetIndex() >= 0 &&
+      cRecovery.GetOpenCL() != obj && !cRecovery.BufferRead())
+      ReturnFalseEx("forecast recovery read");
+   if(cRecoveryEvents.Total() > 0 && cRecoveryEvents.GetIndex() >= 0 &&
+      cRecoveryEvents.GetOpenCL() != obj && !cRecoveryEvents.BufferRead())
+      ReturnFalseEx("forecast recovery events read");
+   if(cAgeZeroEvents.Total() > 0 && cAgeZeroEvents.GetIndex() >= 0 &&
+      cAgeZeroEvents.GetOpenCL() != obj && !cAgeZeroEvents.BufferRead())
+      ReturnFalseEx("forecast age zero events read");
+   if(cForwardValidity.Total() > 0 && cForwardValidity.GetIndex() >= 0 &&
+      cForwardValidity.GetOpenCL() != obj && !cForwardValidity.BufferRead())
+      ReturnFalseEx("forecast forward validity read");
+   if(cDiagnosticPartials.Total() > 0 && cDiagnosticPartials.GetIndex() >= 0 &&
+      cDiagnosticPartials.GetOpenCL() != obj && !cDiagnosticPartials.BufferRead())
+      ReturnFalseEx("forecast diagnostic partials read");
+   if(cEpochDiagnostics.Total() > 0 && cEpochDiagnostics.GetIndex() >= 0 &&
+      cEpochDiagnostics.GetOpenCL() != obj && !cEpochDiagnostics.BufferRead())
+      ReturnFalseEx("forecast epoch diagnostics read");
+   if(cDiagnosticScratch.Total() > 0 && cDiagnosticScratch.GetIndex() >= 0 &&
+      cDiagnosticScratch.GetOpenCL() != obj && !cDiagnosticScratch.BufferRead())
+      ReturnFalseEx("forecast diagnostic scratch read");
+//--- Transfer the codebook and embedded neurons in their legacy order.
+   if(!cCodebook.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast codebook context");
+   if(!cGeneratorInput.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast generator input context");
+   if(!cRouterInput.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast router input context");
+   if(!cConfidenceInput.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast confidence input context");
+   if(!cGenerator.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast generator context");
+   if(!cRouter.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast router context");
+   if(!cConfidenceHead.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast confidence head context");
+   if(!cRouterSoftmax.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast router softmax context");
+   if(!cResponsibilityScores.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast responsibility scores context");
+   if(!cTopKSelector.SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast top K selector context");
+//--- Recreate only nonempty direct buffers missing from the target context.
+   if(cConfidence.Total() > 0 &&
+      (cConfidence.GetOpenCL() != obj || cConfidence.GetIndex() < 0) &&
+      !cConfidence.BufferCreate(obj))
+      ReturnFalseEx("forecast confidence create");
+   if(cLogConfidence.Total() > 0 &&
+      (cLogConfidence.GetOpenCL() != obj || cLogConfidence.GetIndex() < 0) &&
+      !cLogConfidence.BufferCreate(obj))
+      ReturnFalseEx("forecast log confidence create");
+   if(cLogProbabilities.Total() > 0 &&
+      (cLogProbabilities.GetOpenCL() != obj || cLogProbabilities.GetIndex() < 0) &&
+      !cLogProbabilities.BufferCreate(obj))
+      ReturnFalseEx("forecast log probabilities create");
+   if(cResponsibilities.Total() > 0 &&
+      (cResponsibilities.GetOpenCL() != obj || cResponsibilities.GetIndex() < 0) &&
+      !cResponsibilities.BufferCreate(obj))
+      ReturnFalseEx("forecast responsibilities create");
+   if(cTarget.Total() > 0 &&
+      (cTarget.GetOpenCL() != obj || cTarget.GetIndex() < 0) &&
+      !cTarget.BufferCreate(obj))
+      ReturnFalseEx("forecast target create");
+   if(cBatchControl.Total() > 0 &&
+      (cBatchControl.GetOpenCL() != obj || cBatchControl.GetIndex() < 0) &&
+      !cBatchControl.BufferCreate(obj))
+      ReturnFalseEx("forecast batch control create");
+   if(cRecovery.Total() > 0 &&
+      (cRecovery.GetOpenCL() != obj || cRecovery.GetIndex() < 0) &&
+      !cRecovery.BufferCreate(obj))
+      ReturnFalseEx("forecast recovery create");
+   if(cRecoveryEvents.Total() > 0 &&
+      (cRecoveryEvents.GetOpenCL() != obj || cRecoveryEvents.GetIndex() < 0) &&
+      !cRecoveryEvents.BufferCreate(obj))
+      ReturnFalseEx("forecast recovery events create");
+   if(cAgeZeroEvents.Total() > 0 &&
+      (cAgeZeroEvents.GetOpenCL() != obj || cAgeZeroEvents.GetIndex() < 0) &&
+      !cAgeZeroEvents.BufferCreate(obj))
+      ReturnFalseEx("forecast age zero events create");
+   if(cForwardValidity.Total() > 0 &&
+      (cForwardValidity.GetOpenCL() != obj || cForwardValidity.GetIndex() < 0) &&
+      !cForwardValidity.BufferCreate(obj))
+      ReturnFalseEx("forecast forward validity create");
+   if(cDiagnosticPartials.Total() > 0 &&
+      (cDiagnosticPartials.GetOpenCL() != obj || cDiagnosticPartials.GetIndex() < 0) &&
+      !cDiagnosticPartials.BufferCreate(obj))
+      ReturnFalseEx("forecast diagnostic partials create");
+   if(cEpochDiagnostics.Total() > 0 &&
+      (cEpochDiagnostics.GetOpenCL() != obj || cEpochDiagnostics.GetIndex() < 0) &&
+      !cEpochDiagnostics.BufferCreate(obj))
+      ReturnFalseEx("forecast epoch diagnostics create");
+   if(cDiagnosticScratch.Total() > 0 &&
+      (cDiagnosticScratch.GetOpenCL() != obj || cDiagnosticScratch.GetIndex() < 0) &&
+      !cDiagnosticScratch.BufferCreate(obj))
+      ReturnFalseEx("forecast diagnostic scratch create");
+//--- Transfer inherited owners and publish the Forecast context last.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("forecast inherited base context");
+//--- Finalize the checked ScenarioForecast context transfer.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Sets the training flag of the CNeuronScenarioForecast layer.     |
