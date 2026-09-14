@@ -20,9 +20,10 @@ input bool                        InpOMPBSmoke             = false; //Stage smok
 //--- partitioning, Reference collection and frozen BYPASS baselines.  The
 //--- calibration/update transaction remains in the following block.
 input group                       "---- OMPB calibration ----"
+input uint                        InpOMPBEpochs            = 3; //Calibration epochs
 input datetime                    InpOMPBReferenceStart    = D'2024.01.01';
-input datetime                    InpOMPBReferenceEnd      = D'2025.06.01';
-input datetime                    InpOMPBCalibrationStart  = D'2025.06.01';
+input datetime                    InpOMPBReferenceEnd      = D'2024.07.01';
+input datetime                    InpOMPBCalibrationStart  = D'2024.07.01';
 input datetime                    InpOMPBCalibrationEnd    = D'2026.01.01';
 input uint                        InpOMPBSourcePeriod      = 0;
 input float                       InpOMPBTau               = 1.0f;
@@ -51,13 +52,15 @@ int OnInit(void)
    const bool smoke = (InpRecoverySmoke || InpOMPBSmoke);
    if(InpOMPBStage == OMPB_STAGE_CALIBRATION)
      {
+      if(InpOMPBEpochs == 0)
+         return(INIT_PARAMETERS_INCORRECT);
       if(!D2SkillConfigureForecastRun(smoke, InpRecoverySmokeBatches,
                                       InpRecoverySmokeAge) ||
          !CreateOMPBStage02ReferenceStudy(InpOMPBReferenceStart, InpOMPBReferenceEnd,
                                           InpOMPBCalibrationStart, InpOMPBCalibrationEnd,
                                           InpOMPBSourcePeriod, InpOMPBTau, InpOMPBLambdaDis,
                                           InpOMPBLambdaKL, InpOMPBLambdaAlpha, InpOMPBAlphaPrior,
-                                          InpOMPBMaxKL, smoke, InpRecoverySmokeBatches))
+                                          InpOMPBMaxKL, smoke, InpRecoverySmokeBatches, InpOMPBEpochs))
          return(INIT_PARAMETERS_INCORRECT);
       return(INIT_SUCCEEDED);
      }

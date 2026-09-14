@@ -543,23 +543,123 @@ const CD2SkillBank *CD2Skill::StepBank(void) const
    return(m_ready ? GetPointer(m_step_bank) : NULL);
   }
 //+------------------------------------------------------------------+
-//| Enables the Task and/or Step branch, materializing the bank on   |
-//| first use.                                                       |
+//| Checks D2 composition readiness, including deferred banks.       |
+//+------------------------------------------------------------------+
+bool CD2Skill::SupportsOpenCLChecked(void) const
+  {
+//--- Validate the exact D2 identity and complete Scenario-owned tree.
+   if(Type() != defNeuronD2Skill || !m_ready || bCritic ||
+      !ValidateScenarioOwnedTreeChecked())
+      return(false);
+
+//--- Validate each Bank using its current materialization state.
+   if(m_task_bank_materialized && !m_task_bank.SupportsOpenCLChecked())
+      return(false);
+   if(!m_task_bank_materialized && !m_task_bank.SupportsDeferredOpenCLChecked())
+      return(false);
+   if(m_step_bank_materialized && !m_step_bank.SupportsOpenCLChecked())
+      return(false);
+   if(!m_step_bank_materialized && !m_step_bank.SupportsDeferredOpenCLChecked())
+      return(false);
+
+//--- Bound tensor products before comparing derived dimensions.
+   const long max_elements = INT_MAX;
+   if((long)iQueries > max_elements / (long)iScenarios ||
+      (long)iQueries * (long)iScenarios > max_elements / (long)iDimension ||
+      (long)iScenarios > max_elements / (long)iVariables ||
+      (long)iScenarios * (long)iVariables > max_elements / (long)iHorizon ||
+      (long)iScenarios * (long)iVariables * (long)iHorizon > max_elements / (long)iDimension)
+      return(false);
+
+//--- Confirm the established Task and Step dimensions and slot counts.
+   return(m_task_bank.Dimension() == (uint)((long)iQueries * iScenarios * iDimension) &&
+          m_task_bank.Slots() == iScenarios &&
+          m_step_bank.Dimension() == (uint)((long)iScenarios * iVariables * iHorizon * iDimension) &&
+          m_step_bank.Slots() == iScenarios);
+  }
+//+------------------------------------------------------------------+
+//| Transfers both banks before publishing the Scenario parent.     |
+//+------------------------------------------------------------------+
+bool CD2Skill::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate the exact model and both Bank states before either Bank is prepared.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked target or capability");
+   if(m_task_bank_materialized && !m_task_bank.SupportsOpenCLChecked(obj))
+      ReturnFalseEx("checked Task prevalidation");
+   if(!m_task_bank_materialized && !m_task_bank.SupportsDeferredOpenCLChecked(obj))
+      ReturnFalseEx("checked Task prevalidation");
+   if(m_step_bank_materialized && !m_step_bank.SupportsOpenCLChecked(obj))
+      ReturnFalseEx("checked Step prevalidation");
+   if(!m_step_bank_materialized && !m_step_bank.SupportsDeferredOpenCLChecked(obj))
+      ReturnFalseEx("checked Step prevalidation");
+
+//--- Prepare and transfer Task before publishing its readiness.
+   if(!m_task_bank_materialized && !m_task_bank.PrepareOpenCLChecked(obj))
+      ReturnFalseEx("checked Task prepare");
+   if(!m_task_bank.SetOpenCLChecked(obj))
+      ReturnFalseEx("checked Task context");
+   if(!m_task_bank_materialized)
+      m_task_bank_materialized = true;
+
+//--- Prepare and transfer Step before publishing its readiness.
+   if(!m_step_bank_materialized && !m_step_bank.PrepareOpenCLChecked(obj))
+      ReturnFalseEx("checked Step prepare");
+   if(!m_step_bank.SetOpenCLChecked(obj))
+      ReturnFalseEx("checked Step context");
+   if(!m_step_bank_materialized)
+      m_step_bank_materialized = true;
+
+//--- Publish the Scenario parent only after both Bank transfers succeed.
+   if(!CNeuronScenarioCrossAttention::SetOpenCLChecked(obj))
+      ReturnFalseEx("checked Scenario context");
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Enables the Task and/or Step branch after checked preparation.   |
 //+------------------------------------------------------------------+
 bool CD2Skill::Enable(const bool task, const bool step)
   {
+//--- Validate every requested Bank before preparing either deferred branch.
    if(!m_ready || !OpenCL)
       ReturnFalse;
+   if(task && m_task_bank_materialized && !m_task_bank.SupportsOpenCLChecked(OpenCL))
+      ReturnFalse;
+   if(task && !m_task_bank_materialized && !m_task_bank.SupportsDeferredOpenCLChecked(OpenCL))
+      ReturnFalse;
+   if(step && m_step_bank_materialized && !m_step_bank.SupportsOpenCLChecked(OpenCL))
+      ReturnFalse;
+   if(step && !m_step_bank_materialized && !m_step_bank.SupportsDeferredOpenCLChecked(OpenCL))
+      ReturnFalse;
+
+//--- Prepare and transfer requested deferred Banks without changing enabled state.
    if(task && !m_task_bank_materialized)
      {
-      m_task_bank.SetOpenCL(OpenCL);
+      if(!m_task_bank.PrepareOpenCLChecked(OpenCL))
+         ReturnFalse;
+      if(!m_task_bank.SetOpenCLChecked(OpenCL))
+         ReturnFalse;
+      if(!m_task_bank.SetCorrectionBuffer(m_task_bank.SelectedCorrection()))
+         ReturnFalse;
       m_task_bank_materialized = true;
      }
    if(step && !m_step_bank_materialized)
      {
-      m_step_bank.SetOpenCL(OpenCL);
+      if(!m_step_bank.PrepareOpenCLChecked(OpenCL))
+         ReturnFalse;
+      if(!m_step_bank.SetOpenCLChecked(OpenCL))
+         ReturnFalse;
+      if(!m_step_bank.SetCorrectionBuffer(m_step_bank.SelectedCorrection()))
+         ReturnFalse;
       m_step_bank_materialized = true;
      }
+//--- Bind selected correction aliases only after all requested transfers succeed.
+   if(task && m_task_bank.GetCorrectionBuffer() == NULL &&
+      !m_task_bank.SetCorrectionBuffer(m_task_bank.SelectedCorrection()))
+      ReturnFalse;
+   if(step && m_step_bank.GetCorrectionBuffer() == NULL &&
+      !m_step_bank.SetCorrectionBuffer(m_step_bank.SelectedCorrection()))
+      ReturnFalse;
    m_task_bank.SetEnabled(task);
    m_step_bank.SetEnabled(step);
    return(true);
@@ -1204,6 +1304,59 @@ bool CD2SkillItem::EnsureItemState(void)
           m_item_mass.GetIndex() >= 0 && EnsureItemScratch());
   }
 //+------------------------------------------------------------------+
+//| Prepares legitimately absent Item-owned host buffers only.       |
+//+------------------------------------------------------------------+
+bool CD2SkillItem::PrepareItemOwnedCheckedState(void)
+  {
+   if(CheckPointer(OpenCL) == POINTER_INVALID || m_item_dimension == 0 ||
+      CheckPointer(Output) == POINTER_INVALID || CheckPointer(Gradient) == POINTER_INVALID ||
+      Output.Total() != (int)m_item_dimension || Gradient.Total() != (int)m_item_dimension ||
+      (Output.GetIndex() >= 0 && CheckPointer(Output.GetOpenCL()) == POINTER_INVALID) ||
+      (Gradient.GetIndex() >= 0 && CheckPointer(Gradient.GetOpenCL()) == POINTER_INVALID))
+      return(false);
+
+   uint local_size    = 0;
+   uint groups        = 0;
+   uint partial_count = 0;
+   if(!ItemLaunchLayout(local_size, groups, partial_count))
+      return(false);
+
+   CBufferFloat *buffers[7];
+   int           totals[7];
+   string        slots[7] = {"correction", "direction", "scale", "observations",
+                             "mass", "norm partials", "reduced norm"};
+   buffers[0] = GetPointer(m_item_correction);
+   totals[0] = (int)m_item_dimension;
+   buffers[1] = GetPointer(m_item_direction);
+   totals[1] = (int)m_item_dimension;
+   buffers[2] = GetPointer(m_item_scale);
+   totals[2] = 1;
+   buffers[3] = GetPointer(m_item_observations);
+   totals[3] = 1;
+   buffers[4] = GetPointer(m_item_mass);
+   totals[4] = 1;
+   buffers[5] = GetPointer(m_item_partials);
+   totals[5] = (int)partial_count;
+   buffers[6] = GetPointer(m_item_reduced_norm);
+   totals[6] = 2;
+
+   for(int i = 0; i < 7; i++)
+     {
+      if(CheckPointer(buffers[i]) == POINTER_INVALID ||
+         (buffers[i].Total() != totals[i] &&
+          (buffers[i].Total() != 0 || buffers[i].GetIndex() >= 0)) ||
+         (buffers[i].GetIndex() >= 0 &&
+          CheckPointer(buffers[i].GetOpenCL()) == POINTER_INVALID))
+         ReturnFalseEx("item " + slots[i] + " checked state");
+     }
+
+   for(int i = 0; i < 7; i++)
+      if(buffers[i].Total() == 0 && !buffers[i].BufferInit(totals[i], 0.0f))
+         ReturnFalseEx("item " + slots[i] + " host init");
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Computes the GPU launch layout and norm-reduction scratch size   |
 //| for the item.                                                    |
 //+------------------------------------------------------------------+
@@ -1423,6 +1576,170 @@ void CD2SkillItem::SetOpenCL(COpenCLMy *obj)
    EnsureItemScratch();
    if(m_item_correction.Total() > 0 && m_item_correction.GetIndex() >= 0)
       m_correction = GetPointer(m_item_correction);
+  }
+//+------------------------------------------------------------------+
+//| Validates Item-owned checked state without alias policy.         |
+//+------------------------------------------------------------------+
+bool CD2SkillItem::ValidateItemOwnedCheckedState(const bool allow_missing) const
+  {
+//--- Validate the fixed item geometry and the inherited live owners.
+   if(CheckPointer(OpenCL) == POINTER_INVALID ||
+      m_item_dimension == 0 || m_item_dimension > (uint)INT_MAX ||
+      CheckPointer(Output) == POINTER_INVALID || CheckPointer(Gradient) == POINTER_INVALID ||
+      Output.Total() != (int)m_item_dimension || Gradient.Total() != (int)m_item_dimension ||
+      (Output.GetIndex() >= 0 && CheckPointer(Output.GetOpenCL()) == POINTER_INVALID) ||
+      (Gradient.GetIndex() >= 0 && CheckPointer(Gradient.GetOpenCL()) == POINTER_INVALID))
+      return(false);
+
+//--- Obtain the existing reduction layout without allocating or rebinding scratch.
+   uint local_size    = 0;
+   uint groups        = 0;
+   uint partial_count = 0;
+   if(!ItemLaunchLayout(local_size, groups, partial_count))
+      return(false);
+
+//--- Permit only wholly absent deferred Item slots; allocated slots retain live owners.
+   const CBufferFloat *buffers[7];
+   int                 totals[7];
+   buffers[0] = GetPointer(m_item_correction);
+   totals[0] = (int)m_item_dimension;
+   buffers[1] = GetPointer(m_item_direction);
+   totals[1] = (int)m_item_dimension;
+   buffers[2] = GetPointer(m_item_scale);
+   totals[2] = 1;
+   buffers[3] = GetPointer(m_item_observations);
+   totals[3] = 1;
+   buffers[4] = GetPointer(m_item_mass);
+   totals[4] = 1;
+   buffers[5] = GetPointer(m_item_partials);
+   totals[5] = (int)partial_count;
+   buffers[6] = GetPointer(m_item_reduced_norm);
+   totals[6] = 2;
+   for(int i = 0; i < 7; i++)
+     {
+      if(CheckPointer(buffers[i]) == POINTER_INVALID ||
+         (buffers[i].Total() != totals[i] &&
+          (!allow_missing || buffers[i].Total() != 0 || buffers[i].GetIndex() >= 0)) ||
+         (buffers[i].GetIndex() >= 0 &&
+          CheckPointer(buffers[i].GetOpenCL()) == POINTER_INVALID))
+         return(false);
+     }
+
+//--- Finalize the Item-owned state validation without an alias policy.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Reports checked transfer support for an exact D2 skill item.     |
+//+------------------------------------------------------------------+
+bool CD2SkillItem::SupportsOpenCLChecked(void) const
+  {
+//--- Retain the exact Item type gate and the current correction-alias policy.
+   if(Type() != defNeuronD2SkillItem || !ValidateItemOwnedCheckedState())
+      return(false);
+
+//--- Validate the optional correction alias without constraining borrowed owners to the outer target.
+   if(m_correction != NULL)
+     {
+      if(CheckPointer(m_correction) == POINTER_INVALID ||
+         m_correction.Total() != (int)m_item_dimension)
+         return(false);
+
+      if(m_correction != GetPointer(m_item_correction) &&
+         (CheckPointer(m_correction.GetOpenCL()) == POINTER_INVALID ||
+          m_correction.GetIndex() < 0))
+         return(false);
+     }
+
+//--- Finalize without constraining an external correction alias to the outer owner.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Transfers owned item buffers before inherited context publication.|
+//+------------------------------------------------------------------+
+bool CD2SkillItem::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Reject an invalid target, incomplete item or foreign borrowed correction before mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked item target or capability");
+   if(m_correction != NULL && m_correction != GetPointer(m_item_correction) &&
+      (CheckPointer(m_correction) == POINTER_INVALID ||
+       m_correction.GetOpenCL() != obj ||
+       m_correction.Total() != (int)m_item_dimension || m_correction.GetIndex() < 0))
+      ReturnFalseEx("borrowed item correction target");
+
+//--- Read every allocated foreign direct buffer before any item buffer is recreated.
+   if(m_item_correction.GetIndex() >= 0 &&
+      CheckPointer(m_item_correction.GetOpenCL()) == POINTER_INVALID)
+      ReturnFalseEx("item correction owner");
+   if(m_item_correction.GetIndex() >= 0 && m_item_correction.GetOpenCL() != obj &&
+      !m_item_correction.BufferRead())
+      ReturnFalseEx("item correction read");
+   if(m_item_direction.GetIndex() >= 0 &&
+      CheckPointer(m_item_direction.GetOpenCL()) == POINTER_INVALID)
+      ReturnFalseEx("item direction owner");
+   if(m_item_direction.GetIndex() >= 0 && m_item_direction.GetOpenCL() != obj &&
+      !m_item_direction.BufferRead())
+      ReturnFalseEx("item direction read");
+   if(m_item_scale.GetIndex() >= 0 &&
+      CheckPointer(m_item_scale.GetOpenCL()) == POINTER_INVALID)
+      ReturnFalseEx("item scale owner");
+   if(m_item_scale.GetIndex() >= 0 && m_item_scale.GetOpenCL() != obj &&
+      !m_item_scale.BufferRead())
+      ReturnFalseEx("item scale read");
+   if(m_item_observations.GetIndex() >= 0 &&
+      CheckPointer(m_item_observations.GetOpenCL()) == POINTER_INVALID)
+      ReturnFalseEx("item observations owner");
+   if(m_item_observations.GetIndex() >= 0 && m_item_observations.GetOpenCL() != obj &&
+      !m_item_observations.BufferRead())
+      ReturnFalseEx("item observations read");
+   if(m_item_mass.GetIndex() >= 0 &&
+      CheckPointer(m_item_mass.GetOpenCL()) == POINTER_INVALID)
+      ReturnFalseEx("item mass owner");
+   if(m_item_mass.GetIndex() >= 0 && m_item_mass.GetOpenCL() != obj &&
+      !m_item_mass.BufferRead())
+      ReturnFalseEx("item mass read");
+   if(m_item_partials.GetIndex() >= 0 &&
+      CheckPointer(m_item_partials.GetOpenCL()) == POINTER_INVALID)
+      ReturnFalseEx("item partials owner");
+   if(m_item_partials.GetIndex() >= 0 && m_item_partials.GetOpenCL() != obj &&
+      !m_item_partials.BufferRead())
+      ReturnFalseEx("item partials read");
+   if(m_item_reduced_norm.GetIndex() >= 0 &&
+      CheckPointer(m_item_reduced_norm.GetOpenCL()) == POINTER_INVALID)
+      ReturnFalseEx("item reduced norm owner");
+   if(m_item_reduced_norm.GetIndex() >= 0 && m_item_reduced_norm.GetOpenCL() != obj &&
+      !m_item_reduced_norm.BufferRead())
+      ReturnFalseEx("item reduced norm read");
+
+//--- Recreate only direct item buffers that are foreign to the target or host-only.
+   if(m_item_correction.GetOpenCL() != obj || m_item_correction.GetIndex() < 0)
+      if(!m_item_correction.BufferCreate(obj))
+         ReturnFalseEx("item correction create");
+   if(m_item_direction.GetOpenCL() != obj || m_item_direction.GetIndex() < 0)
+      if(!m_item_direction.BufferCreate(obj))
+         ReturnFalseEx("item direction create");
+   if(m_item_scale.GetOpenCL() != obj || m_item_scale.GetIndex() < 0)
+      if(!m_item_scale.BufferCreate(obj))
+         ReturnFalseEx("item scale create");
+   if(m_item_observations.GetOpenCL() != obj || m_item_observations.GetIndex() < 0)
+      if(!m_item_observations.BufferCreate(obj))
+         ReturnFalseEx("item observations create");
+   if(m_item_mass.GetOpenCL() != obj || m_item_mass.GetIndex() < 0)
+      if(!m_item_mass.BufferCreate(obj))
+         ReturnFalseEx("item mass create");
+   if(m_item_partials.GetOpenCL() != obj || m_item_partials.GetIndex() < 0)
+      if(!m_item_partials.BufferCreate(obj))
+         ReturnFalseEx("item partials create");
+   if(m_item_reduced_norm.GetOpenCL() != obj || m_item_reduced_norm.GetIndex() < 0)
+      if(!m_item_reduced_norm.BufferCreate(obj))
+         ReturnFalseEx("item reduced norm create");
+
+//--- Publish inherited owners only after every owned item buffer reached the target.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited item base context");
+
+//--- Finalize the checked item transfer without replacing the correction alias.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Clears all item buffers and drops the external correction        |
@@ -1869,6 +2186,417 @@ void CD2SkillBank::SetOpenCL(COpenCLMy *obj)
    if(m_selected_correction.Total() == (int)m_dimension &&
       m_selected_correction.GetOpenCL() == obj && m_selected_correction.GetIndex() >= 0)
       m_correction = GetPointer(m_selected_correction);
+  }
+//+------------------------------------------------------------------+
+//| Reports checked transfer support for an exact D2 skill bank.     |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::SupportsOpenCLChecked(void) const
+  {
+   return(Type() == defNeuronD2SkillBank && ValidateBankOwnedCheckedState(false));
+  }
+//+------------------------------------------------------------------+
+//| Checks strict Bank transfer support for a specific target.       |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::SupportsOpenCLChecked(const COpenCLMy *target) const
+  {
+   return(Type() == defNeuronD2SkillBank &&
+          ValidateBankOwnedCheckedState(false, target));
+  }
+//+------------------------------------------------------------------+
+//| Validates the Bank-owned checked state before any mutation.      |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::ValidateBankOwnedCheckedState(const bool allow_missing_transient,
+                                                  const COpenCLMy *target) const
+  {
+//--- Validate fixed geometry before deriving any scratch-buffer sizes.
+   if(!ValidateItemOwnedCheckedState(allow_missing_transient) ||
+      m_slots == 0 || m_dimension == 0 || m_dimension != m_item_dimension ||
+      m_slots > RAG_FLOAT_INDEX_LIMIT)
+      return(false);
+
+   const long vector_total = (long)m_slots * (long)m_dimension;
+   if(vector_total <= 0 || vector_total > INT_MAX || m_slots > (uint)INT_MAX ||
+      m_slots > (uint)INT_MAX / 4)
+      return(false);
+
+//--- Derive every existing scratch size without allocation or mutable validation.
+   uint retrieval_local             = 0;
+   uint retrieval_partials          = 0;
+   uint score_partials              = 0;
+   uint metric_partials             = 0;
+   uint diagnostics_norm_partials   = 0;
+   uint diagnostics_partials        = 0;
+   uint influence_partials          = 0;
+   uint gradient_influence_partials = 0;
+   if(!RetrievalLaunchLayout(retrieval_local, retrieval_partials) ||
+      retrieval_partials > (uint)INT_MAX / 2 ||
+      !ReductionScratchCount(m_dimension, m_slots, 4, score_partials) ||
+      !ReductionScratchCount(m_dimension, 1, D2SKILL_METRICS, metric_partials) ||
+      !ReductionScratchCount(m_dimension, m_slots, 1, diagnostics_norm_partials) ||
+      !ReductionScratchCount(m_slots, 1, D2SKILL_DIAGNOSTIC_PARTIALS, diagnostics_partials) ||
+      !ReductionScratchCount(m_slots, 1, 1, influence_partials) ||
+      !ReductionScratchCount(m_dimension, 1, 1, gradient_influence_partials) ||
+      score_partials > (uint)INT_MAX || metric_partials > (uint)INT_MAX ||
+      diagnostics_norm_partials > (uint)INT_MAX || diagnostics_partials > (uint)INT_MAX ||
+      influence_partials > (uint)INT_MAX || gradient_influence_partials > (uint)INT_MAX)
+      return(false);
+
+//--- Map all Bank-owned slots to their established host shapes.
+   const CBufferFloat *buffers[42];
+   int                 totals[42];
+   buffers[0] = GetPointer(m_keys);
+   totals[0] = (int)vector_total;
+   buffers[1] = GetPointer(m_corrections);
+   totals[1] = (int)vector_total;
+   buffers[2] = GetPointer(m_directions);
+   totals[2] = (int)vector_total;
+   buffers[3] = GetPointer(m_scales);
+   totals[3] = (int)m_slots;
+   buffers[4] = GetPointer(m_utility);
+   totals[4] = (int)m_slots;
+   buffers[5] = GetPointer(m_observations);
+   totals[5] = (int)m_slots;
+   buffers[6] = GetPointer(m_uses);
+   totals[6] = (int)m_slots;
+   buffers[7] = GetPointer(m_mass);
+   totals[7] = (int)m_slots;
+   buffers[8] = GetPointer(m_used);
+   totals[8] = (int)m_slots;
+   buffers[9] = GetPointer(m_state);
+   totals[9] = (int)m_slots;
+   buffers[10] = GetPointer(m_age);
+   totals[10] = (int)m_slots;
+   buffers[11] = GetPointer(m_protection);
+   totals[11] = (int)m_slots;
+   buffers[12] = GetPointer(m_influence);
+   totals[12] = (int)m_slots;
+   buffers[13] = GetPointer(m_utility_applied);
+   totals[13] = (int)m_slots;
+   buffers[14] = GetPointer(m_retrieved);
+   totals[14] = (int)m_slots;
+   buffers[15] = GetPointer(m_retrieval_scores);
+   totals[15] = (int)m_slots;
+   buffers[16] = GetPointer(m_free_scores);
+   totals[16] = (int)m_slots;
+   buffers[17] = GetPointer(m_eviction_scores);
+   totals[17] = (int)m_slots;
+   buffers[18] = GetPointer(m_diagnostics_norms);
+   totals[18] = (int)m_slots;
+   buffers[19] = GetPointer(m_influence_total);
+   totals[19] = 1;
+   buffers[20] = GetPointer(m_gradient_influence_total);
+   totals[20] = 1;
+   buffers[21] = GetPointer(m_selected_slot);
+   totals[21] = 1;
+   buffers[22] = GetPointer(m_selected_score);
+   totals[22] = 1;
+   buffers[23] = GetPointer(m_selected_correction);
+   totals[23] = (int)m_dimension;
+   buffers[24] = GetPointer(m_diagnostics);
+   totals[24] = D2SKILL_DIAGNOSTICS;
+   buffers[25] = GetPointer(m_utility_distribution);
+   totals[25] = D2SKILL_DISTRIBUTION_BINS;
+   buffers[26] = GetPointer(m_usage_distribution);
+   totals[26] = D2SKILL_DISTRIBUTION_BINS;
+   buffers[27] = GetPointer(m_score_partials);
+   totals[27] = (int)score_partials;
+   buffers[28] = GetPointer(m_score_metrics);
+   totals[28] = (int)(4 * m_slots);
+   buffers[29] = GetPointer(m_retrieval_partial);
+   totals[29] = (int)(2 * retrieval_partials);
+   buffers[30] = GetPointer(m_retrieval_merge);
+   totals[30] = (int)(2 * retrieval_partials);
+   buffers[31] = GetPointer(m_retrieval_top);
+   totals[31] = 2;
+   buffers[32] = GetPointer(m_free_top);
+   totals[32] = 2;
+   buffers[33] = GetPointer(m_eviction_top);
+   totals[33] = 2;
+   buffers[34] = GetPointer(m_metric_partials);
+   totals[34] = (int)metric_partials;
+   buffers[35] = GetPointer(m_metrics);
+   totals[35] = D2SKILL_METRICS;
+   buffers[36] = GetPointer(m_decision);
+   totals[36] = 4;
+   buffers[37] = GetPointer(m_diagnostics_norm_partials);
+   totals[37] = (int)diagnostics_norm_partials;
+   buffers[38] = GetPointer(m_diagnostics_partials);
+   totals[38] = (int)diagnostics_partials;
+   buffers[39] = GetPointer(m_diagnostics_totals);
+   totals[39] = D2SKILL_DIAGNOSTIC_PARTIALS;
+   buffers[40] = GetPointer(m_influence_partials);
+   totals[40] = (int)influence_partials;
+   buffers[41] = GetPointer(m_gradient_influence_partials);
+   totals[41] = (int)gradient_influence_partials;
+
+//--- Deferred loads may omit only transient slots; every present slot keeps its shape and owner.
+   for(int i = 0; i < 42; i++)
+     {
+      const bool transient = (i >= 13 && i <= 20) || i >= 27;
+      const bool absent = buffers[i].Total() == 0 && buffers[i].GetIndex() < 0;
+      if(CheckPointer(buffers[i]) == POINTER_INVALID ||
+         (buffers[i].Total() != totals[i] &&
+          (!allow_missing_transient || !transient || !absent)) ||
+         (buffers[i].GetIndex() >= 0 &&
+          CheckPointer(buffers[i].GetOpenCL()) == POINTER_INVALID))
+         return(false);
+     }
+
+//--- Only Item and selected-Bank aliases may remain host-only for checked repair.
+   if(m_correction != NULL && m_correction != GetPointer(m_item_correction) &&
+      m_correction != GetPointer(m_selected_correction) &&
+      (CheckPointer(m_correction) == POINTER_INVALID ||
+       m_correction.Total() != (int)m_dimension || m_correction.GetIndex() < 0 ||
+       CheckPointer(m_correction.GetOpenCL()) == POINTER_INVALID ||
+       (target != NULL && m_correction.GetOpenCL() != target)))
+      return(false);
+
+//--- Finalize exact Bank capability after every owned slot is checked.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Checks a loaded Bank before its missing transient slots exist.   |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::SupportsDeferredOpenCLChecked(const COpenCLMy *target) const
+  {
+   return(Type() == defNeuronD2SkillBank &&
+          ValidateBankOwnedCheckedState(true, target));
+  }
+//+------------------------------------------------------------------+
+//| Initializes absent loaded-bank transient host slots only.        |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::PrepareOpenCLChecked(COpenCLMy *target)
+  {
+//--- Complete target-aware prevalidation before any host-only slot is initialized.
+   if(!SupportsDeferredOpenCLChecked(target))
+      return(false);
+   if(!PrepareItemOwnedCheckedState())
+      return(false);
+
+//--- Derive every transient host-buffer shape without allocating device storage.
+   uint retrieval_local              = 0;
+   uint retrieval_partials           = 0;
+   uint score_partials               = 0;
+   uint metric_partials              = 0;
+   uint diagnostic_norm_partials     = 0;
+   uint diagnostic_partials          = 0;
+   uint influence_partials           = 0;
+   uint gradient_influence_partials  = 0;
+   if(!RetrievalLaunchLayout(retrieval_local, retrieval_partials))
+      ReturnFalseEx("bank retrieval launch layout");
+   if(!ReductionScratchCount(m_dimension, m_slots, 4, score_partials))
+      ReturnFalseEx("bank score partials shape");
+   if(!ReductionScratchCount(m_dimension, 1, D2SKILL_METRICS, metric_partials))
+      ReturnFalseEx("bank metric partials shape");
+   if(!ReductionScratchCount(m_dimension, m_slots, 1, diagnostic_norm_partials))
+      ReturnFalseEx("bank diagnostic norm partials shape");
+   if(!ReductionScratchCount(m_slots, 1, D2SKILL_DIAGNOSTIC_PARTIALS, diagnostic_partials))
+      ReturnFalseEx("bank diagnostic partials shape");
+   if(!ReductionScratchCount(m_slots, 1, 1, influence_partials))
+      ReturnFalseEx("bank influence partials shape");
+   if(!ReductionScratchCount(m_dimension, 1, 1, gradient_influence_partials))
+      ReturnFalseEx("bank gradient influence partials shape");
+
+//--- Map transient Bank slots to their established host shapes.
+   CBufferFloat *buffers[23];
+   int           totals[23];
+   string        slots[23] = {"utility applied", "influence total",
+                              "gradient influence total", "retrieved", "retrieval scores",
+                              "free scores", "eviction scores", "diagnostic norms",
+                              "score partials", "score metrics", "retrieval partial",
+                              "retrieval merge", "retrieval top", "free top", "eviction top",
+                              "metric partials", "metrics", "decision",
+                              "diagnostic norm partials", "diagnostic partials",
+                              "diagnostic totals", "influence partials",
+                              "gradient influence partials"};
+   buffers[0] = GetPointer(m_utility_applied);
+   totals[0] = (int)m_slots;
+   buffers[1] = GetPointer(m_influence_total);
+   totals[1] = 1;
+   buffers[2] = GetPointer(m_gradient_influence_total);
+   totals[2] = 1;
+   buffers[3] = GetPointer(m_retrieved);
+   totals[3] = (int)m_slots;
+   buffers[4] = GetPointer(m_retrieval_scores);
+   totals[4] = (int)m_slots;
+   buffers[5] = GetPointer(m_free_scores);
+   totals[5] = (int)m_slots;
+   buffers[6] = GetPointer(m_eviction_scores);
+   totals[6] = (int)m_slots;
+   buffers[7] = GetPointer(m_diagnostics_norms);
+   totals[7] = (int)m_slots;
+   buffers[8] = GetPointer(m_score_partials);
+   totals[8] = (int)score_partials;
+   buffers[9] = GetPointer(m_score_metrics);
+   totals[9] = (int)(4 * m_slots);
+   buffers[10] = GetPointer(m_retrieval_partial);
+   totals[10] = (int)(2 * retrieval_partials);
+   buffers[11] = GetPointer(m_retrieval_merge);
+   totals[11] = (int)(2 * retrieval_partials);
+   buffers[12] = GetPointer(m_retrieval_top);
+   totals[12] = 2;
+   buffers[13] = GetPointer(m_free_top);
+   totals[13] = 2;
+   buffers[14] = GetPointer(m_eviction_top);
+   totals[14] = 2;
+   buffers[15] = GetPointer(m_metric_partials);
+   totals[15] = (int)metric_partials;
+   buffers[16] = GetPointer(m_metrics);
+   totals[16] = D2SKILL_METRICS;
+   buffers[17] = GetPointer(m_decision);
+   totals[17] = 4;
+   buffers[18] = GetPointer(m_diagnostics_norm_partials);
+   totals[18] = (int)diagnostic_norm_partials;
+   buffers[19] = GetPointer(m_diagnostics_partials);
+   totals[19] = (int)diagnostic_partials;
+   buffers[20] = GetPointer(m_diagnostics_totals);
+   totals[20] = D2SKILL_DIAGNOSTIC_PARTIALS;
+   buffers[21] = GetPointer(m_influence_partials);
+   totals[21] = (int)influence_partials;
+   buffers[22] = GetPointer(m_gradient_influence_partials);
+   totals[22] = (int)gradient_influence_partials;
+
+//--- Reject malformed optional slots before initializing only their absent host mirrors.
+   for(int i = 0; i < 23; i++)
+      if(CheckPointer(buffers[i]) == POINTER_INVALID ||
+         (buffers[i].Total() != totals[i] &&
+          (buffers[i].Total() != 0 || buffers[i].GetIndex() >= 0)) ||
+         (buffers[i].GetIndex() >= 0 &&
+          CheckPointer(buffers[i].GetOpenCL()) == POINTER_INVALID))
+         ReturnFalseEx("bank " + slots[i] + " checked state");
+
+//--- Initialize only the accepted unallocated transient buffers on the CPU.
+   for(int i = 0; i < 23; i++)
+      if(buffers[i].Total() == 0 && !buffers[i].BufferInit(totals[i], 0.0f))
+         ReturnFalseEx("bank " + slots[i] + " host init");
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Transfers all Bank buffers before the qualified Item transfer.   |
+//+------------------------------------------------------------------+
+bool CD2SkillBank::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Reject a foreign borrowed alias before any owned Bank mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked bank target or capability");
+   if(m_correction != NULL && m_correction != GetPointer(m_item_correction) &&
+      m_correction != GetPointer(m_selected_correction) &&
+      (m_correction.GetOpenCL() != obj || m_correction.GetIndex() < 0 ||
+       m_correction.Total() != (int)m_dimension ||
+       CheckPointer(m_correction.GetOpenCL()) == POINTER_INVALID))
+      ReturnFalseEx("borrowed bank correction target");
+
+//--- Read every foreign allocated Bank buffer before any Bank buffer is recreated.
+   CBufferFloat *buffers[42];
+   string       labels[42];
+   buffers[0] = GetPointer(m_keys);
+   labels[0] = "bank keys";
+   buffers[1] = GetPointer(m_corrections);
+   labels[1] = "bank corrections";
+   buffers[2] = GetPointer(m_directions);
+   labels[2] = "bank directions";
+   buffers[3] = GetPointer(m_scales);
+   labels[3] = "bank scales";
+   buffers[4] = GetPointer(m_utility);
+   labels[4] = "bank utility";
+   buffers[5] = GetPointer(m_observations);
+   labels[5] = "bank observations";
+   buffers[6] = GetPointer(m_uses);
+   labels[6] = "bank uses";
+   buffers[7] = GetPointer(m_mass);
+   labels[7] = "bank mass";
+   buffers[8] = GetPointer(m_used);
+   labels[8] = "bank used";
+   buffers[9] = GetPointer(m_state);
+   labels[9] = "bank state";
+   buffers[10] = GetPointer(m_age);
+   labels[10] = "bank age";
+   buffers[11] = GetPointer(m_protection);
+   labels[11] = "bank protection";
+   buffers[12] = GetPointer(m_influence);
+   labels[12] = "bank influence";
+   buffers[13] = GetPointer(m_utility_applied);
+   labels[13] = "bank utility applied";
+   buffers[14] = GetPointer(m_retrieved);
+   labels[14] = "bank retrieved";
+   buffers[15] = GetPointer(m_retrieval_scores);
+   labels[15] = "bank retrieval scores";
+   buffers[16] = GetPointer(m_free_scores);
+   labels[16] = "bank free scores";
+   buffers[17] = GetPointer(m_eviction_scores);
+   labels[17] = "bank eviction scores";
+   buffers[18] = GetPointer(m_diagnostics_norms);
+   labels[18] = "bank diagnostics norms";
+   buffers[19] = GetPointer(m_influence_total);
+   labels[19] = "bank influence total";
+   buffers[20] = GetPointer(m_gradient_influence_total);
+   labels[20] = "bank gradient influence total";
+   buffers[21] = GetPointer(m_selected_slot);
+   labels[21] = "bank selected slot";
+   buffers[22] = GetPointer(m_selected_score);
+   labels[22] = "bank selected score";
+   buffers[23] = GetPointer(m_selected_correction);
+   labels[23] = "bank selected correction";
+   buffers[24] = GetPointer(m_diagnostics);
+   labels[24] = "bank diagnostics";
+   buffers[25] = GetPointer(m_utility_distribution);
+   labels[25] = "bank utility distribution";
+   buffers[26] = GetPointer(m_usage_distribution);
+   labels[26] = "bank usage distribution";
+   buffers[27] = GetPointer(m_score_partials);
+   labels[27] = "bank score partials";
+   buffers[28] = GetPointer(m_score_metrics);
+   labels[28] = "bank score metrics";
+   buffers[29] = GetPointer(m_retrieval_partial);
+   labels[29] = "bank retrieval partial";
+   buffers[30] = GetPointer(m_retrieval_merge);
+   labels[30] = "bank retrieval merge";
+   buffers[31] = GetPointer(m_retrieval_top);
+   labels[31] = "bank retrieval top";
+   buffers[32] = GetPointer(m_free_top);
+   labels[32] = "bank free top";
+   buffers[33] = GetPointer(m_eviction_top);
+   labels[33] = "bank eviction top";
+   buffers[34] = GetPointer(m_metric_partials);
+   labels[34] = "bank metric partials";
+   buffers[35] = GetPointer(m_metrics);
+   labels[35] = "bank metrics";
+   buffers[36] = GetPointer(m_decision);
+   labels[36] = "bank decision";
+   buffers[37] = GetPointer(m_diagnostics_norm_partials);
+   labels[37] = "bank diagnostics norm partials";
+   buffers[38] = GetPointer(m_diagnostics_partials);
+   labels[38] = "bank diagnostics partials";
+   buffers[39] = GetPointer(m_diagnostics_totals);
+   labels[39] = "bank diagnostics totals";
+   buffers[40] = GetPointer(m_influence_partials);
+   labels[40] = "bank influence partials";
+   buffers[41] = GetPointer(m_gradient_influence_partials);
+   labels[41] = "bank gradient influence partials";
+
+   for(int i = 0; i < 42; i++)
+     {
+      if(buffers[i].GetIndex() >= 0 &&
+         CheckPointer(buffers[i].GetOpenCL()) == POINTER_INVALID)
+         ReturnFalseEx(labels[i] + " owner");
+      if(buffers[i].GetIndex() >= 0 && buffers[i].GetOpenCL() != obj &&
+         !buffers[i].BufferRead())
+         ReturnFalseEx(labels[i] + " read");
+     }
+
+//--- Recreate only foreign or host-only Bank slots, retaining target-resident values.
+   for(int i = 0; i < 42; i++)
+      if(buffers[i].GetOpenCL() != obj || buffers[i].GetIndex() < 0)
+         if(!buffers[i].BufferCreate(obj))
+            ReturnFalseEx(labels[i] + " create");
+
+//--- Transfer Item-owned state and publish the outer context only after Bank success.
+   if(!CD2SkillItem::SetOpenCLChecked(obj))
+      ReturnFalseEx("checked bank item transfer");
+
+//--- Finalize after the qualified Item transfer publishes the outer context.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Scores all slots against the state and gathers the winning       |

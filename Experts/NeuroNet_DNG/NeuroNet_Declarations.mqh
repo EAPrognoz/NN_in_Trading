@@ -1481,6 +1481,7 @@ public:
    virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
    //---
    virtual int       Type(void)        const                      {  return defNeuronTransposeOCL; }///< Identificator of class.@return Type of class
+   virtual bool      SupportsOpenCLChecked(void) const override;
    //---
    virtual uint      GetWindow(void) const { return iWindow; }
    virtual uint      GetCount(void) const { return iCount; }
@@ -1515,7 +1516,7 @@ protected:
 public:
    /** Constructor */
                      CNeuronMH2AttentionOCL(void);
-   /** Destructor */~CNeuronMH2AttentionOCL(void) {};
+   /** Destructor */~CNeuronMH2AttentionOCL(void);
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint window, uint window_key, uint heads,
                           uint units_count, ENUM_OPTIMIZATION optimization_type,
@@ -1528,6 +1529,8 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronCGConvOCL class.                             |
@@ -1759,6 +1762,8 @@ public:
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronGTE class.                                   |
@@ -2129,6 +2134,8 @@ public:
    //---
    virtual int       Type(void)        const                      {  return defNeuronLearnabledPE;    }///< Identificator of class.@return Type of class
    virtual void      SetOpenCL(COpenCLMy *obj);
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    //---
    virtual CBufferFloat* GetPE(void)   const { return cPositionEncoder.getOutput(); }
    // Implements AddPEGradient.
@@ -6213,7 +6220,7 @@ protected:
 
 public:
                      CNeuronMultiWindowsConvOCL(void) {  activation = SoftPlus;  iWindow = -1; }
-                    ~CNeuronMultiWindowsConvOCL(void) {};
+                    ~CNeuronMultiWindowsConvOCL(void);
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint &windows[], uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
@@ -6224,6 +6231,8 @@ public:
    virtual bool      Load(int const file_handle);
    //---
    virtual void      SetOpenCL(COpenCLMy *obj);
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    //---
    // Gets Window.
    virtual int       GetWindow(uint index)
@@ -9761,6 +9770,8 @@ public:
    virtual bool      Load(int const file_handle) override;
    //---
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
@@ -11813,6 +11824,8 @@ public:
    virtual bool      Load(int const file_handle) override;
    //---
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
@@ -13188,6 +13201,8 @@ public:
    virtual int       Type(void) override const  {  return defNeuronMomADTTM; }
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
@@ -13969,6 +13984,7 @@ protected:
    virtual bool               updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool               updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *Forecast) override;
    bool                       InitHolders(uint myIndex, ENUM_OPTIMIZATION optimization_type, uint batch);
+   bool                       ValidateScenarioOwnedTreeChecked(void) const;
 
 public:
                      CNeuronScenarioCrossAttention(void) : iVariables(0), iScenarios(0), iHorizon(0), iDimension(0),
@@ -13985,6 +14001,8 @@ public:
    virtual bool               Load(const int file_handle) override;
    bool                       Load(const int file_handle, COpenCLMy *open_cl);
    virtual void               SetOpenCL(COpenCLMy *obj) override;
+   virtual bool               SupportsOpenCLChecked(void) const override;
+   virtual bool               SetOpenCLChecked(COpenCLMy *obj) override;
    virtual void               TrainMode(bool flag) override;
    virtual bool               WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool               AppendParameterFingerprint(ulong &fingerprint) override;
@@ -14097,9 +14115,11 @@ protected:
    bool              ItemLaunchLayout(uint &local_size, uint &groups,
                                       uint &partial_count) const;
    bool              EnsureItemScratch(void);
+   bool              PrepareItemOwnedCheckedState(void);
    bool              CalculateItemNorm(CBufferFloat *source, const uint local_size,
                                        const uint groups);
    void              RebindItemBuffer(CBufferFloat &buffer, COpenCLMy *obj);
+   bool              ValidateItemOwnedCheckedState(const bool allow_missing = false) const;
 
 public:
                      CD2SkillItem(void);
@@ -14123,6 +14143,8 @@ public:
    virtual bool      Load(const int file_handle) override;
    bool              Load(const int file_handle, COpenCLMy *opencl);
    virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    virtual bool      Clear(void) override;
    bool              UpdateFromGradient(CBufferFloat *gradient);
    CBufferFloat      *Correction(void);
@@ -14200,6 +14222,8 @@ protected:
 
    void              RebindBuffer(CBufferFloat &buffer, COpenCLMy *obj);
    bool              ValidateBuffers(void);
+   bool              ValidateBankOwnedCheckedState(const bool allow_missing_transient,
+                                                    const COpenCLMy *target = NULL) const;
    bool              InitBuffer(CBufferFloat &buffer, const int total,
                                 const float value = 0.0f);
    bool              RetrievalLaunchLayout(uint &local_size, uint &partial_count) const;
@@ -14237,6 +14261,11 @@ public:
    virtual bool      Load(const int file_handle) override;
    bool              Load(const int file_handle, COpenCLMy *opencl);
    virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   bool              SupportsOpenCLChecked(const COpenCLMy *target) const;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+   bool              SupportsDeferredOpenCLChecked(const COpenCLMy *target = NULL) const;
+   bool              PrepareOpenCLChecked(COpenCLMy *target);
    virtual bool      Clear(void) override;
    // Destructive fixture reset. Clear() preserves durable bank state.
    bool              ResetDurableState(void);
@@ -14327,6 +14356,8 @@ public:
    virtual bool      Load(const int file_handle) override;
    bool              Load(const int file_handle, COpenCLMy *opencl);
    virtual void      SetOpenCL(COpenCLMy *opencl) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      UpdateInputStateSecond(CObject *SourceObject,

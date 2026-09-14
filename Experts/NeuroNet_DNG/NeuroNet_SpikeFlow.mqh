@@ -7556,6 +7556,30 @@ void CNeuronMSRes::SetOpenCL(COpenCLMy *obj)
    cFlow.SetOpenCL(OpenCL);
   }
 //+------------------------------------------------------------------+
+//| Reports checked-transfer support for CNeuronMSRes.               |
+//+------------------------------------------------------------------+
+bool CNeuronMSRes::SupportsOpenCLChecked(void) const
+  {
+   return(Type() == defNeuronMSRes && cFlow.SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers MSRes owners before base context publishing.           |
+//+------------------------------------------------------------------+
+bool CNeuronMSRes::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate target and complete nested ownership before mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or MSRes tree");
+//--- Transfer the flow before the outer context is published.
+   if(!cFlow.SetOpenCLChecked(obj))
+      ReturnFalseEx("MSRes flow context");
+//--- Publish inherited outer owners after the flow succeeded.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited base context");
+//--- Finalize the checked MSRes transfer.
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Sets the training flag of the CNeuronMSRes layer.                |
 //+------------------------------------------------------------------+
 void CNeuronMSRes::TrainMode(bool flag)

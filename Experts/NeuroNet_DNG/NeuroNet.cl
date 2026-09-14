@@ -835,33 +835,29 @@ __kernel void CalcHiddenGradientConv(__global float *matrix_w,       ///<[in] We
    const size_t i = get_global_id(0);
    const size_t inputs = get_global_size(0);
    const size_t v = get_global_id(1);
-//---
+//--- Resolve per-variable tensor offsets.
    const int shift_var_in = v * inputs;
    const int shift_var_out = v * outputs;
    const int shift_var_w = v * window_out * (window_in + 1);
-//---
+//--- Derive the exact forward-window interval from the signed input position.
    float sum = 0;
    float out = matrix_o[shift_var_in + i];
-   const int w_start = i % step;
-   const int start = max((int)((i - window_in + step) / step), 0);
-   int stop = (w_start + step - 1) / step;
-   stop = min((int)((i + step - 1) / step + 1), stop) + start;
-   if(stop > (outputs / window_out))
-      stop = outputs / window_out;
+   const int position = (int)i;
+   const int start = position < window_in ? 0 : (position - window_in) / step + 1;
+   const int stop = min(position / step + 1, outputs / window_out);
+//--- Accumulate each output component across the contributing windows.
    for(int h = 0; h < window_out; h ++)
      {
       for(int k = start; k < stop; k++)
         {
          int shift_g = k * window_out + h;
-         int shift_w = (stop - k - 1) * step + i % step + h * (window_in + 1);
-         if(shift_g >= outputs || shift_w >= (window_in + 1) * window_out)
-            break;
+         int shift_w = h * (window_in + 1) + position - k * step;
          float grad = IsNaNOrInf(matrix_g[shift_out + shift_g + shift_var_out], 0.0f);
          if(fabs(grad) > 0.0f)
             sum += IsNaNOrInf(grad * matrix_w[shift_w + shift_var_w], 0.0f);
         }
      }
-//---
+//--- Apply the existing activation derivative to the accumulated gradient.
    matrix_ig[shift_var_in + i] = Deactivation(sum, out, activation);
   }
 //+------------------------------------------------------------------+

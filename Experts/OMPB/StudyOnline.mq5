@@ -5,16 +5,15 @@
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 #property strict
+#define  D2SKILL
 #include "Trajectory.mqh"
 //---
 input group                       "---- D2Skill online ----"
 input ENUM_D2SKILL_STAGE          InpD2SkillStage = D2Skill_D2_STAGE_ONLINE; //Lifecycle stage
 input ENUM_D2SKILL_MODE           InpD2SkillExecutionMode = D2_ONLINE_CALIBRATION; //Bank execution mode
 input ED2SkillRepresentation      InpD2SkillRepresentation = D2SkillDirectionMagnitude; //Bank representation
-input bool                        InpD2SkillResetBanksOnRepresentationMismatch =
-   false; //Reset incompatible banks
-input bool                        InpD2SkillRecreateIncompatibleCheckpoint =
-   false; //Recreate incompatible policy checkpoint
+input bool                        InpD2SkillResetBanksOnRepresentationMismatch = false; //Reset incompatible banks
+input bool                        InpD2SkillRecreateIncompatibleCheckpoint = false; //Recreate incompatible policy checkpoint
 input bool                        InpD2SkillOnlineDirectionUpdate = false; //Update direction EMA
 input bool                        InpD2SkillOnlineCriticUpdate = false; //Update Critic online
 //---
@@ -25,6 +24,7 @@ input float                       Tau           = tau; //Target-network smoothin
 input int                         CheckpointTransitions = 256; //Transitions per checkpoint
 input int                         InpD2SkillPairHorizonTransitions = 0; //Zero: terminal pair only
 input double                      MinBalance = 50.0; //Minimum account balance
+//---
 datetime Start = 0;
 datetime End = 0;
 int Epochs = 0;

@@ -70,11 +70,13 @@ input int                  SlowPeriod  =  26;            //Slow
 input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 //---
+#ifdef D2SKILL
 input group                "---- D2Skill ----"
 input ENUM_D2SKILL_BANK_MODE InpD2SkillMode = D2Skill_D2_MODE_FULL; //Skill bank mode
 input bool                 InpD2SkillUtilityAware = true; //Utility-aware retrieval
 input double               InpD2SkillMinUtility = -1.0; //Minimum utility
 input double               InpD2SkillUtilityScale = 1.0; //Utility scale
+#endif
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -2713,6 +2715,8 @@ int                  OMPBStage02TargetEvalLast = -1;
 bool                 OMPBStage02Smoke = false;
 uint                 OMPBStage02SmokeLimit = 0;
 uint                 OMPBStage02SourcePeriod = 0;
+uint                 ExtOMPBCalibrationEpochs = 1;
+uint                 ExtOMPBCalibrationEpoch = 0;
 ulong                OMPBStage02BaseFingerprint = 0;
 ulong                OMPBStage02ForecastFingerprint = 0;
 ulong                OMPBStage02TargetFingerprint = 0;
@@ -2735,7 +2739,7 @@ bool OMPBStage02Configure(const datetime reference_start, const datetime referen
    if(reference_start >= reference_end || reference_end > calibration_start ||
       calibration_start >= calibration_end || tau_value < 0.0f || tau_value > 1.0f ||
       lambda_dis < 0.0f || lambda_kl < 0.0f || lambda_alpha < 0.0f ||
-      alpha_prior <= 0.0f || alpha_prior >= 1.0f || max_kl < 0.0f ||
+      max_kl < 0.0f ||
       !OMPBStage02Finite(tau_value) || !OMPBStage02Finite(lambda_dis) ||
       !OMPBStage02Finite(lambda_kl) || !OMPBStage02Finite(lambda_alpha) ||
       !OMPBStage02Finite(alpha_prior) || !OMPBStage02Finite(max_kl))
@@ -2779,6 +2783,9 @@ bool OMPBStage02Configure(const datetime reference_start, const datetime referen
                TimeToString(calibration_end, TIME_DATE));
    PrintFormat("OMPB_STAGE02_PREFLIGHT_CONFIG split=%s source_period=%u smoke=%s",
                TimeToString(calibration_split, TIME_DATE), anchor_period, (smoke ? "true" : "false"));
+   PrintFormat("OMPB_STAGE02_OBJECTIVE tau=%.8g lambda_dis=%.8g lambda_kl=%.8g " +
+               "lambda_alpha=%.8g alpha_prior=%.8g max_kl=%.8g",
+               tau_value, lambda_dis, lambda_kl, lambda_alpha, alpha_prior, max_kl);
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -2862,6 +2869,106 @@ bool OMPBStage02PrepareData(void)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Returns the valid-row quota for one Stage 02 progress phase.     |
+//+------------------------------------------------------------------+
+uint OMPBStage02ProgressQuota(const uint rows, const uint cap, const bool smoke,
+                              const uint smoke_limit)
+  {
+   uint quota = (cap == 0 ? rows : (uint)MathMin(rows, cap));
+   if(smoke)
+      quota = (uint)MathMin(quota, smoke_limit);
+
+   return(quota);
+  }
+//+------------------------------------------------------------------+
+//| Converts valid progress into a bounded Stage 02 percentage.      |
+//+------------------------------------------------------------------+
+double OMPBStage02ProgressPercent(const uint done, const uint quota)
+  {
+   if(quota == 0)
+      return(0.0);
+
+   return(100.0 * double(MathMin(done, quota)) / double(quota));
+  }
+//+------------------------------------------------------------------+
+//| Shows a throttled Stage 02 chart status without training work.   |
+//+------------------------------------------------------------------+
+void OMPBStage02ShowProgress(const string phase, const uint done, const uint total,
+                             const uint attempts, const uint invalid, const bool end,
+                             const bool successful, const bool show_epoch,
+                             const bool show_ompb, const uint source_done,
+                             const uint source_attempts, const uint source_invalid,
+                             const string detail)
+  {
+   static ulong  last_tick = 0;
+   static string last_phase = "";
+   const ulong now = GetTickCount64();
+   const bool phase_changed = (phase != last_phase);
+   const bool timer_elapsed = (!phase_changed && last_tick > 0 && now - last_tick >= 1000);
+   const bool read_metrics = (!phase_changed && (timer_elapsed || end));
+   if(!phase_changed && !end && !timer_elapsed)
+      return;
+
+   string lmix_text = "n/a";
+   string valid_text = "n/a";
+   string diagnostic_invalid_text = "n/a";
+   string disagreement_text = "n/a";
+   string kl_text = "n/a";
+//--- A phase transition deliberately hides the preceding phase's epoch metrics.
+   if(read_metrics && show_epoch)
+     {
+      double lmix, router, trajectory, confidence, latent, observation;
+      double valid, diagnostic_invalid, entropy, distance, inactive, recovered;
+      if(D2SkillForecast && D2SkillForecast.ReadEpochDiagnostics(
+            lmix, router, trajectory, confidence, latent, observation,
+            valid, diagnostic_invalid, entropy, distance, inactive, recovered) &&
+         valid > 0.0 && OMPBStage02Finite(lmix) && OMPBStage02Finite(valid) &&
+         OMPBStage02Finite(diagnostic_invalid))
+        {
+         lmix_text = StringFormat("%.8f", lmix / valid);
+         valid_text = StringFormat("%.0f", valid);
+         diagnostic_invalid_text = StringFormat("%.0f", diagnostic_invalid);
+        }
+      if(show_ompb)
+        {
+         uint reference_count, current_count, invalid_fallbacks, kl_rejects;
+         float disagreement, kl, alpha_prior;
+         if(ReadOMPBDiagnostics(reference_count, current_count, disagreement, kl, alpha_prior,
+                                invalid_fallbacks, kl_rejects) && OMPBStage02Finite(disagreement) &&
+            OMPBStage02Finite(kl))
+           {
+            disagreement_text = StringFormat("%.8f", disagreement);
+            kl_text = StringFormat("%.8f", kl);
+           }
+        }
+     }
+   const double percent = OMPBStage02ProgressPercent(done, total);
+   string state = "running";
+   if(end)
+     {
+      state = (successful && total > 0 && done >= total ? "complete" : "ended");
+      if(IsStopped())
+         state = "stopped";
+     }
+   const string phase_label = (phase == "calibration" ?
+                               StringFormat("%s epoch %u/%u", phase,
+                                            ExtOMPBCalibrationEpoch, ExtOMPBCalibrationEpochs) : phase);
+   Comment(StringFormat("%s Stage02 %s %6.2f%% state=%s\n" +
+                        "processed %u/%u attempts %u invalid %u L_mix %s valid %s invalid %s\n" +
+                        "KL %s disagreement %s source_updates %u source_attempts %u source_invalid %u\n%s",
+                        OMPB_LOG_PREFIX, phase_label, percent, state, done, total, attempts, invalid,
+                        lmix_text, valid_text, diagnostic_invalid_text, kl_text, disagreement_text,
+                        source_done, source_attempts, source_invalid, detail));
+   if(end && IsStopped())
+      PrintFormat("OMPB_STAGE02_PROGRESS_STOP phase=%s valid=%u total=%u attempts=%u invalid=%u",
+                  phase, done, total, attempts, invalid);
+
+   last_phase = phase;
+   last_tick = now;
+  }
+//+------------------------------------------------------------------+
+//| Collects the immutable Stage 02 Reference history.               |
+//+------------------------------------------------------------------+
 bool OMPBStage02CollectReference(void)
   {
    CNeuronOMPBOCL *ompb = GetOMPB();
@@ -2872,6 +2979,12 @@ bool OMPBStage02CollectReference(void)
      }
    ompb.TrainMode(false);
    uint collected = 0;
+   const uint rows = uint(OMPBStage02ReferenceFirst - OMPBStage02ReferenceLast + 1);
+   const uint quota = OMPBStage02ProgressQuota(rows, OMPBReferenceSize, OMPBStage02Smoke,
+                                                OMPBStage02SmokeLimit);
+   OMPBStage02ShowProgress("reference", collected, quota, collected, 0, false, false, false,
+                           false,
+                           0, 0, 0, "");
    for(int position = OMPBStage02ReferenceFirst;
        position >= OMPBStage02ReferenceLast && !IsStopped(); position--)
      {
@@ -2883,6 +2996,9 @@ bool OMPBStage02CollectReference(void)
          ReturnFalse;
         }
       collected++;
+      OMPBStage02ShowProgress("reference", collected, quota, collected, 0, false, false, false,
+                              false,
+                              0, 0, 0, "");
       if(OMPBStage02Smoke && collected >= OMPBStage02SmokeLimit)
          break;
       if(ompb.ReferenceCount() >= OMPBReferenceSize)
@@ -2892,12 +3008,20 @@ bool OMPBStage02CollectReference(void)
      {
       PrintFormat("OMPB_STAGE02_REFERENCE_FAIL reason=count collected=%u reference=%u required=%u",
                   collected, ompb.ReferenceCount(), OMPBReferenceSize);
+      OMPBStage02ShowProgress("reference", collected, quota, collected, 0, true, false, false,
+                              false,
+                              0, 0, 0, "result=failed");
       ReturnFalse;
      }
+   OMPBStage02ShowProgress("reference", collected, quota, collected, 0, true, true, false,
+                           false,
+                           0, 0, 0, "");
    PrintFormat("OMPB_STAGE02_REFERENCE_PASS collected=%u reference=%u capacity=%u smoke=%s",
                collected, ompb.ReferenceCount(), OMPBReferenceSize, (OMPBStage02Smoke ? "true" : "false"));
    return(ConfigureOMPB(OMPB_BYPASS));
   }
+//+------------------------------------------------------------------+
+//| Computes the frozen BYPASS baseline for one evaluation scope.    |
 //+------------------------------------------------------------------+
 bool OMPBStage02Baseline(const int first, const int last, const string scope,
                          double &forecast_loss, uint &valid_batches, uint &invalid_batches)
@@ -2905,6 +3029,12 @@ bool OMPBStage02Baseline(const int first, const int last, const string scope,
    forecast_loss = 0.0;
    valid_batches = 0;
    invalid_batches = 0;
+   uint attempts = 0;
+   const uint rows = uint(first - last + 1);
+   const uint quota = OMPBStage02ProgressQuota(rows, 0, OMPBStage02Smoke,
+                                                OMPBStage02SmokeLimit);
+   const string progress_phase = (StringFind(scope, "source") >= 0 ?
+                                  "baseline source" : "baseline target");
    if(first < last || !D2SkillForecast || !ConfigureOMPB(OMPB_BYPASS) ||
       !D2SkillMarket.Clear() || !D2SkillTarget.Clear() ||
       !D2SkillForecast.ResetEpochDiagnostics())
@@ -2912,43 +3042,61 @@ bool OMPBStage02Baseline(const int first, const int last, const string scope,
       PrintFormat("OMPB_STAGE02_BASELINE_FAIL scope=%s reason=setup", scope);
       ReturnFalse;
      }
+   OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                           quota, attempts, invalid_batches, false, false, true, false,
+                           0, 0, 0, "");
    for(int position = first; position >= last && !IsStopped(); position--)
      {
+      attempts++;
       if(!D2SkillTrainBatch(position))
         {
          invalid_batches++;
+         OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                                 quota, attempts, invalid_batches, false, false, true, false,
+                                 0, 0, 0, "");
          continue;
         }
       valid_batches++;
+      OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                              quota, attempts, invalid_batches, false, false, true, false,
+                              0, 0, 0, "");
       if(OMPBStage02Smoke && valid_batches >= OMPBStage02SmokeLimit)
          break;
      }
    double lmix, router, trajectory, confidence, latent, observation;
    double valid, invalid, entropy, distance, inactive, recovered;
    if(valid_batches == 0 || !D2SkillForecast.BuildEpochCodebookDiagnostics() ||
-      !D2SkillForecast.ReadEpochDiagnostics(lmix, router, trajectory, confidence, latent,
-            observation, valid, invalid, entropy, distance,
-            inactive, recovered) ||
+      !D2SkillForecast.ReadEpochDiagnostics(
+            lmix, router, trajectory, confidence, latent, observation,
+            valid, invalid, entropy, distance, inactive, recovered) ||
       valid < double(valid_batches) || !OMPBStage02Finite(lmix) ||
       !OMPBStage02Finite(valid) || !OMPBStage02Finite(invalid))
      {
       PrintFormat("OMPB_STAGE02_BASELINE_FAIL scope=%s reason=metrics valid=%u invalid=%u",
                   scope, valid_batches, invalid_batches);
+      OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                              quota, attempts, invalid_batches, true, false, true, false,
+                              0, 0, 0, "result=failed");
       ReturnFalse;
      }
    forecast_loss = lmix / valid;
    if(!OMPBStage02Finite(forecast_loss))
      {
       PrintFormat("OMPB_STAGE02_BASELINE_FAIL scope=%s reason=nonfinite_loss", scope);
+      OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                              quota, attempts, invalid_batches, true, false, true, false,
+                              0, 0, 0, "result=failed");
       ReturnFalse;
      }
+   OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                           quota, attempts, invalid_batches, true, true, true, false,
+                           0, 0, 0, "");
    PrintFormat("OMPB_STAGE02_BASELINE_PASS scope=%s loss=%.9f valid=%u invalid=%u",
                scope, forecast_loss, valid_batches, invalid_batches);
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Fingerprints only the specified market layers.  The seed and the |
-//| layer index make base, OMPB and ScenarioForecast checks separate. |
+//| Fingerprints the selected market layers for Stage 02.            |
 //+------------------------------------------------------------------+
 bool OMPBStage02MarketFingerprint(const int first, const int last, ulong &fingerprint)
   {
@@ -2967,7 +3115,7 @@ bool OMPBStage02MarketFingerprint(const int first, const int last, ulong &finger
    return(fingerprint != 0);
   }
 //+------------------------------------------------------------------+
-//| Captures every state that must remain frozen while OMPB learns.   |
+//| Captures the states that must remain frozen during OMPB.         |
 //+------------------------------------------------------------------+
 bool OMPBStage02CaptureSignatures(void)
   {
@@ -3023,6 +3171,12 @@ bool OMPBStage02InferenceEvaluation(const int first, const int last, const strin
    forecast_loss = 0.0;
    valid_batches = 0;
    invalid_batches = 0;
+   uint attempts = 0;
+   const uint rows = uint(first - last + 1);
+   const uint quota = OMPBStage02ProgressQuota(rows, 0, OMPBStage02Smoke,
+                                                OMPBStage02SmokeLimit);
+   const string progress_phase = (StringFind(scope, "source") >= 0 ?
+                                  "eval source" : "eval target");
    CNeuronOMPBOCL *ompb = GetOMPB();
    if(first < last || !ompb || !D2SkillForecast || !ConfigureOMPB(OMPB_INFERENCE) ||
       !D2SkillMarket.Clear() || !D2SkillTarget.Clear() ||
@@ -3034,14 +3188,24 @@ bool OMPBStage02InferenceEvaluation(const int first, const int last, const strin
    D2SkillMarket.TrainMode(true);
    D2SkillTarget.TrainMode(false);
    ompb.TrainMode(false);
+   OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                           quota, attempts, invalid_batches, false, false, true, false,
+                           0, 0, 0, "");
    for(int position = first; position >= last && !IsStopped(); position--)
      {
+      attempts++;
       if(!D2SkillTrainBatch(position))
         {
          invalid_batches++;
+         OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                                 quota, attempts, invalid_batches, false, false, true, false,
+                                 0, 0, 0, "");
          continue;
         }
       valid_batches++;
+      OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                              quota, attempts, invalid_batches, false, false, true, false,
+                              0, 0, 0, "");
       if(OMPBStage02Smoke && valid_batches >= OMPBStage02SmokeLimit)
          break;
      }
@@ -3056,14 +3220,23 @@ bool OMPBStage02InferenceEvaluation(const int first, const int last, const strin
      {
       PrintFormat("OMPB_STAGE02_EVALUATION_FAIL scope=%s reason=metrics valid=%u invalid=%u",
                   scope, valid_batches, invalid_batches);
+      OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                              quota, attempts, invalid_batches, true, false, true, false,
+                              0, 0, 0, "result=failed");
       ReturnFalse;
      }
    forecast_loss = lmix / valid;
    if(!OMPBStage02Finite(forecast_loss) || !D2SkillVerifyFrozenForecastExact())
      {
       PrintFormat("OMPB_STAGE02_EVALUATION_FAIL scope=%s reason=finite_or_frozen", scope);
+      OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                              quota, attempts, invalid_batches, true, false, true, false,
+                              0, 0, 0, "result=failed");
       ReturnFalse;
      }
+   OMPBStage02ShowProgress(progress_phase, (OMPBStage02Smoke ? valid_batches : attempts),
+                           quota, attempts, invalid_batches, true, true, true, false,
+                           0, 0, 0, "");
    PrintFormat("OMPB_STAGE02_EVALUATION_PASS scope=%s loss=%.9f valid=%u invalid=%u",
                scope, forecast_loss, valid_batches, invalid_batches);
    return(true);
@@ -3090,8 +3263,7 @@ bool OMPBStage02Accept(const double source_before, const double target_before,
    return(accepted);
   }
 //+------------------------------------------------------------------+
-//| Candidate manifest signatures are intentionally filename-aware.  |
-//| The temporary graph must never validate against a production file.|
+//| The temporary graph must never validate a production file.       |
 //+------------------------------------------------------------------+
 ulong OMPBStage02ForecastSignature(const string market_file,
                                    CNeuronScenarioForecast *forecast)
@@ -4282,7 +4454,7 @@ bool OMPBStage02RunBatch(const int position, const bool source_anchor)
 //| Stage 02 online calibration.  The outer network stays frozen;   |
 //| only the OMPB posterior and alpha receive explicit updates.      |
 //+------------------------------------------------------------------+
-bool OMPBStage02Calibrate(void)
+bool OMPBStage02CalibrateEpoch(void)
   {
    CNeuronOMPBOCL *ompb = GetOMPB();
    if(!ompb || !D2SkillForecast ||
@@ -4304,11 +4476,18 @@ bool OMPBStage02Calibrate(void)
    uint source_updates = 0;
    uint source_invalid = 0;
    const uint source_rows = uint(OMPBStage02ReferenceFirst - OMPBStage02ReferenceLast + 1);
+   const uint target_rows = uint(OMPBStage02TargetCalibrationFirst -
+                                 OMPBStage02TargetCalibrationLast + 1);
+   const uint target_quota = OMPBStage02ProgressQuota(target_rows, 0, OMPBStage02Smoke,
+                                                       OMPBStage02SmokeLimit);
    if(source_rows == 0)
      {
       Print("OMPB_STAGE02_CALIBRATION_FAIL reason=source_rows");
       ReturnFalse;
      }
+   OMPBStage02ShowProgress("calibration", target_attempts, target_quota, target_attempts,
+                           target_invalid, false, false, true, true, source_updates, source_attempts,
+                           source_invalid, StringFormat("target_updates=%u", target_updates));
    for(int position = OMPBStage02TargetCalibrationFirst;
        position >= OMPBStage02TargetCalibrationLast && !IsStopped(); position--)
      {
@@ -4363,12 +4542,16 @@ bool OMPBStage02Calibrate(void)
               }
            }
         }
+      OMPBStage02ShowProgress("calibration", target_attempts, target_quota, target_attempts,
+                              target_invalid, false, false, true, true, source_updates, source_attempts,
+                              source_invalid, StringFormat("target_updates=%u", target_updates));
       if(OMPBStage02Smoke && target_attempts >= OMPBStage02SmokeLimit)
          break;
      }
    double lmix, router, trajectory, confidence, latent, observation;
    double valid, invalid, entropy, distance, inactive, recovered;
-   if(target_updates == 0 || !D2SkillForecast.BuildEpochCodebookDiagnostics() ||
+   if(IsStopped() || target_attempts < target_quota || target_updates == 0 ||
+      !D2SkillForecast.BuildEpochCodebookDiagnostics() ||
       !D2SkillForecast.ReadEpochDiagnostics(lmix, router, trajectory, confidence, latent,
             observation, valid, invalid, entropy, distance,
             inactive, recovered) ||
@@ -4378,14 +4561,48 @@ bool OMPBStage02Calibrate(void)
      {
       PrintFormat("OMPB_STAGE02_CALIBRATION_FAIL reason=final_metrics target=%u source=%u",
                   target_updates, source_updates);
+      OMPBStage02ShowProgress("calibration", target_attempts, target_quota, target_attempts,
+                              target_invalid, true, false, true, true, source_updates, source_attempts,
+                              source_invalid, StringFormat("target_updates=%u result=failed", target_updates));
       ReturnFalse;
      }
+   OMPBStage02ShowProgress("calibration", target_attempts, target_quota, target_attempts,
+                           target_invalid, true, true, true, true, source_updates, source_attempts,
+                           source_invalid, StringFormat("target_updates=%u", target_updates));
    PrintFormat("OMPB_STAGE02_CALIBRATION_PASS target_attempts=%u target_updates=%u target_invalid=%u " +
                "source_attempts=%u source_updates=%u source_invalid=%u loss=%.9f reference=%u current=%u smoke=%s",
                target_attempts, target_updates, target_invalid, source_attempts, source_updates,
                source_invalid, lmix / valid, ompb.ReferenceCount(), ompb.CurrentCount(),
-               (OMPBStage02Smoke ? "true" : "false"));
+                (OMPBStage02Smoke ? "true" : "false"));
+   PrintFormat("OMPB_STAGE02_EPOCH_PASS epoch=%u epochs=%u loss=%.9f " +
+               "kl_last=%.9g disagreement_last=%.9g alpha_prior_loss_last=%.9g " +
+               "invalid_fallbacks=%u kl_rejects=%u",
+               ExtOMPBCalibrationEpoch, ExtOMPBCalibrationEpochs, lmix / valid,
+               ompb.LastKL(), ompb.LastDisagreement(), ompb.LastAlphaPrior(),
+               ompb.InvalidFallbacks(), ompb.KLRejects());
    return(true);
+  }
+//+------------------------------------------------------------------+
+//| Runs chronological calibration epochs with retained parameters.  |
+//+------------------------------------------------------------------+
+bool OMPBStage02Calibrate(void)
+  {
+//--- Clear in the epoch setup retains posterior, alpha and optimizer state.
+   for(uint epoch = 0; epoch < ExtOMPBCalibrationEpochs; epoch++)
+     {
+      if(IsStopped())
+         return(false);
+      ExtOMPBCalibrationEpoch = epoch + 1;
+      PrintFormat("OMPB_STAGE02_EPOCH_BEGIN epoch=%u epochs=%u",
+                  ExtOMPBCalibrationEpoch, ExtOMPBCalibrationEpochs);
+      OMPBStage02ShowProgress("epoch setup", 0, 1, 0, 0, false, false, false, false,
+                             0, 0, 0, StringFormat("epoch=%u/%u", ExtOMPBCalibrationEpoch,
+                                                   ExtOMPBCalibrationEpochs));
+      if(!OMPBStage02CalibrateEpoch())
+         return(false);
+     }
+//--- Only a complete run may proceed to held-out evaluation and publication.
+   return(!IsStopped() && ExtOMPBCalibrationEpoch == ExtOMPBCalibrationEpochs);
   }
 //+------------------------------------------------------------------+
 bool CreateOMPBStage02ReferenceStudy(const datetime reference_start, const datetime reference_end,
@@ -4393,8 +4610,15 @@ bool CreateOMPBStage02ReferenceStudy(const datetime reference_start, const datet
                                      const uint anchor_period, const float tau_value,
                                      const float lambda_dis, const float lambda_kl,
                                      const float lambda_alpha, const float alpha_prior,
-                                     const float max_kl, const bool smoke, const uint smoke_limit)
+                                     const float max_kl, const bool smoke, const uint smoke_limit,
+                                     const uint calibration_epochs = 1)
   {
+   if(calibration_epochs == 0)
+      ReturnFalseEx("calibration epochs is zero");
+   ExtOMPBCalibrationEpochs = (smoke ? 1 : calibration_epochs);
+   ExtOMPBCalibrationEpoch = 0;
+   PrintFormat("OMPB_STAGE02_EPOCH_CONFIG requested=%u effective=%u smoke=%s",
+               calibration_epochs, ExtOMPBCalibrationEpochs, (smoke ? "true" : "false"));
    ResetLastError();
    D2SkillReady = false;
    D2SkillForecast = NULL;
@@ -4438,8 +4662,13 @@ bool CreateOMPBStage02ReferenceStudy(const datetime reference_start, const datet
 //+------------------------------------------------------------------+
 void RunOMPBStage02ReferenceStudy(void)
   {
+   OMPBStage02ShowProgress("preparing", 0, 1, 0, 0, false, false, false, false,
+                           0, 0, 0, "");
    if(!D2SkillReady || !OMPBStage02PrepareData() || !OMPBStage02CollectReference())
      {
+      OMPBStage02ShowProgress("preparing", 0, 1, 0, 0, true, false, false, false,
+                              0, 0, 0,
+                              "result=failed");
       ExpertRemove();
       return;
      }
@@ -4455,7 +4684,7 @@ void RunOMPBStage02ReferenceStudy(void)
       ExpertRemove();
       return;
      }
-   double source_loss, target_loss;
+   double source_loss = 0.0, target_loss = 0.0;
    uint source_valid, source_invalid, target_valid, target_invalid;
    const bool source_ok = OMPBStage02Baseline(OMPBStage02SourceEvalFirst,
                           OMPBStage02SourceEvalLast, "source_eval",
@@ -4512,14 +4741,28 @@ void RunOMPBStage02ReferenceStudy(void)
    else
      {
       ompb.TrainMode(false);
-      if(acceptance_ok && !OMPBStage02Smoke)
+//--- Quality acceptance is diagnostic; unchanged frozen parameters remain mandatory.
+      const bool checkpoint_integrity = OMPBStage02VerifySignatures();
+      OMPBStage02ShowProgress("saving", 0, 1, 0, 0, false, false, false, false,
+                              0, 0, 0,
+                              StringFormat("accepted=%s smoke=%s",
+                                           (acceptance_ok ? "true" : "false"),
+                                           (OMPBStage02Smoke ? "true" : "false")));
+      if(checkpoint_integrity && !OMPBStage02Smoke)
          checkpoint_saved = OMPBStage02SaveAcceptedCheckpoint();
       else
          if(OMPBStage02Smoke)
             PrintFormat("OMPB_STAGE02_TRANSACTION_SKIPPED reason=smoke accepted=%s",
                         (acceptance_ok ? "true" : "false"));
          else
-            Print("OMPB_STAGE02_TRANSACTION_SKIPPED reason=acceptance");
+            Print("OMPB_STAGE02_TRANSACTION_SKIPPED reason=integrity");
+      OMPBStage02ShowProgress("saving", (checkpoint_saved ? 1 : 0), 1, 1, 0, true,
+                              checkpoint_saved || OMPBStage02Smoke, false, false,
+                              0, 0, 0,
+                              StringFormat("accepted=%s saved=%s smoke=%s",
+                                           (acceptance_ok ? "true" : "false"),
+                                           (checkpoint_saved ? "true" : "false"),
+                                           (OMPBStage02Smoke ? "true" : "false")));
       CNeuronOMPBOCL *final_ompb = GetOMPB();
       if(!final_ompb)
          Print("OMPB_STAGE02_INFERENCE_READY_FAIL reason=ompb_after_checkpoint");
@@ -4532,6 +4775,34 @@ void RunOMPBStage02ReferenceStudy(void)
      }
    D2SkillMarket.TrainMode(false);
    D2SkillTarget.TrainMode(false);
+   const uint final_rows = uint(OMPBStage02TargetEvalFirst - OMPBStage02TargetEvalLast + 1);
+   const uint final_quota = OMPBStage02ProgressQuota(final_rows, 0, OMPBStage02Smoke,
+                                                      OMPBStage02SmokeLimit);
+   string final_detail = StringFormat("source_degradation=n/a target_improvement=n/a accepted=%s saved=%s",
+                                      (acceptance_ok ? "true" : "false"),
+                                      (checkpoint_saved ? "true" : "false"));
+   if(target_ok && evaluation_ok)
+     {
+      const double source_denominator = MathMax(MathAbs(source_loss), 1.0e-12);
+      const double target_denominator = MathMax(MathAbs(target_loss), 1.0e-12);
+      const double source_degradation = (source_inference_loss - source_loss) /
+                                        source_denominator;
+      const double target_improvement = (target_loss - target_inference_loss) /
+                                        target_denominator;
+      final_detail = StringFormat("source_degradation=%.2f%% target_improvement=%.2f%% accepted=%s saved=%s",
+                                  100.0 * source_degradation, 100.0 * target_improvement,
+                                  (acceptance_ok ? "true" : "false"),
+                                  (checkpoint_saved ? "true" : "false"));
+     }
+   const uint final_done = (OMPBStage02Smoke ? target_inference_valid :
+                           target_inference_valid + target_inference_invalid);
+   OMPBStage02ShowProgress("final", final_done, final_quota,
+                           target_inference_valid + target_inference_invalid,
+                           target_inference_invalid, true, finalized && calibration_ok && evaluation_ok,
+                           false, false, source_inference_valid,
+                           source_inference_valid + source_inference_invalid,
+                           source_inference_invalid,
+                           final_detail);
    ExpertRemove();
   }
 //+------------------------------------------------------------------+

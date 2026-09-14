@@ -5,17 +5,15 @@
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 #property strict
-
+#define  D2SKILL
 #include "Trajectory.mqh"
 //---
 input group                       "---- D2Skill training ----"
 input ENUM_D2SKILL_STAGE          InpD2SkillStage = D2Skill_D2_STAGE_FORMATION; //Lifecycle stage
 input ENUM_D2SKILL_MODE           InpD2SkillExecutionMode = D2_COLLECT; //Bank execution mode
 input ED2SkillRepresentation      InpD2SkillRepresentation = D2SkillDirectionMagnitude; //Bank representation
-input bool                        InpD2SkillResetBanksOnRepresentationMismatch =
-   false; //Reset incompatible banks
-input bool                        InpD2SkillRecreateIncompatibleCheckpoint =
-   false; //Recreate incompatible policy checkpoint
+input bool                        InpD2SkillResetBanksOnRepresentationMismatch = false; //Reset incompatible banks
+input bool                        InpD2SkillRecreateIncompatibleCheckpoint = false; //Recreate incompatible policy checkpoint
 //---
 input group                       "---- OMPB production checkpoint ----"
 input ENUM_OMPB_STAGE             InpOMPBStage = OMPB_STAGE_BASE_POLICY; //Must be Stage 03
@@ -27,38 +25,42 @@ input int                         Iterations    = 1000000; //Training iterations
 input int                         EpisodeBars   = 2 * StackSize; //Bars per episode
 input double                      MinBalance    = 50.0; //Minimum account balance
 input int                         UpdatePolicy  = 5; //Actor update interval
+//---
 int            Epochs        = 0;
-CNet Actor;
-CNet Q1;
-CNet Q2;
+CNet           Actor;
+CNet           Q1;
+CNet           Q2;
 
-CBufferFloat State;
-CBufferFloat TimeState;
-CBufferFloat Account;
-CBufferFloat NextAccount;
-CBufferFloat CurrentAction;
-CBufferFloat BaselineAction;
-CBufferFloat BaselineAccount;
-CBufferFloat BaselineNextAccount;
-CBufferFloat TeacherAction;
-CBufferFloat RandomAction;
-CBufferFloat CriticInput;
-CBufferFloat ScalarTarget;
-CBufferFloat ActorObjective;
-ulong TeacherTransitions = 0;
-ulong TeacherCriticTransitions = 0;
-ulong RandomCriticTransitions = 0;
-double TeacherRewardSum = 0;
-ulong PolicyTransitions = 0;
-ulong PolicySkippedInvalid = 0;
-ulong PairedTransitions = 0;
-double PairedDeltaSum = 0;
-SD2SkillActorForwardState    ActorForwardState;
-SD2SkillActorForwardState    BaselineActorForwardState;
-SD2SkillEpisodeOutcome       BaselineEpisodeOutcome;
-SD2SkillEpisodeOutcome       SkillEpisodeOutcome;
-bool                          PairedEpisodeActive = false;
-bool                          Stage03StopRequestedLogged = false;
+CBufferFloat   State;
+CBufferFloat   TimeState;
+CBufferFloat   Account;
+CBufferFloat   NextAccount;
+CBufferFloat   CurrentAction;
+CBufferFloat   BaselineAction;
+CBufferFloat   BaselineAccount;
+CBufferFloat   BaselineNextAccount;
+CBufferFloat   TeacherAction;
+CBufferFloat   RandomAction;
+CBufferFloat   CriticInput;
+CBufferFloat   ScalarTarget;
+CBufferFloat   ActorObjective;
+
+ulong          TeacherTransitions = 0;
+ulong          TeacherCriticTransitions = 0;
+ulong          RandomCriticTransitions = 0;
+double         TeacherRewardSum = 0;
+ulong          PolicyTransitions = 0;
+ulong          PolicySkippedInvalid = 0;
+ulong          PairedTransitions = 0;
+double         PairedDeltaSum = 0;
+
+SD2SkillActorForwardState  ActorForwardState;
+SD2SkillActorForwardState  BaselineActorForwardState;
+SD2SkillEpisodeOutcome     BaselineEpisodeOutcome;
+SD2SkillEpisodeOutcome     SkillEpisodeOutcome;
+
+bool                       PairedEpisodeActive = false;
+bool                       Stage03StopRequestedLogged = false;
 //+------------------------------------------------------------------+
 //| Logs one user-requested Stage 03 stop without misclassifying it. |
 //+------------------------------------------------------------------+

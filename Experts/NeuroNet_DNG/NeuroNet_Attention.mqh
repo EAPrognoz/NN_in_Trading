@@ -2162,6 +2162,15 @@ CNeuronMH2AttentionOCL::CNeuronMH2AttentionOCL(void)  :  iHeads(0),
    activation = None;
   }
 //+------------------------------------------------------------------+
+//| Releases the raw MH2 score buffer while its context is live.     |
+//+------------------------------------------------------------------+
+CNeuronMH2AttentionOCL::~CNeuronMH2AttentionOCL(void)
+  {
+   if(!!OpenCL && ScoreIndex >= 0)
+      OpenCL.BufferFree(ScoreIndex);
+   ScoreIndex = INVALID_HANDLE;
+  }
+//+------------------------------------------------------------------+
 //| Initializes the CNeuronMH2AttentionOCL layer and allocates its   |
 //| GPU buffers.                                                     |
 //+------------------------------------------------------------------+
@@ -2172,6 +2181,14 @@ bool CNeuronMH2AttentionOCL::Init(uint numOutputs, uint myIndex,
                                   ENUM_OPTIMIZATION optimization_type,
                                   uint batch)
   {
+//--- Release the old raw score slot before the base changes its context.
+   if(ScoreIndex >= 0 && !!OpenCL)
+     {
+      if(!OpenCL.BufferFree(ScoreIndex))
+         ReturnFalse;
+      ScoreIndex = INVALID_HANDLE;
+     }
+//--- Initialize the inherited owners before allocating MH2 children.
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, window * units_count,
                             optimization_type, batch))
       ReturnFalse;
@@ -2193,7 +2210,15 @@ bool CNeuronMH2AttentionOCL::Init(uint numOutputs, uint myIndex,
       ReturnFalse;
    KV_Embedding.SetActivationFunction(None);
 //---
-   ScoreIndex = OpenCL.AddBuffer(sizeof(float) * iUnits * iWindow * iHeads, CL_MEM_READ_WRITE);
+   if(iUnits > uint(INT_MAX) / iWindow)
+      ReturnFalse;
+   const uint score_count = iUnits * iWindow;
+   if(score_count > uint(INT_MAX) / iHeads)
+      ReturnFalse;
+   const uint score_total = score_count * iHeads;
+   if(score_total > UINT_MAX / sizeof(float))
+      ReturnFalse;
+   ScoreIndex = OpenCL.AddBuffer(score_total * sizeof(float), CL_MEM_READ_WRITE);
    if(ScoreIndex == INVALID_HANDLE)
       ReturnFalse;
 //---
@@ -2213,9 +2238,13 @@ bool CNeuronMH2AttentionOCL::Init(uint numOutputs, uint myIndex,
    for(int i = 0; i < 2; i++)
       FF[i].SetActivationFunction(None);
 //---
-   Gradient.BufferFree();
-   DeleteObj(Gradient);
-   Gradient = FF[1].getGradient();
+   CBufferFloat *ff1_gradient = FF[1].getGradient();
+   if(Gradient != ff1_gradient)
+     {
+      Gradient.BufferFree();
+      DeleteObj(Gradient);
+      Gradient = ff1_gradient;
+     }
 //---
    return true;
   }
@@ -2331,23 +2360,23 @@ bool CNeuronMH2AttentionOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //+------------------------------------------------------------------+
 bool CNeuronMH2AttentionOCL::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
-   if(!FF[1].CalcHiddenGradients((CObject *)GetPointer(FF[0])))
+   if(!FF[0].CalcHiddenGradients(FF[1].AsObject()))
       ReturnFalse;
-   if(!FF[0].CalcHiddenGradients((CObject *)GetPointer(AttentionOut)))
+   if(!AttentionOut.CalcHiddenGradients(FF[0].AsObject()))
       ReturnFalse;
    if(!SumAndNormalize(FF[1].getGradient(), AttentionOut.getGradient(), W0.getGradient(), iWindow, false))
       ReturnFalse;
-   if(!W0.CalcHiddenGradients((CObject *)GetPointer(MHAttentionOut)))
+   if(!MHAttentionOut.CalcHiddenGradients(W0.AsObject()))
       ReturnFalse;
    if(!AttentionInsideGradients())
       ReturnFalse;
-   if(!KV_Embedding.CalcHiddenGradients((CObject *)GetPointer(Transpose)))
+   if(!Transpose.CalcHiddenGradients(KV_Embedding.AsObject()))
       ReturnFalse;
-   if(!Q_Embedding.CalcHiddenGradients((CObject *)prevLayer))
+   if(!prevLayer.CalcHiddenGradients(Q_Embedding.AsObject()))
       ReturnFalse;
    if(!SumAndNormalize(prevLayer.getGradient(), W0.getGradient(), AttentionOut.getGradient(), iWindow, false))
       ReturnFalse;
-   if(!Transpose.CalcHiddenGradients((CObject *)prevLayer))
+   if(!prevLayer.CalcHiddenGradients(Transpose.AsObject()))
       ReturnFalse;
    if(!SumAndNormalize(prevLayer.getGradient(), AttentionOut.getGradient(), prevLayer.getGradient(), iWindow, false))
       ReturnFalse;
@@ -2447,7 +2476,19 @@ bool CNeuronMH2AttentionOCL::Load(const int file_handle)
 //+------------------------------------------------------------------+
 void CNeuronMH2AttentionOCL::SetOpenCL(COpenCLMy * obj)
   {
+   if(CheckPointer(obj) == POINTER_INVALID || OpenCL == obj)
+      return;
+//--- Release the old transient scores before any owner pointer changes.
+   if(!!OpenCL && ScoreIndex >= 0)
+     {
+      if(!OpenCL.BufferFree(ScoreIndex))
+         return;
+      ScoreIndex = INVALID_HANDLE;
+     }
+//--- Rebind persistent children; legacy callers intentionally discard scores.
    CNeuronBaseOCL::SetOpenCL(obj);
+   if(OpenCL != obj)
+      return;
    Q_Embedding.SetOpenCL(OpenCL);
    KV_Embedding.SetOpenCL(OpenCL);
    if(Transpose.Neurons() > 0)
@@ -2457,7 +2498,131 @@ void CNeuronMH2AttentionOCL::SetOpenCL(COpenCLMy * obj)
    AttentionOut.SetOpenCL(OpenCL);
    FF[0].SetOpenCL(OpenCL);
    FF[1].SetOpenCL(OpenCL);
-   ScoreIndex = OpenCL.AddBuffer(sizeof(float) * iUnits * iWindow * iHeads, CL_MEM_READ_WRITE);
+   if(iUnits == 0 || iWindow == 0 || iHeads == 0)
+      return;
+   if(iUnits > uint(INT_MAX) / iWindow)
+      return;
+   const uint score_count = iUnits * iWindow;
+   if(score_count > uint(INT_MAX) / iHeads)
+      return;
+   const uint score_total = score_count * iHeads;
+   if(score_total > UINT_MAX / sizeof(float))
+      return;
+   ScoreIndex = OpenCL.AddBuffer(score_total * sizeof(float), CL_MEM_READ_WRITE);
+  }
+//+------------------------------------------------------------------+
+//| Reports checked transfer support for exact MH2 attention only.   |
+//+------------------------------------------------------------------+
+bool CNeuronMH2AttentionOCL::SupportsOpenCLChecked(void) const
+  {
+//--- Require exact MH2 identity and a live, shape-matching raw score owner.
+   if(Type() != defNeuronMH2AttentionOCL || CheckPointer(OpenCL) == POINTER_INVALID ||
+      ScoreIndex < 0 || iUnits == 0 || iWindow == 0 || iWindowKey == 0 || iHeads == 0 ||
+      iUnits > uint(INT_MAX) / iWindow)
+      return(false);
+   const uint score_count = iUnits * iWindow;
+   if(score_count > uint(INT_MAX) / iHeads)
+      return(false);
+   const uint score_total = score_count * iHeads;
+   if(score_total > UINT_MAX / sizeof(float) ||
+      OpenCL.GetBufferSize(ScoreIndex) != score_total * sizeof(float))
+      return(false);
+//--- Require every nested owner before any checked transfer mutates it.
+   return(Q_Embedding.SupportsOpenCLChecked() &&
+          KV_Embedding.SupportsOpenCLChecked() &&
+          Transpose.SupportsOpenCLChecked() &&
+          MHAttentionOut.SupportsOpenCLChecked() &&
+          W0.SupportsOpenCLChecked() &&
+          AttentionOut.SupportsOpenCLChecked() &&
+          FF[0].SupportsOpenCLChecked() && FF[1].SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers MH2 children and device scores to a checked context.   |
+//+------------------------------------------------------------------+
+bool CNeuronMH2AttentionOCL::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate the complete MH2 owner set before creating a candidate.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or MH2 tree");
+   int candidate = INVALID_HANDLE;
+   COpenCLMy *old_owner = OpenCL;
+   int old_score = ScoreIndex;
+//--- Read and stage scores only when the target differs from the source.
+   if(obj != OpenCL)
+     {
+      const uint score_total = (uint)(old_owner.GetBufferSize(old_score) / sizeof(float));
+      float scores[];
+      if(ArrayResize(scores, (int)score_total) != (int)score_total)
+         ReturnFalseEx("score snapshot allocation");
+      if(!old_owner.BufferRead(old_score, scores, 0, 0, score_total))
+         ReturnFalseEx("score snapshot read");
+      candidate = obj.AddBufferFromArray(scores, 0, score_total, CL_MEM_READ_WRITE);
+      if(candidate == INVALID_HANDLE)
+         ReturnFalseEx("score candidate create");
+     }
+//--- Transfer children before publishing the parent base context.
+   if(!Q_Embedding.SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("query embedding context");
+     }
+   if(!KV_Embedding.SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("key-value embedding context");
+     }
+   if(!Transpose.SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("transpose context");
+     }
+   if(!MHAttentionOut.SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("attention output context");
+     }
+   if(!W0.SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("projection context");
+     }
+   if(!AttentionOut.SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("residual context");
+     }
+   if(!FF[0].SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("feed-forward zero context");
+     }
+   if(!FF[1].SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("feed-forward one context");
+     }
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+     {
+      if(candidate >= 0 && !obj.BufferFree(candidate))
+         ReturnFalseEx("score candidate cleanup");
+      ReturnFalseEx("base context");
+     }
+   if(candidate == INVALID_HANDLE)
+      return(true);
+//--- Associate the candidate with B even if releasing A reports failure.
+   ScoreIndex = candidate;
+   if(!old_owner.BufferFree(old_score))
+      ReturnFalseEx("source score release");
+//--- Finalize the checked transfer with the score owned by the published context.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Averages the CNeuronMH2AttentionOCL weights toward the source    |
@@ -4437,6 +4602,61 @@ bool CNeuronCrossAttention::Init(uint numOutputs, uint myIndex, COpenCLMy * open
    return true;
   }
 //+------------------------------------------------------------------+
+//| Reports checked transfer support for exact CrossAttention only.   |
+//+------------------------------------------------------------------+
+bool CNeuronCrossAttention::SupportsOpenCLChecked(void) const
+  {
+//--- Validate the CrossAttention geometry and its rectangular raw-score owner.
+   if(Type() != defNeuronCrossAttenOCL || CheckPointer(OpenCL) == POINTER_INVALID ||
+      ScoreIndex < 0 || iWindow == 0 || iWindowKey == 0 || iHeads == 0 ||
+      iUnits == 0 || iWindow_K == 0 || iUnits_K == 0 ||
+      iUnits > uint(INT_MAX) / iUnits_K || iWindow_K > uint(INT_MAX) / iUnits_K)
+      return(false);
+   const uint score_count = iUnits * iUnits_K;
+   if(score_count > uint(INT_MAX) / iHeads)
+      return(false);
+   const uint score_total = score_count * iHeads;
+   if(score_total > UINT_MAX / sizeof(float) ||
+      OpenCL.GetBufferSize(ScoreIndex) != score_total * sizeof(float))
+      return(false);
+//--- Require the optional context base owner and its fixed rectangular buffers.
+   if(cContext != NULL)
+     {
+      if(CheckPointer(cContext) == POINTER_INVALID ||
+         cContext.Type() != defNeuronBaseOCL || !cContext.SupportsOpenCLChecked())
+         return(false);
+      const uint context_total = iWindow_K * iUnits_K;
+      CBufferFloat *context_output = cContext.getOutput();
+      CBufferFloat *context_gradient = cContext.getGradient();
+      if(CheckPointer(context_output) == POINTER_INVALID ||
+         CheckPointer(context_gradient) == POINTER_INVALID ||
+         context_output.Total() != context_total || context_gradient.Total() != context_total)
+         return(false);
+     }
+//--- Require every nested owner before any checked transfer mutates it.
+   return(Q_Embedding.SupportsOpenCLChecked() &&
+          KV_Embedding.SupportsOpenCLChecked() &&
+          Transpose.SupportsOpenCLChecked() &&
+          MHAttentionOut.SupportsOpenCLChecked() &&
+          W0.SupportsOpenCLChecked() &&
+          AttentionOut.SupportsOpenCLChecked() &&
+          FF[0].SupportsOpenCLChecked() && FF[1].SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers CrossAttention context before the inherited MH2 tree.  |
+//+------------------------------------------------------------------+
+bool CNeuronCrossAttention::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate the target and complete CrossAttention ownership contract.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or CrossAttention tree");
+//--- Transfer the optional context before the inherited child sequence.
+   if(cContext != NULL && !cContext.SetOpenCLChecked(obj))
+      ReturnFalseEx("CrossAttention context");
+//--- Finalize through MH2, preserving its child order and base-last publication.
+   return(CNeuronMH2AttentionOCL::SetOpenCLChecked(obj));
+  }
+//+------------------------------------------------------------------+
 //| Handles the CNeuronCrossAttention attention out operation.       |
 //+------------------------------------------------------------------+
 bool CNeuronCrossAttention::attentionOut(void)
@@ -4469,32 +4689,43 @@ bool CNeuronCrossAttention::attentionOut(void)
 //+------------------------------------------------------------------+
 bool CNeuronCrossAttention::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context)
   {
-   if(!Context)
+//--- Validate the fixed CrossAttention context shape.
+   if(!Context || iWindow_K == 0 || iUnits_K == 0 || iWindow_K > UINT_MAX / iUnits_K)
+      ReturnFalse;
+   const uint context_total = iWindow_K * iUnits_K;
+   if(Context.Total() != context_total)
       ReturnFalse;
    if(!cContext)
      {
       cContext = new CNeuronBaseOCL();
       if(!cContext)
          ReturnFalse;
-      if(!cContext.Init(0, 0, OpenCL, Context.Total(), optimization, iBatch))
+      if(!cContext.Init(0, 0, OpenCL, context_total, optimization, iBatch))
          ReturnFalse;
      }
-//---
+//--- Resolve the cContext-owned buffers before temporary binding.
+   CBufferFloat *inside = cContext.getOutput();
+   CBufferFloat *gradient = cContext.getGradient();
+   if(!inside || !gradient || inside.Total() != context_total || gradient.Total() != context_total)
+      ReturnFalse;
    if(Context.GetIndex() >= 0)
      {
-      CBufferFloat *inside = cContext.getOutput();
-      if(inside.GetIndex() != Context.GetIndex())
-         inside.BufferSet(Context.GetIndex());
-     }
-   else
-     {
-      CBufferFloat *inside = cContext.getOutput();
-      inside.AssignArray(Context);
-      if(!inside.BufferWrite())
+      //--- The caller owns Context; bind it only for this synchronous call.
+      if(!cContext.SetOutput(Context, false))
          ReturnFalse;
+      const bool calculated = feedForward(NeuronOCL, cContext);
+      const bool restored = cContext.SetOutput(inside, false);
+      if(!restored || !calculated)
+         ReturnFalse;
+      return(true);
      }
-//---
-   return feedForward(NeuronOCL, cContext);
+//--- Copy host Context into cContext-owned output.
+   if(!inside.AssignArray(Context))
+      ReturnFalse;
+   if(!inside.BufferWrite())
+      ReturnFalse;
+//--- Run forward with cContext's owned host copy.
+   return(feedForward(NeuronOCL, cContext));
   }
 //+------------------------------------------------------------------+
 //| Runs the CNeuronCrossAttention feed-forward pass and writes the  |
@@ -4562,41 +4793,69 @@ bool CNeuronCrossAttention::AttentionInsideGradients(void)
 //+------------------------------------------------------------------+
 bool CNeuronCrossAttention::calcInputGradients(CNeuronBaseOCL* prevLayer, CBufferFloat* SecondInput, CBufferFloat* SecondGradient, ENUM_ACTIVATION SecondActivation = None)
   {
-   if(!SecondInput)
+//--- Validate the fixed CrossAttention context shape and caller buffers.
+   if(!SecondInput || !SecondGradient || iWindow_K == 0 || iUnits_K == 0 ||
+      iWindow_K > UINT_MAX / iUnits_K)
+      ReturnFalse;
+   const uint context_total = iWindow_K * iUnits_K;
+   if(SecondInput.Total() != context_total || SecondGradient.Total() != context_total)
       ReturnFalse;
    if(!cContext)
      {
       cContext = new CNeuronBaseOCL();
       if(!cContext)
          ReturnFalse;
-      if(!cContext.Init(0, 0, OpenCL, SecondInput.Total(), optimization, iBatch))
+      if(!cContext.Init(0, 0, OpenCL, context_total, optimization, iBatch))
          ReturnFalse;
      }
+   CBufferFloat *inside_output = cContext.getOutput();
+   CBufferFloat *inside_gradient = cContext.getGradient();
+   if(!inside_output || !inside_gradient || inside_output.Total() != context_total ||
+      inside_gradient.Total() != context_total)
+      ReturnFalse;
    cContext.SetActivationFunction(SecondActivation);
-//---
+//--- Prepare cContext output for the supplied input.
+   bool output_bound = false;
+   if(SecondInput.GetIndex() >= 0)
+     {
+      //--- The supplied input remains owned by the caller.
+      if(!cContext.SetOutput(SecondInput, false))
+         ReturnFalse;
+      output_bound = true;
+     }
+   else
+     {
+      if(!inside_output.AssignArray(SecondInput))
+         ReturnFalse;
+      if(!inside_output.BufferWrite())
+         ReturnFalse;
+     }
    if(SecondGradient.GetIndex() >= 0)
      {
-      CBufferFloat *inside = cContext.getGradient();
-      // SecondGradient принадлежит вызывающему коду.
-      // cContext подключает его только на время текущего backward.
+      //--- The supplied gradient remains owned by the caller.
       if(!cContext.SetGradient(SecondGradient, false))
+        {
+         if(output_bound && !cContext.SetOutput(inside_output, false))
+            ReturnFalse;
          ReturnFalse;
+        }
       const bool calculated = calcInputGradients(prevLayer, cContext);
-      // Восстанавливаем собственный градиент cContext до уничтожения
-      // временного SecondGradient.
-      const bool restored = cContext.SetGradient(inside, false);
-      if(!restored || !calculated)
+      const bool gradient_restored = cContext.SetGradient(inside_gradient, false);
+      const bool output_restored = !output_bound || cContext.SetOutput(inside_output, false);
+      if(!gradient_restored || !output_restored || !calculated)
          ReturnFalse;
      }
    else
      {
-      if(!calcInputGradients(prevLayer, cContext))
+      const bool calculated = calcInputGradients(prevLayer, cContext);
+      const bool output_restored = !output_bound || cContext.SetOutput(inside_output, false);
+      if(!output_restored || !calculated)
          ReturnFalse;
       if(cContext.getGradient().GetData(SecondGradient) <= 0)
          ReturnFalse;
      }
-//---
-   return true;
+//--- Both caller-owned bindings are restored before return.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Back-propagates the input gradients through the                  |
@@ -4632,34 +4891,43 @@ bool CNeuronCrossAttention::calcInputGradients(CNeuronBaseOCL* prevLayer, CNeuro
 //+------------------------------------------------------------------+
 bool CNeuronCrossAttention::updateInputWeights(CNeuronBaseOCL* NeuronOCL, CBufferFloat* Context)
   {
-   if(!Context)
+//--- Validate the fixed CrossAttention context shape.
+   if(!Context || iWindow_K == 0 || iUnits_K == 0 || iWindow_K > UINT_MAX / iUnits_K)
+      ReturnFalse;
+   const uint context_total = iWindow_K * iUnits_K;
+   if(Context.Total() != context_total)
       ReturnFalse;
    if(!cContext)
      {
       cContext = new CNeuronBaseOCL();
       if(!cContext)
          ReturnFalse;
-      if(!cContext.Init(0, 0, OpenCL, Context.Total(), optimization, iBatch))
+      if(!cContext.Init(0, 0, OpenCL, context_total, optimization, iBatch))
          ReturnFalse;
      }
-//---
+//--- Resolve the cContext-owned buffers before temporary binding.
+   CBufferFloat *inside = cContext.getOutput();
+   CBufferFloat *gradient = cContext.getGradient();
+   if(!inside || !gradient || inside.Total() != context_total || gradient.Total() != context_total)
+      ReturnFalse;
    if(Context.GetIndex() >= 0)
      {
-      CBufferFloat *inside = cContext.getOutput();
-      if(inside.GetIndex() != Context.GetIndex())
-         inside.BufferSet(Context.GetIndex());
-     }
-   else
-     {
-      CBufferFloat *inside = cContext.getOutput();
-      inside.AssignArray(Context);
-      if(!inside.BufferWrite())
+      //--- The caller owns Context; bind it only for this synchronous call.
+      if(!cContext.SetOutput(Context, false))
          ReturnFalse;
-      DeleteObj(Context);
-      Context = inside;
+      const bool updated = updateInputWeights(NeuronOCL, cContext);
+      const bool restored = cContext.SetOutput(inside, false);
+      if(!restored || !updated)
+         ReturnFalse;
+      return(true);
      }
-//---
-   return updateInputWeights(NeuronOCL, cContext);
+//--- Copy host Context into cContext-owned output.
+   if(!inside.AssignArray(Context))
+      ReturnFalse;
+   if(!inside.BufferWrite())
+      ReturnFalse;
+//--- Update weights from cContext's owned host copy.
+   return(updateInputWeights(NeuronOCL, cContext));
   }
 //+------------------------------------------------------------------+
 //| Updates the CNeuronCrossAttention trainable weights from the     |
@@ -24245,6 +24513,37 @@ void CCrossMHFlashAttention::SetOpenCL(COpenCLMy *obj)
    cLogSumExp.BufferFree();
    CNeuronBaseOCL::SetOpenCL(obj);
    cLogSumExp.BufferCreate(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//| Reports checked-transfer support for CrossMHFlashAttention.      |
+//+------------------------------------------------------------------+
+bool CCrossMHFlashAttention::SupportsOpenCLChecked(void) const
+  {
+//--- Reject subtypes with an unverified ownership tree.
+   return(Type() == defCrossMHFlashAttention);
+  }
+//+------------------------------------------------------------------+
+//| Transfers logsumexp before publishing the base context.          |
+//+------------------------------------------------------------------+
+bool CCrossMHFlashAttention::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate the target and exact ownership contract before mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or flash ownership");
+//--- Preserve allocated logsumexp data from its current device owner.
+   if(cLogSumExp.Total() > 0 && cLogSumExp.GetIndex() >= 0 &&
+      cLogSumExp.GetOpenCL() != obj && !cLogSumExp.BufferRead())
+      ReturnFalseEx("logsumexp read");
+//--- Do not overwrite already transferred logsumexp from a stale host cache.
+   if(cLogSumExp.Total() > 0 &&
+      (cLogSumExp.GetOpenCL() != obj || cLogSumExp.GetIndex() < 0) &&
+      !cLogSumExp.BufferCreate(obj))
+      ReturnFalseEx("logsumexp create");
+//--- Publish the inherited context only after logsumexp transfer succeeds.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("base context transfer");
+//--- Finalize without resetting the attention configuration or cache.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Initializes the CNeuronMixFeedForward layer and allocates its GPU|

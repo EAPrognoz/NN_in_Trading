@@ -3521,6 +3521,11 @@ bool CNeuronBayesianLinearOCL::updateInputWeights(CNeuronBaseOCL *n)
       ReturnFalseEx("Bayesian update: posterior weights");
    if(!cBias.UpdateInputWeights())
       ReturnFalseEx("Bayesian update: posterior bias");
+//--- Refresh the deterministic caches before switching to inference.
+   if(!cWeights.FeedForward())
+      ReturnFalseEx("updated posterior weights cache");
+   if(!cBias.FeedForward())
+      ReturnFalseEx("updated posterior bias cache");
 //--- Finalize the inherited update contract.
    return(true);
   }

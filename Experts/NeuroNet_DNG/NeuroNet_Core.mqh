@@ -17138,6 +17138,13 @@ void CNeuronPositionEncoder::SetOpenCL(COpenCLMy * obj)
       PositionEncoder.BufferFree();
   }
 //+------------------------------------------------------------------+
+//| Returns whether this transpose layer is checked-transfer safe.   |
+//+------------------------------------------------------------------+
+bool CNeuronTransposeOCL::SupportsOpenCLChecked(void) const
+  {
+   return(Type() == defNeuronTransposeOCL);
+  }
+//+------------------------------------------------------------------+
 //| Initializes the CNeuronTransposeOCL layer and allocates its GPU  |
 //| buffers.                                                         |
 //+------------------------------------------------------------------+
@@ -18313,6 +18320,35 @@ void CNeuronLearnabledPE::SetOpenCL(COpenCLMy * obj)
    CNeuronBaseOCL::SetOpenCL(obj);
    cPositionEncoder.SetOpenCL(OpenCL);
    cInputs.SetOpenCL(OpenCL);
+  }
+//+------------------------------------------------------------------+
+//| Reports checked transfer support for CNeuronLearnabledPE.        |
+//+------------------------------------------------------------------+
+bool CNeuronLearnabledPE::SupportsOpenCLChecked(void) const
+  {
+   return(Type() == defNeuronLearnabledPE &&
+          cInputs.SupportsOpenCLChecked() &&
+          cPositionEncoder.SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers LearnabledPE owners before base context publication.   |
+//+------------------------------------------------------------------+
+bool CNeuronLearnabledPE::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate target and complete nested ownership before mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or positional tree");
+//--- Transfer input ownership before the positional encoder.
+   if(!cInputs.SetOpenCLChecked(obj))
+      ReturnFalseEx("input context");
+//--- Transfer positional encoding ownership after the input succeeds.
+   if(!cPositionEncoder.SetOpenCLChecked(obj))
+      ReturnFalseEx("positional encoder context");
+//--- Publish inherited owners after both nested transfers succeeded.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited base context");
+//--- Finalize the checked LearnabledPE transfer.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Saves the CNeuronLearnabledPE state to the file handle.          |

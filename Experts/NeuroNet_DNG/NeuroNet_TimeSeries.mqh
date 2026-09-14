@@ -46,8 +46,7 @@ CNeuronOMPBOCL::~CNeuronOMPBOCL(void)
    DeleteObj(cCurrent);
   }
 //+------------------------------------------------------------------+
-//| Initializes the CNeuronOMPBOCL layer and allocates its GPU       |
-//| buffers.                                                         |
+//| Initializes CNeuronOMPBOCL device buffers.                       |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint dimension, uint variables, uint samples,
@@ -312,7 +311,7 @@ bool CNeuronOMPBOCL::PrepareGate(void)
    return(!rejected);
   }
 //+------------------------------------------------------------------+
-//| Builds the deterministic gate and reports checked rejection.    |
+//| Builds the deterministic gate and reports checked rejection.     |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::PrepareGateChecked(bool &rejected)
   {
@@ -356,7 +355,7 @@ bool CNeuronOMPBOCL::PrepareGateChecked(bool &rejected)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Allocates the transient and constant OMPB alpha GPU buffers.    |
+//| Allocates transient and constant OMPB alpha GPU buffers.         |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::InitializeAlphaRuntime(void)
   {
@@ -392,7 +391,7 @@ bool CNeuronOMPBOCL::InitializeAlphaRuntime(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Multiplies an OMPB allocation span without exceeding INT_MAX.   |
+//| Multiplies an OMPB allocation span without exceeding INT_MAX.    |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::MultiplyRuntimeSize(const ulong left, const ulong right, ulong &result)
   {
@@ -405,7 +404,7 @@ bool CNeuronOMPBOCL::MultiplyRuntimeSize(const ulong left, const ulong right, ul
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Validates OMPB allocation products and derives checked scratch. |
+//| Validates OMPB allocation products and derives checked scratch.  |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::ValidateRuntimeSizes(const uint dimension, const uint variables,
       const uint samples, const uint reference_capacity, const uint current_capacity,
@@ -472,7 +471,7 @@ bool CNeuronOMPBOCL::ValidateRuntimeSizes(const uint dimension, const uint varia
    return(numeric_total > 0);
   }
 //+------------------------------------------------------------------+
-//| Allocates the transient checked numeric status buffers.         |
+//| Allocates transient checked numeric status buffers.              |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::InitializeNumericRuntime(const uint total)
   {
@@ -620,10 +619,7 @@ bool CNeuronOMPBOCL::IsFiniteOutput(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Fixed-capacity sample distribution.  The AddToStack input stays  |
-//| [V,C,D] for the per-variable Bayesian affine.  TransposeRCD is   |
-//| still executed for its owned [C,V,D] history representation and  |
-//| then for the mandatory [V*C,K,D] CalcDistance input.             |
+//| Builds OMPB sample distributions with fixed capacity.            |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::CalculateDistribution(CNeuronAddToStack *history,
       CNeuronTransposeRCDOCL *history_transpose,
@@ -674,9 +670,7 @@ bool CNeuronOMPBOCL::CalculateDistribution(CNeuronAddToStack *history,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Distribution work intentionally starts only with both complete   |
-//| fixed-shape histories.  This keeps AddToStack padding out of the |
-//| Bayesian service and avoids an implicit dynamic buffer view.     |
+//| Prepares regularizers after fixed-shape histories are ready.     |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::PrepareRegularizers(void)
   {
@@ -1728,8 +1722,7 @@ bool CNeuronOMPBOCL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Executes the append parameter fingerprint step of the            |
-//| CNeuronOMPBOCL layer.                                            |
+//| Appends the OMPB parameter fingerprint.                          |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::AppendParameterFingerprint(ulong &fingerprint)
   {
@@ -11866,15 +11859,36 @@ void CNeuronDUET::SetOpenCL(COpenCLMy * obj)
    cResidual.SetOpenCL(OpenCL);
   }
 //+------------------------------------------------------------------+
-//| Initializes the CNeuronMultiWindowsConvOCL layer and allocates   |
-//| its GPU buffers.                                                 |
+//| Releases the MultiWindows convolution window table.              |
+//+------------------------------------------------------------------+
+CNeuronMultiWindowsConvOCL::~CNeuronMultiWindowsConvOCL(void)
+  {
+//--- Release only the live integer table that belongs to this context.
+   if(CheckPointer(OpenCL) != POINTER_INVALID &&
+      iWindow != (uint)INVALID_HANDLE &&
+      OpenCL.GetBufferSize((int)iWindow) == aiWindows.Size() * sizeof(int))
+      OpenCL.BufferFree((int)iWindow);
+//--- Invalidate the raw context-local slot before inherited destruction.
+   iWindow = (uint)INVALID_HANDLE;
+  }
+//+------------------------------------------------------------------+
+//| Initializes MultiWindows convolution and its window table.       |
 //+------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                       uint &windows[], uint window_out, uint units_count,
                                       uint variables, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
-   if(windows.Size() <= 0 || ArrayCopy(aiWindows, windows, 0, 0, windows.Size()) < int(windows.Size()))
-      ReturnFalse;
+//--- Release the previous table through its current context before geometry changes.
+   if(CheckPointer(OpenCL) != POINTER_INVALID &&
+      iWindow != (uint)INVALID_HANDLE &&
+      OpenCL.GetBufferSize((int)iWindow) == aiWindows.Size() * sizeof(int))
+      OpenCL.BufferFree((int)iWindow);
+   iWindow = (uint)INVALID_HANDLE;
+//--- Validate and retain the requested positive window geometry.
+   if(windows.Size() <= 0)
+      ReturnFalseEx("positive window count");
+   if(ArrayCopy(aiWindows, windows, 0, 0, windows.Size()) < int(windows.Size()))
+      ReturnFalseEx("window geometry copy");
    int window = 0;
    for(uint i = 0; i < aiWindows.Size(); i++)
      {
@@ -11883,16 +11897,20 @@ bool CNeuronMultiWindowsConvOCL::Init(uint numOutputs, uint myIndex, COpenCLMy *
          ReturnFalse;
      }
    window--;
-   if(!CNeuronConvOCL::Init(numOutputs, myIndex, open_cl, window, window, window_out, units_count * aiWindows.Size()*variables, 1, ADAM, batch))
-      ReturnFalse;
-//---
+//--- Initialize inherited owners before publishing a replacement raw table.
+   bool result = CNeuronConvOCL::Init(numOutputs, myIndex, open_cl, window, window, window_out,
+                                      units_count * aiWindows.Size() * variables, 1, ADAM, batch);
+   iWindow = (uint)INVALID_HANDLE;
+   if(!result)
+      ReturnFalseEx("inherited convolution initialization");
+//--- Create and publish the context-local integer table only after inherited success.
    iVariables = variables;
    int temp = OpenCL.AddBufferFromArray(aiWindows, 0, aiWindows.Size(), CL_MEM_READ_ONLY);
    if(temp < 0)
-      ReturnFalse;
+      ReturnFalseEx("window table create");
    iWindow = (uint)temp;
-//---
-   return true;
+//--- Finalize after the replacement table has a live owner.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Runs the CNeuronMultiWindowsConvOCL feed-forward pass and writes |
@@ -12017,49 +12035,133 @@ bool CNeuronMultiWindowsConvOCL::Save(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Restores the CNeuronMultiWindowsConvOCL state from the file      |
-//| handle.                                                          |
+//| Restores MultiWindows convolution and its window table.          |
 //+------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvOCL::Load(const int file_handle)
   {
-   if(!!OpenCL && iWindow >= 0)
-      OpenCL.BufferFree(iWindow);
-//---
-   if(!CNeuronConvOCL::Load(file_handle))
-      ReturnFalse;
-//---
+//--- Release the previous live table before parent deserialization changes its handle.
+   if(CheckPointer(OpenCL) != POINTER_INVALID &&
+      iWindow != (uint)INVALID_HANDLE &&
+      OpenCL.GetBufferSize((int)iWindow) == aiWindows.Size() * sizeof(int))
+      OpenCL.BufferFree((int)iWindow);
+   iWindow = (uint)INVALID_HANDLE;
+//--- Restore inherited convolution owners, never accepting its historical raw handle.
+   bool result = CNeuronConvOCL::Load(file_handle);
+   iWindow = (uint)INVALID_HANDLE;
+   if(!result)
+      ReturnFalseEx("inherited convolution load");
+//--- Read and validate the persisted positive window table.
    ArrayFree(aiWindows);
+   const ulong file_size = FileSize(file_handle);
+   const ulong count_position = FileTell(file_handle);
+   if(FileIsEnding(file_handle) || count_position > file_size ||
+      file_size - count_position < (ulong)INT_VALUE)
+      ReturnFalseEx("window count read");
    int total = FileReadInteger(file_handle);
+   const ulong values_position = FileTell(file_handle);
+   if(total <= 0 || values_position > file_size ||
+      (ulong)total > (file_size - values_position) / (ulong)INT_VALUE)
+      ReturnFalseEx("window count");
    if(ArrayResize(aiWindows, total) != total)
-      ReturnFalse;
+      ReturnFalseEx("window table resize");
    for(int i = 0; i < total; i++)
      {
       aiWindows[i] = FileReadInteger(file_handle);
       if(aiWindows[i] <= 0)
-         ReturnFalse;
+         ReturnFalseEx("positive window value");
      }
-   int sum = 0;
+//--- Verify the serialized table against the inherited convolution step.
+   long sum = 0;
    for(int i = 0; i < total; i++)
-      sum += aiWindows[i] + 1;
-   if(iStep != (sum - 1))
-      ReturnFalse;
+     {
+      sum += (long)aiWindows[i] + 1;
+      if(sum > (long)UINT_MAX)
+         ReturnFalseEx("window sum");
+     }
+   if(iStep != uint(sum - 1))
+      ReturnFalseEx("window step");
+//--- Allocate and publish the replacement table only after complete validation.
    int temp = OpenCL.AddBufferFromArray(aiWindows, 0, aiWindows.Size(), CL_MEM_READ_ONLY);
    if(temp < 0)
-      ReturnFalse;
+      ReturnFalseEx("window table create");
    iWindow = (uint)temp;
-//---
-   return true;
+//--- Finalize only after the fully validated table is published.
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| Rebinds the CNeuronMultiWindowsConvOCL GPU buffers to the given  |
-//| OpenCL context.                                                  |
+//| Checks MultiWindows convolution transfer capability.             |
 //+------------------------------------------------------------------+
-void CNeuronMultiWindowsConvOCL::SetOpenCL(COpenCLMy * obj)
+bool CNeuronMultiWindowsConvOCL::SupportsOpenCLChecked(void) const
   {
-   if(!!OpenCL && iWindow >= 0)
-      OpenCL.BufferFree(iWindow);
-   CNeuronConvOCL::SetOpenCL(obj);
-   iWindow = OpenCL.AddBufferFromArray(aiWindows, 0, aiWindows.Size(), CL_MEM_READ_ONLY);
+//--- Validate the exact type, persistent table and current raw owner.
+   if(Type() != defNeuronMultiWindowsConvOCL || aiWindows.Size() <= 0 ||
+      CheckPointer(OpenCL) == POINTER_INVALID || iWindow == (uint)INVALID_HANDLE ||
+      OpenCL.GetBufferSize((int)iWindow) != aiWindows.Size() * sizeof(int) ||
+      CheckPointer(WeightsConv) == POINTER_INVALID)
+      return(false);
+   for(uint i = 0; i < aiWindows.Size(); i++)
+      if(aiWindows[i] <= 0)
+         return(false);
+//--- Require the optimizer owner set selected by the persisted profile.
+   if(optimization == SGD)
+      return(CheckPointer(DeltaWeightsConv) != POINTER_INVALID);
+//--- Finalize the non-SGD profile capability only with both moments present.
+   return(CheckPointer(FirstMomentumConv) != POINTER_INVALID &&
+          CheckPointer(SecondMomentumConv) != POINTER_INVALID);
+  }
+//+------------------------------------------------------------------+
+//| Transfers MultiWindows convolution to the target context.        |
+//+------------------------------------------------------------------+
+bool CNeuronMultiWindowsConvOCL::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate the target and current raw table before any mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or window table");
+//--- Let the inherited transfer reconcile float owners on the same context.
+   if(obj == OpenCL)
+      return(CNeuronConvOCL::SetOpenCLChecked(obj));
+//--- Create the target table before the inherited transfer can publish the target.
+   COpenCLMy *old_owner = OpenCL;
+   const int old_window = (int)iWindow;
+   const int candidate = obj.AddBufferFromArray(aiWindows, 0, aiWindows.Size(), CL_MEM_READ_ONLY);
+   if(candidate == INVALID_HANDLE)
+      ReturnFalseEx("candidate window table create");
+//--- Transfer convolution and base owners while the source raw table remains live.
+   if(!CNeuronConvOCL::SetOpenCLChecked(obj))
+     {
+      if(!obj.BufferFree(candidate))
+         ReturnFalseEx("candidate window table cleanup");
+      ReturnFalseEx("inherited convolution context");
+     }
+//--- Release the old context-local slot before publishing the target candidate.
+   if(!old_owner.BufferFree(old_window))
+     {
+      iWindow = (uint)candidate;
+      ReturnFalseEx("source window table release");
+     }
+   iWindow = (uint)candidate;
+//--- Finalize the checked transfer with the raw table owned by the published context.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Attaches or transfers MultiWindows convolution context.          |
+//+------------------------------------------------------------------+
+void CNeuronMultiWindowsConvOCL::SetOpenCL(COpenCLMy *obj)
+  {
+//--- Attach fresh objects before Load supplies their serialized window geometry.
+   if(CheckPointer(obj) == POINTER_INVALID)
+     {
+      PrintFormat("%s: invalid OpenCL attachment target", __FUNCTION__);
+      return;
+     }
+   if(aiWindows.Size() <= 0)
+     {
+      CNeuronConvOCL::SetOpenCL(obj);
+      return;
+     }
+//--- Reuse checked transfer for initialized objects without recreating the raw table.
+   if(!SetOpenCLChecked(obj))
+      PrintFormat("%s: MultiWindows checked OpenCL transfer failed", __FUNCTION__);
   }
 //+------------------------------------------------------------------+
 //| Initializes the CNeuronComplexConvOCL layer and allocates its GPU|
@@ -21264,6 +21366,44 @@ bool CNeuronMomADTTM::Load(const int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
+//| Reports checked-transfer support for the MomADTTM ownership tree.|
+//+------------------------------------------------------------------+
+bool CNeuronMomADTTM::SupportsOpenCLChecked(void) const
+  {
+   return(Type() == defNeuronMomADTTM && cMeanDistance.SupportsOpenCLChecked() &&
+          cScores.SupportsOpenCLChecked() && cDistance.SupportsOpenCLChecked());
+  }
+//+------------------------------------------------------------------+
+//| Transfers MomADTTM caches through their checked ownership tree.  |
+//+------------------------------------------------------------------+
+bool CNeuronMomADTTM::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Validate the target and complete ownership tree before mutation.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or ownership tree");
+//--- Preserve the direct cache before moving nested owners.
+   if(cCandidatesGradient.Total() > 0 && cCandidatesGradient.GetIndex() >= 0 &&
+      cCandidatesGradient.GetOpenCL() != obj && !cCandidatesGradient.BufferRead())
+      ReturnFalseEx("candidate gradient read");
+//--- Transfer complete nested caches through their checked contracts.
+   if(!cMeanDistance.SetOpenCLChecked(obj))
+      ReturnFalseEx("mean distance transfer");
+   if(!cScores.SetOpenCLChecked(obj))
+      ReturnFalseEx("scores transfer");
+   if(!cDistance.SetOpenCLChecked(obj))
+      ReturnFalseEx("distance transfer");
+//--- Preserve already transferred device data on retry.
+   if(cCandidatesGradient.Total() > 0 &&
+      (cCandidatesGradient.GetOpenCL() != obj || cCandidatesGradient.GetIndex() < 0) &&
+      !cCandidatesGradient.BufferCreate(obj))
+      ReturnFalseEx("candidate gradient create");
+//--- Publish the inherited context after all nested owners are ready.
+   if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
+      ReturnFalseEx("base context transfer");
+//--- Finalize without resetting configuration or cached state.
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Rebinds the CNeuronMomADTTM GPU buffers to the given OpenCL      |
 //| context.                                                         |
 //+------------------------------------------------------------------+
@@ -27321,6 +27461,134 @@ bool CNeuronScenarioCrossAttention::Load(const int file_handle, COpenCLMy *open_
    if(!Load(file_handle))
       ReturnFalse;
    return true;
+  }
+//+------------------------------------------------------------------+
+//| Checks ScenarioCrossAttention checked-transfer capability.       |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioCrossAttention::SupportsOpenCLChecked(void) const
+  {
+//--- Preserve the exact public Scenario identity gate.
+   return(Type() == defNeuronScenarioCrossAttention && ValidateScenarioOwnedTreeChecked());
+  }
+//+------------------------------------------------------------------+
+//| Validates the Scenario-owned checked-transfer tree.              |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioCrossAttention::ValidateScenarioOwnedTreeChecked(void) const
+  {
+//--- Validate the owner and scalar geometry independently of identity.
+   if(CheckPointer(OpenCL) == POINTER_INVALID ||
+      iVariables == 0 || iScenarios == 0 || iHorizon == 0 || iDimension == 0 ||
+      iQueries != (bCritic ? 5 : 3) || iStackSize == 0 || iTopK == 0 || iTopK > iScenarios)
+      return(false);
+//--- Bound every tensor product before it reaches an int buffer index space.
+   const long max_elements = INT_MAX;
+   if((long)iScenarios > max_elements / (long)iVariables)
+      return(false);
+   const long scenario_variables = (long)iScenarios * (long)iVariables;
+   if(scenario_variables > max_elements / (long)iHorizon)
+      return(false);
+   const long tokens = scenario_variables * (long)iHorizon;
+   if(tokens > max_elements / (long)iDimension)
+      return(false);
+   const long token_dimension = tokens * (long)iDimension;
+   if(token_dimension > max_elements / 2 || (long)iQueries > max_elements / (long)iDimension)
+      return(false);
+   const long query_dimension = (long)iQueries * (long)iDimension;
+   if((long)iScenarios > max_elements / query_dimension)
+      return(false);
+   const long query_scenario_dimension = (long)iScenarios * query_dimension;
+//--- Match the projected query family to the declared Scenario geometry.
+   if(Neurons() != (int)query_dimension || cQueryProjection.Neurons() != (int)query_scenario_dimension ||
+      cQueryGradient.Neurons() != (int)query_scenario_dimension ||
+      cMHAOutput.Neurons() != (int)query_dimension)
+      return(false);
+//--- The Actor-only continuity path owns stack and projected token products.
+   if(!bCritic && ((long)iStackSize > max_elements / query_dimension ||
+                   tokens > max_elements / 2 / query_dimension))
+      return(false);
+//--- Require the complete common ownership tree without demanding one owner.
+   if(!cFlow.SupportsOpenCLChecked() || !cQueryProjection.SupportsOpenCLChecked() ||
+      !cQueryGradient.SupportsOpenCLChecked() || !cWz.SupportsOpenCLChecked() ||
+      !cWu.SupportsOpenCLChecked() || !cTokenSum.SupportsOpenCLChecked() ||
+      !cTokenPE.SupportsOpenCLChecked() || !cTokensTranspose.SupportsOpenCLChecked() ||
+      !cKV.SupportsOpenCLChecked() || !cKVGradK.SupportsOpenCLChecked() ||
+      !cKVGradV.SupportsOpenCLChecked() || !cAttention.SupportsOpenCLChecked() ||
+      !cAttentionTranspose.SupportsOpenCLChecked() || !cHeadGate.SupportsOpenCLChecked() ||
+      !cHeadGateTranspose.SupportsOpenCLChecked() || !cOutputProjection.SupportsOpenCLChecked() ||
+      !cQueryResidual.SupportsOpenCLChecked() || !cMHAOutput.SupportsOpenCLChecked())
+      return(false);
+//--- Critic leaves the Actor-only history holders uninitialized by contract.
+   if(!bCritic && (!cHistoryStack.SupportsOpenCLChecked() || !cHistoryTTM.SupportsOpenCLChecked() ||
+                   !cHistoryTokenProjection.SupportsOpenCLChecked() || !cHistoryMarket.SupportsOpenCLChecked() ||
+                   !cHistoryContext.SupportsOpenCLChecked() || !cScenarioHistory.SupportsOpenCLChecked()))
+      return(false);
+//--- Finalize the complete capability check without mutating any owner.
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Transfers ScenarioCrossAttention owners before MSRes publishing. |
+//+------------------------------------------------------------------+
+bool CNeuronScenarioCrossAttention::SetOpenCLChecked(COpenCLMy *obj)
+  {
+//--- Reject an invalid target or incomplete tree before any child moves.
+   if(CheckPointer(obj) == POINTER_INVALID || !SupportsOpenCLChecked())
+      ReturnFalseEx("checked context target or Scenario tree");
+//--- Move the common holders in legacy ownership order with local diagnostics.
+   if(!cQueryProjection.SetOpenCLChecked(obj))
+      ReturnFalseEx("query projection context");
+   if(!cQueryGradient.SetOpenCLChecked(obj))
+      ReturnFalseEx("query gradient context");
+   if(!cWz.SetOpenCLChecked(obj))
+      ReturnFalseEx("Wz context");
+   if(!cWu.SetOpenCLChecked(obj))
+      ReturnFalseEx("Wu context");
+   if(!cTokenSum.SetOpenCLChecked(obj))
+      ReturnFalseEx("token sum context");
+   if(!cTokenPE.SetOpenCLChecked(obj))
+      ReturnFalseEx("token positional encoding context");
+   if(!cTokensTranspose.SetOpenCLChecked(obj))
+      ReturnFalseEx("tokens transpose context");
+   if(!cKV.SetOpenCLChecked(obj))
+      ReturnFalseEx("key-value context");
+   if(!cKVGradK.SetOpenCLChecked(obj))
+      ReturnFalseEx("key gradient context");
+   if(!cKVGradV.SetOpenCLChecked(obj))
+      ReturnFalseEx("value gradient context");
+   if(!cAttention.SetOpenCLChecked(obj))
+      ReturnFalseEx("flash attention context");
+   if(!cAttentionTranspose.SetOpenCLChecked(obj))
+      ReturnFalseEx("attention transpose context");
+   if(!cHeadGate.SetOpenCLChecked(obj))
+      ReturnFalseEx("head gate context");
+   if(!cHeadGateTranspose.SetOpenCLChecked(obj))
+      ReturnFalseEx("head gate transpose context");
+   if(!cOutputProjection.SetOpenCLChecked(obj))
+      ReturnFalseEx("output projection context");
+   if(!cQueryResidual.SetOpenCLChecked(obj))
+      ReturnFalseEx("query residual context");
+   if(!cMHAOutput.SetOpenCLChecked(obj))
+      ReturnFalseEx("MHA output context");
+//--- Transfer Actor continuity only when those holders were initialized.
+   if(!bCritic)
+     {
+      if(!cHistoryStack.SetOpenCLChecked(obj))
+         ReturnFalseEx("history stack context");
+      if(!cHistoryTTM.SetOpenCLChecked(obj))
+         ReturnFalseEx("history TTM context");
+      if(!cHistoryTokenProjection.SetOpenCLChecked(obj))
+         ReturnFalseEx("history token projection context");
+      if(!cHistoryMarket.SetOpenCLChecked(obj))
+         ReturnFalseEx("history market context");
+      if(!cHistoryContext.SetOpenCLChecked(obj))
+         ReturnFalseEx("history context context");
+      if(!cScenarioHistory.SetOpenCLChecked(obj))
+         ReturnFalseEx("scenario history context");
+     }
+//--- MSRes transfers cFlow and publishes inherited Base owners last.
+   if(!CNeuronMSRes::SetOpenCLChecked(obj))
+      ReturnFalseEx("inherited MSRes context");
+//--- Finalize only after every Scenario and inherited owner succeeded.
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| Rebinds the CNeuronScenarioCrossAttention GPU buffers to the     |
