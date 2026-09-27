@@ -1,29 +1,26 @@
-//+------------------------------------------------------------------+
-//|                                          NeuroNet_Definitions.mqh|
-//|                           Base definitions and standard includes.|
-//|                                               Copyright 2024, DNG|
-//|                                 https://www.mql5.com/ru/users/dng|
+﻿//+------------------------------------------------------------------+
+//|                                         NeuroNet_Definitions.mqh |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 
 #ifndef NEURONET_DEFINITIONS_MQH
 #define NEURONET_DEFINITIONS_MQH
 #define NEURONET_OPENCL_CHECKED_API
-/// \file
-/// \brief NeuroNet.mqh
-/// Library for creating Neural network for use in MQL5 experts
-/// \author [DNG](https://www.mql5.com/en/users/dng)
-/// \copyright Copyright 2019, DNG
+//--- \file
+//--- \brief NeuroNet.mqh
+//--- Library for creating Neural network for use in MQL5 experts
+//--- \author [DNG](https://www.mql5.com/en/users/dng)
 //+------------------------------------------------------------------+
-///\mainpage NeuronNet
-/// Library for creating Neural network for use in MQL5 experts.
-/// - \ref const
-/// - \ref enums
-/// - \ref ObjectTypes
-/// - \ref group1
-/// - [<b>Class Hierarchy</b>](hierarchy.html)
-/// - [<b>Files</b>](files.html)
+//---\mainpage NeuronNet
+//--- Library for creating Neural network for use in MQL5 experts.
+//--- - \ref const
+//--- - \ref enums
+//--- - \ref ObjectTypes
+//--- - \ref group1
+//--- - [<b>Class Hierarchy</b>](hierarchy.html)
+//--- - [<b>Files</b>](files.html)
 //+------------------------------------------------------------------+
-#property copyright "Copyright 2019, DNG"
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 //+------------------------------------------------------------------+
@@ -35,10 +32,10 @@
 #include <OpenCL\OpenCL.mqh>
 #include <Math\Stat\Normal.mqh>
 //+------------------------------------------------------------------+
-// Defines
+//--- Defines
 //+------------------------------------------------------------------+
-///\defgroup const  Global constants
-///@{
+//---\defgroup const  Global constants
+//---@{
 #define  lr                3.0e-4f  ///<learning rate
 #define  momentum          0.9f     ///<momentum for SGD optimization
 #define  WeightsMultiplier 0.01f
@@ -47,7 +44,7 @@
 #define  b1                0.9f
 /** Second momentum multiplier of Adam optimization*/
 #define  b2                0.999f
-/// Pseudo-random sequence generator
+//--- Pseudo-random sequence generator
 #define  xor128            rnd_t=(rnd_x^(rnd_x<<11)); \
                            rnd_x=rnd_y; \
                            rnd_y=rnd_z; \
@@ -55,7 +52,7 @@
                            rnd_w=(rnd_w^(rnd_w>>19))^(rnd_t^(rnd_t>>8))
 //---
 uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRand(), rnd_t = 0;
-///@}
+//---@}
 #define CreateKernel(id, name)    if(!opencl.KernelCreate(id, name)) { \
                                     PrintFormat("Error of create kernel %s: %d line %d", #name, GetLastError(), __LINE__); \
                                     ReturnFalse; }
@@ -117,10 +114,10 @@ uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRan
 #define D2SKILL_PROTECTED                        2
 #define D2SKILL_ACTIVE                           3
 #define D2SKILL_INACTIVE                         4
+template<typename T1, typename T2>
 //+------------------------------------------------------------------+
 //| Implements the pow helper function.                              |
 //+------------------------------------------------------------------+
-template<typename T1, typename T2>
 T1 pow(T2 a, T1 b)
   {
    return (T1)MathPow((T1)a, (T1)b);
@@ -134,31 +131,31 @@ union uaLongChar
    uchar cdata[24];
   };
 //+------------------------------------------------------------------+
-///\defgroup ObjectTypes  Defines Object types identified
-///Used to identify classes in a library
-///@{
+//---\defgroup ObjectTypes  Defines Object types identified
+//---Used to identify classes in a library
+//---@{
 //+------------------------------------------------------------------+
-///\defgroup arr Arrays
-///Used to identify array classes
-///\{
+//---\defgroup arr Arrays
+//---Used to identify array classes
+//---\{
 #define  defArrayConnects  0x7782   ///<Array of connections \details Identified class #CArrayCon
 #define  defLayer          0x7787   ///<Layer of neurons \details Identified class #CLayer
 #define  defArrayLayer     0x7788   ///<Array of layers \details Identified class #CArrayLayer
 #define  defNet            0x7790   ///<Neuron Net \details Identified class #CNet
-///\}
-///\defgroup cpu CPU
-///Used to identify classes with CPU calculation
-///\{
+//---\}
+//---\defgroup cpu CPU
+//---Used to identify classes with CPU calculation
+//---\{
 #define  defConnect        0x7781   ///<Connection \details Identified class #CConnection
 #define  defNeuronBase     0x7783   ///<Neuron base type \details Identified class #CNeuronBase
 #define  defNeuron         0x7784   ///<Full connected neuron \details Identified class #CNeuron
 #define  defNeuronConv     0x7785   ///<Convolution neuron \details Identified class #CNeuronConv
 #define  defNeuronProof    0x7786   ///<Proof neuron \details Identified class #CNeuronProof
 #define  defNeuronLSTM     0x7791   ///<LSTM Neuron \details Identified class #CNeuronLSTM
-///\}
-///\defgroup gpu GPU
-///Used to identify classes with GPU calculation
-///\{
+//---\}
+//---\defgroup gpu GPU
+//---Used to identify classes with GPU calculation
+//---\{
 #define  defBufferDouble               0x7882   ///<Data Buffer OpenCL \details Identified class #CBufferFloat
 #define  defNeuronBaseOCL              0x7883   ///<Neuron Base OpenCL \details Identified class #CNeuronBaseOCL
 #define  defNeuronConvOCL              0x7885   ///<Conolution neuron OpenCL \details Identified class #CNeuronConvOCL
@@ -511,20 +508,21 @@ union uaLongChar
 #define  defNeuronD2SkillItem             0x811C
 #define  defNeuronD2SkillBank             0x811D
 #define  defNeuronD2Skill                 0x811E
-///\}
-///@}
+#define  defNeuronACSRM                 0x8121   ///\<Spectral-risk (AC-SRM) critic layer \\details Identified class #CNeuronACSRM
+//---\}
+//---@}
 //+------------------------------------------------------------------+
-///\defgroup group1 Defines for OpenCL kernels identified
-/// Used as indexes when calling functions OpenCL.
-///@{
-///\defgroup neuron_base Neuron Base
-/// Describes the process for the Neuron Base.
-///\details Detailed description on [the link.](https://www.mql5.com/ru/articles/8435#para4)
-///@{
-///\defgroup neuron_base_ff Feed Forward proccess kernel
-/// Describes the forward path process for the Neuron Base.
-///\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para41">the link.</A>
-///@{
+//---\defgroup group1 Defines for OpenCL kernels identified
+//--- Used as indexes when calling functions OpenCL.
+//---@{
+//---\defgroup neuron_base Neuron Base
+//--- Describes the process for the Neuron Base.
+//---\details Detailed description on [the link.](https://www.mql5.com/ru/articles/8435#para4)
+//---@{
+//---\defgroup neuron_base_ff Feed Forward proccess kernel
+//--- Describes the forward path process for the Neuron Base.
+//---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para41">the link.</A>
+//---@{
 #define  def_k_FeedForward       0  ///< Index of #FeedForward kernel
 #define  def_k_ff_matrix_w       0  ///< Weights matrix (m+1)*n, where m - number of neurons in layer and n - number of outputs (neurons in next layer)
 #define  def_k_ff_matrix_i       1  ///< Inputs tesor
@@ -533,11 +531,11 @@ union uaLongChar
 #define  def_k_ff_activation     4  ///< Activation type (#ENUM_ACTIVATION)
 #define  def_k_ff_numeric_flags  5  ///< Per-logical-output numeric status buffer
 #define  def_k_ff_flags_enabled  6  ///< Nonzero enables numeric status writes
-///@}
-///\defgroup neuron_base_gr Gradients Calculation kernels
-/// Describes the process of gradients calculation for the Neuron Base.
-///\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para42">the link.</A>
-///@{
+//---@}
+//---\defgroup neuron_base_gr Gradients Calculation kernels
+//--- Describes the process of gradients calculation for the Neuron Base.
+//---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para42">the link.</A>
+//---@{
 #define  def_k_CalcOutputGradient 1  ///< Index of Output gradients calculation kernel (#CalcOutputGradient)
 #define  def_k_cog_matrix_t       0  ///< Target tensor
 #define  def_k_cog_matrix_o       1  ///< Output tensor
@@ -552,12 +550,12 @@ union uaLongChar
 #define  def_k_chg_matrix_ig      3  ///< Tensor of gradients at previous layer
 #define  def_k_chg_outputs        4  ///< Number of outputs
 #define  def_k_chg_activation     5  ///< Activation type (#ENUM_ACTIVATION)
-///@}
-///\defgroup neuron_base_opt Updating Weights Calculation kernel
-/// Describes the process of optimization weights for the Neuron Base.
-///\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para43">the link.</A>
-/// For Adam optimization look <A HREF="https://www.mql5.com/ru/articles/8598#para31">the link.</A>
-///@{
+//---@}
+//---\defgroup neuron_base_opt Updating Weights Calculation kernel
+//--- Describes the process of optimization weights for the Neuron Base.
+//---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para43">the link.</A>
+//--- For Adam optimization look <A HREF="https://www.mql5.com/ru/articles/8598#para31">the link.</A>
+//---@{
 #define  def_k_UpdateWeightsMomentum      3   ///< Index SGD optomization Update weights kernel (#UpdateWeightsMomentum)
 #define  def_k_uwm_matrix_w        0  ///< SGD Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
 #define  def_k_uwm_matrix_g        1  ///< SGD Tensor of gradients at current layer
@@ -587,26 +585,26 @@ union uaLongChar
 #define  def_k_uwls_inputs         5  ///< Least Squares Number of inputs
 #define  def_k_uwls_l              6  ///< Least Squares Learning rates
 #define  def_k_uwls_update         7  ///< Least Squares Update flag
-///@}
-///@}
+//---@}
+//---@}
 //---
-///\defgroup neuron_proof Pooling layer's neuron
-/// Describes the process for the Neuron of pooling layer.
-///@{
-///\defgroup neuron_proof_ff Pooling layer's neuron Feed Forward
-/// Describes the feed forward process for the Neuron of pooling layer.
-///@{
+//---\defgroup neuron_proof Pooling layer's neuron
+//--- Describes the process for the Neuron of pooling layer.
+//---@{
+//---\defgroup neuron_proof_ff Pooling layer's neuron Feed Forward
+//--- Describes the feed forward process for the Neuron of pooling layer.
+//---@{
 #define  def_k_FeedForwardProof    5  ///< Index of the kernel of the Pooling neuron for Feed forward process (#FeedForwardProof)
 #define  def_k_ffp_matrix_i        0  ///< Inputs tesor
 #define  def_k_ffp_matrix_o        1  ///< Output tensor
 #define  def_k_ffp_inputs          2  ///< Number of inputs
 #define  def_k_ffp_window          3  ///< Size of input window
 #define  def_k_ffp_step            4  ///< Step size
-///@}
+//---@}
 //---
-///\defgroup neuron_proof_gr Pooling layer's neuron Gradients Calculation kernels
-/// Describes the gradient calculation process for the Neuron of pooling layer.
-///@{
+//---\defgroup neuron_proof_gr Pooling layer's neuron Gradients Calculation kernels
+//--- Describes the gradient calculation process for the Neuron of pooling layer.
+//---@{
 #define  def_k_CalcInputGradientProof 6  ///< Index of the kernel of the Pooling neuron to transfer gradient to previous layer (#CalcInputGradientProof)
 #define  def_k_cigp_matrix_i      0  ///< Inputs tesor
 #define  def_k_cigp_matrix_g      1  ///< Tensor of gradients at current layer
@@ -615,15 +613,15 @@ union uaLongChar
 #define  def_k_cigp_outputs       4  ///< Number of outputs
 #define  def_k_cigp_window        5  ///< Size of input window
 #define  def_k_cigp_step          6  ///< Step size
-///@}
-///@}
+//---@}
+//---@}
 //---
-///\defgroup neuron_conv Convolution layer's neuron
-/// Describes the process for the Neuron of convolution layer.
-///@{
-///\defgroup neuron_conv_ff Convolution layer's neuron Feed Forward
-/// Describes the feed forward process for the Neuron of convolution layer.
-///@{
+//---\defgroup neuron_conv Convolution layer's neuron
+//--- Describes the process for the Neuron of convolution layer.
+//---@{
+//---\defgroup neuron_conv_ff Convolution layer's neuron Feed Forward
+//--- Describes the feed forward process for the Neuron of convolution layer.
+//---@{
 #define  def_k_FeedForwardConv    7  ///< Index of the kernel of the convolution neuron for Feed forward process (#FeedForwardConv)
 #define  def_k_ffc_matrix_w       0  ///< Weights matrix (m+1)*n, where m - input window and n - output window
 #define  def_k_ffc_matrix_i       1  ///< Inputs tesor
@@ -633,11 +631,11 @@ union uaLongChar
 #define  def_k_ffc_window_in      5  ///< Size of input window
 #define  def_k_ffс_window_out     6  ///< Size of output window
 #define  def_k_ffc_activation     7  ///< Activation type (#ENUM_ACTIVATION)
-///@}
+//---@}
 //---
-///\defgroup neuron_conv_gr Convolution layer's neuron Gradients Calculation kernels
-/// Describes the gradient calculation process for the Neuron of convolution layer.
-///@{
+//---\defgroup neuron_conv_gr Convolution layer's neuron Gradients Calculation kernels
+//--- Describes the gradient calculation process for the Neuron of convolution layer.
+//---@{
 #define  def_k_CalcHiddenGradientConv 8  ///< Index of the kernel of the convolution neuron to transfer gradient to previous layer (#CalcHiddenGradientConv)
 #define  def_k_chgc_matrix_w      0  ///< Weights matrix (m+1)*n, where m - input window and n - output window
 #define  def_k_chgc_matrix_g      1  ///< Tensor of gradients at current layer
@@ -649,11 +647,11 @@ union uaLongChar
 #define  def_k_chgc_window_out    7  ///< Size of output window
 #define  def_k_chgc_activation    8  ///< Activation type (#ENUM_ACTIVATION)
 #define  def_k_chgc_shift_out     9  ///< Activation type (#ENUM_ACTIVATION)
-///@}
+//---@}
 //---
-///\defgroup neuron_conv_opt Convolution layer's neuron Update weights kernels
-/// Describes the optimization process for the Neuron of convolution layer.
-///@{
+//---\defgroup neuron_conv_opt Convolution layer's neuron Update weights kernels
+//--- Describes the optimization process for the Neuron of convolution layer.
+//---@{
 #define  def_k_UpdateWeightsConvMomentum      9  ///< Index of the kernel of the convolution neuron to update weights SGD (#UpdateWeightsConvMomentum)
 #define  def_k_uwcm_matrix_w       0  ///< Weights matrix (m+1)*n, where m - input window and n - output window
 #define  def_k_uwcm_matrix_g       1  ///< Tensor of gradients at current layer
@@ -692,17 +690,17 @@ union uaLongChar
 #define  def_k_uwcls_window_in    8  ///< Size of input window
 #define  def_k_uwcls_window_out   9  ///< Size of output window
 #define  def_k_uwcls_step         10  ///< Step size
-///@}
-///@}
+//---@}
+//---@}
 //---
-///\defgroup neuron_atten Attention layer's neuron
-/// Describes the process for the Neuron of attention layer.
-///\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para4">the link.</A>
-///@{
-///\defgroup neuron_atten_ff Attention layer's neuron Feed Forward
-/// Describes the feed forward process for the Neuron of attention layer.
-///\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para43">the link.</A>
-///@{
+//---\defgroup neuron_atten Attention layer's neuron
+//--- Describes the process for the Neuron of attention layer.
+//---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para4">the link.</A>
+//---@{
+//---\defgroup neuron_atten_ff Attention layer's neuron Feed Forward
+//--- Describes the feed forward process for the Neuron of attention layer.
+//---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para43">the link.</A>
+//---@{
 #define  def_k_AttentionScore     11 ///< Index of the kernel of the attention neuron to calculate score matrix (#AttentionScore)
 #define  def_k_as_querys          0  ///< Matrix of Querys
 #define  def_k_as_keys            1  ///< Matriz of Keys
@@ -760,12 +758,12 @@ union uaLongChar
 #define  def_k_conc_input4        6  ///< Matrix of Buffer 4
 #define  def_k_conc_window4       7  ///< Window of Buffer 4
 #define  def_k_conc_out           8  ///< Output tesor
-///@}
+//---@}
 //---
-///\defgroup neuron_atten_gr Attention layer's neuron Gradients Calculation
-/// Describes the gradients calculation process for the Neuron of attention layer.
-///\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para44">the link.</A>
-///@{
+//---\defgroup neuron_atten_gr Attention layer's neuron Gradients Calculation
+//--- Describes the gradients calculation process for the Neuron of attention layer.
+//---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para44">the link.</A>
+//---@{
 #define  def_k_AttentionGradients 14    ///< Index of the kernel for gradients calculation process (#AttentionInsideGradients)
 #define  def_k_ag_querys          0     ///< Matrix of Querys
 #define  def_k_ag_querys_g        1     ///< Matrix of Querys' Gradients
@@ -798,13 +796,13 @@ union uaLongChar
 #define def_k_dout_map              1     ///< Map Tensor
 #define def_k_dout_out              2     ///< Out Tensor
 #define def_k_dout_dimension        3     ///< Dimension of Inputs
-///@}
-///@}
+//---@}
+//---@}
 //---
-///\defgroup neuron_norm Kernels of matrix normalization process
-/// Describes the process of matrix normalization.
-///\details Detailed description on <A HREF="https://arxiv.org/abs/1607.06450">the link.</A>
-///@{
+//---\defgroup neuron_norm Kernels of matrix normalization process
+//--- Describes the process of matrix normalization.
+//---\details Detailed description on <A HREF="https://arxiv.org/abs/1607.06450">the link.</A>
+//---@{
 #define def_k_Normalize          15    ///< Index of the kernel for matrix normalization (#Normalize)
 #define def_k_norm_buffer        0     ///< In/Out Matrix
 #define def_k_norm_dimension     1     ///< Dimension of matrix
@@ -841,10 +839,10 @@ union uaLongChar
 #define def_k_buoa_l                      2  ///< Learning rates
 #define def_k_buoa_b1                     3  ///< First momentum multiplier
 #define def_k_buoa_b2                     4  ///< Second momentum multiplier
-///@}
-///\defgroup VAE neuron Kernels of Variant Aoutoencodre
-/// Describes the process of Variant Aoutoencodre.
-///@{
+//---@}
+//---\defgroup VAE neuron Kernels of Variant Aoutoencodre
+//--- Describes the process of Variant Aoutoencodre.
+//---@{
 #define def_k_VAEFeedForward             30
 #define def_k_vaeff_inputs                0
 #define def_k_vaeff_random                1
@@ -858,10 +856,10 @@ union uaLongChar
 #define def_k_vaehg_random                2
 #define def_k_vaehg_gradient              3
 #define def_k_vaehg_kld_mult              4
-///@}
-///\defgroup LSTM neuron Kernels of RNN unit
-/// Describes the process of RNN.
-///@{
+//---@}
+//---\defgroup LSTM neuron Kernels of RNN unit
+//--- Describes the process of RNN.
+//---@{
 #define def_k_LSTM_FeedForward            32
 #define def_k_lstmff_inputs               0
 #define def_k_lstmff_inputs_size          1
@@ -895,9 +893,9 @@ union uaLongChar
 #define def_k_lstmuw_l                    4
 #define def_k_lstmuw_b1                   5
 #define def_k_lstmuw_b2                   6
-///@}
-///\defgroup SoftMax activation Kernels
-///@{
+//---@}
+//---\defgroup SoftMax activation Kernels
+//---@{
 #define def_k_SoftMax_FeedForward         36
 #define def_k_softmaxff_inputs            0
 #define def_k_softmaxff_outputs           1
@@ -911,9 +909,9 @@ union uaLongChar
 #define def_k_softmaxog_outputs           0
 #define def_k_softmaxog_targets           1
 #define def_k_softmaxog_output_gr         2
-///@}
-///\defgroup SoftMax activation Kernels
-///@{
+//---@}
+//---\defgroup SoftMax activation Kernels
+//---@{
 #define def_k_FQF_Cosine                  39
 #define def_k_fqf_cosine_softmax          0
 #define def_k_fqf_cosine_outputs          1
@@ -943,6 +941,74 @@ union uaLongChar
 #define def_k_fqfcosgr_output_gr          1
 #define def_k_fqfcosgr_softmax_gr         2
 //---
+#define def_k_FQF_DistributionTargetGradient  320
+#define def_k_fqfdtg_quantiles                0
+#define def_k_fqfdtg_probabilities            1
+#define def_k_fqfdtg_quantiles_gr             2
+#define def_k_fqfdtg_probabilities_gr         3
+#define def_k_fqfdtg_target                   4
+#define def_k_fqfdtg_probability_weight       5
+#define def_k_fqfdtg_value_weight             6
+//---
+#define def_k_FQF_Sample                    321
+#define def_k_fqfs_quantiles                0
+#define def_k_fqfs_probabilities            1
+#define def_k_fqfs_random                   2
+#define def_k_fqfs_result                   3
+//---
+#define def_k_FQF_SRMForward                  322
+#define def_k_fqfsrm_quantiles                0
+#define def_k_fqfsrm_probabilities            1
+#define def_k_fqfsrm_result                   2
+#define def_k_fqfsrm_risk_type                3
+#define def_k_fqfsrm_risk_parameter           4
+#define def_k_fqfsrm_mean_weight              5
+//--- Spectral Risk Measure types (FQF_SRMForward)
+#define defSRM_MEAN                           0
+#define defSRM_CVAR                           1  ///< lower-tail RETURN CVaR (risk_variable=return): E[R | R in the lower alpha tail]; the Actor maximizes it
+#define defSRM_MEAN_CVAR                      2
+#define defSRM_EXPONENTIAL                    3
+#define defSRM_DUAL_POWER                     4
+#define defFQF_LOCAL_ARRAY_SIZE             64  ///< Must match LOCAL_ARRAY_SIZE of NeuroNet.cl
+//---
+#define def_k_FQF_SRMGradient                 323
+#define def_k_fqfsrmg_quantiles               0
+#define def_k_fqfsrmg_probabilities           1
+#define def_k_fqfsrmg_result_gradient         2
+#define def_k_fqfsrmg_quantiles_gradient      3
+#define def_k_fqfsrmg_probabilities_gradient  4
+#define def_k_fqfsrmg_risk_type               5
+#define def_k_fqfsrmg_risk_parameter          6
+#define def_k_fqfsrmg_mean_weight             7
+//---
+#define def_k_FQF_FractionGradient       324
+#define def_k_fqffg_matrix_w             0
+#define def_k_fqffg_matrix_g             1
+#define def_k_fqffg_matrix_ig            2
+#define def_k_fqffg_outputs              3
+#define def_k_FQF_CosineGradientSRM         325
+//---
+#define def_k_FQF_MonotoneRearrange        326
+#define def_k_fqfmon_quantiles                 0
+#define def_k_fqfmon_probabilities             1
+#define def_k_fqfmon_ordered_quantiles         2
+#define def_k_fqfmon_ordered_probabilities     3
+#define def_k_fqfmon_order                     4
+#define def_k_fqfmon_diagnostics               5
+//---
+#define def_k_FQF_RearrangeGradient           327
+#define def_k_fqfrg_ordered_quantiles_gradient     0
+#define def_k_fqfrg_ordered_probabilities_gradient 1
+#define def_k_fqfrg_order                     2
+#define def_k_fqfrg_quantiles_gradient         3
+#define def_k_fqfrg_probabilities_gradient     4
+//---
+//--- FQF probability/numerical contract tolerances (MQL5 side)
+#define defFQF_PROBABILITY_TOLERANCE      1.0e-3f  ///< Max |sum(p)-1| before the SRM probability contract is violated
+#define defFQF_SPECTRAL_EPS               1.0e-4f  ///< Float tolerance for Phi(tau_high) >= Phi(tau_low) - eps
+#define defFQF_KINK_EPS                   1.0e-5f  ///< |tau - alpha| below this counts a CVaR break-point hit
+#define defFQF_DIAGNOSTIC_FLOATS          6        ///< Floats per task in the FQF_MonotoneRearrange diagnostics row
+//---
 //---
 #define def_k_MHSparseAttentionScore    44 ///< Index of the kernel of the multi-heads sparse attention neuron to calculate score matrix (#MHSparseAttentionScore)
 #define def_k_mhas_sparse                3  ///< less than 1.0 сoefficient of sparse
@@ -954,8 +1020,8 @@ union uaLongChar
 #define def_k_chg_model                 6  ///< Number of model to calculate
 #define def_k_UWMultiModels             48 ///< Index of the kernel of the multi-models neuron to update weights
 #define def_k_uwa_model                 9  ///< Number of model to update
-///@}
-///@}
+//---@}
+//---@}
 #define def_k_ConcatFeedForward        49 ///< Index of #FeedForward kernel
 #define def_k_cff_matrix_w             0  ///< Weights matrix (m+1)*n, where m - number of neurons in layer and n - number of outputs (neurons in next layer)
 #define def_k_cff_matrix_i1            1  ///< Inputs tesor
@@ -2835,7 +2901,7 @@ union uaLongChar
 //--- Generic RAG retrieval pipeline. All dimensions are runtime arguments.
 #define RAG_TOPK_LOCAL_WIDTH                      64
 #define RAG_TOPK_MAX                              (RAG_TOPK_LOCAL_WIDTH / 2)
-// ScenarioID is transported in float2.x by the GPU TopK pipeline.
+//--- ScenarioID is transported in float2.x by the GPU TopK pipeline.
 #define RAG_FLOAT_INDEX_LIMIT                     16777216
 #define def_k_RAGScore                           287
 #define def_k_rags_embedding                       0
@@ -2900,6 +2966,7 @@ union uaLongChar
 #define def_k_sgn_confidence_gradient            10
 #define def_k_sgn_variables                      11
 #define def_k_sgn_batch_control                  12
+#define def_k_sgn_normalize_gradients            13
 //--- D2Skill GPU retrieval, update and hindsight utility kernels.
 #define def_k_D2SkillScoreSlots                  294
 #define def_k_d2ss_query                           0
@@ -3192,10 +3259,11 @@ enum ENUM_OMPB_MODE
    OMPB_CALIBRATE,
    OMPB_INFERENCE
   };
+//+------------------------------------------------------------------+
 //| Enum of activation formula used                                  |
 //+------------------------------------------------------------------+
 //--- OpenCL program resource.
-#resource "NeuroNet.cl" as string cl_program
+#resource "..\\NeuroNet_DNG\\NeuroNet.cl" as string cl_program
 enum ENUM_ACTIVATION
   {
    None = -1,  ///< Without activation formula
@@ -3208,7 +3276,7 @@ enum ENUM_ACTIVATION
    ELU = 6,
   };
 //+------------------------------------------------------------------+
-/// Enum of optimization method used
+//--- Enum of optimization method used
 //+------------------------------------------------------------------+
 enum ENUM_OPTIMIZATION
   {
@@ -3217,18 +3285,15 @@ enum ENUM_OPTIMIZATION
    LS = 2,       ///< Least Squares
    ADAM_MINI = 3 ///< Adam-mini
   };
-///@}
+//---@}
 //+------------------------------------------------------------------+
-///\class CConnection
-///\brief Class of connection to anothe neuron
-///\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para51">the link.</A>
+//---\class CConnection
+//---\brief Class of connection to anothe neuron
+//---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para51">the link.</A>
 //+------------------------------------------------------------------+
 #endif // NEURONET_DEFINITIONS_MQH
 
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
 #endif // NEURONET_BUILDING_FACADE
-
-
-
-//+------------------------------------------------------------------+
+//+---+

@@ -1,7 +1,7 @@
-//+------------------------------------------------------------------+
-//| Legendre Wavelets                                                |
-//| Copyright 2024, DNG                                              |
-//| http://www.mql5.com/ru/users/dng                                 |
+﻿//+------------------------------------------------------------------+
+//|                                                     legendre.mqh |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #define Legendre4(x)    Legendre(4,2*x-1)
 #define Legendre6(x)    Legendre(6,2*x-1)
@@ -35,5 +35,4 @@ double Legendre(uint poly, double x)
 //---
    return result;
   }
-//+------------------------------------------------------------------+
-
+//+---+

@@ -1,12 +1,16 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                        Study.mq5 |
-//|                                                   Copyright DNG® |
+//|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//| Input parameters                                            |
+#property description "Харнесс обучения политик ADAPT: формирование и калибровка пары актор-критик."
+#property description "Обучает актор и критиков на исторических барах с энкодерами состояния и эндпоинтов."
+#property description "Только для тестов; ордера не выставляет."
+//+------------------------------------------------------------------+
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
 CNet                 ADAPTEncoder;
 CNet                 ADAPTEndpoints;
@@ -26,7 +30,7 @@ vector<float>        STD_Actor;
 vector<float>        STD_Goal;
 COpenCLMy           *OpenCL;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
    ResetLastError();
    if(!LoadTotalBase())
@@ -34,7 +38,7 @@ COpenCLMy           *OpenCL;
       PrintFormat("Error of load study data: %d", GetLastError());
       return INIT_FAILED;
      }
-// Load Models.
+//--- Load Models.
    float temp;
    if(!ADAPTEncoder.Load(FileName + "Enc.nnw", temp, temp, temp, dtStudied, true) ||
       !ADAPTEndpoints.Load(FileName + "Endp.nnw", temp, temp, temp, dtStudied, true) ||
@@ -127,7 +131,7 @@ COpenCLMy           *OpenCL;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
    if(!(reason == REASON_INITFAILED || reason == REASON_RECOMPILE))
      {
@@ -142,7 +146,7 @@ COpenCLMy           *OpenCL;
    delete OpenCL;
   }
 //+------------------------------------------------------------------+
-//| ChartEvent function                                         |
+//| ChartEvent function                                              |
 //+------------------------------------------------------------------+
                   const double &dparam,
                   const string &sparam)
@@ -151,7 +155,7 @@ COpenCLMy           *OpenCL;
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train function                                              |
+//| Train function                                                   |
 //+------------------------------------------------------------------+
    vector<float> probability = GetProbTrajectories(Buffer, 0.9);
    vector<float> result, target;
@@ -173,7 +177,7 @@ COpenCLMy           *OpenCL;
       for(int i = state; i < end; i++)
         {
          bState.AssignArray(Buffer[tr].States[i].state);
-         // Trajectory.
+         //--- Trajectory.
          if(!ADAPTEncoder.feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CBufferFloat*)NULL))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -263,7 +267,7 @@ COpenCLMy           *OpenCL;
             Stop = true;
             break;
            }
-         // Policy.
+         //--- Policy.
          float PrevBalance = Buffer[tr].States[MathMax(i - 1, 0)].account[0];
          float PrevEquity = Buffer[tr].States[MathMax(i - 1, 0)].account[1];
          bAccount.Clear();
@@ -286,21 +290,21 @@ COpenCLMy           *OpenCL;
          bAccount.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
          if(bAccount.GetIndex() >= 0)
             bAccount.BufferWrite();
-         // State embedding.
+         //--- State embedding.
          if(!StateEncoder.feedForward((CNet *)GetPointer(ADAPTEncoder), -1, (CBufferFloat*)GetPointer(bAccount)))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             Stop = true;
             break;
            }
-         // Endpoint embedding.
+         //--- Endpoint embedding.
          if(!EndpointEncoder.feedForward(Result, -1, false, (CBufferFloat*)GetPointer(bProbs)))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             Stop = true;
             break;
            }
-         // Actor.
+         //--- Actor.
          if(!Actor.feedForward((CNet *)GetPointer(StateEncoder), -1, (CNet*)GetPointer(EndpointEncoder)))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -371,5 +375,4 @@ COpenCLMy           *OpenCL;
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Probability", ADAPTProbability.getRecentAverageError());
    ExpertRemove();
   }
-//+------------------------------------------------------------------+
-
+//+---+

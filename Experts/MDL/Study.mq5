@@ -1,14 +1,14 @@
+﻿//+------------------------------------------------------------------+
+//|                                                        Study.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| Study.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//| |
-//+------------------------------------------------------------------+
+#property description "Харнесс обучения политик MDL: формирование и калибровка пары актор-критик."
+#property description "Проходит стадии жизненного цикла MDL и обучает актор, критиков Q1 и Q2 на исторических барах."
+#property description "Только для тестов; ордера не выставляет."
 #define Study
 #define StudyOnline
 //+------------------------------------------------------------------+
@@ -20,9 +20,6 @@ input int                  Epochs         = 100;
 input double               MinBalance     = 50;
 input double               MaxBalance     = 150;
 #include "Trajectory.mqh"
-//+------------------------------------------------------------------+
-//| |
-//+------------------------------------------------------------------+
 CNet                 cActor;
 CNet                 cCritic;
 //---
@@ -48,9 +45,9 @@ int OnInit()
    CArrayObj *critic = new CArrayObj();
    if(!CreateDescriptions(actor, critic))
      {
-      // Implements DeleteObj.
+      //--- Implements DeleteObj.
       DeleteObj(actor)
-      // Implements DeleteObj.
+      //--- Implements DeleteObj.
       DeleteObj(critic)
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return INIT_FAILED;
@@ -61,9 +58,9 @@ int OnInit()
       if(!cActor.Create(actor))
         {
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
-         // Implements DeleteObj.
+         //--- Implements DeleteObj.
          DeleteObj(actor)
-         // Implements DeleteObj.
+         //--- Implements DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -345,5 +342,4 @@ void Train(void)
    ExpertRemove();
 //---
   }
-//+------------------------------------------------------------------+
-
+//+---+

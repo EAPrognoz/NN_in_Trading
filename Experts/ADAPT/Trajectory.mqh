@@ -1,17 +1,14 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
-//|                                                   Copyright DNG® |
+//|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//| Rewards structure                                                |
-//|   0     -  Delta Balance                                         |
-//|   1     -  Delta Equity ( "-" Drawdown / "+" Profit)             |
-//|   2     -  Penalty for no open positions                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------------------------------------+
+//| Rewards structure 0 - Delta Balance 1 - Delta Equity ( "-"  Drawdown / "+" Profit) 2 - Penalty for no open positions  |
+//+-----------------------------------------------------------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 #define        HistoryBars             1             //Depth of history
 #define        GPTBars                 100           //Analitic Depth of history
@@ -43,7 +40,7 @@
                      SState(void);
    bool              Save(int file_handle);
    bool              Load(int file_handle);
-   // Overloading.
+   //--- Overloading.
    void              operator=(const SState &obj)
      {
       ArrayCopy(state, obj.state);
@@ -52,6 +49,9 @@
       ArrayCopy(rewards, obj.rewards);
      }
   };
+//+------------------------------------------------------------------+
+//| Implements SState::SState.                                       |
+//+------------------------------------------------------------------+
 SState::SState(void)
   {
    ArrayInitialize(state, 0);
@@ -59,6 +59,9 @@ SState::SState(void)
    ArrayInitialize(action, 0);
    ArrayInitialize(rewards, 0);
   }
+//+------------------------------------------------------------------+
+//| Implements SState::Save.                                         |
+//+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
@@ -89,6 +92,9 @@ bool SState::Save(int file_handle)
          return false;
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements SState::Load.                                         |
+//+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
@@ -144,13 +150,19 @@ bool SState::Load(int file_handle)
    bool              Save(int file_handle);
    bool              Load(int file_handle);
   };
+//+------------------------------------------------------------------+
+//| Implements STrajectory::STrajectory.                             |
+//+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
-   // Implements DiscountFactor.
+   //--- Implements DiscountFactor.
    DiscountFactor(DiscFactor),
-   // Creates and manages object lifecycle for CumCounted.
+   //--- Creates and manages object lifecycle for CumCounted.
    CumCounted(false)
   {
   }
+//+------------------------------------------------------------------+
+//| Implements STrajectory::Save.                                    |
+//+------------------------------------------------------------------+
 bool STrajectory::Save(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
@@ -166,6 +178,9 @@ bool STrajectory::Save(int file_handle)
          return false;
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements STrajectory::Load.                                    |
+//+------------------------------------------------------------------+
 bool STrajectory::Load(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
@@ -180,6 +195,9 @@ bool STrajectory::Load(int file_handle)
          return false;
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements STrajectory::CumRevards.                              |
+//+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {
    if(CumCounted)
@@ -189,6 +207,9 @@ void STrajectory::CumRevards(void)
          States[i].rewards[r] += States[i + 1].rewards[r] * DiscountFactor;
    CumCounted = true;
   }
+//+------------------------------------------------------------------+
+//| Implements STrajectory::Add.                                     |
+//+------------------------------------------------------------------+
 bool STrajectory::Add(SState &state)
   {
    if(Total + 1 >= ArraySize(States))
@@ -197,6 +218,9 @@ bool STrajectory::Add(SState &state)
    Total++;
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements SaveTotalBase.                                        |
+//+------------------------------------------------------------------+
 bool SaveTotalBase(void)
   {
    int total = ArraySize(Buffer);
@@ -221,6 +245,9 @@ bool SaveTotalBase(void)
    FileClose(handle);
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements LoadTotalBase.                                        |
+//+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
    int handle = FileOpen(FileName + ".bd", FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
@@ -246,6 +273,9 @@ bool LoadTotalBase(void)
    FileClose(handle);
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements CreateDescriptions.                                   |
+//+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *state_encoder)
   {
    CLayerDescription *descr;
@@ -267,9 +297,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       if(!state_encoder)
          return false;
      }
-// Endpoints Encoder.
+//--- Endpoints Encoder.
    end_encoder.Clear();
-// Input layer.
+//--- Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -281,7 +311,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-// layer 1.
+//--- layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronConcatenate;
@@ -295,9 +325,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-// State Encoder.
+//--- State Encoder.
    state_encoder.Clear();
-// Input layer.
+//--- Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -309,7 +339,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-// layer 1.
+//--- layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronConcatenate;
@@ -323,9 +353,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-// Actor.
+//--- Actor.
    actor.Clear();
-// Input layer.
+//--- Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -337,7 +367,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-// layer 1.
+//--- layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronConcatenate;
@@ -351,7 +381,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-// layer 2.
+//--- layer 2.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -363,7 +393,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-// layer 3.
+//--- layer 3.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -375,7 +405,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
-// layer 4.
+//--- layer 4.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronVAEOCL;
@@ -388,6 +418,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
      }
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements CreateTrajNetDescriptions.                            |
+//+------------------------------------------------------------------+
 bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayObj *probability)
   {
    CLayerDescription *descr;
@@ -409,9 +442,9 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       if(!probability)
          return false;
      }
-// Encoder.
+//--- Encoder.
    encoder.Clear();
-// Input layer.
+//--- Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -423,7 +456,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 1.
+//--- layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBatchNormOCL;
@@ -436,7 +469,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 2.
+//--- layer 2.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronEmbeddingOCL;
@@ -451,7 +484,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 3.
+//--- layer 3.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronPEOCL;
@@ -464,7 +497,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
      }
    for(int l = 0; l < Lenc; l++)
      {
-      // layer 4.
+      //--- layer 4.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronTransposeOCL;
@@ -475,7 +508,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      // layer 5.
+      //--- layer 5.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronMH2AttentionOCL;
@@ -489,7 +522,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      // layer 6.
+      //--- layer 6.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronMLMHAttentionOCL;
@@ -504,7 +537,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      // layer 7.
+      //--- layer 7.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronTransposeOCL;
@@ -515,7 +548,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      // layer 8.
+      //--- layer 8.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronMH2AttentionOCL;
@@ -530,7 +563,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          delete descr;
          return false;
         }
-      // layer 9.
+      //--- layer 9.
       if(!(descr = new CLayerDescription()))
          return false;
       descr.type = defNeuronMLMHAttentionOCL;
@@ -546,9 +579,9 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
          return false;
         }
      }
-// Endpoints.
+//--- Endpoints.
    endpoints.Clear();
-// Input layer.
+//--- Input layer.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -560,7 +593,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 1.
+//--- layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -572,7 +605,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 2.
+//--- layer 2.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronSoftMaxOCL;
@@ -585,7 +618,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 3.
+//--- layer 3.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -597,12 +630,12 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// Probability.
+//--- Probability.
    probability.Clear();
-// Input layer.
+//--- Input layer.
    if(!probability.Add(endpoints.At(0)))
       return false;
-// layer 1.
+//--- layer 1.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronConcatenate;
@@ -616,7 +649,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 2.
+//--- layer 2.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -628,7 +661,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 3.
+//--- layer 3.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronBaseOCL;
@@ -640,7 +673,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
-// layer 4.
+//--- layer 4.
    if(!(descr = new CLayerDescription()))
       return false;
    descr.type = defNeuronSoftMaxOCL;
@@ -656,6 +689,9 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
    return true;
   }
 #ifndef Study
+//+------------------------------------------------------------------+
+//| Implements IsNewBar.                                             |
+//+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
    static datetime last_bar = 0;
@@ -664,6 +700,9 @@ bool IsNewBar(void)
    last_bar = iTime(Symb.Name(), TimeFrame, 0);
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements CloseByDirection.                                     |
+//+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
    int total = PositionsTotal();
@@ -678,6 +717,9 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
      }
    return result;
   }
+//+------------------------------------------------------------------+
+//| Implements TrailPosition.                                        |
+//+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
    int total = PositionsTotal();
@@ -723,6 +765,9 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
      }
    return result;
   }
+//+------------------------------------------------------------------+
+//| Implements ClosePartial.                                         |
+//+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
    if(value <= 0)
@@ -751,6 +796,9 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
    return (value <= 0);
   }
 #endif
+//+------------------------------------------------------------------+
+//| Implements GetProbTrajectories.                                  |
+//+------------------------------------------------------------------+
 vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
   {
    ulong total = buffer.Size();
@@ -795,15 +843,18 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
    result = result.CumSum();
    return result;
   }
+//+------------------------------------------------------------------+
+//| Implements SampleTrajectory.                                     |
+//+------------------------------------------------------------------+
 int SampleTrajectory(vector<float> &probability)
   {
-// check.
+//--- check.
    ulong total = probability.Size();
    if(total <= 0)
       return -1;
-// randomize.
+//--- randomize.
    float rnd = float(MathRand() / 32767.0);
-// search.
+//--- search.
    if(rnd <= probability[0] || total == 1)
       return 0;
    if(rnd > probability[total - 2])
@@ -819,7 +870,7 @@ int SampleTrajectory(vector<float> &probability)
       while(probability[result - 1] >= rnd)
          result--;
      }
-// return result.
+//--- return result.
    return result;
   }
   {
@@ -836,23 +887,29 @@ public:
                     ~CDeal(void) {};
    vector<float>        Action(datetime current, double ask, double bid, int period_seconds);
   };
+//+------------------------------------------------------------------+
+//| Implements CDeal::CDeal.                                         |
+//+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
-   // Creates and manages object lifecycle for CloseTime.
+   //--- Creates and manages object lifecycle for CloseTime.
    CloseTime(0),
-   // Implements Type.
+   //--- Implements Type.
    Type(POSITION_TYPE_BUY),
-   // Implements Volume.
+   //--- Implements Volume.
    Volume(0),
-   // Implements OpenPrice.
+   //--- Implements OpenPrice.
    OpenPrice(0),
-   // Implements StopLos.
+   //--- Implements StopLos.
    StopLos(0),
-   // Implements TakeProfit.
+   //--- Implements TakeProfit.
    TakeProfit(0),
-   // Implements point.
+   //--- Implements point.
    point(1e-5)
   {
   }
+//+------------------------------------------------------------------+
+//| Implements CDeal::Action.                                        |
+//+------------------------------------------------------------------+
 vector<float> CDeal::Action(datetime current, double ask, double bid, int period_seconds)
   {
    vector<float> result = vector<float>::Zeros(NActions);
@@ -886,6 +943,9 @@ public:
    bool              LoadDeals(string file_name, string symbol, double point);
    vector<float>     Action(datetime current, double ask, double bid, int period_seconds);
   };
+//+------------------------------------------------------------------+
+//| Implements CDeals::LoadDeals.                                    |
+//+------------------------------------------------------------------+
 bool CDeals::LoadDeals(string file_name, string symbol, double point)
   {
    if(file_name == NULL || !FileIsExist(file_name, FILE_COMMON))
@@ -972,6 +1032,9 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
    FileClose(handle);
    return true;
   }
+//+------------------------------------------------------------------+
+//| Implements CDeals::Action.                                       |
+//+------------------------------------------------------------------+
 vector<float> CDeals::Action(datetime current, double ask, double bid, int period_seconds)
   {
    vector<float> result = vector<float>::Zeros(NActions);
@@ -990,5 +1053,4 @@ vector<float> CDeals::Action(datetime current, double ask, double bid, int perio
      }
    return result;
   }
-//+------------------------------------------------------------------+
-
+//+---+

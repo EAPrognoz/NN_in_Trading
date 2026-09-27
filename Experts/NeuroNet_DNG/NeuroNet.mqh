@@ -1,16 +1,15 @@
-//+------------------------------------------------------------------+
-//|                                                      NeuroNet.mqh|
-//|                   Facade include for the logical NeuroNet blocks.|
-//|                                               Copyright 2024, DNG|
-//|                                 https://www.mql5.com/ru/users/dng|
+﻿//+------------------------------------------------------------------+
+//|                                                     NeuroNet.mqh |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 
 #ifndef NEURONET_MQH
 #define NEURONET_MQH
 #define NEURONET_BUILDING_FACADE
-/// \file
-/// \brief NeuroNet.mqh
-/// Facade include for the logical NeuroNet blocks.
+//--- \file
+//--- \brief NeuroNet.mqh
+//--- Facade include for the logical NeuroNet blocks.
 //+------------------------------------------------------------------+
 #include "NeuroNet_Definitions.mqh"
 #include "NeuroNet_Declarations.mqh"
@@ -26,6 +25,4 @@
 #include "NeuroNet_Misc.mqh"
 #undef NEURONET_BUILDING_FACADE
 #endif // NEURONET_MQH
-
-
-//+------------------------------------------------------------------+
+//+---+

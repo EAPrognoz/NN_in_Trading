@@ -1,10 +1,15 @@
+﻿//+------------------------------------------------------------------+
+//|                                                  StudyOnline.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| StudyOnline.mq5                                                  |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 #property strict
+#property description "Харнесс онлайн-обучения и калибровки банков D2."
+#property description "Выполняет обучающие переходы на закрытых барах в режиме онлайн-калибровки."
+#property description "Только для тестов; ордера не выставляет."
 #include "Trajectory.mqh"
 //---
 input group                       "---- D2Skill online ----"
@@ -63,7 +68,7 @@ bool ResetD2SkillEpisodeInfluence(CNet &actor)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Accumulates one causal online virtual account outcome.            |
+//| Accumulates one causal online virtual account outcome.           |
 //+------------------------------------------------------------------+
 bool AccumulateOnlineOutcome(SD2SkillEpisodeOutcome &outcome,
                              CBufferFloat *account, const double reward)
@@ -177,7 +182,7 @@ bool FinishOnlinePair(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Drops an incomplete pair without emitting terminal utility.     |
+//| Drops an incomplete pair without emitting terminal utility.      |
 //+------------------------------------------------------------------+
 bool AbortOnlinePair(void)
   {
@@ -192,7 +197,8 @@ bool AbortOnlinePair(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Produces a Base action without disturbing the Skill recurrent state. |
+//| Produces a Base action without disturbing the Skill recurrent    |
+//| state.                                                           |
 //+------------------------------------------------------------------+
 bool BuildOnlineBaselineAction(void)
   {
@@ -269,9 +275,7 @@ bool TrainPreviousTransition(const bool terminal)
 //--- The live Forecast is at s_next.  Online reward is one step, so TD
 //--- bootstrap uses runtime-only target objects initialized from live files.
    double q1_target = 0, q2_target = 0;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!terminal)
      {
       if(!TargetActor.feedForward(GetPointer(Account), 1, false, GetPointer(D2SkillMarket), -1))
@@ -291,9 +295,7 @@ bool TrainPreviousTransition(const bool terminal)
       CBufferFloat *qt1 = NULL, *qt2 = NULL;
       TargetQ1.getResults(qt1);
       TargetQ2.getResults(qt2);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!qt1 || !qt2 || qt1.Total() != 1 || qt2.Total() != 1)
         {
          DeleteObj(qt1);
@@ -307,9 +309,7 @@ bool TrainPreviousTransition(const bool terminal)
    double observed = (AccountInfoDouble(ACCOUNT_EQUITY) - PreviousEquity +
                       AccountInfoDouble(ACCOUNT_BALANCE) - PreviousBalance) * PreviousBalance / EtalonBalance +
                      PreviousMarginPenalty;
-//+------------------------------------------------------------------+
-//| Match offline D2Skill: missing a move is penalized at one execu... |
-//+------------------------------------------------------------------+
+//--- Match offline D2Skill: missing a move is penalized at one execu...
    if(MathMax(double(Account[4]), double(Account[5])) < Symb.LotsMin())
      {
       const double point_cost = Symb.TickValue() / Symb.TickSize();
@@ -430,9 +430,7 @@ void OnTick(void)
   {
    if(!IsNewBar())
       return;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillRefreshLiveMarket(GetPointer(State), GetPointer(TimeState)))
      {
       PrintFormat("%s -> %d market", __FUNCTION__, __LINE__);
@@ -440,9 +438,7 @@ void OnTick(void)
          ExpertRemove();
       return;
      }
-//+------------------------------------------------------------------+
-//| clears/reruns explicit states, so sequence boundaries remain ... |
-//+------------------------------------------------------------------+
+//--- clears/reruns explicit states, so sequence boundaries remain ...
    if(!D2SkillForwardForecastState(GetPointer(State)))
      {
       PrintFormat("%s -> %d forecast", __FUNCTION__, __LINE__);
@@ -451,9 +447,7 @@ void OnTick(void)
       return;
      }
    double buy_value = 0, sell_value = 0;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillBuildLiveAccount(PreviousBalance, PreviousEquity, Rates[0].time, GetPointer(Account), buy_value, sell_value))
      {
       PrintFormat("%s -> %d account", __FUNCTION__, __LINE__);
@@ -479,15 +473,11 @@ void OnTick(void)
 //--- deposit is the only financial terminal state for online training.
    const bool terminal = (AccountInfoDouble(ACCOUNT_BALANCE) <= MinBalance);
    bool online_pair_boundary = false;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(HavePrevious)
      {
       PolicyCheckpointSafe = false;
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!TrainPreviousTransition(terminal))
         {
          PrintFormat("%s -> %d train: terminal recurrent-state failure", __FUNCTION__, __LINE__);
@@ -513,9 +503,7 @@ void OnTick(void)
       //--- Training ended at previous state. A terminal transition has no next
       //--- action, hence it must not rerun the current policy state.
       if(!terminal && (!CreateBuffers(0, GetPointer(State), GetPointer(TimeState), (CBufferFloat*)NULL) ||
-                       //+------------------------------------------------------------------+
-                       //| Function D2SkillForwardForecastState.                              |
-                       //+------------------------------------------------------------------+
+                       //--- Function D2SkillForwardForecastState.
                        !D2SkillForwardForecastState(GetPointer(State))))
         {
          PrintFormat("%s -> %d restore: terminal recurrent-state failure", __FUNCTION__, __LINE__);
@@ -547,9 +535,7 @@ void OnTick(void)
             }
          }
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(terminal)
      {
        PrintFormat("D2Skill online terminal: balance=%.2f "
@@ -570,9 +556,7 @@ void OnTick(void)
       return;
      }
    if(!Actor.feedForward(GetPointer(Account), 1, false, GetPointer(D2SkillMarket), -1) ||
-//+------------------------------------------------------------------+
-//| Function ReadAction.                                             |
-//+------------------------------------------------------------------+
+//--- Function ReadAction.
       !ReadAction(Actor, GetPointer(Action)) || !D2SkillValidateAction(GetPointer(Action)))
      {
       PrintFormat("%s -> %d action", __FUNCTION__, __LINE__);
@@ -590,9 +574,7 @@ void OnTick(void)
      }
    double margin_penalty = 0;
    bool market_closed = false;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillExecuteAction(GetPointer(Action), buy_value, sell_value, margin_penalty, market_closed))
      {
       PrintFormat("%s -> %d execute: terminal partial-trade risk", __FUNCTION__, __LINE__);
@@ -600,9 +582,7 @@ void OnTick(void)
       ExpertRemove();
       return;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(market_closed)
      {
       Print("D2Skill online execution deferred: market closed");
@@ -614,9 +594,7 @@ void OnTick(void)
      }
    if(margin_penalty < 0)
       PrintFormat("D2Skill online insufficient margin: penalty=%.2f", margin_penalty);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!StorePrevious())
      {
       PrintFormat("%s -> %d metadata: terminal post-trade failure", __FUNCTION__, __LINE__);
@@ -631,7 +609,4 @@ void OnTick(void)
    if(OnlinePairActive)
       OnlineVirtualTransitionPending = true;
   }
-//+------------------------------------------------------------------+
-
-
-//+------------------------------------------------------------------+
+//+---+

@@ -36,6 +36,13 @@
 #define ActFunc_GELU          4
 #define ActFunc_MinusSoftPlus 5
 #define ActFunc_ELU           6
+//--- Spectral Risk Measure risk types (FQF_SRMForward)
+#define SRM_MEAN              0
+#define SRM_CVAR              1
+#define SRM_MEAN_CVAR         2
+#define SRM_EXPONENTIAL       3
+#define SRM_DUAL_POWER        4
+#define SRM_PARAMETER_EPS     1.0e-6f
 //---
 #define BarrierLoc      barrier(CLK_LOCAL_MEM_FENCE);
 //+------------------------------------------------------------------+
@@ -380,73 +387,73 @@ __kernel void FeedForward(__global const float *matrix_w, ///<[in] Weights matri
                           ///< of neurons in layer and n - number of outputs
                           ///< (neurons in next layer)
                           __global const float *matrix_i, ///<[in] Inputs tensor
-                           __global float *matrix_o, ///<[out] Output tensor
-                           const int inputs,               ///< Number of inputs
-                           const int activation,           ///< Activation type (#ENUM_ACTIVATION)
-                           __global float *numeric_flags,  ///<[out] One status per output
-                           const int flags_enabled
-                          )
+                          __global float *matrix_o, ///<[out] Output tensor
+                          const int inputs,               ///< Number of inputs
+                          const int activation,           ///< Activation type (#ENUM_ACTIVATION)
+                          __global float *numeric_flags,  ///<[out] One status per output
+                          const int flags_enabled
+                         )
   {
    const int i = get_global_id(0);
    const int total_out = get_global_size(0);
    const int loc = get_local_id(1);
-    const int total_loc = get_local_size(1);
+   const int total_loc = get_local_size(1);
 //---
-    __local float Temp[LOCAL_ARRAY_SIZE];
-    __local float FlagTemp[LOCAL_ARRAY_SIZE];
+   __local float Temp[LOCAL_ARRAY_SIZE];
+   __local float FlagTemp[LOCAL_ARRAY_SIZE];
 //---
-    float sum = 0;
-    float inp;
-    float invalid = 0;
-    int shift = RCtoFlat(i, 0, total_out, (inputs + 1), 0);
-    for(int k = loc; k < inputs; k += total_loc)
-      {
-       if(flags_enabled)
-         {
-          const float raw_inp = matrix_i[k];
-          const float raw_weight = matrix_w[shift + k];
-          const float raw_product = raw_inp * raw_weight;
-          invalid += (isnan(raw_inp) || isinf(raw_inp) || isnan(raw_weight) || isinf(raw_weight) ||
-                      isnan(raw_product) || isinf(raw_product));
-         }
-       inp = IsNaNOrInf(matrix_i[k], 0.0f);
-       if(inp == 0.0f)
-          continue;
-       sum += IsNaNOrInf(inp * matrix_w[shift + k], 0.0f);
-      }
-    if(loc == 0)
-      {
-       if(flags_enabled)
-         {
-          const float raw_bias = matrix_w[shift + inputs];
-          invalid += isnan(raw_bias) || isinf(raw_bias);
-         }
-       sum += IsNaNOrInf(matrix_w[shift + inputs], 0.0f);
-      }
-    if(flags_enabled)
-       invalid += isnan(sum) || isinf(sum);
-    if(total_loc > 1)
-       sum = LocalSum(sum, 1, Temp);
-    if(flags_enabled)
-      {
-       if(total_loc > 1)
-          invalid += isnan(Temp[0]) || isinf(Temp[0]);
-       invalid = LocalSum(invalid, 1, FlagTemp);
-      }
+   float sum = 0;
+   float inp;
+   float invalid = 0;
+   int shift = RCtoFlat(i, 0, total_out, (inputs + 1), 0);
+   for(int k = loc; k < inputs; k += total_loc)
+     {
+      if(flags_enabled)
+        {
+         const float raw_inp = matrix_i[k];
+         const float raw_weight = matrix_w[shift + k];
+         const float raw_product = raw_inp * raw_weight;
+         invalid += (isnan(raw_inp) || isinf(raw_inp) || isnan(raw_weight) || isinf(raw_weight) ||
+                     isnan(raw_product) || isinf(raw_product));
+        }
+      inp = IsNaNOrInf(matrix_i[k], 0.0f);
+      if(inp == 0.0f)
+         continue;
+      sum += IsNaNOrInf(inp * matrix_w[shift + k], 0.0f);
+     }
+   if(loc == 0)
+     {
+      if(flags_enabled)
+        {
+         const float raw_bias = matrix_w[shift + inputs];
+         invalid += isnan(raw_bias) || isinf(raw_bias);
+        }
+      sum += IsNaNOrInf(matrix_w[shift + inputs], 0.0f);
+     }
+   if(flags_enabled)
+      invalid += isnan(sum) || isinf(sum);
+   if(total_loc > 1)
+      sum = LocalSum(sum, 1, Temp);
+   if(flags_enabled)
+     {
+      if(total_loc > 1)
+         invalid += isnan(Temp[0]) || isinf(Temp[0]);
+      invalid = LocalSum(invalid, 1, FlagTemp);
+     }
 //---
-    if(loc == 0)
-      {
-       if(flags_enabled)
-          invalid += isnan(sum) || isinf(sum);
-//--- Preserve the activation result for the numerical flag before storing it.
-       const float activation_value = fActivation(sum, activation);
-       if(flags_enabled)
-         {
-          invalid += isnan(activation_value) || isinf(activation_value);
-          numeric_flags[i] = (invalid > 0.0f ? 1.0f : 0.0f);
-         }
-       matrix_o[i] = activation_value;
-      }
+   if(loc == 0)
+     {
+      if(flags_enabled)
+         invalid += isnan(sum) || isinf(sum);
+      //--- Preserve the activation result for the numerical flag before storing it.
+      const float activation_value = fActivation(sum, activation);
+      if(flags_enabled)
+        {
+         invalid += isnan(activation_value) || isinf(activation_value);
+         numeric_flags[i] = (invalid > 0.0f ? 1.0f : 0.0f);
+        }
+      matrix_o[i] = activation_value;
+     }
   }
 //+------------------------------------------------------------------+
 ///\ingroup neuron_base_gr  Neuron Base Output Gradients Calculation kernel
@@ -1154,29 +1161,29 @@ __kernel void SumMatrix(__global float *matrix1,    ///<[in] First matrix
                         float multiplyer,           ///< Multiplyer for output
                         int shift_in1,              ///< Shift for input 1
                         int shift_in2,              ///< Shift for input 2
-                         int shift_out,              ///< Shift for output
-                         __global float *numeric_flags,
-                         const int flags_enabled
+                        int shift_out,              ///< Shift for output
+                        __global float *numeric_flags,
+                        const int flags_enabled
                        )
   {
    const int i = get_global_id(0);
    const int step = get_global_size(0);
 //---
-    for(int k = 0; k < dimension; k++)
-      {
-       int index = i * dimension + k;
-       if(flags_enabled)
-         {
-          const float value1 = matrix1[i * shift_in1 + index];
-          const float value2 = matrix2[i * shift_in2 + index];
-          const float raw_sum = value1 + value2;
-          const float raw_result = raw_sum * multiplyer;
-          const int invalid = isnan(value1) || isinf(value1) || isnan(value2) || isinf(value2) ||
-                              isnan(raw_sum) || isinf(raw_sum) || isnan(raw_result) || isinf(raw_result);
-          numeric_flags[index] = (invalid ? 1.0f : 0.0f);
-         }
-       matrix_out[i * shift_out + index] =
-          IsNaNOrInf((matrix1[i * shift_in1 + index] + matrix2[i * shift_in2 + index]) * multiplyer, 0);
+   for(int k = 0; k < dimension; k++)
+     {
+      int index = i * dimension + k;
+      if(flags_enabled)
+        {
+         const float value1 = matrix1[i * shift_in1 + index];
+         const float value2 = matrix2[i * shift_in2 + index];
+         const float raw_sum = value1 + value2;
+         const float raw_result = raw_sum * multiplyer;
+         const int invalid = isnan(value1) || isinf(value1) || isnan(value2) || isinf(value2) ||
+                             isnan(raw_sum) || isinf(raw_sum) || isnan(raw_result) || isinf(raw_result);
+         numeric_flags[index] = (invalid ? 1.0f : 0.0f);
+        }
+      matrix_out[i * shift_out + index] =
+         IsNaNOrInf((matrix1[i * shift_in1 + index] + matrix2[i * shift_in2 + index]) * multiplyer, 0);
      }
   }
 //+------------------------------------------------------------------+
@@ -1316,10 +1323,11 @@ __kernel void NormalizeWeights(__global float *buffer, int dimension)
 //---
    do
      {
-      for(int i = 0; (i < dimension && !(isnan(sum) || !isinf(sum))); i++)
+      sum = 0;
+      for(int i = 0; (i < dimension && !(isnan(sum) || isinf(sum))); i++)
         {
          float normalized = IsNaNOrInf(buffer[shift + i], 0) / k;
-         sum = normalized * normalized / dimension;
+         sum += normalized * normalized;
         }
       if(isnan(sum) || isinf(sum))
          k *= 10;
@@ -1817,22 +1825,22 @@ __kernel void VAE_FeedForward(__global float *inputs, __global float *random,
   {
    uint i = (uint)get_global_id(0);
    uint total = (uint)get_global_size(0);
-    if(flags_enabled)
-      {
-//--- Read the raw VAE operands before this work-item updates a potentially aliased output.
-       const float mean = inputs[i];
-       const float log_var = inputs[i + total];
-       const float epsilon = random[i];
-       const float half_log_var = 0.5f * log_var;
-       const float sigma = exp(half_log_var);
-       const float product = IsNaNOrInf(sigma, 0) * epsilon;
-       const float raw_result = IsNaNOrInf(mean, 0) + product;
-       const int invalid = isnan(mean) || isinf(mean) || isnan(log_var) || isinf(log_var) ||
-                           isnan(epsilon) || isinf(epsilon) || isnan(half_log_var) || isinf(half_log_var) ||
-                           isnan(sigma) || isinf(sigma) || isnan(product) || isinf(product) ||
-                           isnan(raw_result) || isinf(raw_result);
-       numeric_flags[i] = (invalid ? 1.0f : 0.0f);
-      }
+   if(flags_enabled)
+     {
+      //--- Read the raw VAE operands before this work-item updates a potentially aliased output.
+      const float mean = inputs[i];
+      const float log_var = inputs[i + total];
+      const float epsilon = random[i];
+      const float half_log_var = 0.5f * log_var;
+      const float sigma = exp(half_log_var);
+      const float product = IsNaNOrInf(sigma, 0) * epsilon;
+      const float raw_result = IsNaNOrInf(mean, 0) + product;
+      const int invalid = isnan(mean) || isinf(mean) || isnan(log_var) || isinf(log_var) ||
+                          isnan(epsilon) || isinf(epsilon) || isnan(half_log_var) || isinf(half_log_var) ||
+                          isnan(sigma) || isinf(sigma) || isnan(product) || isinf(product) ||
+                          isnan(raw_result) || isinf(raw_result);
+      numeric_flags[i] = (invalid ? 1.0f : 0.0f);
+     }
    outputs[i] = IsNaNOrInf(inputs[i], 0) + IsNaNOrInf(exp(0.5f * inputs[i + total]), 0) * random[i];
   }
 //+------------------------------------------------------------------+
@@ -2255,6 +2263,575 @@ __kernel void FQF_CosineGradient(__global float *softmax,
                 softmax[shift + it] / temp;
      }
    softmax_gr[shift + i] += result;
+  }
+//+------------------------------------------------------------------+
+//| Computes the exact cosine-feature gradient used ONLY by the      |
+//| Complexity: O(N^2) per task (each row i sums N-1 neighbor terms). |
+//| CNeuronACSRM specialized backward ::propagateACSRMGradients.     |
+//|   c_i = cos(pi*i*tau_i),  tau_i = sum_{j<i} p_j + p_i/2          |
+//|   d c_i / d p_i = -pi*i*sin(pi*i*tau_i) * (1/2)         (own)    |
+//|   d c_i / d p_k = -pi*i*sin(pi*i*tau_i)                 (k < i)  |
+//| The legacy ::FQF_CosineGradient above keeps the original base    |
+//| library behaviour for CNeuronFQF / CNeuronSoftActorCritic.       |
+//+------------------------------------------------------------------+
+__kernel void FQF_CosineGradientSRM(__global float *softmax,
+                                    __global float *output_gr,
+                                    __global float *softmax_gr)
+  {
+   size_t i = get_global_id(0);
+   size_t total = get_global_size(0);
+   size_t action = get_global_id(1);
+   int shift = action * total;
+//---
+   float cumul = 0;
+//---
+   for(int it = 0; it < i; it++)
+      cumul += softmax[shift + it];
+   float result = -0.5f * M_PI_F * i *
+                  sin(M_PI_F * i * (cumul + softmax[shift + i] / 2)) *
+                  output_gr[shift + i];
+//---
+   for(int it = i + 1; it < total; it++)
+     {
+      cumul += softmax[shift + it - 1];
+      float temp = cumul + softmax[shift + it] / 2;
+      result += -M_PI_F * it * sin(M_PI_F * it * temp) * output_gr[shift + it];
+     }
+   softmax_gr[shift + i] += result;
+  }
+//+------------------------------------------------------------------+
+//| FQF Distribution Target Gradient                                 |
+//+------------------------------------------------------------------+
+//| Computes the fqf distribution target gradient contributions on   |
+//| the GPU. For one observed scalar target y the kernel selects the |
+//| nearest representative k = argmin_i |z_i - y| over valid         |
+//| quantiles and writes one-hot supervision gradients to both       |
+//| gradient buffers.                                                |
+//+------------------------------------------------------------------+
+__kernel void FQF_DistributionTargetGradient(__global float *quantiles,
+      __global float *probabilities,
+      __global float *quantiles_gr,
+      __global float *probabilities_gr,
+      const float target,
+      const float probability_weight,
+      const float value_weight)
+  {
+   const size_t i = get_local_id(0);
+   const size_t total = get_local_size(0);
+   const size_t v = get_global_id(1);
+   const size_t total_v = get_global_size(1);
+//---
+   __local float Temp[LOCAL_ARRAY_SIZE];
+//--- invalid target or quantile maps to MAX_VALUE and cannot win
+//--- the nearest-representative reduction
+   const int target_valid = !(isnan(target) || isinf(target));
+   const float zi = quantiles[RCtoFlat(v,i,total_v,total,0)];
+   const int z_valid = target_valid && !(isnan(zi) || isinf(zi));
+   const float distance = (z_valid ? fabs(zi - target) : MAX_VALUE);
+   const float min_distance = LocalMin(distance, 0, Temp);
+   BarrierLoc;
+//--- among equally close representatives select the maximum centroid;
+//--- this makes an ambiguous Critic correction act on the
+//--- overestimated representative
+   float centroid_candidate = MIN_VALUE;
+   if(z_valid && distance == min_distance)
+      centroid_candidate = zi;
+   const float selected_centroid = LocalMax(centroid_candidate, 0, Temp);
+   BarrierLoc;
+//--- if several representatives have exactly the same selected
+//--- centroid, use the minimal index only as a deterministic tie-break
+   float index_candidate = MAX_VALUE;
+   if(z_valid && zi == selected_centroid)
+      index_candidate = (float)i;
+   const float selected_index = LocalMin(index_candidate, 0, Temp);
+   const int found = (selected_index >= 0.0f && selected_index < (float)total);
+   const size_t k = (found ? (size_t)selected_index : total);
+//---
+   const float pi = IsNaNOrInf(probabilities[RCtoFlat(v,i,total_v,total,0)], 0.0f);
+//--- value gradient
+   quantiles_gr[RCtoFlat(v,i,total_v,total,0)] = (found && i == k ? value_weight * (target - zi) : 0.0f);
+//--- probability gradient at SoftMax output
+   probabilities_gr[RCtoFlat(v,i,total_v,total,0)] = (found && i == k ? probability_weight / (pi + 1.0e-37f) : 0.0f);
+  }
+//+------------------------------------------------------------------+
+//| FQF Sample                                                       |
+//+------------------------------------------------------------------+
+//| Samples one scalar realization per independent distribution.     |
+//| One work-group owns one task: it reads its N probabilities once, |
+//| builds the local inclusive CDF with a prefix scan, locates u_t   |
+//| inside the CDF and only the winning item reads its centroid.     |
+//+------------------------------------------------------------------+
+__kernel void FQF_Sample(__global float *quantiles,
+                         __global float *probabilities,
+                         __global float *random,
+                         __global float *result)
+  {
+   const size_t i = get_local_id(0);
+   const size_t total = get_local_size(0);
+   const size_t task = get_group_id(1);
+   const size_t tasks = get_num_groups(1);
+//---
+   __local float Temp[LOCAL_ARRAY_SIZE];
+//--- row = task, column = quantile, row width = total (single variable)
+   const size_t index = RCtoFlat(task, i, tasks, total, 0);
+//--- every task has its own uniform random value u_t in [0, 1]
+   const float rnd = fmin(fmax(IsNaNOrInf(random[task], 0.5f), 0.0f), 1.0f);
+//--- one probability read per element; NaN/Inf/negative maps to 0
+   const float pi = fmax(IsNaNOrInf(probabilities[index], 0.0f), 0.0f);
+//--- local inclusive prefix scan: Temp[i] = CDF_i = sum_{j<=i} p_j
+   Temp[i] = pi;
+   BarrierLoc;
+   for(size_t offset = 1;
+       offset < total;
+       offset <<= 1)
+     {
+      const float add = (i >= offset ? Temp[i - offset] : 0.0f);
+      BarrierLoc;
+      if(i >= offset)
+         Temp[i] += add;
+      BarrierLoc;
+     }
+//--- destroyed or non-finite distribution (mass ~ 0, or the float32 sum
+//--- overflowed to +Inf/NaN): neutral sample 0 written by i == 0
+   const float mass = IsNaNOrInf(Temp[total - 1], 0.0f);
+   if(mass <= 1.0e-6f)
+     {
+      if(i == 0)
+         result[task] = 0.0f;
+      return;
+     }
+//--- first interval containing u_t: CDF_i >= u_t and CDF_{i-1} < u_t
+   const float threshold = rnd * mass;
+   const float cumulative = Temp[i];
+   const float previous = (i == 0 ? 0.0f : Temp[i - 1]);
+   bool selected = cumulative >= threshold && (i == 0 || previous < threshold);
+//--- float rounding fallback: force the last element
+   if(i == total - 1 &&
+      cumulative < threshold)
+      selected = true;
+//--- the parallel prefix scan is float32; the CDF can locally decrease by
+//--- one ulp, so several items may satisfy the crossing test. Keep the
+//--- candidate index in a private register, then LocalMin selects one
+//--- deterministic winner (the smallest index). The barrier after the
+//--- candidate guarantees every work-item already consumed its CDF value
+//--- (Temp) before the reduction reuses the scratch buffer.
+   const float candidate = (selected ? (float)i : (float)total);
+   BarrierLoc;
+   const float winner = LocalMin(candidate, 0, Temp);
+   BarrierLoc;
+//--- only the single winning item reads its centroid through RCtoFlat
+   if(winner == (float)i)
+     {
+      const float value = quantiles[index];
+      result[task] = IsNaNOrInf(value, 0.0f);
+     }
+  }
+//+------------------------------------------------------------------+
+//| FQF SRM Cumulative Spectral Function                             |
+//+------------------------------------------------------------------+
+//| Returns the cumulative spectral mass Phi(u) = int_0^u phi(v) dv  |
+//| for the selected spectral risk measure. The result is clamped    |
+//| to [0, 1] and the kernel always stays finite; parameter          |
+//| validation happens on the MQL5 side before the launch.           |
+//+------------------------------------------------------------------+
+float SRMCumulative(const float u,
+                    const int risk_type,
+                    const float risk_parameter,
+                    const float mean_weight)
+  {
+   const float tau = fmin(fmax(u, 0.0f), 1.0f);
+//---
+   switch(risk_type)
+     {
+      case SRM_MEAN:
+         return tau;
+      case SRM_CVAR:
+        {
+         const float alpha =
+            fmin(fmax(risk_parameter, SRM_PARAMETER_EPS), 1.0f);
+         return fmin(fmax(fmin(tau, alpha) / alpha, 0.0f), 1.0f);
+        }
+      case SRM_MEAN_CVAR:
+        {
+         const float alpha =
+            fmin(fmax(risk_parameter, SRM_PARAMETER_EPS), 1.0f);
+         const float omega =
+            fmin(fmax(mean_weight, 0.0f), 1.0f);
+         return fmin(fmax(omega * tau +
+                          (1.0f - omega) * fmin(tau, alpha) / alpha,
+                          0.0f), 1.0f);
+        }
+      case SRM_EXPONENTIAL:
+        {
+//--- expm1 is supported by the target OpenCL compiler
+         const float lambda = fmax(risk_parameter, 0.0f);
+         if(lambda <= SRM_PARAMETER_EPS)
+            return tau;
+         const float denominator = -expm1(-lambda);
+         const float numerator = -expm1(-lambda * tau);
+         return fmin(fmax(numerator / denominator, 0.0f), 1.0f);
+        }
+      case SRM_DUAL_POWER:
+        {
+         const float nu = fmax(risk_parameter, 1.0f);
+         return fmin(fmax(1.0f - pow(1.0f - tau, nu), 0.0f), 1.0f);
+        }
+      default:
+         return 0.0f;
+     }
+  }
+//+------------------------------------------------------------------+
+//| FQF SRM Density                                                  |
+//+------------------------------------------------------------------+
+//| Returns the spectral density phi(u) = dPhi(u)/du of the selected |
+//| risk measure; it is the exact derivative of ::SRMCumulative.     |
+//| CVaR and Mean-CVaR use the right-hand derivative at u == alpha,  |
+//| Exponential falls back to the Mean density at lambda <= EPS.     |
+//+------------------------------------------------------------------+
+float SRMDensity(const float u,
+                 const int risk_type,
+                 const float risk_parameter,
+                 const float mean_weight)
+  {
+   const float tau = fmin(fmax(u, 0.0f), 1.0f);
+//---
+   switch(risk_type)
+     {
+      case SRM_MEAN:
+         return 1.0f;
+      case SRM_CVAR:
+        {
+         const float alpha =
+            fmin(fmax(risk_parameter, SRM_PARAMETER_EPS), 1.0f);
+         return (tau < alpha ? 1.0f / alpha : 0.0f);
+        }
+      case SRM_MEAN_CVAR:
+        {
+         const float alpha =
+            fmin(fmax(risk_parameter, SRM_PARAMETER_EPS), 1.0f);
+         const float omega =
+            fmin(fmax(mean_weight, 0.0f), 1.0f);
+         return (tau < alpha ?
+                 omega + (1.0f - omega) / alpha :
+                 omega);
+        }
+      case SRM_EXPONENTIAL:
+        {
+//--- expm1 is supported by the target OpenCL compiler
+         const float lambda = fmax(risk_parameter, 0.0f);
+         if(lambda <= SRM_PARAMETER_EPS)
+            return 1.0f;
+         const float denominator = -expm1(-lambda);
+         return fmax(lambda * exp(-lambda * tau) / denominator, 0.0f);
+        }
+      case SRM_DUAL_POWER:
+        {
+         const float nu = fmax(risk_parameter, 1.0f);
+         if(nu == 1.0f)
+            return 1.0f;
+         return fmax(nu * pow(1.0f - tau, nu - 1.0f), 0.0f);
+        }
+      default:
+         return 0.0f;
+     }
+  }
+//+------------------------------------------------------------------+
+//| FQF SRM Forward                                                  |
+//+------------------------------------------------------------------+
+//| Convolves one FQF distribution per work-group into the scalar    |
+//| spectral risk measure rho_t = sum_i w_i z_i. The probabilities   |
+//| are prefix-scanned into the local inclusive CDF, the adaptive    |
+//| interval bounds are normalized by the total mass and the exact   |
+//| spectral mass of every interval is Phi(tau_high) - Phi(tau_low). |
+//+------------------------------------------------------------------+
+__kernel void FQF_SRMForward(__global float *quantiles,
+                             __global float *probabilities,
+                             __global float *result,
+                             const int risk_type,
+                             const float risk_parameter,
+                             const float mean_weight)
+  {
+   const size_t i = get_local_id(0);
+   const size_t total = get_local_size(0);
+   const size_t task = get_group_id(1);
+   const size_t tasks = get_num_groups(1);
+//---
+   __local float Temp[LOCAL_ARRAY_SIZE];
+//--- row = task, column = quantile, row width = total (single variable)
+   const size_t index = RCtoFlat(task, i, tasks, total, 0);
+//--- one probability read per element; NaN/Inf/negative maps to 0
+   float pi = probabilities[index];
+   pi = fmax(IsNaNOrInf(pi, 0.0f), 0.0f);
+//--- local inclusive prefix scan: Temp[i] = CDF_i = sum_{j<=i} p_j
+   Temp[i] = pi;
+   BarrierLoc;
+   for(size_t offset = 1;
+       offset < total;
+       offset <<= 1)
+     {
+      const float add =
+         (i >= offset ?
+          Temp[i - offset] :
+          0.0f);
+
+      BarrierLoc;
+
+      if(i >= offset)
+         Temp[i] += add;
+
+      BarrierLoc;
+     }
+//--- destroyed distribution (total mass ~ 0): neutral risk 0
+   const float mass = Temp[total - 1];
+
+   if(IsNaNOrInf(mass, 0.0f) <= 1.0e-37f)
+     {
+      if(i == 0)
+         result[task] = 0.0f;
+      return;
+     }
+//--- normalize the probability axis by the actual total mass
+   const float inv_mass = 1.0f / mass;
+
+   const float tau_high =
+      fmin(fmax(Temp[i] * inv_mass, 0.0f), 1.0f);
+
+   const float tau_low =
+      (i == 0 ?
+       0.0f :
+       fmin(fmax(Temp[i - 1] * inv_mass, 0.0f), 1.0f));
+//--- exact spectrum mass of the adaptive interval
+   const float spectral_high =
+      SRMCumulative(tau_high,
+                    risk_type,
+                    risk_parameter,
+                    mean_weight);
+
+   const float spectral_low =
+      SRMCumulative(tau_low,
+                    risk_type,
+                    risk_parameter,
+                    mean_weight);
+
+   const float weight =
+      fmax(spectral_high - spectral_low, 0.0f);
+//--- distribution value of the same FQF grid index
+   const float zi =
+      IsNaNOrInf(quantiles[index], 0.0f);
+
+   const float contribution =
+      weight * zi;
+//--- CDF is no longer needed
+   BarrierLoc;
+//--- reduce the weighted returns over the work-group
+   const float risk =
+      LocalSum(contribution, 0, Temp);
+
+   if(i == 0)
+      result[task] =
+         IsNaNOrInf(risk, 0.0f);
+  }
+//+------------------------------------------------------------------+
+//| FQF SRM Gradient                                                 |
+//+------------------------------------------------------------------+
+//| Back-propagates the upstream scalar risk-score gradient g_t of   |
+//| rho_t = sum_i w_i z_i. One work-group per task: the centroid     |
+//| gradient is g_t * (Phi(tau_high) - Phi(tau_low)) and the         |
+//| probability gradient is assembled from a reverse scan over the   |
+//| adaptive CDF-boundary derivatives as (A_k - B) / M, using the    |
+//| same mass normalization and sanitization as ::FQF_SRMForward.    |
+//+------------------------------------------------------------------+
+__kernel void FQF_SRMGradient(__global float *quantiles,
+                              __global float *probabilities,
+                              __global float *result_gradient,
+                              __global float *quantiles_gradient,
+                              __global float *probabilities_gradient,
+                              const int risk_type,
+                              const float risk_parameter,
+                              const float mean_weight)
+  {
+   const size_t i = get_local_id(0);
+   const size_t total = get_local_size(0);
+   const size_t task = get_group_id(1);
+   const size_t tasks = get_num_groups(1);
+//---
+   __local float Temp[LOCAL_ARRAY_SIZE];
+//--- row = task, column = quantile, row width = total (single variable)
+   const size_t index = RCtoFlat(task, i, tasks, total, 0);
+//--- sanitize inputs; validity flags repeat the forward masking
+   const float raw_pi = probabilities[index];
+   const bool p_valid =
+      !(isnan(raw_pi) || isinf(raw_pi)) &&
+      raw_pi >= 0.0f;
+   const float pi =
+      fmax(IsNaNOrInf(raw_pi, 0.0f), 0.0f);
+
+   const float raw_zi = quantiles[index];
+   const bool z_valid =
+      !(isnan(raw_zi) || isinf(raw_zi));
+   const float zi =
+      IsNaNOrInf(raw_zi, 0.0f);
+
+   const float upstream =
+      IsNaNOrInf(result_gradient[task], 0.0f);
+//--- zero upstream: gradients vanish identically (avoids 0*Inf NaN paths)
+   if(upstream == 0.0f)
+     {
+      quantiles_gradient[index] = 0.0f;
+      probabilities_gradient[index] = 0.0f;
+      return;
+     }
+//--- local inclusive prefix scan: Temp[i] = CDF_i = sum_{j<=i} p_j
+   Temp[i] = pi;
+   BarrierLoc;
+
+   for(size_t offset = 1;
+       offset < total;
+       offset <<= 1)
+     {
+      const float add =
+         (i >= offset ?
+          Temp[i - offset] :
+          0.0f);
+
+      BarrierLoc;
+
+      if(i >= offset)
+         Temp[i] += add;
+
+      BarrierLoc;
+     }
+//--- destroyed distribution (total mass ~ 0): neutral gradients only
+   const float mass =
+      IsNaNOrInf(Temp[total - 1], 0.0f);
+
+   if(mass <= 1.0e-37f)
+     {
+      quantiles_gradient[index] = 0.0f;
+      probabilities_gradient[index] = 0.0f;
+      return;
+     }
+//--- normalize the probability axis by the actual total mass
+   const float inv_mass = 1.0f / mass;
+
+   const float tau_high =
+      fmin(fmax(Temp[i] * inv_mass, 0.0f), 1.0f);
+
+   const float tau_low =
+      (i == 0 ?
+       0.0f :
+       fmin(fmax(Temp[i - 1] * inv_mass, 0.0f), 1.0f));
+//--- exact spectrum mass of the adaptive interval (same as forward)
+   const float spectral_high =
+      SRMCumulative(tau_high,
+                    risk_type,
+                    risk_parameter,
+                    mean_weight);
+
+   const float spectral_low =
+      SRMCumulative(tau_low,
+                    risk_type,
+                    risk_parameter,
+                    mean_weight);
+
+   const float weight =
+      fmax(spectral_high - spectral_low, 0.0f);
+//--- direct centroid gradient: g_t * w_i (invalid centroid -> 0)
+   quantiles_gradient[index] =
+      (z_valid ?
+       IsNaNOrInf(upstream * weight, 0.0f) :
+       0.0f);
+//--- stage sanitized centroids into local memory for neighbor reads
+   BarrierLoc;
+
+   Temp[i] = zi;
+
+   BarrierLoc;
+
+   const float next_z =
+      (i + 1 < total ?
+       Temp[i + 1] :
+       zi);
+//--- derivative of rho w.r.t. the adaptive CDF boundary tau_i
+   const float boundary_gradient =
+      (i + 1 < total ?
+       IsNaNOrInf(upstream *
+                  (zi - next_z) *
+                  SRMDensity(tau_high,
+                             risk_type,
+                             risk_parameter,
+                             mean_weight),
+                  0.0f) :
+       0.0f);
+//--- reverse inclusive scan: Temp[i] = A_i = sum_{j>=i} a_j
+   BarrierLoc;
+
+   Temp[i] = boundary_gradient;
+
+   BarrierLoc;
+
+   for(size_t offset = 1;
+       offset < total;
+       offset <<= 1)
+     {
+      const float add =
+         (i + offset < total ?
+          Temp[i + offset] :
+          0.0f);
+
+      BarrierLoc;
+
+      if(i + offset < total)
+         Temp[i] += add;
+
+      BarrierLoc;
+     }
+
+   const float suffix = Temp[i];
+//--- normalization correction B = sum_q q_i A_i (one local reduction)
+   const float normalized_probability =
+      pi * inv_mass;
+
+   const float correction =
+      LocalSum(normalized_probability * suffix,
+               0,
+               Temp);
+//--- direct probability gradient: (A_i - B) / M (invalid p -> 0)
+   probabilities_gradient[index] =
+      (p_valid ?
+       IsNaNOrInf((suffix - correction) * inv_mass, 0.0f) :
+       0.0f);
+  }
+//+------------------------------------------------------------------+
+//| FQF Fraction Gradient                                            |
+//+------------------------------------------------------------------+
+//| Exact input gradient of the fraction proposal head. For the      |
+//| plain linear fraction layer the full graph derivative d rho/d x   |
+//| receives the probability branch (dP/dx)^T g_P = W^T * g_probs.   |
+//| Unlike ::CalcHiddenGradient this kernel applies no activation     |
+//| clipping: it mirrors the clamp-free arithmetic of                |
+//| ::FQF_QuantileGradient so the composite FQF layer propagates the |
+//| exact chain-rule gradient to its input.                          |
+//+------------------------------------------------------------------+
+__kernel void FQF_FractionGradient(__global float *matrix_w,
+                                   __global float *gradient,
+                                   __global float *input_gr,
+                                   const int outputs)
+  {
+   const uint i = get_global_id(0);
+   const uint inputs = get_global_size(0);
+   const uint loc = get_local_id(1);
+   const uint total_loc = get_local_size(1);
+//---
+   __local float Temp[LOCAL_ARRAY_SIZE];
+//---
+   float sum = 0;
+   for(int k = (int)loc; k < outputs; k += (int)total_loc)
+      sum += matrix_w[k * (inputs + 1) + i] * gradient[k];
+   if(total_loc > 1)
+      sum = LocalSum(sum, 1, Temp);
+   if(loc == 0)
+      input_gr[i] = IsNaNOrInf(sum, 0.0f);
   }
 //+------------------------------------------------------------------+
 //| Sparse Attention                                                 |
@@ -4714,12 +5291,12 @@ __kernel void MatMult(__global const float *matr1,
                       __global const float *matr2,
                       __global float *result,
                       int dimension,
-                       int multvarsecond,
-                       int offset_matr1,
-                       int offset_matr2,
-                       int offset_result,
-                       __global float *numeric_flags,
-                       const int flags_enabled)
+                      int multvarsecond,
+                      int offset_matr1,
+                      int offset_matr2,
+                      int offset_result,
+                      __global float *numeric_flags,
+                      const int flags_enabled)
   {
    size_t row = get_global_id(0);
    size_t col = get_global_id(1);
@@ -4731,31 +5308,31 @@ __kernel void MatMult(__global const float *matr1,
    int shift2 = offset_matr2 + RCtoFlat(0, col, dimension, cols, multvarsecond * var);
    int shift_out = offset_result + RCtoFlat(row, col, rows, cols, var);
 //---
-    float res = 0;
-    int invalid = 0;
+   float res = 0;
+   int invalid = 0;
 //---
-    for(int i = 0; i < dimension; i++)
-      {
-       if(flags_enabled)
-         {
-          const float value1 = matr1[shift1 + i];
-          const float value2 = matr2[shift2 + i * cols];
-          const float product = value1 * value2;
-          invalid |= isnan(value1) || isinf(value1) || isnan(value2) || isinf(value2) ||
-                     isnan(product) || isinf(product);
-         }
-//--- Preserve the legacy sanitized accumulation after checking its raw operands.
-       res += IsNaNOrInf(matr1[shift1 + i] * matr2[shift2 + i * cols], 0);
-       if(flags_enabled)
-          invalid |= isnan(res) || isinf(res);
-      }
+   for(int i = 0; i < dimension; i++)
+     {
+      if(flags_enabled)
+        {
+         const float value1 = matr1[shift1 + i];
+         const float value2 = matr2[shift2 + i * cols];
+         const float product = value1 * value2;
+         invalid |= isnan(value1) || isinf(value1) || isnan(value2) || isinf(value2) ||
+                    isnan(product) || isinf(product);
+        }
+      //--- Preserve the legacy sanitized accumulation after checking its raw operands.
+      res += IsNaNOrInf(matr1[shift1 + i] * matr2[shift2 + i * cols], 0);
+      if(flags_enabled)
+         invalid |= isnan(res) || isinf(res);
+     }
 //---
-    if(flags_enabled)
-      {
-       invalid |= isnan(res) || isinf(res);
-       numeric_flags[RCtoFlat(row, col, rows, cols, var)] = (invalid ? 1.0f : 0.0f);
-      }
-    result[shift_out] = res;
+   if(flags_enabled)
+     {
+      invalid |= isnan(res) || isinf(res);
+      numeric_flags[RCtoFlat(row, col, rows, cols, var)] = (invalid ? 1.0f : 0.0f);
+     }
+   result[shift_out] = res;
   }
 //+------------------------------------------------------------------+
 //| Computes the mat mult grad gradient contributions on the GPU.    |
@@ -6585,43 +7162,43 @@ __kernel void HiVTPrepare(__global const float *data,
 //| Implements the gate element mul kernel on the GPU.               |
 //+------------------------------------------------------------------+
 __kernel void GateElementMul(__global const float *inputs1,
-                              __global const float *inputs2,
-                              __global const float *gate,
-                              __global float *out,
-                              __global float *numeric_flags,
-                              const int flags_enabled
+                             __global const float *inputs2,
+                             __global const float *gate,
+                             __global float *out,
+                             __global float *numeric_flags,
+                             const int flags_enabled
                             )
   {
    const int i = get_global_id(0);
 //---
-    int invalid = 0;
-    if(flags_enabled)
-      {
-//--- Evaluate raw gate products before their operands are sanitized for legacy output.
-       const float raw_gate = gate[i];
-       const float raw_input1 = inputs1[i];
-       const float raw_input2 = inputs2[i];
-       const float raw_product1 = raw_gate * raw_input1;
-       const float raw_product2 = (1.0f - raw_gate) * raw_input2;
-       invalid = isnan(raw_gate) || isinf(raw_gate) || isnan(raw_input1) || isinf(raw_input1) ||
-                 isnan(raw_input2) || isinf(raw_input2) || isnan(raw_product1) || isinf(raw_product1) ||
-                 isnan(raw_product2) || isinf(raw_product2);
-      }
-    const float g = IsNaNOrInf(gate[i], 0.5f);
-    float result = 0;
-    float inp = IsNaNOrInf(inputs1[i], 0.0f);
-    if(inp != 0.0f && g != 0.0f)
-       result += g * inp;
-    inp = IsNaNOrInf(inputs2[i], 0.0f);
-    if(inp != 0.0f && (1 - g) != 0.0f)
-       result += (1 - g) * inp;
+   int invalid = 0;
+   if(flags_enabled)
+     {
+      //--- Evaluate raw gate products before their operands are sanitized for legacy output.
+      const float raw_gate = gate[i];
+      const float raw_input1 = inputs1[i];
+      const float raw_input2 = inputs2[i];
+      const float raw_product1 = raw_gate * raw_input1;
+      const float raw_product2 = (1.0f - raw_gate) * raw_input2;
+      invalid = isnan(raw_gate) || isinf(raw_gate) || isnan(raw_input1) || isinf(raw_input1) ||
+                isnan(raw_input2) || isinf(raw_input2) || isnan(raw_product1) || isinf(raw_product1) ||
+                isnan(raw_product2) || isinf(raw_product2);
+     }
+   const float g = IsNaNOrInf(gate[i], 0.5f);
+   float result = 0;
+   float inp = IsNaNOrInf(inputs1[i], 0.0f);
+   if(inp != 0.0f && g != 0.0f)
+      result += g * inp;
+   inp = IsNaNOrInf(inputs2[i], 0.0f);
+   if(inp != 0.0f && (1 - g) != 0.0f)
+      result += (1 - g) * inp;
 //---
-    if(flags_enabled)
-      {
-       invalid |= isnan(result) || isinf(result);
-       numeric_flags[i] = (invalid ? 1.0f : 0.0f);
-      }
-    out[i] = IsNaNOrInf(result, 0);
+   if(flags_enabled)
+     {
+      invalid |= isnan(result) || isinf(result);
+      numeric_flags[i] = (invalid ? 1.0f : 0.0f);
+     }
+   out[i] = IsNaNOrInf(result, 0);
   }
 //+------------------------------------------------------------------+
 //| Computes the gate element mul grad gradient contributions on the |
@@ -6652,7 +7229,10 @@ __kernel void GateElementMulGrad(__global const float *inputs1,
 //---
    inputs1_gr[i] = Deactivation(i1_gr, i1, activ1);
    inputs2_gr[i] = Deactivation(i2_gr, i2, activ2);
-   gate_gr[i] = Deactivation(g_gr, g, activ_gate);
+   if(activ_gate == ActFunc_SIGMOID)
+      gate_gr[i] = clamp(IsNaNOrInf(g_gr * g * (1.0f - g), 0), -MAX_GRAD, MAX_GRAD);
+   else
+      gate_gr[i] = Deactivation(g_gr, g, activ_gate);
   }
 //+------------------------------------------------------------------+
 //| Performs the transpose rcd data-layout operation on the GPU.     |
@@ -6728,11 +7308,11 @@ __kernel void OrthoganalLoss(__global const float *data,
 //+------------------------------------------------------------------+
 __kernel void CalcDistance(__global const float *data,
                            __global float *distance,
-                            const int dimension,
-                            const int groups,
-                            const int normalize,
-                            __global float *numeric_flags,
-                            const int flags_enabled
+                           const int dimension,
+                           const int groups,
+                           const int normalize,
+                           __global float *numeric_flags,
+                           const int flags_enabled
                           )
   {
    const size_t main = get_global_id(0);
@@ -6749,43 +7329,43 @@ __kernel void CalcDistance(__global const float *data,
    const int shift_slave = (shift_group + slave) * dimension;
    const int shift_dist = shift_group * total + main * total + slave;
 //--- calc distance
-    float dist = 0;
-    int invalid = 0;
-    if(flags_enabled)
-       for(int d = 0; d < dimension; d++)
-         {
-          const float value_main = data[shift_main + d];
-          const float value_slave = data[shift_slave + d];
-          invalid |= isnan(value_main) || isinf(value_main) || isnan(value_slave) || isinf(value_slave);
-         }
-    if(main != slave)
+   float dist = 0;
+   int invalid = 0;
+   if(flags_enabled)
+      for(int d = 0; d < dimension; d++)
+        {
+         const float value_main = data[shift_main + d];
+         const float value_slave = data[shift_slave + d];
+         invalid |= isnan(value_main) || isinf(value_main) || isnan(value_slave) || isinf(value_slave);
+        }
+   if(main != slave)
      {
       //---
       for(int d = 0; d < dimension; d++)
         {
-          float delta = data[shift_main + d] - data[shift_slave + d];
-          dist += delta * delta;
-          if(flags_enabled)
-            {
-             const float square = delta * delta;
-             invalid |= isnan(delta) || isinf(delta) || isnan(square) || isinf(square);
-            }
+         float delta = data[shift_main + d] - data[shift_slave + d];
+         dist += delta * delta;
+         if(flags_enabled)
+           {
+            const float square = delta * delta;
+            invalid |= isnan(delta) || isinf(delta) || isnan(square) || isinf(square);
+           }
         }
      }
 //--- Look Max
-    float max_dist = LocalMax(dist, 1, Temp);
-    if(flags_enabled)
-       invalid |= isnan(dist) || isinf(dist) || isnan(max_dist) || isinf(max_dist);
+   float max_dist = LocalMax(dist, 1, Temp);
+   if(flags_enabled)
+      invalid |= isnan(dist) || isinf(dist) || isnan(max_dist) || isinf(max_dist);
 //--- Normalize
-    if(normalize && max_dist > 0)
-       dist /= Temp[0];
-    if(flags_enabled)
-       invalid |= isnan(dist) || isinf(dist);
-    if(flags_enabled)
-       numeric_flags[shift_dist] = (invalid ? 1.0f : 0.0f);
-    dist = IsNaNOrInf(dist, 1);
+   if(normalize && max_dist > 0)
+      dist /= Temp[0];
+   if(flags_enabled)
+      invalid |= isnan(dist) || isinf(dist);
+   if(flags_enabled)
+      numeric_flags[shift_dist] = (invalid ? 1.0f : 0.0f);
+   dist = IsNaNOrInf(dist, 1);
 //--- result
-    distance[shift_dist] = dist;
+   distance[shift_dist] = dist;
   }
 //+------------------------------------------------------------------+
 //| Runs the feed forward local max feed-forward pass on the GPU.    |
@@ -10703,7 +11283,7 @@ __kernel void DifMatrixGrad(__global float *matrix1,    ///<[in] First matrix
                             const float multiplyer,           ///< Multiplyer for output
                             const int shift_in1,              ///< Shift for input 1
                             const int shift_in2,              ///< Shift for input 2
-                             const int shift_out               ///< Shift for output
+                            const int shift_out               ///< Shift for output
                            )
   {
    const int i = get_global_id(0);
@@ -10782,9 +11362,9 @@ __kernel void SumVecMatrix(__global const float *vector_in,
                            const float multiplyer,           ///< Multiplyer for output
                            const int shift_in1,              ///< Shift for input 1
                            const int shift_in2,              ///< Shift for input 2
-                            const int shift_out,              ///< Shift for output
-                            __global float *numeric_flags,
-                            const int flags_enabled
+                           const int shift_out,              ///< Shift for output
+                           __global float *numeric_flags,
+                           const int flags_enabled
                           )
   {
    const int r = get_global_id(0);
@@ -10797,17 +11377,17 @@ __kernel void SumVecMatrix(__global const float *vector_in,
    int flat_in = shift_in2 + RCtoFlat(r, c, rows, cols, v);
    int flat_out = shift_out + RCtoFlat(r, c, rows, cols, v);
    int flat_v = shift_in1 + RCtoFlat(0, c, 1, cols, v);
-     if(flags_enabled)
-      {
-       const float vector_value = vector_in[flat_v];
-       const float matrix_value = matrix_in[flat_in];
-       const float raw_sum = vector_value + matrix_value;
-       const float raw_result = raw_sum * multiplyer;
-       const int invalid = isnan(vector_value) || isinf(vector_value) || isnan(matrix_value) || isinf(matrix_value) ||
-                           isnan(raw_sum) || isinf(raw_sum) || isnan(raw_result) || isinf(raw_result);
-       numeric_flags[RCtoFlat(r, c, rows, cols, v)] = (invalid ? 1.0f : 0.0f);
-      }
-    matrix_out[flat_out] = IsNaNOrInf((vector_in[flat_v] + matrix_in[flat_in]) * multiplyer, 0);
+   if(flags_enabled)
+     {
+      const float vector_value = vector_in[flat_v];
+      const float matrix_value = matrix_in[flat_in];
+      const float raw_sum = vector_value + matrix_value;
+      const float raw_result = raw_sum * multiplyer;
+      const int invalid = isnan(vector_value) || isinf(vector_value) || isnan(matrix_value) || isinf(matrix_value) ||
+                          isnan(raw_sum) || isinf(raw_sum) || isnan(raw_result) || isinf(raw_result);
+      numeric_flags[RCtoFlat(r, c, rows, cols, v)] = (invalid ? 1.0f : 0.0f);
+     }
+   matrix_out[flat_out] = IsNaNOrInf((vector_in[flat_v] + matrix_in[flat_in]) * multiplyer, 0);
   }
 //+------------------------------------------------------------------+
 //| Computes the sum vec matrix grad gradient contributions on the   |
@@ -16173,13 +16753,16 @@ __kernel void ScenarioResponsibilities(__global float *target,
                responsibility = IsNaNOrInf(sparse[selected], 0.0f);
                break;
               }
+      //--- Scores are normalized by the joint coordinate count, so every
+      //--- negative objective derivative uses the same inverse scale.
+      const float score_scale = sqrt(max((float)variables * (float)horizon * (float)dimension, 1.0f));
       if(d == 0 && v == 0)
         {
          responsibilities[k] = responsibility;
          //--- Update kernels add their gradient.  Use the library convention
          //--- target-output, i.e. posterior responsibility minus router Pi.
          router_gradient[k] = (batch_control[0] > 0.5f ?
-                               responsibility - IsNaNOrInf(pi[k], 0.0f) : 0.0f);
+                               (responsibility - IsNaNOrInf(pi[k], 0.0f)) / score_scale : 0.0f);
         }
       for(int h = 0; h < horizon; h++)
         {
@@ -16189,7 +16772,8 @@ __kernel void ScenarioResponsibilities(__global float *target,
          const float scale = clamp(IsNaNOrInf(u[confidence_shift], 1.0f), 1.0e-3f, 10.0f);
          const float error = IsNaNOrInf(target[target_shift] - z[shift], 0.0f);
          generator_gradient[shift] = (responsibility > 0.0f ?
-                                      (error > 0.0f ? 1.0f : (error < 0.0f ? -1.0f : 0.0f)) / scale : 0.0f);
+                                      (error > 0.0f ? 1.0f : (error < 0.0f ? -1.0f : 0.0f)) /
+                                      (scale * score_scale) : 0.0f);
          const float absolute_sum = LocalSum(responsibility > 0.0f ? fabs(error) : 0.0f,
                                              0, Temp + lv * dimension);
          if(ld == 0)
@@ -16202,7 +16786,8 @@ __kernel void ScenarioResponsibilities(__global float *target,
             const float confidence_signal = absolute_sum / (scale * scale) -
                                             (float)dimension / scale;
             confidence_gradient[confidence_shift] = (responsibility > 0.0f && scale < 10.0f ?
-                                                    IsNaNOrInf(confidence_signal * softplus_gradient, 0.0f) : 0.0f);
+                                                    IsNaNOrInf(confidence_signal * softplus_gradient / score_scale,
+                                                               0.0f) : 0.0f);
            }
          BarrierLoc
         }
@@ -16408,7 +16993,8 @@ __kernel void ScenarioGradientNormalize(__global float *generator_gradient,
                                         const int phase,
                                         __global float *confidence_gradient,
                                         const int variables,
-                                        __global const float *batch_control)
+                                        __global const float *batch_control,
+                                        const int normalize_gradients)
   {
    const int d = get_global_id(0);
    const int v = get_global_id(1);
@@ -16449,8 +17035,10 @@ __kernel void ScenarioGradientNormalize(__global float *generator_gradient,
       BarrierLoc
       const float generator_rms = sqrt(Temp[0] / max((float)(variables * horizon * dimension), 1.0f) + 1.0e-12f);
       const float confidence_rms = sqrt(TempSecond[0] / max((float)(variables * horizon), 1.0f) + 1.0e-12f);
-      const float generator_scale = (responsibility > 0.0f ? responsibility / max(generator_rms, 1.0e-6f) : 0.0f);
-      const float confidence_scale = (responsibility > 0.0f ? responsibility / max(confidence_rms, 1.0e-6f) : 0.0f);
+      const float generator_scale = (responsibility > 0.0f ? responsibility /
+                                     (normalize_gradients != 0 ? max(generator_rms, 1.0e-6f) : 1.0f) : 0.0f);
+      const float confidence_scale = (responsibility > 0.0f ? responsibility /
+                                      (normalize_gradients != 0 ? max(confidence_rms, 1.0e-6f) : 1.0f) : 0.0f);
       for(int h = 0; h < horizon; h++)
         {
          const int confidence_shift = (k * variables + v) * horizon + h;
@@ -17593,7 +18181,7 @@ __kernel void OMPBDisagreement(__global const float *reference,
            }
         }
      }
-   //--- Reduce source and target statistics through independent local scratch.
+//--- Reduce source and target statistics through independent local scratch.
    source_sum = LocalSum(source_sum, 0, source_scratch);
    target_sum = LocalSum(target_sum, 0, target_scratch);
    source_alpha = LocalSum(source_alpha, 0, source_alpha_scratch);
@@ -17606,7 +18194,7 @@ __kernel void OMPBDisagreement(__global const float *reference,
                  isnan(target_alpha_scratch[0]) || isinf(target_alpha_scratch[0]);
       invalid = (LocalSum((float)invalid, 0, invalid_scratch) > 0.0f ? 1 : 0);
      }
-   //--- Finalize the per-variable disagreement and alpha update direction.
+//--- Finalize the per-variable disagreement and alpha update direction.
    if(lane == 0)
      {
       float delta = 0.0f;
@@ -17657,92 +18245,92 @@ __kernel void OMPBDisagreementGrad(__global const float *corrections,
                                    const int gate_stride,
                                    __global float *numeric_flags,
                                    const int flags_enabled)
-   {
-    const int group = (int)get_global_id(0);
-    const int sample = (int)get_global_id(1);
-    const int coordinate = (int)get_global_id(2);
-    //--- All buffers are indexed as [group, sample, coordinate] with fixed extents.
-    if(states <= 0 || variables <= 0 || samples <= 0 || dimension <= 0 ||
-       group < 0 || sample < 0 || coordinate < 0 ||
-       group >= states * variables || sample >= samples || coordinate >= dimension)
+  {
+   const int group = (int)get_global_id(0);
+   const int sample = (int)get_global_id(1);
+   const int coordinate = (int)get_global_id(2);
+//--- All buffers are indexed as [group, sample, coordinate] with fixed extents.
+   if(states <= 0 || variables <= 0 || samples <= 0 || dimension <= 0 ||
+      group < 0 || sample < 0 || coordinate < 0 ||
+      group >= states * variables || sample >= samples || coordinate >= dimension)
       return;
-    const int variable = group / states;
-    const int distance_base = group * samples * samples;
-    const int correction_base = (group * samples + sample) * dimension + coordinate;
-    int invalid = 0;
-    const float raw_delta = disagreement[variable];
-    const float raw_correction = corrections[correction_base];
-    if(flags_enabled)
-       invalid |= isnan(raw_delta) || isinf(raw_delta) || isnan(raw_correction) ||
-                  isinf(raw_correction) || isnan(multiplier) || isinf(multiplier) ||
-                  isnan(inv_tau2) || isinf(inv_tau2);
-    const float delta = IsNaNOrInf(raw_delta, 0.0f);
-    if(gate_stride <= 0)
-      {
-       if(flags_enabled)
-          numeric_flags[correction_base] = 1.0f;
-       return;
-      }
-    const float raw_gate = gate[variable * gate_stride];
-    if(flags_enabled)
-       invalid |= isnan(raw_gate) || isinf(raw_gate);
-    const float g = IsNaNOrInf(raw_gate, 0.0f);
-    const float gate2 = g * g;
-    if(flags_enabled)
-       invalid |= isnan(gate2) || isinf(gate2);
-    if(samples == 1)
-      {
-       if(flags_enabled)
-          numeric_flags[correction_base] = (invalid ? 1.0f : 0.0f);
-       return;
-      }
-    const int pairs = samples * (samples - 1) / 2;
-    //--- delta = D_S - D_T; its sign drives the pair direction. The buffer is
-    //--- appended (+=) and must be pre-zeroed by the wrapper. In line with the
-    //--- library contract (optimizers add gradient buffers), the multiplier
-    //--- carries the negative derivative of the mismatch penalty.
-    const float sign_delta = (delta > 0.0f ? 1.0f : (delta < 0.0f ? -1.0f : 0.0f));
-    float value = 0.0f;
-    const float correction = IsNaNOrInf(raw_correction, 0.0f);
-    //--- Saturated pair-distance terms do not contribute to gradient.
-    for(int other = 0; other < samples; other++)
-      {
-       if(other == sample)
-          continue;
-       const int didx = distance_base + sample * samples + other;
-       const float raw_distance = distance[didx];
-       const float raw_pair_distance = raw_distance * gate2 * inv_tau2;
-       if(flags_enabled)
-          invalid |= isnan(raw_distance) || isinf(raw_distance) || isnan(raw_pair_distance) ||
-                     isinf(raw_pair_distance);
-       const float pair_distance = IsNaNOrInf(raw_pair_distance, 1.0f);
-       if(pair_distance >= 1.0f)
-          continue;
-       const int other_index = (group * samples + other) * dimension + coordinate;
-       const float raw_other = corrections[other_index];
-       const float raw_difference = raw_correction - raw_other;
-       const float raw_pair_value = 2.0f * gate2 * raw_difference;
-       if(flags_enabled)
-          invalid |= isnan(raw_other) || isinf(raw_other) || isnan(raw_difference) ||
-                     isinf(raw_difference) || isnan(raw_pair_value) || isinf(raw_pair_value);
-       value += 2.0f * gate2 * (correction - IsNaNOrInf(raw_other, 0.0f));
-       if(flags_enabled)
-          invalid |= isnan(value) || isinf(value);
-      }
-    const float direction_factor = multiplier * (float)source_sign * sign_delta * inv_tau2 /
-                                   (float)(states * pairs);
-    const float raw_direction = value * direction_factor;
-    if(flags_enabled)
-       invalid |= isnan(direction_factor) || isinf(direction_factor) ||
-                  isnan(raw_direction) || isinf(raw_direction);
-    const float raw_gradient = gradient[correction_base];
-    const float final_gradient = raw_gradient + clamp(IsNaNOrInf(raw_direction, 0.0f), -MAX_GRAD, MAX_GRAD);
-    if(flags_enabled)
-       invalid |= isnan(raw_gradient) || isinf(raw_gradient) || isnan(final_gradient) || isinf(final_gradient);
-    gradient[correction_base] = final_gradient;
-    if(flags_enabled)
-       numeric_flags[correction_base] = (invalid ? 1.0f : 0.0f);
-   }
+   const int variable = group / states;
+   const int distance_base = group * samples * samples;
+   const int correction_base = (group * samples + sample) * dimension + coordinate;
+   int invalid = 0;
+   const float raw_delta = disagreement[variable];
+   const float raw_correction = corrections[correction_base];
+   if(flags_enabled)
+      invalid |= isnan(raw_delta) || isinf(raw_delta) || isnan(raw_correction) ||
+                 isinf(raw_correction) || isnan(multiplier) || isinf(multiplier) ||
+                 isnan(inv_tau2) || isinf(inv_tau2);
+   const float delta = IsNaNOrInf(raw_delta, 0.0f);
+   if(gate_stride <= 0)
+     {
+      if(flags_enabled)
+         numeric_flags[correction_base] = 1.0f;
+      return;
+     }
+   const float raw_gate = gate[variable * gate_stride];
+   if(flags_enabled)
+      invalid |= isnan(raw_gate) || isinf(raw_gate);
+   const float g = IsNaNOrInf(raw_gate, 0.0f);
+   const float gate2 = g * g;
+   if(flags_enabled)
+      invalid |= isnan(gate2) || isinf(gate2);
+   if(samples == 1)
+     {
+      if(flags_enabled)
+         numeric_flags[correction_base] = (invalid ? 1.0f : 0.0f);
+      return;
+     }
+   const int pairs = samples * (samples - 1) / 2;
+//--- delta = D_S - D_T; its sign drives the pair direction. The buffer is
+//--- appended (+=) and must be pre-zeroed by the wrapper. In line with the
+//--- library contract (optimizers add gradient buffers), the multiplier
+//--- carries the negative derivative of the mismatch penalty.
+   const float sign_delta = (delta > 0.0f ? 1.0f : (delta < 0.0f ? -1.0f : 0.0f));
+   float value = 0.0f;
+   const float correction = IsNaNOrInf(raw_correction, 0.0f);
+//--- Saturated pair-distance terms do not contribute to gradient.
+   for(int other = 0; other < samples; other++)
+     {
+      if(other == sample)
+         continue;
+      const int didx = distance_base + sample * samples + other;
+      const float raw_distance = distance[didx];
+      const float raw_pair_distance = raw_distance * gate2 * inv_tau2;
+      if(flags_enabled)
+         invalid |= isnan(raw_distance) || isinf(raw_distance) || isnan(raw_pair_distance) ||
+                    isinf(raw_pair_distance);
+      const float pair_distance = IsNaNOrInf(raw_pair_distance, 1.0f);
+      if(pair_distance >= 1.0f)
+         continue;
+      const int other_index = (group * samples + other) * dimension + coordinate;
+      const float raw_other = corrections[other_index];
+      const float raw_difference = raw_correction - raw_other;
+      const float raw_pair_value = 2.0f * gate2 * raw_difference;
+      if(flags_enabled)
+         invalid |= isnan(raw_other) || isinf(raw_other) || isnan(raw_difference) ||
+                    isinf(raw_difference) || isnan(raw_pair_value) || isinf(raw_pair_value);
+      value += 2.0f * gate2 * (correction - IsNaNOrInf(raw_other, 0.0f));
+      if(flags_enabled)
+         invalid |= isnan(value) || isinf(value);
+     }
+   const float direction_factor = multiplier * (float)source_sign * sign_delta * inv_tau2 /
+                                  (float)(states * pairs);
+   const float raw_direction = value * direction_factor;
+   if(flags_enabled)
+      invalid |= isnan(direction_factor) || isinf(direction_factor) ||
+                 isnan(raw_direction) || isinf(raw_direction);
+   const float raw_gradient = gradient[correction_base];
+   const float final_gradient = raw_gradient + clamp(IsNaNOrInf(raw_direction, 0.0f), -MAX_GRAD, MAX_GRAD);
+   if(flags_enabled)
+      invalid |= isnan(raw_gradient) || isinf(raw_gradient) || isnan(final_gradient) || isinf(final_gradient);
+   gradient[correction_base] = final_gradient;
+   if(flags_enabled)
+      numeric_flags[correction_base] = (invalid ? 1.0f : 0.0f);
+  }
 //+------------------------------------------------------------------+
 //| Implements the OMPB gaussian kl kernel on the GPU.               |
 //+------------------------------------------------------------------+
@@ -17759,5 +18347,156 @@ __kernel void OMPBGaussianKL(__global const float *mean,
       //--- the exact KL is non-negative, so guard float round-off.
       output[id] = fmax(0.5f * (expm1(lv) - lv + mu * mu), 0.0f);
      }
+  }
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| FQF Monotone Rearrange (new independent primitive, v1 bitonic)  |
+//+------------------------------------------------------------------+
+//| Weighted discrete monotone rearrangement of one FQF distribution |
+//| per work-group.  N = 2^k local work-items (bitonic network); the |
+//| canonical size is N = 32 and N must fit LOCAL_ARRAY_SIZE and the |
+//| device max work-group size.  Builds the permutation I so that    |
+//|   Z*_j = Z_{I_j},  P*_j = P_{I_j},  Z*_0 <= ... <= Z*_{N-1},    |
+//| using the deterministic comparator (z_i,i) < (z_j,j): first the  |
+//| centroid value, ties by the ORIGINAL index.  The probability    |
+//| mass always travels together with its centroid; the raw FQF     |
+//| buffers are never modified (only the ordered copies are written |
+//| and the SRM rank-sensitive path consumes them).  Non-finite     |
+//| centroids map to +MAX_VALUE (trailing) so the network stays     |
+//| total; the MQL5 caller rejects such distributions before the    |
+//| SRM launch per the numerical contract.                          |
+//| Diagnostics (6 floats per task, computed on the ORIGINAL order):|
+//|   [0] crossing_rate      = mean_i 1[z_{i+1} < z_i]             |
+//|   [1] crossing_magnitude = mean_i max(z_i - z_{i+1}, 0)        |
+//|   [2] prob_sum           = sum_i p_i                           |
+//|   [3] prob_min           = min_i p_i (sanitized, invalid -> 0) |
+//|   [4] prob_max           = max_i p_i (sanitized, invalid -> 0) |
+//|   [5] invalid_probability_count = sum_i (not finite(p_i) or p<0)|
+//+------------------------------------------------------------------+
+__kernel void FQF_MonotoneRearrange(__global float *quantiles,
+                                    __global float *probabilities,
+                                    __global float *ordered_quantiles,
+                                    __global float *ordered_probabilities,
+                                    __global float *order,
+                                    __global float *diagnostics)
+  {
+   const size_t i = get_local_id(0);
+   const size_t total = get_local_size(0);
+   const size_t task = get_group_id(1);
+   const size_t tasks = get_num_groups(1);
+//--- geometry contract: one work-group per task, N = 2^k, N <= 64
+   if(total == 0 || (total & (total - 1)) != 0 || total > LOCAL_ARRAY_SIZE)
+      return;
+//---
+   __local float lz[LOCAL_ARRAY_SIZE];
+   __local float lp[LOCAL_ARRAY_SIZE];
+   __local float li[LOCAL_ARRAY_SIZE];
+   __local float Red[LOCAL_ARRAY_SIZE];
+//--- row = task, column = quantile, row width = total (single variable)
+   const size_t index = RCtoFlat(task, i, tasks, total, 0);
+   const float zi = quantiles[index];
+   const float pi = probabilities[index];
+   const int z_invalid = !(isfinite(zi));
+   const int p_invalid = !(isfinite(pi)) || pi < 0.0f;
+//---
+   lz[i] = (z_invalid ? MAX_VALUE : zi);
+   lp[i] = (p_invalid ? 0.0f : pi);
+   li[i] = (float)i;
+//--- every lane reads neighbours/partners below; make the initial local
+//--- representation visible to the whole work-group before diagnostics
+//--- and before the first bitonic compare-exchange stage.
+   BarrierLoc;
+//--- diagnostics on the ORIGINAL order (raw local copies before the
+//--- bitonic network runs)
+   const float crossing_flag = (i + 1 < total && lz[i + 1] < lz[i] ? 1.0f : 0.0f);
+   const float crossing_mag  = (i + 1 < total ? fmax(lz[i] - lz[i + 1], 0.0f) : 0.0f);
+   const float denom_inv     = (total > 1 ? 1.0f / (float)(total - 1) : 0.0f);
+//---
+   const float crossing_rate  = LocalSum(crossing_flag, 0, Red) * denom_inv;
+   BarrierLoc;
+   const float crossing_total = LocalSum(crossing_mag, 0, Red) * denom_inv;
+   BarrierLoc;
+   const float prob_sum       = LocalSum(lp[i], 0, Red);
+   BarrierLoc;
+   const float prob_min       = LocalMin(lp[i], 0, Red);
+   BarrierLoc;
+   const float prob_max       = LocalMax(lp[i], 0, Red);
+   BarrierLoc;
+   const float invalid_count  = LocalSum((float)p_invalid, 0, Red);
+   BarrierLoc;
+//--- bitonic merge network sorting (z, index) ascending
+   for(size_t width = 2; width <= total; width <<= 1)
+      for(size_t stride = width >> 1; stride > 0; stride >>= 1)
+        {
+         const size_t partner = i ^ stride;
+         if(partner > i)
+           {
+            const int ascending = ((i & width) == 0);
+            const float az = lz[i];
+            const float bz = lz[partner];
+            const float ai = li[i];
+            const float bi = li[partner];
+            const int before = (az < bz) || (az == bz && ai < bi);
+            if((ascending && !before) || (!ascending && before))
+              {
+               const float tz = lz[i];      lz[i] = lz[partner];      lz[partner] = tz;
+               const float tp = lp[i];      lp[i] = lp[partner];      lp[partner] = tp;
+               const float ti = li[i];      li[i] = li[partner];      li[partner] = ti;
+              }
+           }
+         BarrierLoc;
+        }
+//--- ordered outputs: provenance kept per item (order[j] = I_j)
+   const size_t out_index = RCtoFlat(task, i, tasks, total, 0);
+   ordered_quantiles[out_index]      = lz[i];
+   ordered_probabilities[out_index]  = lp[i];
+   order[out_index]                  = li[i];
+//--- diagnostics written by lane 0 (6 floats per task)
+   if(i == 0)
+     {
+      const size_t d = task * 6;
+      diagnostics[d + 0] = crossing_rate;
+      diagnostics[d + 1] = crossing_total;
+      diagnostics[d + 2] = prob_sum;
+      diagnostics[d + 3] = prob_min;
+      diagnostics[d + 4] = prob_max;
+      diagnostics[d + 5] = invalid_count;
+     }
+  }
+//+------------------------------------------------------------------+
+//| FQF Rearrange Gradient (new independent primitive)               |
+//+------------------------------------------------------------------+
+//| Undoes ::FQF_MonotoneRearrange in the backward pass by scattering|
+//| the sorted-pair gradients back to the original FQF indexing:     |
+//|   g_Z[I_j] = g_{Z*},j,   g_P[I_j] = g_{P*},j.                   |
+//| One work-item per (task, sorted position j); the order buffer    |
+//| stores the original index I_j of every sorted position.  An      |
+//| out-of-range permutation entry is rejected (no write) and the    |
+//| MQL5 side treats a bad permutation as an invalid SRM state.      |
+//+------------------------------------------------------------------+
+__kernel void FQF_RearrangeGradient(__global float *ordered_quantiles_gradient,
+                                    __global float *ordered_probabilities_gradient,
+                                    __global float *order,
+                                    __global float *quantiles_gradient,
+                                    __global float *probabilities_gradient)
+  {
+   const size_t j = get_global_id(0);
+   const size_t total = get_global_size(0);
+   const size_t task = get_global_id(1);
+   const size_t tasks = get_global_size(1);
+//---
+   if(total == 0 || tasks == 0 || j >= total || task >= tasks)
+      return;
+//--- row = task, column = quantile, row width = total (single variable)
+   const size_t index = RCtoFlat(task, j, tasks, total, 0);
+   const int dst_index = (int)IsNaNOrInf(order[index], -1.0f);
+   if(dst_index < 0 || dst_index >= (int)total)
+      return;
+//--- each (task, j) writes exactly one destination; order is a
+//--- permutation, so destinations are disjoint
+   const size_t dst = RCtoFlat(task, (size_t)dst_index, tasks, total, 0);
+   quantiles_gradient[dst]     = ordered_quantiles_gradient[index];
+   probabilities_gradient[dst] = ordered_probabilities_gradient[index];
   }
 //+------------------------------------------------------------------+

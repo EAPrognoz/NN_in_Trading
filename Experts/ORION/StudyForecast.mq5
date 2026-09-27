@@ -1,9 +1,14 @@
+﻿//+------------------------------------------------------------------+
+//|                                                StudyForecast.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| StudyForecast.mq5                                                |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
+#property description "Харнесс обучения прогнозного блока ORION."
+#property description "Обучает модель на заданном историческом интервале и проверяет восстановление чекпоинта."
+#property description "Только для тестов; ордера не выставляет."
 #define ORION_FORECAST_STUDY
 #define Study
 #include "Trajectory.mqh"
@@ -35,5 +40,4 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    if(id == 1001)
       TrainORIONForecast();
   }
-//+------------------------------------------------------------------+
-
+//+---+

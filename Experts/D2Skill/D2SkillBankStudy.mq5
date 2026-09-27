@@ -1,9 +1,13 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                             D2SkillBankStudy.mq5 |
-//| Standalone D2Skill bank lifecycle acceptance study.             |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property strict
 #property version   "1.00"
+#property description "Харнесс изучения банка D2-навыков малой размерности."
+#property description "Формирует банк из двух слотов и сохраняет его в файл D2SkillBankStudy.bin."
+#property description "Только для тестов; ордера не выставляет."
 
 #include "..\\NeuroNet_DNG\\NeuroNet.mqh"
 
@@ -15,9 +19,8 @@ const string D2_STUDY_FILE    = "D2SkillBankStudy.bin";
 CNet           g_net;
 CNeuronBaseOCL g_source;
 bool           g_completed = false;
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements CreateHost.                                           |
 //+------------------------------------------------------------------+
 bool CreateHost(void)
   {
@@ -47,7 +50,7 @@ bool CreateHost(void)
    return(created && g_net.GetOpenCL() != NULL);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements Put.                                                  |
 //+------------------------------------------------------------------+
 bool Put(CBufferFloat *buffer, const float first, const float second)
   {
@@ -55,7 +58,7 @@ bool Put(CBufferFloat *buffer, const float first, const float second)
    return(buffer && buffer.AssignArray(values) && buffer.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ReadSelection.                                        |
 //+------------------------------------------------------------------+
 bool ReadSelection(CD2SkillBank &bank)
   {
@@ -63,7 +66,7 @@ bool ReadSelection(CD2SkillBank &bank)
           bank.SelectedCorrection().BufferRead());
   }
 //+------------------------------------------------------------------+
-//| Confirmation data use a stable account-side query.              |
+//| Confirmation data use a stable account-side query.               |
 //+------------------------------------------------------------------+
 bool Train(CD2SkillBank &bank, const float gradient_x, const float gradient_y)
   {
@@ -74,7 +77,7 @@ bool Train(CD2SkillBank &bank, const float gradient_x, const float gradient_y)
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements ReadLifecycle.                                        |
 //+------------------------------------------------------------------+
 bool ReadLifecycle(CD2SkillBank &bank)
   {
@@ -82,7 +85,7 @@ bool ReadLifecycle(CD2SkillBank &bank)
           bank.Used().BufferRead() && bank.State().BufferRead());
   }
 //+------------------------------------------------------------------+
-//| Two close keys intentionally own corrections with opposite sign.|
+//| Two close keys intentionally own corrections with opposite sign. |
 //+------------------------------------------------------------------+
 bool SeedCloseOpposingCorrections(CD2SkillBank &bank)
   {
@@ -114,7 +117,8 @@ bool SeedCloseOpposingCorrections(CD2SkillBank &bank)
           bank.Influence().AssignArray(influence) && bank.Influence().BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Nearby account states must select their matching signed residual.|
+//| Nearby account states must select their matching signed          |
+//| residual.                                                        |
 //+------------------------------------------------------------------+
 bool RunCorrectionSelection(void)
   {
@@ -141,7 +145,7 @@ bool RunCorrectionSelection(void)
           opposing_slot == 1.0f && opposing_correction < 0.0f);
   }
 //+------------------------------------------------------------------+
-//| Candidate becomes an ordinary slot, then evicts only inactive.  |
+//| Candidate becomes an ordinary slot, then evicts only inactive.   |
 //+------------------------------------------------------------------+
 bool RunCandidateAndEviction(void)
   {
@@ -199,7 +203,7 @@ bool RunDirectionMagnitudePromotion(void)
           MathAbs(correction_norm - scale) <= D2_STUDY_EPSILON);
   }
 //+------------------------------------------------------------------+
-//| Protected slots reject an unrelated confirmed candidate.        |
+//| Protected slots reject an unrelated confirmed candidate.         |
 //+------------------------------------------------------------------+
 bool RunProtectedRejection(void)
   {
@@ -220,7 +224,8 @@ bool RunProtectedRejection(void)
    return(rejected >= 1.0f && evicted == 0.0f && protected_slots == D2_STUDY_SLOTS);
   }
 //+------------------------------------------------------------------+
-//| A query outside the acceptance gate must take the zero NoSkill path.|
+//| A query outside the acceptance gate must take the zero NoSkill   |
+//| path.                                                            |
 //+------------------------------------------------------------------+
 bool RunNoSkill(void)
   {
@@ -238,7 +243,8 @@ bool RunNoSkill(void)
    return(bank.SelectedSlot()[0] == -1.0f && correction_norm <= D2_STUDY_EPSILON);
   }
 //+------------------------------------------------------------------+
-//| Save/Load preserves durable slots and gives the same next winner.|
+//| Save/Load preserves durable slots and gives the same next        |
+//| winner.                                                          |
 //+------------------------------------------------------------------+
 bool RunPersistenceWinner(void)
   {
@@ -284,7 +290,7 @@ bool RunPersistenceWinner(void)
           correction_delta <= D2_STUDY_EPSILON);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements OnInit.                                               |
 //+------------------------------------------------------------------+
 int OnInit(void)
   {
@@ -304,7 +310,7 @@ int OnInit(void)
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements OnTimer.                                              |
 //+------------------------------------------------------------------+
 void OnTimer(void)
   {
@@ -312,11 +318,11 @@ void OnTimer(void)
       ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements OnDeinit.                                             |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
    EventKillTimer();
    g_source.Clear();
   }
-//+------------------------------------------------------------------+
+//+---+

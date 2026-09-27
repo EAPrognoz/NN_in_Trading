@@ -47,13 +47,14 @@ public:
 //+------------------------------------------------------------------+
 //| m d Su pp or t implementation                               |
 //+------------------------------------------------------------------+
-                              m_dSupport(0)
+                              CMyTreeNode::CMyTreeNode() : m_dSupport(0)
   {
    Clear();
   }
 //+------------------------------------------------------------------+
-//| |
+//| Destructor                                                       |
 //+------------------------------------------------------------------+
+CMyTreeNode::~CMyTreeNode()
   {
   }
 //+------------------------------------------------------------------+
@@ -80,8 +81,9 @@ float CMyTreeNode::GetConfidence(const ulong ID)
    return temp.GetConfidence();
   }
 //+------------------------------------------------------------------+
-//| |
+//| Getting the element by ID                                        |
 //+------------------------------------------------------------------+
+CMyTreeNode *CMyTreeNode::GetNext(const ulong ID)
   {
    if(m_data_total <= 0)
       return NULL;
@@ -122,8 +124,9 @@ bool CMyTreeNode::DeleteNode(const ulong ID)
    return false;
   }
 //+------------------------------------------------------------------+
-//| |
+//| Adding a node                                                    |
 //+------------------------------------------------------------------+
+CMyTreeNode *CMyTreeNode::AddNode(const ulong ID, float support)
   {
    CMyTreeNode *node = new CMyTreeNode();
    if(!node)

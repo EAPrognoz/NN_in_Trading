@@ -1,19 +1,22 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                     Research.mq5 |
-//|                                                   Copyright DNG® |
+//|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
+#property description "Харнесс исследований ADAPT на историческом интервале."
+#property description "Собирает статистику переходов и проверяет корректность маршрутов адаптивной торговли."
+#property description "Только для тестов; ордера не выставляет."
 //+------------------------------------------------------------------+
-//| Includes                                                    |
+//| Includes                                                         |
 //+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
 input double               MinProfit   =  10;
 input group                "---- RSI ----"
@@ -56,7 +59,7 @@ vector<float>        check;
 double               PrevBalance = 0;
 double               PrevEquity = 0;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
   {
    if(!Symb.Name(_Symbol))
@@ -78,7 +81,7 @@ double               PrevEquity = 0;
      }
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
       return INIT_FAILED;
-// Load Models.
+//--- Load Models.
    float temp;
    if(!ADAPTEncoder.Load(FileName + "Enc.nnw", temp, temp, temp, dtStudied, true) ||
       !ADAPTEndpoints.Load(FileName + "Endp.nnw", temp, temp, temp, dtStudied, true) ||
@@ -163,13 +166,13 @@ double               PrevEquity = 0;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
   {
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                        |
+//| Expert tick function                                             |
 //+------------------------------------------------------------------+
   {
    if(!IsNewBar())
@@ -272,19 +275,19 @@ double               PrevEquity = 0;
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-// State embedding.
+//--- State embedding.
    if(!StateEncoder.feedForward((CNet *)GetPointer(ADAPTEncoder), -1, (CBufferFloat*)GetPointer(bAccount)))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-// Endpoint embedding.
+//--- Endpoint embedding.
    if(!EndpointEncoder.feedForward((CNet *)GetPointer(ADAPTEndpoints), -1, (CNet*)GetPointer(ADAPTProbability)))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-// Actor.
+//--- Actor.
    if(!Actor.feedForward((CNet *)GetPointer(StateEncoder), -1, (CNet*)GetPointer(EndpointEncoder)))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -309,7 +312,7 @@ double               PrevEquity = 0;
       temp[3] -= temp[0];
       temp[0] = 0;
      }
-// Buy Control.
+//--- Buy Control.
    if(temp[0] < min_lot || (temp[1] * MaxTP * Symb.Point()) <= stops || (temp[2] * MaxSL * Symb.Point()) <= stops)
      {
       if(buy_value > 0)
@@ -330,7 +333,7 @@ double               PrevEquity = 0;
             Trade.Buy(buy_lot - buy_value, Symb.Name(), Symb.Ask(), buy_sl, buy_tp);
         }
      }
-// Sell Control.
+//--- Sell Control.
    if(temp[3] < min_lot || (temp[4] * MaxTP * Symb.Point()) <= stops || (temp[5] * MaxSL * Symb.Point()) <= stops)
      {
       if(sell_value > 0)
@@ -363,7 +366,7 @@ double               PrevEquity = 0;
       ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| Tester function                                             |
+//| Tester function                                                  |
 //+------------------------------------------------------------------+
 double OnTester()
   {
@@ -375,14 +378,14 @@ double OnTester()
    return(ret);
   }
 //+------------------------------------------------------------------+
-//| TesterInit function                                         |
+//| TesterInit function                                              |
 //+------------------------------------------------------------------+
 void OnTesterInit()
   {
    LoadTotalBase();
   }
 //+------------------------------------------------------------------+
-//| TesterPass function                                         |
+//| TesterPass function                                              |
 //+------------------------------------------------------------------+
 void OnTesterPass()
   {
@@ -436,7 +439,7 @@ void OnTesterPass()
      }
   }
 //+------------------------------------------------------------------+
-//| TesterDeinit function                                       |
+//| TesterDeinit function                                            |
 //+------------------------------------------------------------------+
   {
    int total = ArraySize(Buffer);
@@ -445,5 +448,4 @@ void OnTesterPass()
    SaveTotalBase();
    Print("Saved");
   }
-//+------------------------------------------------------------------+
-
+//+---+

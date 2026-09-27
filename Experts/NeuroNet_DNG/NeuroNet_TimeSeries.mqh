@@ -1,8 +1,7 @@
-//+------------------------------------------------------------------+
-//|                                           NeuroNet_TimeSeries.mqh|
-//|         Time-series and multimodal models: OMPB, TiDE, FITS, etc.|
-//|                                               Copyright 2024, DNG|
-//|                                 https://www.mql5.com/ru/users/dng|
+﻿//+------------------------------------------------------------------+
+//|                                          NeuroNet_TimeSeries.mqh |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 
 #ifndef NEURONET_BUILDING_FACADE
@@ -32,7 +31,9 @@ CNeuronOMPBOCL::CNeuronOMPBOCL(void) : iDimension(0),
                                        iKLRejects(0),
                                        bSourceAnchor(false),
                                        bForwardAccepted(false),
-                                       bNumericRejected(false)
+                                       bNumericRejected(false),
+                                       bCurrentTransactionPending(false),
+                                       iCurrentTransactionCount(0)
   {
    cReference = NULL;
    cCurrent = NULL;
@@ -56,6 +57,8 @@ bool CNeuronOMPBOCL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //--- An incomplete reinitialization must not leave an older forward updateable.
    bForwardAccepted = false;
    bNumericRejected = false;
+   bCurrentTransactionPending = false;
+   iCurrentTransactionCount = 0;
 //--- Validate the fixed OMPB tensor dimensions before allocating resources.
    if(dimension == 0)
       ReturnFalseEx("dimension is zero");
@@ -219,12 +222,61 @@ bool CNeuronOMPBOCL::SetMode(const ENUM_OMPB_MODE mode)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Starts an opt-in transaction for the Current history update.     |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::BeginCurrentTransaction(void)
+  {
+//--- Validate transaction ownership and the Current history buffers.
+   if(bCurrentTransactionPending)
+      ReturnFalseEx("current transaction is already pending");
+   if(!cCurrent || !cCurrent.getOutput() || !cCurrent.getPrevOutput())
+      ReturnFalseEx("current transaction buffers are null");
+   const uint total = iCurrentCapacity * iDimension * iVariables;
+   if(cCurrent.getOutput().Total() != int(total) || cCurrent.getPrevOutput().Total() != int(total))
+      ReturnFalseEx("current transaction buffer shape mismatch");
+//--- Snapshot the complete ring before feed-forward can mutate it.
+   if(!CopyBufferRaw(cCurrent.getOutput(), cCurrent.getPrevOutput(), total))
+      ReturnFalseEx("current transaction snapshot");
+   iCurrentTransactionCount = iCurrentCount;
+   bCurrentTransactionPending = true;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Commits the pending Current history transaction.                 |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::CommitCurrentTransaction(void)
+  {
+   if(!bCurrentTransactionPending)
+      ReturnFalseEx("current transaction is not pending");
+   bCurrentTransactionPending = false;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Restores Current history after a rejected Stage 02 update.       |
+//+------------------------------------------------------------------+
+bool CNeuronOMPBOCL::RollbackCurrentTransaction(void)
+  {
+//--- Preserve the pending state until the complete snapshot is restored.
+   if(!bCurrentTransactionPending)
+      ReturnFalseEx("current transaction is not pending");
+   if(!cCurrent || !cCurrent.getOutput() || !cCurrent.getPrevOutput())
+      ReturnFalseEx("current transaction buffers are null");
+   const uint total = iCurrentCapacity * iDimension * iVariables;
+   if(!CopyBufferRaw(cCurrent.getPrevOutput(), cCurrent.getOutput(), total))
+      ReturnFalseEx("current transaction restore");
+//--- Publish the saved count only after the device history is restored.
+   iCurrentCount = iCurrentTransactionCount;
+   bCurrentTransactionPending = false;
+   bForwardAccepted = false;
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Sets the tau of the CNeuronOMPBOCL.                              |
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::SetTau(const float value)
   {
-   if(value <= 0.0f)
-      ReturnFalseEx("value is non-positive");
+   if(!MathIsValidNumber(value) || value <= 0.0f)
+      ReturnFalseEx("value is nonfinite or non-positive");
    m_fTau = value;
    return(true);
   }
@@ -233,8 +285,8 @@ bool CNeuronOMPBOCL::SetTau(const float value)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::SetDisagreementMult(const float value)
   {
-   if(value < 0.0f)
-      ReturnFalseEx("value is negative");
+   if(!MathIsValidNumber(value) || value < 0.0f)
+      ReturnFalseEx("value is nonfinite or negative");
    m_fDisagreementMult = value;
    return(true);
   }
@@ -243,8 +295,8 @@ bool CNeuronOMPBOCL::SetDisagreementMult(const float value)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::SetKLDMult(const float value)
   {
-   if(value < 0.0f)
-      ReturnFalseEx("value is negative");
+   if(!MathIsValidNumber(value) || value < 0.0f)
+      ReturnFalseEx("value is nonfinite or negative");
    m_fKLDMult = value;
    cResidual.SetKLDMult(value);
    return(true);
@@ -282,8 +334,8 @@ bool CNeuronOMPBOCL::SetAlphaMult(const float value)
 //+------------------------------------------------------------------+
 bool CNeuronOMPBOCL::SetMaxKL(const float value)
   {
-   if(value < 0.0f)
-      ReturnFalseEx("value is negative");
+   if(!MathIsValidNumber(value) || value < 0.0f)
+      ReturnFalseEx("value is nonfinite or negative");
    m_fMaxKL = value;
    return(true);
   }
@@ -510,11 +562,9 @@ bool CNeuronOMPBOCL::InitializeNumericRuntime(const uint total)
 //--- Finalize numeric runtime allocation without serializing transient state.
    return(true);
   }
-//+------------------------------------------------------------------+
-//| KL is measured from the actual posterior parameter tensors.      |
-//| The VAE mean sampler supplies its gradient exactly once during   |
-//| ordinary Bayesian backward; this method is metric/guard only.    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+//| KL is measured from the actual posterior parameter tensors.  The VAE mean sampler supplies its gradient exactly once during  ordinary Bayesian backward; this method is metric/guard only.  |
+//+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 bool CNeuronOMPBOCL::CalculateKL(void)
   {
    m_fLastKL = 0.0f;
@@ -573,10 +623,9 @@ bool CNeuronOMPBOCL::CalculateKL(void)
    m_fLastKL = cKLMetricScalar[0];
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Alpha prior is a small parameter-only correction.  GateElement   |
-//| has already written the negative forecast derivative into alpha. |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------------------------------------------------+
+//| Alpha prior is a small parameter-only correction.  GateElement  has already written the negative forecast derivative into alpha.  |
+//+-----------------------------------------------------------------------------------------------------------------------------------+
 bool CNeuronOMPBOCL::ApplyAlphaPrior(void)
   {
    m_fLastAlphaPrior = 0.0f;
@@ -852,10 +901,9 @@ bool CNeuronOMPBOCL::PrepareRegularizers(void)
       ReturnFalseEx("current posterior backward");
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronOMPBOCL feed-forward pass and writes the layer   |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Runs the CNeuronOMPBOCL feed-forward pass and writes the layer  output.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronOMPBOCL::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
 //--- Every forward invalidates older updates, including identity-only modes.
@@ -924,7 +972,7 @@ bool CNeuronOMPBOCL::feedForward(CNeuronBaseOCL *NeuronOCL)
      }
    if(!CalculateKL())
       ReturnFalseEx("KL calculation");
-   if(bNumericRejected)
+   if(bNumericRejected == true)
      {
       iInvalidFallbacks++;
       return(Identity(NeuronOCL));
@@ -935,27 +983,52 @@ bool CNeuronOMPBOCL::feedForward(CNeuronBaseOCL *NeuronOCL)
       return(Identity(NeuronOCL));
      }
 //--- Source anchor uses the mean Forecast path without mutating target history.
+   bool own_current_transaction = false;
+   if(eMode == OMPB_CALIBRATE && !bSourceAnchor && !bCurrentTransactionPending)
+     {
+      if(!BeginCurrentTransaction())
+         ReturnFalseEx("current transaction begin");
+      own_current_transaction = true;
+     }
    if(eMode == OMPB_CALIBRATE && !bSourceAnchor)
      {
       if(!cCurrent.FeedForward(NeuronOCL.AsObject()))
+        {
+         if(own_current_transaction && !RollbackCurrentTransaction())
+            ReturnFalseEx("current transaction rollback after history update");
          ReturnFalseEx("current history update");
+        }
       iCurrentCount = MathMin(iCurrentCount + 1, iCurrentCapacity);
      }
    if(!PrepareRegularizers())
+     {
+      if(own_current_transaction && !RollbackCurrentTransaction())
+         ReturnFalseEx("current transaction rollback after regularizer preparation");
       ReturnFalseEx("regularizer preparation");
+     }
    if(bNumericRejected)
      {
+      if(own_current_transaction && !RollbackCurrentTransaction())
+         ReturnFalseEx("current transaction rollback after numeric rejection");
       iInvalidFallbacks++;
       return(Identity(NeuronOCL));
      }
 //--- Finalize the residual output after history and regularizer handling.
+   if(own_current_transaction)
+     {
+      if(!CommitCurrentTransaction())
+        {
+         if(bCurrentTransactionPending && !RollbackCurrentTransaction())
+            ReturnFalseEx("current transaction rollback after commit failure");
+         ReturnFalseEx("current transaction commit");
+        }
+     }
    bForwardAccepted = true;
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronOMPBOCL   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronOMPBOCL  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronOMPBOCL::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -1010,10 +1083,9 @@ bool CNeuronOMPBOCL::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //--- Finalize the calibrated residual gradient after alpha regularization.
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronOMPBOCL trainable weights from the accumulated|
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronOMPBOCL trainable weights from the  accumulated  gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronOMPBOCL::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!bForwardAccepted)
@@ -1054,6 +1126,8 @@ bool CNeuronOMPBOCL::ResetReference(void)
 bool CNeuronOMPBOCL::Save(const int file_handle)
   {
 //--- Write the established OMPB state before the durable history tail.
+   if(bCurrentTransactionPending)
+      ReturnFalseEx("current transaction is pending");
    if(!CNeuronBaseOCL::Save(file_handle))
       ReturnFalseEx("base neuron");
    dFileWriteUInt(file_handle, iDimension);
@@ -1101,6 +1175,8 @@ bool CNeuronOMPBOCL::Load(const int file_handle)
 //--- A partial load cannot retain permission to update from an older forward.
    bForwardAccepted = false;
    bNumericRejected = false;
+   bCurrentTransactionPending = false;
+   iCurrentTransactionCount = 0;
    if(!CNeuronBaseOCL::Load(file_handle))
       ReturnFalseEx("base neuron");
 //--- Read the serialized OMPB configuration in the established field order.
@@ -1306,15 +1382,16 @@ bool CNeuronOMPBOCL::Load(const int file_handle)
    iCurrentCount = current_count;
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronOMPBOCL GPU buffers to the given OpenCL       |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Rebinds the CNeuronOMPBOCL GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------+
 void CNeuronOMPBOCL::SetOpenCL(COpenCLMy *obj)
   {
 //--- A context rebind invalidates permission to update from an older forward.
    bForwardAccepted = false;
    bNumericRejected = false;
+   bCurrentTransactionPending = false;
+   iCurrentTransactionCount = 0;
    CNeuronBaseOCL::SetOpenCL(obj);
    cResidual.SetOpenCL(OpenCL);
    cAlpha.SetOpenCL(OpenCL);
@@ -1380,9 +1457,9 @@ void CNeuronOMPBOCL::SetOpenCL(COpenCLMy *obj)
    if(cKLValues.Total() > 0)
       cKLValues.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Checks checked-transfer support of the full OMPB ownership tree. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Checks checked-transfer support of the full OMPB ownership tree.  |
+//+-------------------------------------------------------------------+
 bool CNeuronOMPBOCL::SupportsOpenCLChecked(void) const
   {
 //--- Validate the target identity and every history pointer before mutation.
@@ -1404,9 +1481,9 @@ bool CNeuronOMPBOCL::SupportsOpenCLChecked(void) const
 //--- Finalize only when the complete embedded hierarchy is transferable.
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Transfers OMPB children and buffers before inherited publication.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Transfers OMPB children and buffers before inherited  publication.  |
+//+---------------------------------------------------------------------+
 bool CNeuronOMPBOCL::SetOpenCLChecked(COpenCLMy *obj)
   {
 //--- Validate the target and complete ownership tree before state changes.
@@ -1415,6 +1492,8 @@ bool CNeuronOMPBOCL::SetOpenCLChecked(COpenCLMy *obj)
 //--- A valid attempt invalidates outcomes tied to the previous forward pass.
    bForwardAccepted = false;
    bNumericRejected = false;
+   bCurrentTransactionPending = false;
+   iCurrentTransactionCount = 0;
 //--- Transfer the complete nested hierarchy before direct and base owners.
    if(!cResidual.SetOpenCLChecked(obj))
       ReturnFalseEx("residual context");
@@ -1626,6 +1705,8 @@ bool CNeuronOMPBOCL::Clear(void)
 //--- A partial clear cannot retain permission to update from an older forward.
    bForwardAccepted = false;
    bNumericRejected = false;
+   bCurrentTransactionPending = false;
+   iCurrentTransactionCount = 0;
 //--- Reference history is durable across inference and session clears.
    iCurrentCount = 0;
    m_fLastDisagreement = 0.0f;
@@ -1704,10 +1785,9 @@ bool CNeuronOMPBOCL::Clear(void)
       ReturnFalseEx("KL values");
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronOMPBOCL weights toward the source model with |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Averages the CNeuronOMPBOCL weights toward the source model with  factor tau.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronOMPBOCL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source)
@@ -1751,13 +1831,11 @@ CLayerDescription *CNeuronOMPBOCL::GetLayerInfo(void)
      }
    return(result);
   }
-//+------------------------------------------------------------------+
-//| Logical method implementations generated from                    |
-//| NeuroNet.mqh: TimeSeries.                                        |
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTiDEOCL layer and allocates its GPU       |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Logical method implementations generated from  NeuroNet.mqh: TimeSeries.  |
+//+-----------------------------------------------------------------------+
+//| Initializes the CNeuronTiDEOCL layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronTiDEOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint history, uint forecast, uint variables, uint features, uint & encoder_decoder[], ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, forecast * variables, optimization_type, batch))
@@ -1816,10 +1894,9 @@ bool CNeuronTiDEOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, ui
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTiDEOCL feed-forward pass and writes the layer   |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Runs the CNeuronTiDEOCL feed-forward pass and writes the layer  output.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronTiDEOCL::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput)
   {
    if(!NeuronOCL || !SecondInput)
@@ -1864,10 +1941,9 @@ bool CNeuronTiDEOCL::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* Second
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronTiDEOCL   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronTiDEOCL  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronTiDEOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput, CBufferFloat* SecondGradient, ENUM_ACTIVATION SecondActivation = None)
   {
    if(!cTemporalDecoderInput.CalcHiddenGradients(cTemporalDecoder.AsObject()))
@@ -1912,10 +1988,9 @@ bool CNeuronTiDEOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL, CBufferFloat*
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTiDEOCL trainable weights from the accumulated|
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronTiDEOCL trainable weights from the  accumulated  gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronTiDEOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput)
   {
 //---
@@ -2035,10 +2110,9 @@ bool CNeuronTiDEOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronTiDEOCL GPU buffers to the given OpenCL       |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Rebinds the CNeuronTiDEOCL GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------+
 void CNeuronTiDEOCL::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -2056,10 +2130,9 @@ void CNeuronTiDEOCL::SetOpenCL(COpenCLMy * obj)
    cEncoderInput.SetOpenCL(OpenCL);
    cTemporalDecoderInput.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronTiDEOCL weights toward the source model with |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Averages the CNeuronTiDEOCL weights toward the source model with  factor tau.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronTiDEOCL::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
 //---
@@ -2084,9 +2157,9 @@ bool CNeuronTiDEOCL::WeightsUpdate(CNeuronBaseOCL* source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronFEDW layer and allocates its GPU buffers. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Initializes the CNeuronFEDW layer and allocates its GPU buffers.  |
+//+-------------------------------------------------------------------+
 bool CNeuronFEDW::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint count, uint filters, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, window * count, optimization_type, batch))
@@ -2121,10 +2194,9 @@ bool CNeuronFEDW::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint 
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronFEDW feed-forward pass and writes the layer      |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Runs the CNeuronFEDW feed-forward pass and writes the layer  output.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronFEDW::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cWavlets.FeedForward(NeuronOCL.AsObject()))
@@ -2173,10 +2245,9 @@ bool CNeuronFEDW::Reconsruct(CBufferFloat* sequence, CBufferFloat* probability)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronFEDW      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronFEDW  layer.  |
+//+----------------------------------------------------------------------+
 bool CNeuronFEDW::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -2214,10 +2285,9 @@ bool CNeuronFEDW::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronFEDW trainable weights from the accumulated   |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Updates the CNeuronFEDW trainable weights from the accumulated  gradients.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronFEDW::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cFF[0].UpdateInputWeights(cReconstruct.AsObject()))
@@ -2229,9 +2299,9 @@ bool CNeuronFEDW::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronFEDW GPU buffers to the given OpenCL context. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Rebinds the CNeuronFEDW GPU buffers to the given OpenCL context.  |
+//+-------------------------------------------------------------------+
 void CNeuronFEDW::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -2297,10 +2367,9 @@ bool CNeuronFEDW::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronFEDW weights toward the source model with    |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Averages the CNeuronFEDW weights toward the source model with  factor tau.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronFEDW::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -2315,10 +2384,9 @@ bool CNeuronFEDW::WeightsUpdate(CNeuronBaseOCL* source, float tau)
       ReturnFalse;
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronFITSOCL layer and allocates its GPU       |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Initializes the CNeuronFITSOCL layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronFITSOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint window_out, uint count, float dropout, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(window <= 0)
@@ -2401,9 +2469,9 @@ bool CNeuronFITSOCL::FFT(CBufferFloat* inp_re, CBufferFloat* inp_im, CBufferFloa
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex layer out step of the CNeuronFITSOCL layer. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Executes the complex layer out step of the CNeuronFITSOCL layer.  |
+//+-------------------------------------------------------------------+
 bool CNeuronFITSOCL::ComplexLayerOut(CBufferFloat* inp_re, CBufferFloat* inp_im, CBufferFloat* out_re, CBufferFloat* out_im)
   {
    uint global_work_offset[2] = {0};
@@ -2420,10 +2488,9 @@ bool CNeuronFITSOCL::ComplexLayerOut(CBufferFloat* inp_re, CBufferFloat* inp_im,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex layer gradient step of the CNeuronFITSOCL   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Executes the complex layer gradient step of the CNeuronFITSOCL  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronFITSOCL::ComplexLayerGradient(CBufferFloat* inp_re, CBufferFloat* inp_im, CBufferFloat* out_re, CBufferFloat* out_im)
   {
    uint global_work_offset[2] = {0};
@@ -2440,10 +2507,9 @@ bool CNeuronFITSOCL::ComplexLayerGradient(CBufferFloat* inp_re, CBufferFloat* in
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronFITSOCL feed-forward pass and writes the layer   |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Runs the CNeuronFITSOCL feed-forward pass and writes the layer  output.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronFITSOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -2476,10 +2542,9 @@ bool CNeuronFITSOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronFITSOCL   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronFITSOCL  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronFITSOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -2517,10 +2582,9 @@ bool CNeuronFITSOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronFITSOCL trainable weights from the accumulated|
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronFITSOCL trainable weights from the  accumulated  gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronFITSOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cInsideRe1.UpdateInputWeights(cDropRe.AsObject()))
@@ -2628,10 +2692,9 @@ bool CNeuronFITSOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronFITSOCL GPU buffers to the given OpenCL       |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Rebinds the CNeuronFITSOCL GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------+
 void CNeuronFITSOCL::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -2672,10 +2735,9 @@ void CNeuronFITSOCL::TrainMode(bool flag)
    cIFFTRe.TrainMode(bTrain);
    cIFFTIm.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronFITSOCL weights toward the source model with |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Averages the CNeuronFITSOCL weights toward the source model with  factor tau.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronFITSOCL::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -2692,10 +2754,9 @@ bool CNeuronFITSOCL::WeightsUpdate(CNeuronBaseOCL* source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronFreDFOCL layer and allocates its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Initializes the CNeuronFreDFOCL layer and allocates its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronFreDFOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint count, float Alpha, bool need_transpose = true, ENUM_OPTIMIZATION optimization_type = ADAM, uint batch = 1)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, window * count, optimization_type, batch))
@@ -2759,10 +2820,9 @@ bool CNeuronFreDFOCL::FFT(CBufferFloat* inp_re, CBufferFloat* inp_im, CBufferFlo
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronFreDFOCL feed-forward pass and writes the layer  |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Runs the CNeuronFreDFOCL feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronFreDFOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL || !NeuronOCL.getOutput())
@@ -2817,10 +2877,9 @@ bool CNeuronFreDFOCL::FreqMSA(CBufferFloat* target, CBufferFloat* forecast, CBuf
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the cumulative gradient step of the CNeuronFreDFOCL     |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Executes the cumulative gradient step of the CNeuronFreDFOCL  layer.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronFreDFOCL::CumulativeGradient(CBufferFloat* gradient1, CBufferFloat* gradient2, CBufferFloat* cummulative, float Alpha)
   {
    if(!gradient1 || !gradient2 || !cummulative)
@@ -2840,10 +2899,9 @@ bool CNeuronFreDFOCL::CumulativeGradient(CBufferFloat* gradient1, CBufferFloat* 
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the calc output gradients step of the CNeuronFreDFOCL   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Executes the calc output gradients step of the CNeuronFreDFOCL  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronFreDFOCL::calcOutputGradients(CArrayFloat* Target, float & error)
   {
    if(!Target)
@@ -2908,10 +2966,9 @@ bool CNeuronFreDFOCL::calcOutputGradients(CArrayFloat* Target, float & error)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronFreDFOCL  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronFreDFOCL  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronFreDFOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -2994,10 +3051,9 @@ bool CNeuronFreDFOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronFreDFOCL GPU buffers to the given OpenCL      |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Rebinds the CNeuronFreDFOCL GPU buffers to the given OpenCL  context.  |
+//+------------------------------------------------------------------------+
 void CNeuronFreDFOCL::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -3012,10 +3068,9 @@ void CNeuronFreDFOCL::SetOpenCL(COpenCLMy * obj)
    if(bTranspose)
       cTranspose.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronATFNetOCL layer and allocates its GPU     |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Initializes the CNeuronATFNetOCL layer and allocates its GPU  buffers.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint history, uint forecast, uint variables, uint heads, uint layers, uint & patch[], ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, forecast * variables, optimization_type, batch))
@@ -3146,10 +3201,9 @@ bool CNeuronATFNetOCL::FFT(CBufferFloat* inp_re, CBufferFloat* inp_im, CBufferFl
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex normalize step of the CNeuronATFNetOCL      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Executes the complex normalize step of the CNeuronATFNetOCL  layer.  |
+//+----------------------------------------------------------------------+
 bool CNeuronATFNetOCL::ComplexNormalize(void)
   {
    uint global_work_offset[1] = {0};
@@ -3167,10 +3221,9 @@ bool CNeuronATFNetOCL::ComplexNormalize(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex un normalize step of the CNeuronATFNetOCL   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Executes the complex un normalize step of the CNeuronATFNetOCL  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::ComplexUnNormalize(void)
   {
    uint global_work_offset[1] = {0};
@@ -3188,10 +3241,9 @@ bool CNeuronATFNetOCL::ComplexUnNormalize(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex normalize gradient step of the              |
-//| CNeuronATFNetOCL layer.                                          |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Executes the complex normalize gradient step of the  CNeuronATFNetOCL layer.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::ComplexNormalizeGradient(void)
   {
    uint global_work_offset[1] = {0};
@@ -3208,10 +3260,9 @@ bool CNeuronATFNetOCL::ComplexNormalizeGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex un normalize gradient step of the           |
-//| CNeuronATFNetOCL layer.                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Executes the complex un normalize gradient step of the  CNeuronATFNetOCL layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::ComplexUnNormalizeGradient(void)
   {
    uint global_work_offset[1] = {0};
@@ -3228,10 +3279,9 @@ bool CNeuronATFNetOCL::ComplexUnNormalizeGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the main freq weights step of the CNeuronATFNetOCL      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Executes the main freq weights step of the CNeuronATFNetOCL  layer.  |
+//+----------------------------------------------------------------------+
 bool CNeuronATFNetOCL::MainFreqWeights(void)
   {
    uint global_work_offset[1] = {0};
@@ -3267,10 +3317,9 @@ bool CNeuronATFNetOCL::WeightedSum(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the weighted sum gradient step of the CNeuronATFNetOCL  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Executes the weighted sum gradient step of the CNeuronATFNetOCL  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::WeightedSumGradient(void)
   {
    uint global_work_offset[1] = {0};
@@ -3288,10 +3337,9 @@ bool CNeuronATFNetOCL::WeightedSumGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the calc reconstruct gradient step of the               |
-//| CNeuronATFNetOCL layer.                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Executes the calc reconstruct gradient step of the  CNeuronATFNetOCL layer.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::calcReconstructGradient(void)
   {
    uint global_work_offset[1] = {0};
@@ -3311,10 +3359,9 @@ bool CNeuronATFNetOCL::calcReconstructGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronATFNetOCL feed-forward pass and writes the layer |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Runs the CNeuronATFNetOCL feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL || !NeuronOCL.getOutput())
@@ -3374,10 +3421,9 @@ bool CNeuronATFNetOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronATFNetOCL |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronATFNetOCL  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL || !NeuronOCL.getGradient() || !cInputs)
@@ -3442,10 +3488,9 @@ bool CNeuronATFNetOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronATFNetOCL trainable weights from the          |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Updates the CNeuronATFNetOCL trainable weights from the  accumulated gradients.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronATFNetOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //--- F-Block
@@ -3601,10 +3646,9 @@ bool CNeuronATFNetOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronATFNetOCL GPU buffers to the given OpenCL     |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Rebinds the CNeuronATFNetOCL GPU buffers to the given OpenCL  context.  |
+//+-------------------------------------------------------------------------+
 void CNeuronATFNetOCL::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -3691,9 +3735,9 @@ bool CNeuronS3::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint wi
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronS3 feed-forward pass and writes the layer output.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Runs the CNeuronS3 feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------+
 bool CNeuronS3::feedForwardS3(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL || !NeuronOCL.getOutput())
@@ -3716,9 +3760,9 @@ bool CNeuronS3::feedForwardS3(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronS3 layer. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronS3 layer.  |
+//+-------------------------------------------------------------------+
 bool CNeuronS3::calcInputGradientsS3(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL || !NeuronOCL.getOutput())
@@ -3763,9 +3807,9 @@ bool CNeuronS3::calcInputGradientsS3(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronS3 feed-forward pass and writes the layer output.|
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Runs the CNeuronS3 feed-forward pass and writes the layer  output (feedForward).  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronS3::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(bTrain)
@@ -3782,9 +3826,9 @@ bool CNeuronS3::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronS3 layer. |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronS3 layer (calcInputGradients).  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronS3::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!calcInputGradientsS3(NeuronOCL))
@@ -3800,10 +3844,9 @@ bool CNeuronS3::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronS3 trainable weights from the accumulated     |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Updates the CNeuronS3 trainable weights from the accumulated  gradients.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronS3::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cWeights.UpdateInputWeights(cOne.AsObject()))
@@ -3882,10 +3925,9 @@ void CNeuronS3::SetOpenCL(COpenCLMy * obj)
    cWeights.SetOpenCL(OpenCL);
    cPositions.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronS3 weights toward the source model with      |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Averages the CNeuronS3 weights toward the source model with  factor tau.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronS3::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -3899,10 +3941,9 @@ bool CNeuronS3::WeightsUpdate(CNeuronBaseOCL* source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTPMEncoder layer and allocates its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Initializes the CNeuronTPMEncoder layer and allocates its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronTPMEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint variables, uint lenth, uint hidden_size, bool ts_in_row, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronLSTMOCL::Init(numOutputs, myIndex, open_cl, hidden_size, optimization_type, batch))
@@ -3937,10 +3978,9 @@ bool CNeuronTPMEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTPMEncoder feed-forward pass and writes the layer|
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronTPMEncoder feed-forward pass and writes the  layer  output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronTPMEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- FEATURE EXTRACTION
@@ -3973,10 +4013,9 @@ bool CNeuronTPMEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronTPMEncoder|
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronTPMEncoder  layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronTPMEncoder::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -4011,10 +4050,9 @@ bool CNeuronTPMEncoder::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTPMEncoder trainable weights from the         |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Updates the CNeuronTPMEncoder trainable weights from the  accumulated gradients.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronTPMEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!CNeuronLSTMOCL::updateInputWeights(cAttentionOut.AsObject()))
@@ -4026,10 +4064,9 @@ bool CNeuronTPMEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronTPMEncoder GPU buffers to the given OpenCL    |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Rebinds the CNeuronTPMEncoder GPU buffers to the given OpenCL  context.  |
+//+--------------------------------------------------------------------------+
 void CNeuronTPMEncoder::SetOpenCL(COpenCLMy * obj)
   {
    if(!OpenCL)
@@ -4129,10 +4166,9 @@ bool CNeuronTPM::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint v
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTPM feed-forward pass and writes the layer       |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Runs the CNeuronTPM feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------+
 bool CNeuronTPM::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- Encoder
@@ -4164,9 +4200,9 @@ bool CNeuronTPM::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronTPM layer.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronTPM  layer.  |
+//+---------------------------------------------------------------------+
 bool CNeuronTPM::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -4208,10 +4244,9 @@ bool CNeuronTPM::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTPM trainable weights from the accumulated    |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Updates the CNeuronTPM trainable weights from the accumulated  gradients.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronTPM::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!CNeuronLSTMOCL::updateInputWeights(cAttAndFeature.AsObject()))
@@ -4293,9 +4328,9 @@ bool CNeuronTPM::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the attention out step of the CNeuronSTNNEncoder layer. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Executes the attention out step of the CNeuronSTNNEncoder layer.  |
+//+-------------------------------------------------------------------+
 bool CNeuronSTNNEncoder::AttentionOut(CBufferFloat* q, CBufferFloat* kv, CBufferFloat* scores, CBufferFloat* out)
   {
    if(!OpenCL)
@@ -4320,10 +4355,9 @@ bool CNeuronSTNNEncoder::AttentionOut(CBufferFloat* q, CBufferFloat* kv, CBuffer
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronSTNNEncoder feed-forward pass and writes the     |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronSTNNEncoder feed-forward pass and writes the  layer output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronSTNNEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(CheckPointer(NeuronOCL) == POINTER_INVALID)
@@ -4367,10 +4401,9 @@ bool CNeuronSTNNEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronSTNNEncoder layer.                                        |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronSTNNEncoder layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronSTNNEncoder::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
    if(CheckPointer(prevLayer) == POINTER_INVALID)
@@ -4427,10 +4460,9 @@ bool CNeuronSTNNEncoder::calcInputGradients(CNeuronBaseOCL* prevLayer)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronSTNNEncoder trainable weights from the        |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Updates the CNeuronSTNNEncoder trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronSTNNEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(CheckPointer(NeuronOCL) == POINTER_INVALID)
@@ -4461,10 +4493,9 @@ bool CNeuronSTNNEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronSTNNDecoder layer and allocates its GPU   |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Initializes the CNeuronSTNNDecoder layer and allocates its GPU  buffers.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronSTNNDecoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint window_key, uint heads, uint window_kv, uint heads_kv, uint units_count, uint units_count_kv, uint layers, uint layers_to_one_kv, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!cEncoder.Init(0, 0, open_cl, window, window_key, heads, heads_kv, units_count, layers, layers_to_one_kv, optimization_type, batch))
@@ -4474,9 +4505,9 @@ bool CNeuronSTNNDecoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the attention out step of the CNeuronSTNNDecoder layer. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Executes the attention out step of the CNeuronSTNNDecoder layer.  |
+//+-------------------------------------------------------------------+
 bool CNeuronSTNNDecoder::AttentionOut(CBufferFloat* q, CBufferFloat* kv, CBufferFloat* scores, CBufferFloat* out)
   {
    if(!OpenCL)
@@ -4501,10 +4532,9 @@ bool CNeuronSTNNDecoder::AttentionOut(CBufferFloat* q, CBufferFloat* kv, CBuffer
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronSTNNDecoder feed-forward pass and writes the     |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronSTNNDecoder feed-forward pass and writes the  layer output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronSTNNDecoder::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* Context)
   {
    if(!cEncoder.FeedForward(NeuronOCL, Context))
@@ -4514,10 +4544,9 @@ bool CNeuronSTNNDecoder::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* Co
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronSTNNDecoder layer.                                        |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronSTNNDecoder layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronSTNNDecoder::calcInputGradients(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput, CBufferFloat* SecondGradient, ENUM_ACTIVATION SecondActivation = None)
   {
    if(!CNeuronMLCrossAttentionMLKV::calcInputGradients(cEncoder.AsObject(), SecondInput, SecondGradient, SecondActivation))
@@ -4527,10 +4556,9 @@ bool CNeuronSTNNDecoder::calcInputGradients(CNeuronBaseOCL* NeuronOCL, CBufferFl
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronSTNNDecoder trainable weights from the        |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Updates the CNeuronSTNNDecoder trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronSTNNDecoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL, CBufferFloat* Context)
   {
    if(!cEncoder.UpdateInputWeights(NeuronOCL, Context))
@@ -4564,10 +4592,9 @@ bool CNeuronSTNNDecoder::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronSTNNDecoder weights toward the source model  |
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Averages the CNeuronSTNNDecoder weights toward the source model  with factor tau.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronSTNNDecoder::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronMLCrossAttentionMLKV::WeightsUpdate(source, tau))
@@ -4577,19 +4604,17 @@ bool CNeuronSTNNDecoder::WeightsUpdate(CNeuronBaseOCL* source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronSTNNDecoder GPU buffers to the given OpenCL   |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Rebinds the CNeuronSTNNDecoder GPU buffers to the given OpenCL  context.  |
+//+---------------------------------------------------------------------------+
 void CNeuronSTNNDecoder::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronMLCrossAttentionMLKV::SetOpenCL(obj);
    cEncoder.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronSparseTSF layer and allocates its GPU     |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Initializes the CNeuronSparseTSF layer and allocates its GPU  buffers.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronSparseTSF::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                             uint sequence, uint variables,
                             uint period, uint forecast,
@@ -4620,10 +4645,9 @@ bool CNeuronSparseTSF::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronSparseTSF feed-forward pass and writes the layer |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Runs the CNeuronSparseTSF feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronSparseTSF::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!acTranspose[0].FeedForward(NeuronOCL))
@@ -4643,10 +4667,9 @@ bool CNeuronSparseTSF::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronSparseTSF |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronSparseTSF  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronSparseTSF::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!acTranspose[2].CalcHiddenGradients(acTranspose[3].AsObject()))
@@ -4672,10 +4695,9 @@ bool CNeuronSparseTSF::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronSparseTSF trainable weights from the          |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Updates the CNeuronSparseTSF trainable weights from the  accumulated gradients.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronSparseTSF::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cConvolution.UpdateInputWeights(acTranspose[0].AsObject()))
@@ -4685,10 +4707,9 @@ bool CNeuronSparseTSF::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronSparseTSF GPU buffers to the given OpenCL     |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Rebinds the CNeuronSparseTSF GPU buffers to the given OpenCL  context.  |
+//+-------------------------------------------------------------------------+
 void CNeuronSparseTSF::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -4697,10 +4718,9 @@ void CNeuronSparseTSF::SetOpenCL(COpenCLMy * obj)
    cConvolution.SetOpenCL(OpenCL);
    cForecast.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronSparseTSF weights toward the source model    |
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Averages the CNeuronSparseTSF weights toward the source model  with factor tau.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronSparseTSF::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -4747,10 +4767,9 @@ bool CNeuronSparseTSF::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTEMPOOCL layer and allocates its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Initializes the CNeuronTEMPOOCL layer and allocates its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint sequence, uint variables, uint forecast, uint heads, uint layers, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
 //--- base
@@ -4873,9 +4892,9 @@ bool CNeuronTEMPOOCL::FFT(CBufferFloat* inp_re, CBufferFloat* inp_im, CBufferFlo
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex normalize step of the CNeuronTEMPOOCL layer.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Executes the complex normalize step of the CNeuronTEMPOOCL  layer.  |
+//+---------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::ComplexNormalize(void)
   {
    uint global_work_offset[1] = {0};
@@ -4893,10 +4912,9 @@ bool CNeuronTEMPOOCL::ComplexNormalize(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex un normalize step of the CNeuronTEMPOOCL    |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Executes the complex un normalize step of the CNeuronTEMPOOCL  layer.  |
+//+------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::ComplexUnNormalize(void)
   {
    uint global_work_offset[1] = {0};
@@ -4914,10 +4932,9 @@ bool CNeuronTEMPOOCL::ComplexUnNormalize(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex normalize gradient step of the              |
-//| CNeuronTEMPOOCL layer.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Executes the complex normalize gradient step of the  CNeuronTEMPOOCL layer.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::ComplexNormalizeGradient(void)
   {
    uint global_work_offset[1] = {0};
@@ -4934,10 +4951,9 @@ bool CNeuronTEMPOOCL::ComplexNormalizeGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex un normalize gradient step of the           |
-//| CNeuronTEMPOOCL layer.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Executes the complex un normalize gradient step of the  CNeuronTEMPOOCL layer.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::ComplexUnNormalizeGradient(void)
   {
    uint global_work_offset[1] = {0};
@@ -4954,10 +4970,9 @@ bool CNeuronTEMPOOCL::ComplexUnNormalizeGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the cut trend and other step of the CNeuronTEMPOOCL     |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Executes the cut trend and other step of the CNeuronTEMPOOCL  layer.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::CutTrendAndOther(CBufferFloat* inputs)
   {
    if(!inputs)
@@ -4977,10 +4992,9 @@ bool CNeuronTEMPOOCL::CutTrendAndOther(CBufferFloat* inputs)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the cut trend and other gradient step of the            |
-//| CNeuronTEMPOOCL layer.                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Executes the cut trend and other gradient step of the  CNeuronTEMPOOCL layer.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::CutTrendAndOtherGradient(CBufferFloat* inputs_gr)
   {
    if(!inputs_gr)
@@ -5001,10 +5015,9 @@ bool CNeuronTEMPOOCL::CutTrendAndOtherGradient(CBufferFloat* inputs_gr)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the cut one from another step of the CNeuronTEMPOOCL    |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Executes the cut one from another step of the CNeuronTEMPOOCL  layer.  |
+//+------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::CutOneFromAnother(void)
   {
    uint global_work_offset[1] = {0};
@@ -5020,10 +5033,9 @@ bool CNeuronTEMPOOCL::CutOneFromAnother(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the cut one from another gradient step of the           |
-//| CNeuronTEMPOOCL layer.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Executes the cut one from another gradient step of the  CNeuronTEMPOOCL layer.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::CutOneFromAnotherGradient(void)
   {
    uint global_work_offset[1] = {0};
@@ -5039,10 +5051,9 @@ bool CNeuronTEMPOOCL::CutOneFromAnotherGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTEMPOOCL feed-forward pass and writes the layer  |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Runs the CNeuronTEMPOOCL feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- trend
@@ -5106,10 +5117,9 @@ bool CNeuronTEMPOOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronTEMPOOCL  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronTEMPOOCL  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -5194,10 +5204,9 @@ bool CNeuronTEMPOOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTEMPOOCL trainable weights from the           |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronTEMPOOCL trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronTEMPOOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //--- trend
@@ -5385,10 +5394,9 @@ bool CNeuronTEMPOOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronTEMPOOCL GPU buffers to the given OpenCL      |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Rebinds the CNeuronTEMPOOCL GPU buffers to the given OpenCL  context.  |
+//+------------------------------------------------------------------------+
 void CNeuronTEMPOOCL::SetOpenCL(COpenCLMy * obj)
   {
 //--- base
@@ -5442,10 +5450,9 @@ CBufferFloat* CNeuronTEMPOOCL::getWeights(void)
 //---
    return result;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTrajLLMOCL layer and allocates its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Initializes the CNeuronTrajLLMOCL layer and allocates its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronTrajLLMOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint window_key, uint heads, uint units_count, uint forecast, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, window * forecast, optimization_type, batch))
@@ -5515,10 +5522,9 @@ bool CNeuronTrajLLMOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTrajLLMOCL feed-forward pass and writes the layer|
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronTrajLLMOCL feed-forward pass and writes the  layer  output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronTrajLLMOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- State Encoder
@@ -5577,10 +5583,9 @@ bool CNeuronTrajLLMOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronTrajLLMOCL|
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronTrajLLMOCL  layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronTrajLLMOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -5652,10 +5657,9 @@ bool CNeuronTrajLLMOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTrajLLMOCL trainable weights from the         |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Updates the CNeuronTrajLLMOCL trainable weights from the  accumulated gradients.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronTrajLLMOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //--- State Encoder
@@ -5822,10 +5826,9 @@ bool CNeuronTrajLLMOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronTrajLLMOCL GPU buffers to the given OpenCL    |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Rebinds the CNeuronTrajLLMOCL GPU buffers to the given OpenCL  context.  |
+//+--------------------------------------------------------------------------+
 void CNeuronTrajLLMOCL::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -5857,10 +5860,9 @@ void CNeuronTrajLLMOCL::SetOpenCL(COpenCLMy * obj)
       caForecastMLP[i].SetOpenCL(OpenCL);
    cTransposeOut.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUniTraj layer and allocates its GPU       |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Initializes the CNeuronUniTraj layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronUniTraj::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint window_key, uint heads, uint units_count, uint forecast, float dropout, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, window * (units_count + forecast), optimization_type, batch))
@@ -5999,10 +6001,9 @@ bool CNeuronUniTraj::BTS(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUniTraj feed-forward pass and writes the layer   |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Runs the CNeuronUniTraj feed-forward pass and writes the layer  output.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronUniTraj::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput)
   {
    if(!NeuronOCL)
@@ -6076,10 +6077,9 @@ bool CNeuronUniTraj::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* Second
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronUniTraj   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronUniTraj  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronUniTraj::calcInputGradients(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput, CBufferFloat* SecondGradient, ENUM_ACTIVATION SecondActivation = None)
   {
 //--- Decoder
@@ -6144,10 +6144,9 @@ bool CNeuronUniTraj::calcInputGradients(CNeuronBaseOCL* NeuronOCL, CBufferFloat*
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronUniTraj trainable weights from the accumulated|
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronUniTraj trainable weights from the  accumulated  gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronUniTraj::updateInputWeights(CNeuronBaseOCL* NeuronOCL, CBufferFloat* second)
   {
    if(!NeuronOCL)
@@ -6297,10 +6296,9 @@ bool CNeuronUniTraj::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronUniTraj GPU buffers to the given OpenCL       |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Rebinds the CNeuronUniTraj GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------+
 void CNeuronUniTraj::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -6327,10 +6325,9 @@ void CNeuronUniTraj::SetOpenCL(COpenCLMy * obj)
       cDecoder[i].SetOpenCL(OpenCL);
    cTranspResult.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronHiVTAAEncoder layer and allocates its GPU |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Initializes the CNeuronHiVTAAEncoder layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronHiVTAAEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint window_key, uint heads, uint heads_kv, uint units_count, uint layers, uint layers_to_one_kv, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, window * units_count * variables, optimization_type, batch))
@@ -6648,10 +6645,9 @@ bool CNeuronHiVTAAEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronHiVTAAEncoder feed-forward pass and writes the   |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Runs the CNeuronHiVTAAEncoder feed-forward pass and writes the  layer output.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronHiVTAAEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(CheckPointer(NeuronOCL) == POINTER_INVALID)
@@ -6704,10 +6700,9 @@ bool CNeuronHiVTAAEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronHiVTAAEncoder layer.                                      |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronHiVTAAEncoder layer.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronHiVTAAEncoder::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
    if(CheckPointer(prevLayer) == POINTER_INVALID)
@@ -6795,10 +6790,9 @@ bool CNeuronHiVTAAEncoder::calcInputGradients(CNeuronBaseOCL* prevLayer)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronHiVTAAEncoder trainable weights from the      |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Updates the CNeuronHiVTAAEncoder trainable weights from the  accumulated gradients.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronHiVTAAEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(CheckPointer(NeuronOCL) == POINTER_INVALID)
@@ -6830,10 +6824,9 @@ bool CNeuronHiVTAAEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronHiVTOCL layer and allocates its GPU       |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Initializes the CNeuronHiVTOCL layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronHiVTOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint window_key, uint heads, uint units_count, uint forecast, uint num_traj, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(units_count < 2 ||
@@ -6913,10 +6906,9 @@ bool CNeuronHiVTOCL::Prepare(const CNeuronBaseOCL* history)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronHiVTOCL feed-forward pass and writes the layer   |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Runs the CNeuronHiVTOCL feed-forward pass and writes the layer  output.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronHiVTOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!Prepare(NeuronOCL))
@@ -6961,10 +6953,9 @@ bool CNeuronHiVTOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronHiVTOCL   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronHiVTOCL  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronHiVTOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -7007,10 +6998,9 @@ bool CNeuronHiVTOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronHiVTOCL trainable weights from the accumulated|
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronHiVTOCL trainable weights from the  accumulated  gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronHiVTOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cEmbeddingTAD.UpdateInputWeights(cDataTAD.AsObject()))
@@ -7160,10 +7150,9 @@ bool CNeuronHiVTOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronHiVTOCL GPU buffers to the given OpenCL       |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Rebinds the CNeuronHiVTOCL GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------+
 void CNeuronHiVTOCL::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -7198,10 +7187,9 @@ CNeuronPointNetOCL::~CNeuronPointNetOCL(void)
    DeleteObj(cTurned1);
    DeleteObj(cTurned2);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronPointNetOCL layer and allocates its GPU   |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Initializes the CNeuronPointNetOCL layer and allocates its GPU  buffers.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronPointNetOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint units_count, uint output, bool use_tnets, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, output, optimization_type, batch))
@@ -7290,10 +7278,9 @@ bool CNeuronPointNetOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronPointNetOCL feed-forward pass and writes the     |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronPointNetOCL feed-forward pass and writes the  layer output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronPointNetOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- PreNet
@@ -7363,10 +7350,9 @@ bool CNeuronPointNetOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the orthoganal loss step of the CNeuronPointNetOCL      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Executes the orthoganal loss step of the CNeuronPointNetOCL  layer.  |
+//+----------------------------------------------------------------------+
 bool CNeuronPointNetOCL::OrthoganalLoss(CNeuronBaseOCL* NeuronOCL, bool add = false)
   {
    if(!NeuronOCL)
@@ -7388,10 +7374,9 @@ bool CNeuronPointNetOCL::OrthoganalLoss(CNeuronBaseOCL* NeuronOCL, bool add = fa
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronPointNetOCL layer.                                        |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronPointNetOCL layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronPointNetOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -7474,10 +7459,9 @@ bool CNeuronPointNetOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronPointNetOCL trainable weights from the        |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Updates the CNeuronPointNetOCL trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronPointNetOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //--- PreNet
@@ -7656,10 +7640,9 @@ bool CNeuronPointNetOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronPointNetOCL GPU buffers to the given OpenCL   |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Rebinds the CNeuronPointNetOCL GPU buffers to the given OpenCL  context.  |
+//+---------------------------------------------------------------------------+
 void CNeuronPointNetOCL::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -7686,10 +7669,9 @@ void CNeuronPointNetOCL::SetOpenCL(COpenCLMy * obj)
    for(int i = 0; i < 2; i++)
       cFinalMLP[i].SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronPointNet2Local layer and allocates its GPU|
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Initializes the CNeuronPointNet2Local layer and allocates its  GPU  buffers.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronPointNet2Local::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint units_count, uint window_out, float radius, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronConvOCL::Init(numOutputs, myIndex, open_cl, 128, 128, window_out, units_count, 1, optimization_type, batch))
@@ -7727,10 +7709,9 @@ bool CNeuronPointNet2Local::Init(uint numOutputs, uint myIndex, COpenCLMy * open
    SetActivationFunction(None);
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the calc distance step of the CNeuronPointNet2Local     |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Executes the calc distance step of the CNeuronPointNet2Local  layer.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronPointNet2Local::CalcDistance(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -7739,10 +7720,9 @@ bool CNeuronPointNet2Local::CalcDistance(CNeuronBaseOCL* NeuronOCL)
    return(CNeuronBaseOCL::CalcDistance(NeuronOCL.getOutput(), GetPointer(cDistance),
                                        iWindow, iUnits));
   }
-//+------------------------------------------------------------------+
-//| Executes the local max pool step of the CNeuronPointNet2Local    |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Executes the local max pool step of the CNeuronPointNet2Local  layer.  |
+//+------------------------------------------------------------------------+
 bool CNeuronPointNet2Local::LocalMaxPool(void)
   {
 //---
@@ -7761,10 +7741,9 @@ bool CNeuronPointNet2Local::LocalMaxPool(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the local max pool grad step of the                     |
-//| CNeuronPointNet2Local layer.                                     |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Executes the local max pool grad step of the  CNeuronPointNet2Local layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronPointNet2Local::LocalMaxPoolGrad(void)
   {
 //---
@@ -7785,10 +7764,9 @@ bool CNeuronPointNet2Local::LocalMaxPoolGrad(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronPointNet2Local feed-forward pass and writes the  |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Runs the CNeuronPointNet2Local feed-forward pass and writes the  layer output.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronPointNet2Local::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!CalcDistance(NeuronOCL))
@@ -7812,10 +7790,9 @@ bool CNeuronPointNet2Local::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronPointNet2Local layer.                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronPointNet2Local layer.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronPointNet2Local::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -7842,10 +7819,9 @@ bool CNeuronPointNet2Local::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronPointNet2Local trainable weights from the     |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Updates the CNeuronPointNet2Local trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronPointNet2Local::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    CNeuronBaseOCL *temp = NeuronOCL;
@@ -7923,10 +7899,9 @@ bool CNeuronPointNet2Local::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronPointNet2Local GPU buffers to the given OpenCL|
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Rebinds the CNeuronPointNet2Local GPU buffers to the given  OpenCL  context.  |
+//+-------------------------------------------------------------------------------+
 void CNeuronPointNet2Local::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronConvOCL::SetOpenCL(obj);
@@ -7948,10 +7923,9 @@ CNeuronPointNet2OCL::~CNeuronPointNet2OCL(void)
    DeleteObj(cTNetG);
    DeleteObj(cTurnedG);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronPointNet2OCL layer and allocates its GPU  |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Initializes the CNeuronPointNet2OCL layer and allocates its GPU  buffers.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronPointNet2OCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint units_count, uint output, bool use_tnets, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronPointNetOCL::Init(numOutputs, myIndex, open_cl, 64, units_count, output, use_tnets, optimization_type, batch))
@@ -7989,10 +7963,9 @@ bool CNeuronPointNet2OCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_c
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronPointNet2OCL feed-forward pass and writes the    |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Runs the CNeuronPointNet2OCL feed-forward pass and writes the  layer output.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronPointNet2OCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- LocalNet
@@ -8021,10 +7994,9 @@ bool CNeuronPointNet2OCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronPointNet2OCL layer.                                       |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronPointNet2OCL layer.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronPointNet2OCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -8064,10 +8036,9 @@ bool CNeuronPointNet2OCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronPointNet2OCL trainable weights from the       |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Updates the CNeuronPointNet2OCL trainable weights from the  accumulated gradients.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronPointNet2OCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //--- LocalNet
@@ -8092,10 +8063,9 @@ bool CNeuronPointNet2OCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronPointNet2OCL GPU buffers to the given OpenCL  |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Rebinds the CNeuronPointNet2OCL GPU buffers to the given OpenCL  context.  |
+//+----------------------------------------------------------------------------+
 void CNeuronPointNet2OCL::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronPointNetOCL::SetOpenCL(obj);
@@ -8176,10 +8146,9 @@ bool CNeuronPointNet2OCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronPointFormer layer and allocates its GPU   |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Initializes the CNeuronPointFormer layer and allocates its GPU  buffers.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronPointFormer::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint units_count, uint output, bool use_tnets, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronPointNet2OCL::Init(numOutputs, myIndex, open_cl, window, units_count, output, use_tnets, optimization_type, batch))
@@ -8214,10 +8183,9 @@ bool CNeuronPointFormer::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronPointFormer feed-forward pass and writes the     |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronPointFormer feed-forward pass and writes the  layer output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronPointFormer::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- LocalNet
@@ -8268,10 +8236,9 @@ bool CNeuronPointFormer::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronPointFormer layer.                                        |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronPointFormer layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronPointFormer::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -8354,10 +8321,9 @@ bool CNeuronPointFormer::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronPointFormer trainable weights from the        |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Updates the CNeuronPointFormer trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronPointFormer::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //--- LocalNet
@@ -8466,10 +8432,9 @@ bool CNeuronPointFormer::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronPointFormer GPU buffers to the given OpenCL   |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Rebinds the CNeuronPointFormer GPU buffers to the given OpenCL  context.  |
+//+---------------------------------------------------------------------------+
 void CNeuronPointFormer::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronPointNet2OCL::SetOpenCL(obj);
@@ -8487,10 +8452,9 @@ void CNeuronPointFormer::SetOpenCL(COpenCLMy * obj)
 //---
    cbTemp.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronHyperDet layer and allocates its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Initializes the CNeuronHyperDet layer and allocates its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronHyperDet::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint units_count, uint output, bool use_tnets, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronPointNet2OCL::Init(numOutputs, myIndex, open_cl, window, units_count, output, use_tnets, optimization_type, batch))
@@ -8525,10 +8489,9 @@ bool CNeuronHyperDet::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, u
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronHyperDet feed-forward pass and writes the layer  |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Runs the CNeuronHyperDet feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronHyperDet::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- LocalNet
@@ -8579,10 +8542,9 @@ bool CNeuronHyperDet::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronHyperDet  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronHyperDet  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronHyperDet::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -8661,10 +8623,9 @@ bool CNeuronHyperDet::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronHyperDet trainable weights from the           |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronHyperDet trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronHyperDet::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //--- LocalNet
@@ -8773,10 +8734,9 @@ bool CNeuronHyperDet::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronHyperDet GPU buffers to the given OpenCL      |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Rebinds the CNeuronHyperDet GPU buffers to the given OpenCL  context.  |
+//+------------------------------------------------------------------------+
 void CNeuronHyperDet::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronPointNet2OCL::SetOpenCL(obj);
@@ -8794,10 +8754,9 @@ void CNeuronHyperDet::SetOpenCL(COpenCLMy * obj)
 //---
    cbTemp.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronSEFormer layer and allocates its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Initializes the CNeuronSEFormer layer and allocates its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronSEFormer::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                            uint window, uint units_count, uint output, bool use_tnets,
                            uint center_points, uint center_window,
@@ -8969,10 +8928,9 @@ bool CNeuronSEFormer::AttentionOut(CBufferFloat* q, CBufferFloat* kv, int scores
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the attention inside gradients step of the              |
-//| CNeuronSEFormer layer.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Executes the attention inside gradients step of the  CNeuronSEFormer layer.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronSEFormer::AttentionInsideGradients(CBufferFloat* q, CBufferFloat* qg,
       CBufferFloat* kv, CBufferFloat* kvg,
       int scores, CBufferFloat* outg
@@ -9000,10 +8958,9 @@ bool CNeuronSEFormer::AttentionInsideGradients(CBufferFloat* q, CBufferFloat* qg
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronSEFormer feed-forward pass and writes the layer  |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Runs the CNeuronSEFormer feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronSEFormer::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //---
@@ -9100,10 +9057,9 @@ bool CNeuronSEFormer::feedForward(CNeuronBaseOCL* NeuronOCL)
 //--- result
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronSEFormer  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronSEFormer  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronSEFormer::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -9235,10 +9191,9 @@ bool CNeuronSEFormer::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronSEFormer trainable weights from the           |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronSEFormer trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronSEFormer::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //---
@@ -9408,10 +9363,9 @@ bool CNeuronSEFormer::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronSEFormer GPU buffers to the given OpenCL      |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Rebinds the CNeuronSEFormer GPU buffers to the given OpenCL  context.  |
+//+------------------------------------------------------------------------+
 void CNeuronSEFormer::SetOpenCL(COpenCLMy * obj)
   {
    bool create_score = false;
@@ -9442,10 +9396,9 @@ void CNeuronSEFormer::SetOpenCL(COpenCLMy * obj)
    cbTemp.BufferFree();
    cbTemp.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMultitaskStockformer layer and allocates  |
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Initializes the CNeuronMultitaskStockformer layer and allocates  its GPU buffers.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronMultitaskStockformer::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                        uint window, uint window_key, uint units_count,
                                        uint heads, uint layers, uint neurons_out, uint filters,
@@ -9509,10 +9462,9 @@ bool CNeuronMultitaskStockformer::Init(uint numOutputs, uint myIndex, COpenCLMy 
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMultitaskStockformer feed-forward pass and writes|
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Runs the CNeuronMultitaskStockformer feed-forward pass and  writes  the layer output.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronMultitaskStockformer::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- Decoupling Flow
@@ -9548,10 +9500,9 @@ bool CNeuronMultitaskStockformer::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return CNeuronBaseOCL::feedForward(cProjection.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronMultitaskStockformer layer.                               |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronMultitaskStockformer layer.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronMultitaskStockformer::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
    if(!prevLayer)
@@ -9598,10 +9549,9 @@ bool CNeuronMultitaskStockformer::calcInputGradients(CNeuronBaseOCL* prevLayer)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMultitaskStockformer trainable weights from   |
-//| the accumulated gradients.                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Updates the CNeuronMultitaskStockformer trainable weights from  the accumulated gradients.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronMultitaskStockformer::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //---
@@ -9666,10 +9616,9 @@ bool CNeuronMultitaskStockformer::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronMultitaskStockformer state from the file     |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Restores the CNeuronMultitaskStockformer state from the file  handle.  |
+//+------------------------------------------------------------------------+
 bool CNeuronMultitaskStockformer::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -9710,10 +9659,9 @@ bool CNeuronMultitaskStockformer::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMultitaskStockformer GPU buffers to the given |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronMultitaskStockformer GPU buffers to the given  OpenCL context.  |
+//+------------------------------------------------------------------------------------+
 void CNeuronMultitaskStockformer::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -9732,10 +9680,9 @@ void CNeuronMultitaskStockformer::SetOpenCL(COpenCLMy * obj)
    cLowHigh.SetOpenCL(OpenCL);
    cProjection.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronHidformer layer and allocates its GPU     |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Initializes the CNeuronHidformer layer and allocates its GPU  buffers.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronHidformer::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                             uint window, uint window_key, uint units_count,
                             uint heads, uint layers, uint stack_size, uint nactions,
@@ -9787,10 +9734,9 @@ bool CNeuronHidformer::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronHidformer feed-forward pass and writes the layer |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Runs the CNeuronHidformer feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronHidformer::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cTranspose.FeedForward(NeuronOCL))
@@ -9835,10 +9781,9 @@ bool CNeuronHidformer::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronHidformer |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronHidformer  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronHidformer::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -9900,10 +9845,9 @@ bool CNeuronHidformer::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronHidformer trainable weights from the          |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Updates the CNeuronHidformer trainable weights from the  accumulated gradients.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronHidformer::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cHyperAgent.UpdateInputWeights(NeuronOCL))
@@ -9974,10 +9918,9 @@ bool CNeuronHidformer::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronHidformer GPU buffers to the given OpenCL     |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Rebinds the CNeuronHidformer GPU buffers to the given OpenCL  context.  |
+//+-------------------------------------------------------------------------+
 void CNeuronHidformer::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -9990,9 +9933,9 @@ void CNeuronHidformer::SetOpenCL(COpenCLMy * obj)
    cHyperAgent.SetOpenCL(obj);
    cConcatenated.SetOpenCL(obj);
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronHidformer execution state and its GPU buffers. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Clears the CNeuronHidformer execution state and its GPU buffers.  |
+//+-------------------------------------------------------------------+
 bool CNeuronHidformer::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
@@ -10011,10 +9954,9 @@ bool CNeuronHidformer::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronChimera layer and allocates its GPU       |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Initializes the CNeuronChimera layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronChimera::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                           uint window_in, uint window_out, uint units_in, uint units_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -10083,10 +10025,9 @@ bool CNeuronChimera::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronChimera feed-forward pass and writes the layer   |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Runs the CNeuronChimera feed-forward pass and writes the layer  output.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronChimera::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    for(uint i = 0; i < caSSM.Size(); i++)
@@ -10114,10 +10055,9 @@ bool CNeuronChimera::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronChimera   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronChimera  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronChimera::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -10156,10 +10096,9 @@ bool CNeuronChimera::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronChimera trainable weights from the accumulated|
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronChimera trainable weights from the  accumulated  gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronChimera::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cDiscretization.UpdateInputWeights(caSSM[1].AsObject()))
@@ -10225,10 +10164,9 @@ bool CNeuronChimera::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronChimera GPU buffers to the given OpenCL       |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Rebinds the CNeuronChimera GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------+
 void CNeuronChimera::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -10325,10 +10263,9 @@ bool CNeuronMoT::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMoT feed-forward pass and writes the layer       |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Runs the CNeuronMoT feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------+
 bool CNeuronMoT::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cNodesTokenizer.FeedForward(NeuronOCL))
@@ -10355,9 +10292,9 @@ bool CNeuronMoT::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return CNeuronMHAttentionPooling::feedForward(cConcatenate.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronMoT layer.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronMoT  layer.  |
+//+---------------------------------------------------------------------+
 bool CNeuronMoT::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -10421,10 +10358,9 @@ bool CNeuronMoT::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMoT trainable weights from the accumulated    |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Updates the CNeuronMoT trainable weights from the accumulated  gradients.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronMoT::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!CNeuronMHAttentionPooling::updateInputWeights(cConcatenate.AsObject()))
@@ -10504,10 +10440,9 @@ void CNeuronMoT::SetOpenCL(COpenCLMy * obj)
    cUnitarSubGraphsTokenizer.SetOpenCL(OpenCL);
    cConcatenate.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronChimeraPlus layer and allocates its GPU   |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Initializes the CNeuronChimeraPlus layer and allocates its GPU  buffers.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronChimeraPlus::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                               uint window_in, uint window_out, uint units_in, uint units_out,
                               ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -10556,10 +10491,9 @@ bool CNeuronChimeraPlus::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronChimeraPlus feed-forward pass and writes the     |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronChimeraPlus feed-forward pass and writes the  layer output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronChimeraPlus::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    for(uint i = 0; i < caSSM.Size(); i++)
@@ -10601,10 +10535,9 @@ bool CNeuronChimeraPlus::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronChimeraPlus layer.                                        |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronChimeraPlus layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronChimeraPlus::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!CNeuronChimera::calcInputGradients(NeuronOCL))
@@ -10634,10 +10567,9 @@ bool CNeuronChimeraPlus::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronChimeraPlus trainable weights from the        |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Updates the CNeuronChimeraPlus trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronChimeraPlus::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!CNeuronChimera::updateInputWeights(NeuronOCL))
@@ -10684,20 +10616,18 @@ bool CNeuronChimeraPlus::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronChimeraPlus GPU buffers to the given OpenCL   |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Rebinds the CNeuronChimeraPlus GPU buffers to the given OpenCL  context.  |
+//+---------------------------------------------------------------------------+
 void CNeuronChimeraPlus::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronChimera::SetOpenCL(obj);
    cSSMPlus.SetOpenCL(OpenCL);
    cDiscretizationPlus.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronChimeraPlus execution state and its GPU        |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Clears the CNeuronChimeraPlus execution state and its GPU  buffers.  |
+//+----------------------------------------------------------------------+
 bool CNeuronChimeraPlus::Clear(void)
   {
    if(!CNeuronChimera::Clear())
@@ -10715,10 +10645,9 @@ bool CNeuronChimeraPlus::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronHypridDecoder layer and allocates its GPU |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Initializes the CNeuronHypridDecoder layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronHypridDecoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                 uint window, uint window_key, uint units_count,
                                 uint heads, uint layers, uint stack_size, uint nactions,
@@ -10732,20 +10661,18 @@ bool CNeuronHypridDecoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronHypridDecoder feed-forward pass and writes the   |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Runs the CNeuronHypridDecoder feed-forward pass and writes the  layer output.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronHypridDecoder::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cChimera.FeedForward(NeuronOCL))
       ReturnFalse;
    return CNeuronHidformer::feedForward(cChimera.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronHypridDecoder layer.                                      |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronHypridDecoder layer.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronHypridDecoder::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -10758,10 +10685,9 @@ bool CNeuronHypridDecoder::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronHypridDecoder trainable weights from the      |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Updates the CNeuronHypridDecoder trainable weights from the  accumulated gradients.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronHypridDecoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!CNeuronHidformer::updateInputWeights(cChimera.AsObject()))
@@ -10796,19 +10722,17 @@ bool CNeuronHypridDecoder::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronHypridDecoder GPU buffers to the given OpenCL |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Rebinds the CNeuronHypridDecoder GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------------+
 void CNeuronHypridDecoder::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronHidformer::SetOpenCL(obj);
    cChimera.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronHypridDecoder execution state and its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Clears the CNeuronHypridDecoder execution state and its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronHypridDecoder::Clear(void)
   {
    if(!CNeuronHidformer::Clear())
@@ -10818,10 +10742,9 @@ bool CNeuronHypridDecoder::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronAttraos layer and allocates its GPU       |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Initializes the CNeuronAttraos layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronAttraos::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                           uint window, uint window_key, uint units_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -10935,10 +10858,9 @@ bool CNeuronAttraos::PScan(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the p scan calc gradient step of the CNeuronAttraos     |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Executes the p scan calc gradient step of the CNeuronAttraos  layer.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronAttraos::PScanCalcGradient(void)
   {
    if(!OpenCL)
@@ -10968,10 +10890,9 @@ bool CNeuronAttraos::PScanCalcGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronAttraos feed-forward pass and writes the layer   |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Runs the CNeuronAttraos feed-forward pass and writes the layer  output.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronAttraos::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //---
@@ -11020,10 +10941,9 @@ bool CNeuronAttraos::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronAttraos   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronAttraos  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronAttraos::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -11101,10 +11021,9 @@ bool CNeuronAttraos::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronAttraos trainable weights from the accumulated|
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronAttraos trainable weights from the  accumulated  gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronAttraos::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
 //---
@@ -11207,10 +11126,9 @@ bool CNeuronAttraos::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronAttraos GPU buffers to the given OpenCL       |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Rebinds the CNeuronAttraos GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------+
 void CNeuronAttraos::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -11296,10 +11214,9 @@ bool CNeuronMoE::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMoE feed-forward pass and writes the layer       |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Runs the CNeuronMoE feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------+
 bool CNeuronMoE::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cGates.FeedForward(NeuronOCL))
@@ -11325,9 +11242,9 @@ bool CNeuronMoE::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronMoE layer.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronMoE  layer.  |
+//+---------------------------------------------------------------------+
 bool CNeuronMoE::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -11372,10 +11289,9 @@ bool CNeuronMoE::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMoE trainable weights from the accumulated    |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Updates the CNeuronMoE trainable weights from the accumulated  gradients.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronMoE::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cGates.UpdateInputWeights(NeuronOCL))
@@ -11439,10 +11355,9 @@ void CNeuronMoE::SetOpenCL(COpenCLMy * obj)
    cXProj.SetOpenCL(OpenCL);
    cExperts.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronChanelMask layer and allocates its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Initializes the CNeuronChanelMask layer and allocates its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronChanelMask::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                              uint window, uint units_count,
                              ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -11516,10 +11431,9 @@ bool CNeuronChanelMask::Mask(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronChanelMask feed-forward pass and writes the layer|
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronChanelMask feed-forward pass and writes the  layer  output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronChanelMask::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -11561,10 +11475,9 @@ bool CNeuronChanelMask::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronChanelMask GPU buffers to the given OpenCL    |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Rebinds the CNeuronChanelMask GPU buffers to the given OpenCL  context.  |
+//+--------------------------------------------------------------------------+
 void CNeuronChanelMask::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -11575,9 +11488,9 @@ void CNeuronChanelMask::SetOpenCL(COpenCLMy * obj)
    cbFFTReal.BufferCreate(OpenCL);
    cbFFTImag.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronDUET layer and allocates its GPU buffers. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Initializes the CNeuronDUET layer and allocates its GPU buffers.  |
+//+-------------------------------------------------------------------+
 bool CNeuronDUET::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                        uint window, uint window_key, uint units_count,
                        uint heads, uint units_out, uint experts, uint top_k,
@@ -11658,10 +11571,9 @@ bool CNeuronDUET::AttentionOut(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the attention inside gradients step of the CNeuronDUET  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Executes the attention inside gradients step of the CNeuronDUET  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronDUET::AttentionInsideGradients(void)
   {
    if(!OpenCL)
@@ -11687,10 +11599,9 @@ bool CNeuronDUET::AttentionInsideGradients(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronDUET feed-forward pass and writes the layer      |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Runs the CNeuronDUET feed-forward pass and writes the layer  output.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronDUET::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cTranspose.FeedForward(NeuronOCL))
@@ -11715,10 +11626,9 @@ bool CNeuronDUET::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return CNeuronTransposeOCL::feedForward(cFeedForward.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronDUET      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronDUET  layer.  |
+//+----------------------------------------------------------------------+
 bool CNeuronDUET::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
    if(!prevLayer)
@@ -11746,10 +11656,9 @@ bool CNeuronDUET::calcInputGradients(CNeuronBaseOCL* prevLayer)
 //---
    return prevLayer.CalcHiddenGradients(cTranspose.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronDUET trainable weights from the accumulated   |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Updates the CNeuronDUET trainable weights from the accumulated  gradients.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronDUET::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cExperts.UpdateInputWeights(cTranspose.AsObject()))
@@ -11839,9 +11748,9 @@ bool CNeuronDUET::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronDUET GPU buffers to the given OpenCL context. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Rebinds the CNeuronDUET GPU buffers to the given OpenCL context.  |
+//+-------------------------------------------------------------------+
 void CNeuronDUET::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronTransposeOCL::SetOpenCL(obj);
@@ -11912,10 +11821,9 @@ bool CNeuronMultiWindowsConvOCL::Init(uint numOutputs, uint myIndex, COpenCLMy *
 //--- Finalize after the replacement table has a live owner.
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMultiWindowsConvOCL feed-forward pass and writes |
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Runs the CNeuronMultiWindowsConvOCL feed-forward pass and writes  the layer output.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL)
@@ -11953,10 +11861,9 @@ bool CNeuronMultiWindowsConvOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronMultiWindowsConvOCL layer.                                |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronMultiWindowsConvOCL layer.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL)
@@ -11983,10 +11890,9 @@ bool CNeuronMultiWindowsConvOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMultiWindowsConvOCL trainable weights from the|
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Updates the CNeuronMultiWindowsConvOCL trainable weights from  the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL)
@@ -12163,10 +12069,9 @@ void CNeuronMultiWindowsConvOCL::SetOpenCL(COpenCLMy *obj)
    if(!SetOpenCLChecked(obj))
       PrintFormat("%s: MultiWindows checked OpenCL transfer failed", __FUNCTION__);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronComplexConvOCL layer and allocates its GPU|
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Initializes the CNeuronComplexConvOCL layer and allocates its  GPU  buffers.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronComplexConvOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window, uint step, uint window_out, uint units_count, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs, myIndex, open_cl, 2 * units_count * window_out * variables, optimization_type, batch))
@@ -12236,10 +12141,9 @@ bool CNeuronComplexConvOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronComplexConvOCL feed-forward pass and writes the  |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Runs the CNeuronComplexConvOCL feed-forward pass and writes the  layer output.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronComplexConvOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(CheckPointer(OpenCL) == POINTER_INVALID || CheckPointer(NeuronOCL) == POINTER_INVALID)
@@ -12265,10 +12169,9 @@ bool CNeuronComplexConvOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronComplexConvOCL layer.                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronComplexConvOCL layer.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronComplexConvOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(CheckPointer(OpenCL) == POINTER_INVALID || CheckPointer(NeuronOCL) == POINTER_INVALID)
@@ -12296,10 +12199,9 @@ bool CNeuronComplexConvOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronComplexConvOCL trainable weights from the     |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Updates the CNeuronComplexConvOCL trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronComplexConvOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(CheckPointer(OpenCL) == POINTER_INVALID || CheckPointer(NeuronOCL) == POINTER_INVALID)
@@ -12379,9 +12281,9 @@ bool CNeuronCATCH::FFT(CBufferFloat* inp_re, CBufferFloat* inp_im,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronCATCH layer and allocates its GPU buffers.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Initializes the CNeuronCATCH layer and allocates its GPU  buffers.  |
+//+---------------------------------------------------------------------+
 bool CNeuronCATCH::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                         uint time_step, uint variables,
                         uint window, uint step, uint window_key, uint heads,
@@ -12459,10 +12361,9 @@ bool CNeuronCATCH::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronCATCH feed-forward pass and writes the layer     |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Runs the CNeuronCATCH feed-forward pass and writes the layer  output.  |
+//+------------------------------------------------------------------------+
 bool CNeuronCATCH::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cTranspose.FeedForward(NeuronOCL))
@@ -12476,13 +12377,13 @@ bool CNeuronCATCH::feedForward(CNeuronBaseOCL* NeuronOCL)
       ReturnFalse;
 //---
    CNeuronBaseOCL *neuron = cFreqConcat.AsObject();
-//neuron.getOutput().BufferRead();
+//---neuron.getOutput().BufferRead();
    for(uint i = 0; i < caProjection.Size(); i++)
      {
       if(!caProjection[i].FeedForward(neuron))
          ReturnFalse;
       neuron = caProjection[i].AsObject();
-      //neuron.getOutput().BufferRead();
+      //---neuron.getOutput().BufferRead();
      }
 //---
    for(uint i = 0; i < caChannelFusion.Size(); i++)
@@ -12490,7 +12391,7 @@ bool CNeuronCATCH::feedForward(CNeuronBaseOCL* NeuronOCL)
       if(!caChannelFusion[i].FeedForward(neuron))
          ReturnFalse;
       neuron = caChannelFusion[i].AsObject();
-      //neuron.getOutput().BufferRead();
+      //---neuron.getOutput().BufferRead();
      }
 //---
    for(uint i = 0; i < caLinearHead.Size(); i++)
@@ -12498,7 +12399,7 @@ bool CNeuronCATCH::feedForward(CNeuronBaseOCL* NeuronOCL)
       if(!caLinearHead[i].FeedForward(neuron))
          ReturnFalse;
       neuron = caLinearHead[i].AsObject();
-      //neuron.getOutput().BufferRead();
+      //---neuron.getOutput().BufferRead();
      }
 //---
    if(!DeConcat(caFreqOut[0].getOutput(), caFreqOut[1].getOutput(), neuron.getOutput(), 1, 1, caFreqOut[0].Neurons()))
@@ -12514,10 +12415,9 @@ bool CNeuronCATCH::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return CNeuronTransposeOCL::feedForward(caFreqOut[0].AsObject());
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronCATCH     |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronCATCH  layer.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronCATCH::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
    if(!prevLayer)
@@ -12581,10 +12481,9 @@ bool CNeuronCATCH::calcInputGradients(CNeuronBaseOCL* prevLayer)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronCATCH trainable weights from the accumulated  |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Updates the CNeuronCATCH trainable weights from the accumulated  gradients.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronCATCH::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    CNeuronBaseOCL *neuron = cFreqConcat.AsObject();
@@ -12611,10 +12510,9 @@ bool CNeuronCATCH::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronCATCH weights toward the source model with   |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Averages the CNeuronCATCH weights toward the source model with  factor tau.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronCATCH::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -12694,9 +12592,9 @@ bool CNeuronCATCH::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronCATCH GPU buffers to the given OpenCL context.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Rebinds the CNeuronCATCH GPU buffers to the given OpenCL  context.  |
+//+---------------------------------------------------------------------+
 void CNeuronCATCH::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronTransposeOCL::SetOpenCL(obj);
@@ -12737,10 +12635,9 @@ bool CNeuronCATCH::ComplexNormalize(CNeuronBaseOCL* cInputFreqComplex,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the complex normalize gradient step of the CNeuronCATCH |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Executes the complex normalize gradient step of the CNeuronCATCH  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronCATCH::ComplexNormalizeGradient(CNeuronBaseOCL* cInputFreqComplex,
       CNeuronBaseOCL* cNormFreqComplex,
       CBufferFloat   * cVariances,
@@ -12760,10 +12657,9 @@ bool CNeuronCATCH::ComplexNormalizeGradient(CNeuronBaseOCL* cInputFreqComplex,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronSkillsEncoder layer and allocates its GPU |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Initializes the CNeuronSkillsEncoder layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronSkillsEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                 uint time_step, uint variables, uint skills,
                                 uint window, uint step, uint window_key, uint heads,
@@ -12807,15 +12703,14 @@ bool CNeuronSkillsEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronSkillsEncoder feed-forward pass and writes the   |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Runs the CNeuronSkillsEncoder feed-forward pass and writes the  layer output.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronSkillsEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cCrossObservAttention.FeedForward(NeuronOCL))
       ReturnFalse;
-//cCrossObservAttention.getOutput().BufferRead();
+//---cCrossObservAttention.getOutput().BufferRead();
    if(!cTranspose.FeedForward(cCrossObservAttention.AsObject()))
       ReturnFalse;
    if(!cSkillsProjection[0].FeedForward(cTranspose.AsObject()))
@@ -12826,10 +12721,9 @@ bool CNeuronSkillsEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return CNeuronSoftMaxOCL::feedForward(cSkillsProjection[1].AsObject());
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronSkillsEncoder layer.                                      |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronSkillsEncoder layer.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronSkillsEncoder::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
    if(!prevLayer)
@@ -12861,10 +12755,9 @@ bool CNeuronSkillsEncoder::calcInputGradients(CNeuronBaseOCL* prevLayer)
 //---
    return prevLayer.CalcHiddenGradients(cCrossObservAttention.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronSkillsEncoder trainable weights from the      |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Updates the CNeuronSkillsEncoder trainable weights from the  accumulated gradients.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronSkillsEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cCrossObservAttention.UpdateInputWeights(NeuronOCL))
@@ -12876,10 +12769,9 @@ bool CNeuronSkillsEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronSkillsEncoder weights toward the source model|
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Averages the CNeuronSkillsEncoder weights toward the source  model  with factor tau.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronSkillsEncoder::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -12931,10 +12823,9 @@ bool CNeuronSkillsEncoder::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronSkillsEncoder GPU buffers to the given OpenCL |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Rebinds the CNeuronSkillsEncoder GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------------+
 void CNeuronSkillsEncoder::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronSoftMaxOCL::SetOpenCL(obj);
@@ -12944,10 +12835,9 @@ void CNeuronSkillsEncoder::SetOpenCL(COpenCLMy * obj)
       cSkillsProjection[i].SetOpenCL(OpenCL);
    cPrevSkillsConcat.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTSPositionEncoder layer and allocates its |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Initializes the CNeuronTSPositionEncoder layer and allocates its  GPU buffers.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronTSPositionEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                     uint window, uint units_count, uint & periods[], uint freqs,
                                     ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -12997,10 +12887,9 @@ bool CNeuronTSPositionEncoder::AddPE(CBufferFloat* time)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTSPositionEncoder feed-forward pass and writes   |
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronTSPositionEncoder feed-forward pass and writes  the layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronTSPositionEncoder::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFloat* SecondInput)
   {
    if(!cProjection.FeedForward(NeuronOCL))
@@ -13010,10 +12899,9 @@ bool CNeuronTSPositionEncoder::feedForward(CNeuronBaseOCL* NeuronOCL, CBufferFlo
 //---
    return AddPE(SecondInput);
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronTSPositionEncoder layer.                                  |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronTSPositionEncoder layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronTSPositionEncoder::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -13024,10 +12912,9 @@ bool CNeuronTSPositionEncoder::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return NeuronOCL.CalcHiddenGradients(cProjection.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTSPositionEncoder trainable weights from the  |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Updates the CNeuronTSPositionEncoder trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronTSPositionEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cProjection.UpdateInputWeights(NeuronOCL))
@@ -13037,10 +12924,9 @@ bool CNeuronTSPositionEncoder::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronTSPositionEncoder weights toward the source  |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Averages the CNeuronTSPositionEncoder weights toward the source  model with factor tau.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronTSPositionEncoder::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -13069,9 +12955,9 @@ bool CNeuronTSPositionEncoder::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronTSPositionEncoder state from the file handle.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Restores the CNeuronTSPositionEncoder state from the file  handle.  |
+//+---------------------------------------------------------------------+
 bool CNeuronTSPositionEncoder::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -13087,10 +12973,9 @@ bool CNeuronTSPositionEncoder::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronTSPositionEncoder GPU buffers to the given    |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Rebinds the CNeuronTSPositionEncoder GPU buffers to the given  OpenCL context.  |
+//+---------------------------------------------------------------------------------+
 void CNeuronTSPositionEncoder::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -13099,10 +12984,9 @@ void CNeuronTSPositionEncoder::SetOpenCL(COpenCLMy * obj)
    cPeriods.BufferFree();
    cPeriods.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMultiWindowsConvWPadOCL layer and         |
-//| allocates its GPU buffers.                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Initializes the CNeuronMultiWindowsConvWPadOCL layer and  allocates its GPU buffers.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvWPadOCL::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint & windows[],
       uint step, uint window_out, uint units_count, uint variables,
       ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -13124,10 +13008,9 @@ bool CNeuronMultiWindowsConvWPadOCL::Init(uint numOutputs, uint myIndex, COpenCL
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMultiWindowsConvWPadOCL feed-forward pass and    |
-//| writes the layer output.                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Runs the CNeuronMultiWindowsConvWPadOCL feed-forward pass and  writes the layer output.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvWPadOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL)
@@ -13187,10 +13070,9 @@ bool CNeuronMultiWindowsConvWPadOCL::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronMultiWindowsConvWPadOCL layer.                            |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronMultiWindowsConvWPadOCL layer.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvWPadOCL::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL)
@@ -13223,10 +13105,9 @@ bool CNeuronMultiWindowsConvWPadOCL::calcInputGradients(CNeuronBaseOCL* NeuronOC
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMultiWindowsConvWPadOCL trainable weights from|
-//| the accumulated gradients.                                       |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------------------+
+//| Updates the CNeuronMultiWindowsConvWPadOCL trainable weights  from  the accumulated gradients.  |
+//+-------------------------------------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvWPadOCL::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL)
@@ -13259,10 +13140,9 @@ bool CNeuronMultiWindowsConvWPadOCL::updateInputWeights(CNeuronBaseOCL* NeuronOC
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Saves the CNeuronMultiWindowsConvWPadOCL state to the file       |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Saves the CNeuronMultiWindowsConvWPadOCL state to the file  handle.  |
+//+----------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvWPadOCL::Save(const int file_handle)
   {
    if(!CNeuronConvOCL::Save(file_handle))
@@ -13275,10 +13155,9 @@ bool CNeuronMultiWindowsConvWPadOCL::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronMultiWindowsConvWPadOCL state from the file  |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Restores the CNeuronMultiWindowsConvWPadOCL state from the file  handle.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronMultiWindowsConvWPadOCL::Load(const int file_handle)
   {
    ArrayFree(aiWindows);
@@ -13301,10 +13180,9 @@ bool CNeuronMultiWindowsConvWPadOCL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMultiWindowsConvWPadOCL GPU buffers to the    |
-//| given OpenCL context.                                            |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronMultiWindowsConvWPadOCL GPU buffers to the  given OpenCL context.  |
+//+---------------------------------------------------------------------------------------+
 void CNeuronMultiWindowsConvWPadOCL::SetOpenCL(COpenCLMy * obj)
   {
    if(!!OpenCL && iWindow >= 0)
@@ -13312,10 +13190,9 @@ void CNeuronMultiWindowsConvWPadOCL::SetOpenCL(COpenCLMy * obj)
    CNeuronConvOCL::SetOpenCL(obj);
    iWindow = OpenCL.AddBufferFromArray(aiWindows, 0, aiWindows.Size(), CL_MEM_READ_ONLY);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronConcatDiff layer and allocates its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Initializes the CNeuronConcatDiff layer and allocates its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronConcatDiff::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                              uint units_count, uint step, uint variables,
                              ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -13331,10 +13208,9 @@ bool CNeuronConcatDiff::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronConcatDiff feed-forward pass and writes the layer|
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronConcatDiff feed-forward pass and writes the  layer  output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronConcatDiff::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL || !Output)
@@ -13372,10 +13248,9 @@ bool CNeuronConcatDiff::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronConcatDiff|
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronConcatDiff  layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronConcatDiff::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -13423,10 +13298,9 @@ bool CNeuronConcatDiff::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMantisPatching layer and allocates its GPU|
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Initializes the CNeuronMantisPatching layer and allocates its  GPU  buffers.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronMantisPatching::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                  uint count, uint patchs, uint variables,
                                  uint embedding_size, uint patch_filters,
@@ -13455,10 +13329,9 @@ bool CNeuronMantisPatching::Init(uint numOutputs, uint myIndex, COpenCLMy * open
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMantisPatching feed-forward pass and writes the  |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Runs the CNeuronMantisPatching feed-forward pass and writes the  layer output.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronMantisPatching::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cToVarSeq.FeedForward(NeuronOCL))
@@ -13476,10 +13349,9 @@ bool CNeuronMantisPatching::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronMantisPatching layer.                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronMantisPatching layer.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronMantisPatching::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -13500,10 +13372,9 @@ bool CNeuronMantisPatching::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMantisPatching trainable weights from the     |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Updates the CNeuronMantisPatching trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronMantisPatching::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cProjecting.UpdateInputWeights(cToVarSeq.AsObject()))
@@ -13553,10 +13424,9 @@ bool CNeuronMantisPatching::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMantisPatching GPU buffers to the given OpenCL|
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Rebinds the CNeuronMantisPatching GPU buffers to the given  OpenCL  context.  |
+//+-------------------------------------------------------------------------------+
 void CNeuronMantisPatching::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronTransposeOCL::SetOpenCL(obj);
@@ -13566,10 +13436,9 @@ void CNeuronMantisPatching::SetOpenCL(COpenCLMy * obj)
    cPatchingProj.SetOpenCL(obj);
    cProof.SetOpenCL(obj);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronMantisPatching weights toward the source     |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Averages the CNeuronMantisPatching weights toward the source  model with factor tau.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronMantisPatching::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronTransposeOCL::WeightsUpdate(source, tau))
@@ -13582,10 +13451,9 @@ bool CNeuronMantisPatching::WeightsUpdate(CNeuronBaseOCL* source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMantisAttentionUnit layer and allocates   |
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Initializes the CNeuronMantisAttentionUnit layer and allocates  its GPU buffers.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronMantisAttentionUnit::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                       uint token_size, uint window, uint window_key,
                                       uint heads, uint units_count, uint layers, uint variables,
@@ -13611,10 +13479,9 @@ bool CNeuronMantisAttentionUnit::Init(uint numOutputs, uint myIndex, COpenCLMy *
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMantisAttentionUnit feed-forward pass and writes |
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Runs the CNeuronMantisAttentionUnit feed-forward pass and writes  the layer output.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronMantisAttentionUnit::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -13632,10 +13499,9 @@ bool CNeuronMantisAttentionUnit::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronMantisAttentionUnit layer.                                |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronMantisAttentionUnit layer.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronMantisAttentionUnit::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -13652,10 +13518,9 @@ bool CNeuronMantisAttentionUnit::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMantisAttentionUnit trainable weights from the|
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Updates the CNeuronMantisAttentionUnit trainable weights from  the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronMantisAttentionUnit::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -13683,10 +13548,9 @@ bool CNeuronMantisAttentionUnit::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronMantisAttentionUnit state from the file      |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Restores the CNeuronMantisAttentionUnit state from the file  handle.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronMantisAttentionUnit::Load(const int file_handle)
   {
    if(!CNeuronSoftMaxOCL::Load(file_handle))
@@ -13699,10 +13563,9 @@ bool CNeuronMantisAttentionUnit::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMantisAttentionUnit GPU buffers to the given  |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Rebinds the CNeuronMantisAttentionUnit GPU buffers to the given  OpenCL context.  |
+//+-----------------------------------------------------------------------------------+
 void CNeuronMantisAttentionUnit::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronSoftMaxOCL::SetOpenCL(obj);
@@ -13710,10 +13573,9 @@ void CNeuronMantisAttentionUnit::SetOpenCL(COpenCLMy * obj)
       cClassToken[i].SetOpenCL(OpenCL);
    cAttention.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronMantisAttentionUnit weights toward the source|
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Averages the CNeuronMantisAttentionUnit weights toward the  source  model with factor tau.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronMantisAttentionUnit::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronSoftMaxOCL::WeightsUpdate(source, tau))
@@ -13728,10 +13590,9 @@ bool CNeuronMantisAttentionUnit::WeightsUpdate(CNeuronBaseOCL* source, float tau
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTimeFoundPatching layer and allocates its |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Initializes the CNeuronTimeFoundPatching layer and allocates its  GPU buffers.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronTimeFoundPatching::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                     uint count, uint patchs, uint variables,
                                     uint embedding_size, uint patch_filters,
@@ -13784,10 +13645,9 @@ bool CNeuronTimeFoundPatching::Init(uint numOutputs, uint myIndex, COpenCLMy * o
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTimeFoundPatching feed-forward pass and writes   |
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronTimeFoundPatching feed-forward pass and writes  the layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronTimeFoundPatching::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cToVarSeq.FeedForward(NeuronOCL))
@@ -13809,10 +13669,9 @@ bool CNeuronTimeFoundPatching::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return CNeuronConvOCL::feedForward(cToPatchVarEmb.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronTimeFoundPatching layer.                                  |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronTimeFoundPatching layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronTimeFoundPatching::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -13840,10 +13699,9 @@ bool CNeuronTimeFoundPatching::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return NeuronOCL.CalcHiddenGradients(cToVarSeq.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTimeFoundPatching trainable weights from the  |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Updates the CNeuronTimeFoundPatching trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronTimeFoundPatching::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cProjecting.UpdateInputWeights(cToVarSeq.AsObject()))
@@ -13857,10 +13715,9 @@ bool CNeuronTimeFoundPatching::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return CNeuronConvOCL::updateInputWeights(cToPatchVarEmb.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronTimeFoundPatching weights toward the source  |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Averages the CNeuronTimeFoundPatching weights toward the source  model with factor tau.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronTimeFoundPatching::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronConvOCL::WeightsUpdate(source, tau))
@@ -13903,9 +13760,9 @@ bool CNeuronTimeFoundPatching::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronTimeFoundPatching state from the file handle.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Restores the CNeuronTimeFoundPatching state from the file  handle.  |
+//+---------------------------------------------------------------------+
 bool CNeuronTimeFoundPatching::Load(const int file_handle)
   {
    if(!CNeuronConvOCL::Load(file_handle))
@@ -13929,10 +13786,9 @@ bool CNeuronTimeFoundPatching::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronTimeFoundPatching GPU buffers to the given    |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Rebinds the CNeuronTimeFoundPatching GPU buffers to the given  OpenCL context.  |
+//+---------------------------------------------------------------------------------+
 void CNeuronTimeFoundPatching::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronConvOCL::SetOpenCL(obj);
@@ -13945,10 +13801,9 @@ void CNeuronTimeFoundPatching::SetOpenCL(COpenCLMy * obj)
    cProof.SetOpenCL(OpenCL);
    cToPatchVarEmb.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTimeFoundTransformerUnit layer and        |
-//| allocates its GPU buffers.                                       |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Initializes the CNeuronTimeFoundTransformerUnit layer and  allocates its GPU buffers.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronTimeFoundTransformerUnit::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window,
       uint window_key, uint heads, uint heads_kv, uint units_count,
       uint layers, uint layers_to_one_kv, uint variables,
@@ -13965,10 +13820,9 @@ bool CNeuronTimeFoundTransformerUnit::Init(uint numOutputs, uint myIndex, COpenC
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTimeFoundTransformerUnit feed-forward pass and   |
-//| writes the layer output.                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------------+
+//| Runs the CNeuronTimeFoundTransformerUnit feed-forward pass and  writes the layer output.  |
+//+-------------------------------------------------------------------------------------------+
 bool CNeuronTimeFoundTransformerUnit::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cSelfAttention.FeedForward(NeuronOCL))
@@ -13978,10 +13832,9 @@ bool CNeuronTimeFoundTransformerUnit::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronTimeFoundTransformerUnit layer.                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronTimeFoundTransformerUnit layer.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronTimeFoundTransformerUnit::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
    if(!prevLayer)
@@ -14002,10 +13855,9 @@ bool CNeuronTimeFoundTransformerUnit::calcInputGradients(CNeuronBaseOCL* prevLay
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTimeFoundTransformerUnit trainable weights    |
-//| from the accumulated gradients.                                  |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------------------+
+//| Updates the CNeuronTimeFoundTransformerUnit trainable weights  from the accumulated gradients.  |
+//+-------------------------------------------------------------------------------------------------+
 bool CNeuronTimeFoundTransformerUnit::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cSelfAttention.UpdateInputWeights(NeuronOCL))
@@ -14015,10 +13867,9 @@ bool CNeuronTimeFoundTransformerUnit::updateInputWeights(CNeuronBaseOCL* NeuronO
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronTimeFoundTransformerUnit weights toward the  |
-//| source model with factor tau.                                    |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------------------+
+//| Averages the CNeuronTimeFoundTransformerUnit weights toward the  source model with factor tau.  |
+//+-------------------------------------------------------------------------------------------------+
 bool CNeuronTimeFoundTransformerUnit::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronCrossDMHAttention::WeightsUpdate(source, tau))
@@ -14030,10 +13881,9 @@ bool CNeuronTimeFoundTransformerUnit::WeightsUpdate(CNeuronBaseOCL* source, floa
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Saves the CNeuronTimeFoundTransformerUnit state to the file      |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Saves the CNeuronTimeFoundTransformerUnit state to the file  handle.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronTimeFoundTransformerUnit::Save(const int file_handle)
   {
    if(!CNeuronCrossDMHAttention::Save(file_handle))
@@ -14043,10 +13893,9 @@ bool CNeuronTimeFoundTransformerUnit::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronTimeFoundTransformerUnit state from the file |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Restores the CNeuronTimeFoundTransformerUnit state from the file  handle.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronTimeFoundTransformerUnit::Load(const int file_handle)
   {
    if(!CNeuronCrossDMHAttention::Load(file_handle))
@@ -14056,19 +13905,17 @@ bool CNeuronTimeFoundTransformerUnit::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronTimeFoundTransformerUnit GPU buffers to the   |
-//| given OpenCL context.                                            |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronTimeFoundTransformerUnit GPU buffers to the  given OpenCL context.  |
+//+----------------------------------------------------------------------------------------+
 void CNeuronTimeFoundTransformerUnit::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronCrossDMHAttention::SetOpenCL(obj);
    cSelfAttention.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTimeMoESparseExperts layer and allocates  |
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Initializes the CNeuronTimeMoESparseExperts layer and allocates  its GPU buffers.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronTimeMoESparseExperts::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl, uint window,
                                        uint window_out, uint units_count, uint variables, uint experts,
                                        uint topK, ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -14101,10 +13948,9 @@ bool CNeuronTimeMoESparseExperts::Init(uint numOutputs, uint myIndex, COpenCLMy 
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTimeMoESparseExperts feed-forward pass and writes|
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Runs the CNeuronTimeMoESparseExperts feed-forward pass and  writes  the layer output.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronTimeMoESparseExperts::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cExpertsIn.FeedForward(NeuronOCL))
@@ -14131,10 +13977,9 @@ bool CNeuronTimeMoESparseExperts::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronTimeMoESparseExperts layer.                               |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronTimeMoESparseExperts layer.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronTimeMoESparseExperts::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -14175,10 +14020,9 @@ bool CNeuronTimeMoESparseExperts::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTimeMoESparseExperts trainable weights from   |
-//| the accumulated gradients.                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Updates the CNeuronTimeMoESparseExperts trainable weights from  the accumulated gradients.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronTimeMoESparseExperts::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!cExpertsIn.UpdateInputWeights(NeuronOCL))
@@ -14196,10 +14040,9 @@ bool CNeuronTimeMoESparseExperts::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronTimeMoESparseExperts weights toward the      |
-//| source model with factor tau.                                    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Averages the CNeuronTimeMoESparseExperts weights toward the  source model with factor tau.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronTimeMoESparseExperts::WeightsUpdate(CNeuronBaseOCL* source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -14243,10 +14086,9 @@ bool CNeuronTimeMoESparseExperts::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronTimeMoESparseExperts state from the file     |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Restores the CNeuronTimeMoESparseExperts state from the file  handle.  |
+//+------------------------------------------------------------------------+
 bool CNeuronTimeMoESparseExperts::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -14266,10 +14108,9 @@ bool CNeuronTimeMoESparseExperts::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronTimeMoESparseExperts GPU buffers to the given |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronTimeMoESparseExperts GPU buffers to the given  OpenCL context.  |
+//+------------------------------------------------------------------------------------+
 void CNeuronTimeMoESparseExperts::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -14280,9 +14121,9 @@ void CNeuronTimeMoESparseExperts::SetOpenCL(COpenCLMy * obj)
    cMasks.SetOpenCL(OpenCL);
    cSharedGates.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Sets the training flag of the CNeuronTimeMoESparseExperts layer. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Sets the training flag of the CNeuronTimeMoESparseExperts layer.  |
+//+-------------------------------------------------------------------+
 void CNeuronTimeMoESparseExperts::TrainMode(bool flag)
   {
    CNeuronBaseOCL::TrainMode(flag);
@@ -14293,10 +14134,9 @@ void CNeuronTimeMoESparseExperts::TrainMode(bool flag)
    cMasks.TrainMode(bTrain);
    cSharedGates.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronTimeMoEAttention layer and allocates its  |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Initializes the CNeuronTimeMoEAttention layer and allocates its  GPU buffers.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronTimeMoEAttention::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                    uint window, uint window_key, uint units_count,
                                    uint window_cross, uint units_cross, uint heads,
@@ -14355,20 +14195,18 @@ bool CNeuronTimeMoEAttention::Init(uint numOutputs, uint myIndex, COpenCLMy * op
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronTimeMoEAttention feed-forward pass and writes the|
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronTimeMoEAttention feed-forward pass and writes  the  layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronTimeMoEAttention::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
       ReturnFalse;
    return CNeuronCrossDMHAttention::feedForward(NeuronOCL, NeuronOCL.getOutput());
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronTimeMoEAttention layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronTimeMoEAttention layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronTimeMoEAttention::calcInputGradients(CNeuronBaseOCL* prevLayer)
   {
    if(!prevLayer)
@@ -14384,10 +14222,9 @@ bool CNeuronTimeMoEAttention::calcInputGradients(CNeuronBaseOCL* prevLayer)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronTimeMoEAttention trainable weights from the   |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Updates the CNeuronTimeMoEAttention trainable weights from the  accumulated gradients.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronTimeMoEAttention::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -14395,10 +14232,9 @@ bool CNeuronTimeMoEAttention::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
 //---
    return CNeuronCrossDMHAttention::updateInputWeights(NeuronOCL, NeuronOCL.getOutput());
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronAdaptConv layer and allocates its GPU     |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Initializes the CNeuronAdaptConv layer and allocates its GPU  buffers.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronAdaptConv::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                             uint window, uint window_out, uint units_count, uint variables,
                             ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -14437,9 +14273,9 @@ bool CNeuronAdaptConv::FFT(CBufferFloat* inp_re, CBufferFloat* inp_im, CBufferFl
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the periods finding step of the CNeuronAdaptConv layer. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Executes the periods finding step of the CNeuronAdaptConv layer.  |
+//+-------------------------------------------------------------------+
 bool CNeuronAdaptConv::PeriodsFinding(CBufferFloat* inp_re, CBufferFloat* inp_im, CBufferFloat* windows, uint variables)
   {
    uint global_work_offset[1] = {0};
@@ -14457,10 +14293,9 @@ bool CNeuronAdaptConv::PeriodsFinding(CBufferFloat* inp_re, CBufferFloat* inp_im
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the adaptive convolution step of the CNeuronAdaptConv   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Executes the adaptive convolution step of the CNeuronAdaptConv  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronAdaptConv::AdaptiveConvolution(CNeuronBaseOCL* NeuronOCL, CBufferFloat* main_freq)
   {
    uint global_work_offset[] = {0, 0, 0};
@@ -14481,10 +14316,9 @@ bool CNeuronAdaptConv::AdaptiveConvolution(CNeuronBaseOCL* NeuronOCL, CBufferFlo
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronAdaptConv feed-forward pass and writes the layer |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Runs the CNeuronAdaptConv feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronAdaptConv::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL)
@@ -14496,10 +14330,9 @@ bool CNeuronAdaptConv::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return AdaptiveConvolution(NeuronOCL, GetPointer(bMainFreq));
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronAdaptConv |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronAdaptConv  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronAdaptConv::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL ||
@@ -14526,10 +14359,9 @@ bool CNeuronAdaptConv::calcInputGradients(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronAdaptConv trainable weights from the          |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Updates the CNeuronAdaptConv trainable weights from the  accumulated gradients.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronAdaptConv::updateInputWeights(CNeuronBaseOCL* NeuronOCL)
   {
    if(!NeuronOCL ||
@@ -14582,10 +14414,9 @@ bool CNeuronAdaptConv::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronAdaptConv GPU buffers to the given OpenCL     |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Rebinds the CNeuronAdaptConv GPU buffers to the given OpenCL  context.  |
+//+-------------------------------------------------------------------------+
 void CNeuronAdaptConv::SetOpenCL(COpenCLMy * obj)
   {
    CNeuronConvOCL::SetOpenCL(obj);
@@ -14594,10 +14425,9 @@ void CNeuronAdaptConv::SetOpenCL(COpenCLMy * obj)
    bMainFreq.BufferInit(iVariables, 1);
    bMainFreq.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronK2VAEEncoder layer and allocates its GPU  |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Initializes the CNeuronK2VAEEncoder layer and allocates its GPU  buffers.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronK2VAEEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_cl,
                                uint window, uint window_key, uint units_cross,
                                uint heads, uint layers, uint scenarios,
@@ -14727,10 +14557,9 @@ bool CNeuronK2VAEEncoder::Init(uint numOutputs, uint myIndex, COpenCLMy * open_c
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronK2VAEEncoder feed-forward pass and writes the    |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Runs the CNeuronK2VAEEncoder feed-forward pass and writes the  layer output.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronK2VAEEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
   {
 //--- Koopman
@@ -14943,10 +14772,9 @@ bool CNeuronK2VAEEncoder::feedForward(CNeuronBaseOCL* NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronK2VAEEncoder layer.                                       |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronK2VAEEncoder layer.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronK2VAEEncoder::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -15145,10 +14973,9 @@ bool CNeuronK2VAEEncoder::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronK2VAEEncoder trainable weights from the       |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Updates the CNeuronK2VAEEncoder trainable weights from the  accumulated gradients.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronK2VAEEncoder::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
 //--- Koopman
@@ -15197,10 +15024,9 @@ bool CNeuronK2VAEEncoder::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronK2VAEEncoder weights toward the source model |
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Averages the CNeuronK2VAEEncoder weights toward the source model  with factor tau.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronK2VAEEncoder::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -15385,10 +15211,9 @@ void CNeuronK2VAEEncoder::TrainMode(bool flag)
    cR.TrainMode(bTrain);
    cP.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronK2VAEEncoder GPU buffers to the given OpenCL  |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Rebinds the CNeuronK2VAEEncoder GPU buffers to the given OpenCL  context.  |
+//+----------------------------------------------------------------------------+
 void CNeuronK2VAEEncoder::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -15427,10 +15252,9 @@ void CNeuronK2VAEEncoder::SetOpenCL(COpenCLMy *obj)
    cIdifK_H.SetOpenCL(OpenCL);
    cIdifK_HT.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronInterpolationAttention layer and allocates|
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Initializes the CNeuronInterpolationAttention layer and  allocates  its GPU buffers.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
       uint units_count, uint dimension,
       ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -15463,10 +15287,9 @@ bool CNeuronInterpolationAttention::Init(uint numOutputs, uint myIndex, COpenCLM
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the interpolation attention step of the                 |
-//| CNeuronInterpolationAttention layer.                             |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Executes the interpolation attention step of the  CNeuronInterpolationAttention layer.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::InterpolationAttention(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL ||
@@ -15495,10 +15318,9 @@ bool CNeuronInterpolationAttention::InterpolationAttention(CNeuronBaseOCL *Neuro
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the interpolation attention grad step of the            |
-//| CNeuronInterpolationAttention layer.                             |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------------+
+//| Executes the interpolation attention grad step of the  CNeuronInterpolationAttention layer.  |
+//+----------------------------------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::InterpolationAttentionGrad(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL ||
@@ -15539,10 +15361,9 @@ bool CNeuronInterpolationAttention::InterpolationAttentionGrad(CNeuronBaseOCL *N
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronInterpolationAttention feed-forward pass and     |
-//| writes the layer output.                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Runs the CNeuronInterpolationAttention feed-forward pass and  writes the layer output.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(bTrain)
@@ -15559,10 +15380,9 @@ bool CNeuronInterpolationAttention::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronInterpolationAttention layer.                             |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronInterpolationAttention layer.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!InterpolationAttentionGrad(NeuronOCL))
@@ -15570,10 +15390,9 @@ bool CNeuronInterpolationAttention::calcInputGradients(CNeuronBaseOCL *NeuronOCL
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronInterpolationAttention trainable weights from |
-//| the accumulated gradients.                                       |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------------+
+//| Updates the CNeuronInterpolationAttention trainable weights from  the accumulated gradients.  |
+//+-----------------------------------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cW.UpdateInputWeights())
@@ -15586,10 +15405,9 @@ bool CNeuronInterpolationAttention::updateInputWeights(CNeuronBaseOCL *NeuronOCL
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronInterpolationAttention weights toward the    |
-//| source model with factor tau.                                    |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------------+
+//| Averages the CNeuronInterpolationAttention weights toward the  source model with factor tau.  |
+//+-----------------------------------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -15604,9 +15422,9 @@ bool CNeuronInterpolationAttention::WeightsUpdate(CNeuronBaseOCL *source, float 
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Saves the CNeuronInterpolationAttention state to the file handle.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Saves the CNeuronInterpolationAttention state to the file  handle.  |
+//+---------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
@@ -15626,10 +15444,9 @@ bool CNeuronInterpolationAttention::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronInterpolationAttention state from the file   |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Restores the CNeuronInterpolationAttention state from the file  handle.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronInterpolationAttention::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -15661,10 +15478,9 @@ bool CNeuronInterpolationAttention::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronInterpolationAttention GPU buffers to the     |
-//| given OpenCL context.                                            |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronInterpolationAttention GPU buffers to the  given OpenCL context.  |
+//+--------------------------------------------------------------------------------------+
 void CNeuronInterpolationAttention::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -15676,10 +15492,9 @@ void CNeuronInterpolationAttention::SetOpenCL(COpenCLMy *obj)
    cAdj.SetOpenCL(OpenCL);
    cAttention.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Sets the training flag of the CNeuronInterpolationAttention      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Sets the training flag of the CNeuronInterpolationAttention  layer.  |
+//+----------------------------------------------------------------------+
 void CNeuronInterpolationAttention::TrainMode(bool flag)
   {
    CNeuronBaseOCL::TrainMode(flag);
@@ -15691,10 +15506,9 @@ void CNeuronInterpolationAttention::TrainMode(bool flag)
    cAdj.TrainMode(bTrain);
    cAttention.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronPeriodNorm layer and allocates its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Initializes the CNeuronPeriodNorm layer and allocates its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronPeriodNorm::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                              uint units_count, uint period, uint variables,
                              ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -15712,10 +15526,9 @@ bool CNeuronPeriodNorm::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronPeriodNorm feed-forward pass and writes the layer|
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronPeriodNorm feed-forward pass and writes the  layer  output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronPeriodNorm::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || NeuronOCL.Neurons() < Neurons())
@@ -15738,10 +15551,9 @@ bool CNeuronPeriodNorm::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronPeriodNorm|
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronPeriodNorm  layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronPeriodNorm::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || NeuronOCL.Neurons() < Neurons())
@@ -15806,18 +15618,17 @@ bool CNeuronPeriodNorm::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronPeriodNorm GPU buffers to the given OpenCL    |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Rebinds the CNeuronPeriodNorm GPU buffers to the given OpenCL  context.  |
+//+--------------------------------------------------------------------------+
 void CNeuronPeriodNorm::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
    cMeanSTDevs.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Checks checked-transfer support of PeriodNorm nested statistics. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Checks checked-transfer support of PeriodNorm nested statistics.  |
+//+-------------------------------------------------------------------+
 bool CNeuronPeriodNorm::SupportsOpenCLChecked(void) const
   {
    return(Type() == defNeuronPeriodNorm &&
@@ -15840,11 +15651,9 @@ bool CNeuronPeriodNorm::SetOpenCLChecked(COpenCLMy *obj)
 //--- Finalize the checked PeriodNorm transfer.
    return(true);
   }
-
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMoEConv layer and allocates its GPU       |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Initializes the CNeuronMoEConv layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronMoEConv::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint units, uint window, uint window_out,
                           uint experts, float dropout, uint topK,
@@ -15910,10 +15719,9 @@ bool CNeuronMoEConv::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMoEConv feed-forward pass and writes the layer   |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Runs the CNeuronMoEConv feed-forward pass and writes the layer  output.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronMoEConv::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -15954,10 +15762,9 @@ bool CNeuronMoEConv::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronMoEConv   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronMoEConv  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronMoEConv::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -16005,10 +15812,9 @@ bool CNeuronMoEConv::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMoEConv trainable weights from the accumulated|
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronMoEConv trainable weights from the  accumulated  gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronMoEConv::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -16028,10 +15834,9 @@ bool CNeuronMoEConv::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronMoEConv weights toward the source model with |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Averages the CNeuronMoEConv weights toward the source model with  factor tau.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronMoEConv::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -16081,10 +15886,9 @@ bool CNeuronMoEConv::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMoEConv GPU buffers to the given OpenCL       |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Rebinds the CNeuronMoEConv GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------+
 void CNeuronMoEConv::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -16101,10 +15905,9 @@ void CNeuronMoEConv::TrainMode(bool flag)
    acProbability.TrainMode(bTrain);
    cExperts.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMultiScaleDifference layer and allocates  |
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Initializes the CNeuronMultiScaleDifference layer and allocates  its GPU buffers.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronMultiScaleDifference::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                        uint dimension, uint units, uint bottleneck, uint &shifts[],
                                        ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -16228,10 +16031,9 @@ bool CNeuronMultiScaleDifference::Init(uint numOutputs, uint myIndex, COpenCLMy 
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMultiScaleDifference feed-forward pass and writes|
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Runs the CNeuronMultiScaleDifference feed-forward pass and  writes  the layer output.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronMultiScaleDifference::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -16284,10 +16086,9 @@ bool CNeuronMultiScaleDifference::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronMultiScaleDifference layer.                               |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronMultiScaleDifference layer.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronMultiScaleDifference::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -16342,10 +16143,9 @@ bool CNeuronMultiScaleDifference::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMultiScaleDifference trainable weights from   |
-//| the accumulated gradients.                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Updates the CNeuronMultiScaleDifference trainable weights from  the accumulated gradients.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronMultiScaleDifference::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -16411,10 +16211,9 @@ bool CNeuronMultiScaleDifference::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronMultiScaleDifference state from the file     |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Restores the CNeuronMultiScaleDifference state from the file  handle.  |
+//+------------------------------------------------------------------------+
 bool CNeuronMultiScaleDifference::Load(const int file_handle)
   {
    if(!CNeuronSpikeConvBlock::Load(file_handle))
@@ -16445,10 +16244,9 @@ bool CNeuronMultiScaleDifference::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronMultiScaleDifference weights toward the      |
-//| source model with factor tau.                                    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Averages the CNeuronMultiScaleDifference weights toward the  source model with factor tau.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronMultiScaleDifference::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronSpikeConvBlock::WeightsUpdate(source, tau))
@@ -16464,10 +16262,9 @@ bool CNeuronMultiScaleDifference::WeightsUpdate(CNeuronBaseOCL *source, float ta
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronMultiScaleDifference execution state and its   |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Clears the CNeuronMultiScaleDifference execution state and its  GPU buffers.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronMultiScaleDifference::Clear(void)
   {
    if(!CNeuronSpikeConvBlock::Clear())
@@ -16482,10 +16279,9 @@ bool CNeuronMultiScaleDifference::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMultiScaleDifference GPU buffers to the given |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronMultiScaleDifference GPU buffers to the given  OpenCL context.  |
+//+------------------------------------------------------------------------------------+
 void CNeuronMultiScaleDifference::SetOpenCL(COpenCLMy *obj)
   {
    if(!!OpenCL)
@@ -16496,9 +16292,9 @@ void CNeuronMultiScaleDifference::SetOpenCL(COpenCLMy *obj)
    cExcitation.SetOpenCL(OpenCL);
    cProjection.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Sets the training flag of the CNeuronMultiScaleDifference layer. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Sets the training flag of the CNeuronMultiScaleDifference layer.  |
+//+-------------------------------------------------------------------+
 void CNeuronMultiScaleDifference::TrainMode(bool flag)
   {
    CNeuronSpikeConvBlock::TrainMode(flag);
@@ -16506,10 +16302,9 @@ void CNeuronMultiScaleDifference::TrainMode(bool flag)
    cExcitation.TrainMode(bTrain);
    cProjection.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronConfGateTailAwareMoE layer and allocates  |
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Initializes the CNeuronConfGateTailAwareMoE layer and allocates  its GPU buffers.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                        uint dimension, uint units, uint forecast, uint experts,
                                        ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -16607,10 +16402,9 @@ bool CNeuronConfGateTailAwareMoE::Init(uint numOutputs, uint myIndex, COpenCLMy 
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the mix experts predict step of the                     |
-//| CNeuronConfGateTailAwareMoE layer.                               |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Executes the mix experts predict step of the  CNeuronConfGateTailAwareMoE layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::MixExpertsPredict(void)
   {
    if(!OpenCL || !Output || !cDensity.getOutput())
@@ -16629,10 +16423,9 @@ bool CNeuronConfGateTailAwareMoE::MixExpertsPredict(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the mix experts predict grad step of the                |
-//| CNeuronConfGateTailAwareMoE layer.                               |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Executes the mix experts predict grad step of the  CNeuronConfGateTailAwareMoE layer.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::MixExpertsPredictGrad(void)
   {
    if(!OpenCL || !Gradient || !cDensity.getOutput())
@@ -16652,10 +16445,9 @@ bool CNeuronConfGateTailAwareMoE::MixExpertsPredictGrad(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronConfGateTailAwareMoE feed-forward pass and writes|
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Runs the CNeuronConfGateTailAwareMoE feed-forward pass and  writes  the layer output.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -16704,10 +16496,9 @@ bool CNeuronConfGateTailAwareMoE::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronConfGateTailAwareMoE layer.                               |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronConfGateTailAwareMoE layer.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -16787,10 +16578,9 @@ bool CNeuronConfGateTailAwareMoE::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronConfGateTailAwareMoE trainable weights from   |
-//| the accumulated gradients.                                       |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Updates the CNeuronConfGateTailAwareMoE trainable weights from  the accumulated gradients.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -16830,10 +16620,9 @@ bool CNeuronConfGateTailAwareMoE::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronConfGateTailAwareMoE weights toward the      |
-//| source model with factor tau.                                    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Averages the CNeuronConfGateTailAwareMoE weights toward the  source model with factor tau.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -16870,10 +16659,9 @@ bool CNeuronConfGateTailAwareMoE::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronConfGateTailAwareMoE state from the file     |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Restores the CNeuronConfGateTailAwareMoE state from the file  handle.  |
+//+------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -16899,10 +16687,9 @@ bool CNeuronConfGateTailAwareMoE::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronConfGateTailAwareMoE execution state and its   |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Clears the CNeuronConfGateTailAwareMoE execution state and its  GPU buffers.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronConfGateTailAwareMoE::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
@@ -16917,10 +16704,9 @@ bool CNeuronConfGateTailAwareMoE::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronConfGateTailAwareMoE GPU buffers to the given |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronConfGateTailAwareMoE GPU buffers to the given  OpenCL context.  |
+//+------------------------------------------------------------------------------------+
 void CNeuronConfGateTailAwareMoE::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -16933,9 +16719,9 @@ void CNeuronConfGateTailAwareMoE::SetOpenCL(COpenCLMy *obj)
    cCGStack.SetOpenCL(OpenCL);
    cDensity.SetOpenCL(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Sets the training flag of the CNeuronConfGateTailAwareMoE layer. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Sets the training flag of the CNeuronConfGateTailAwareMoE layer.  |
+//+-------------------------------------------------------------------+
 void CNeuronConfGateTailAwareMoE::TrainMode(bool flag)
   {
    CNeuronBaseOCL::TrainMode(flag);
@@ -16948,10 +16734,9 @@ void CNeuronConfGateTailAwareMoE::TrainMode(bool flag)
    cCGStack.TrainMode(bTrain);
    cDensity.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronSparseMoEConv layer and allocates its GPU |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Initializes the CNeuronSparseMoEConv layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronSparseMoEConv::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                 uint window, uint filters, uint units,
                                 uint candidates, uint topK,
@@ -16965,10 +16750,9 @@ bool CNeuronSparseMoEConv::Init(uint numOutputs, uint myIndex, COpenCLMy *open_c
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronSparseMoEConv feed-forward pass and writes the   |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Runs the CNeuronSparseMoEConv feed-forward pass and writes the  layer output.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronSparseMoEConv::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cParams.FeedForward(NeuronOCL))
@@ -16983,10 +16767,9 @@ bool CNeuronSparseMoEConv::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronSparseMoEConv layer.                                      |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronSparseMoEConv layer.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronSparseMoEConv::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -17014,10 +16797,9 @@ bool CNeuronSparseMoEConv::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronSparseMoEConv trainable weights from the      |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Updates the CNeuronSparseMoEConv trainable weights from the  accumulated gradients.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronSparseMoEConv::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cParams.UpdateInputWeights(NeuronOCL))
@@ -17049,10 +16831,9 @@ bool CNeuronSparseMoEConv::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronSparseMoEConv weights toward the source model|
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Averages the CNeuronSparseMoEConv weights toward the source  model  with factor tau.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronSparseMoEConv::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -17062,10 +16843,9 @@ bool CNeuronSparseMoEConv::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronSparseMoEConv GPU buffers to the given OpenCL |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Rebinds the CNeuronSparseMoEConv GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------------+
 void CNeuronSparseMoEConv::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -17163,10 +16943,9 @@ bool CNeuronMDL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint &d
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMDL feed-forward pass and writes the layer       |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Runs the CNeuronMDL feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------+
 bool CNeuronMDL::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cPrepare.FeedForward(NeuronOCL))
@@ -17220,9 +16999,9 @@ bool CNeuronMDL::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronMDL layer.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronMDL  layer.  |
+//+---------------------------------------------------------------------+
 bool CNeuronMDL::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -17283,10 +17062,9 @@ bool CNeuronMDL::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMDL trainable weights from the accumulated    |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Updates the CNeuronMDL trainable weights from the accumulated  gradients.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronMDL::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cPrepare.UpdateInputWeights(NeuronOCL))
@@ -17395,10 +17173,9 @@ bool CNeuronMDL::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronMDL weights toward the source model with     |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Averages the CNeuronMDL weights toward the source model with  factor tau.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronMDL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronPerTokenFFN::WeightsUpdate(source, tau))
@@ -17439,10 +17216,9 @@ void CNeuronMDL::TrainMode(bool flag)
    cFeatures.TrainMode(bTrain);
    cFlow.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUniMixerTokenizer layer and allocates its |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Initializes the CNeuronUniMixerTokenizer layer and allocates its  GPU buffers.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronUniMixerTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                     uint &dimensions[], uint units, uint embed_size,
                                     uint blocks, uint candidates, uint topK,
@@ -17461,10 +17237,9 @@ bool CNeuronUniMixerTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *op
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUniMixerTokenizer feed-forward pass and writes   |
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronUniMixerTokenizer feed-forward pass and writes  the layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronUniMixerTokenizer::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cTokenizer.FeedForward(NeuronOCL))
@@ -17474,10 +17249,9 @@ bool CNeuronUniMixerTokenizer::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronUniMixerTokenizer layer.                                  |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronUniMixerTokenizer layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronUniMixerTokenizer::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -17489,10 +17263,9 @@ bool CNeuronUniMixerTokenizer::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronUniMixerTokenizer trainable weights from the  |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Updates the CNeuronUniMixerTokenizer trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronUniMixerTokenizer::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cTokenizer.UpdateInputWeights(NeuronOCL))
@@ -17514,9 +17287,9 @@ bool CNeuronUniMixerTokenizer::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronUniMixerTokenizer state from the file handle.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Restores the CNeuronUniMixerTokenizer state from the file  handle.  |
+//+---------------------------------------------------------------------+
 bool CNeuronUniMixerTokenizer::Load(const int file_handle)
   {
    if(!CNeuronFieldAwareConv::Load(file_handle))
@@ -17526,10 +17299,9 @@ bool CNeuronUniMixerTokenizer::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronUniMixerTokenizer weights toward the source  |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Averages the CNeuronUniMixerTokenizer weights toward the source  model with factor tau.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronUniMixerTokenizer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronFieldAwareConv::WeightsUpdate(source, tau))
@@ -17539,10 +17311,9 @@ bool CNeuronUniMixerTokenizer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronUniMixerTokenizer GPU buffers to the given    |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Rebinds the CNeuronUniMixerTokenizer GPU buffers to the given  OpenCL context.  |
+//+---------------------------------------------------------------------------------+
 void CNeuronUniMixerTokenizer::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronFieldAwareConv::SetOpenCL(obj);
@@ -17556,10 +17327,9 @@ void CNeuronUniMixerTokenizer::TrainMode(bool flag)
    CNeuronFieldAwareConv::TrainMode(flag);
    cTokenizer.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUniMixer layer and allocates its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Initializes the CNeuronUniMixer layer and allocates its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronUniMixer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                            uint window, uint units, uint blocks,
                            uint embed_size, uint candidates, uint topK,
@@ -17600,10 +17370,9 @@ bool CNeuronUniMixer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUniMixer feed-forward pass and writes the layer  |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Runs the CNeuronUniMixer feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronUniMixer::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -17641,10 +17410,9 @@ bool CNeuronUniMixer::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronUniMixer  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronUniMixer  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronUniMixer::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -17675,10 +17443,9 @@ bool CNeuronUniMixer::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronUniMixer trainable weights from the           |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronUniMixer trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronUniMixer::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cWb.UpdateInputWeights())
@@ -17691,10 +17458,9 @@ bool CNeuronUniMixer::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronUniMixer weights toward the source model with|
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Averages the CNeuronUniMixer weights toward the source model  with  factor tau.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronUniMixer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronPerTokenSwiGLU::WeightsUpdate(source, tau))
@@ -17756,10 +17522,9 @@ bool CNeuronUniMixer::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronUniMixer GPU buffers to the given OpenCL      |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Rebinds the CNeuronUniMixer GPU buffers to the given OpenCL  context.  |
+//+------------------------------------------------------------------------+
 void CNeuronUniMixer::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronPerTokenSwiGLU::SetOpenCL(obj);
@@ -17783,10 +17548,9 @@ void CNeuronUniMixer::TrainMode(bool flag)
    for(uint i = 0; i < cG.Size(); i++)
       cG[i].TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUniMixerBlock layer and allocates its GPU |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Initializes the CNeuronUniMixerBlock layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronUniMixerBlock::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                 uint &dimensions[], uint units_s, uint blocks, uint scenarios,
                                 uint stack_size, uint layers, uint embed_size, uint candidates,
@@ -17883,10 +17647,9 @@ bool CNeuronUniMixerBlock::Init(uint numOutputs, uint myIndex, COpenCLMy *open_c
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUniMixerBlock feed-forward pass and writes the   |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Runs the CNeuronUniMixerBlock feed-forward pass and writes the  layer output.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronUniMixerBlock::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cPrepare.FeedForward(NeuronOCL))
@@ -17976,10 +17739,9 @@ bool CNeuronUniMixerBlock::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronUniMixerBlock layer.                                      |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronUniMixerBlock layer.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronUniMixerBlock::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -18060,10 +17822,9 @@ bool CNeuronUniMixerBlock::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronUniMixerBlock trainable weights from the      |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Updates the CNeuronUniMixerBlock trainable weights from the  accumulated gradients.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronUniMixerBlock::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cPrepare.UpdateInputWeights(NeuronOCL))
@@ -18156,10 +17917,9 @@ bool CNeuronUniMixerBlock::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronUniMixerBlock execution state and its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Clears the CNeuronUniMixerBlock execution state and its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronUniMixerBlock::Clear(void)
   {
    if(!CNeuronPerTokenSwiGLU::Clear())
@@ -18180,10 +17940,9 @@ bool CNeuronUniMixerBlock::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronUniMixerBlock weights toward the source model|
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Averages the CNeuronUniMixerBlock weights toward the source  model  with factor tau.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronUniMixerBlock::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronPerTokenSwiGLU::WeightsUpdate(source, tau))
@@ -18199,10 +17958,9 @@ bool CNeuronUniMixerBlock::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronUniMixerBlock GPU buffers to the given OpenCL |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Rebinds the CNeuronUniMixerBlock GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------------+
 void CNeuronUniMixerBlock::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronPerTokenSwiGLU::SetOpenCL(obj);
@@ -18228,10 +17986,9 @@ void CNeuronUniMixerBlock::TrainMode(bool flag)
    cFlow.TrainMode(bTrain);
    cOutputProj.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronINFNetScenarios layer and allocates its   |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Initializes the CNeuronINFNetScenarios layer and allocates its  GPU buffers.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronINFNetScenarios::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                   uint window_in, uint &fields[], uint window_out,
                                   uint embed_size, uint candidates, uint topK,
@@ -18309,10 +18066,9 @@ bool CNeuronINFNetScenarios::Init(uint numOutputs, uint myIndex, COpenCLMy *open
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronINFNetScenarios feed-forward pass and writes the |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Runs the CNeuronINFNetScenarios feed-forward pass and writes the  layer output.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronINFNetScenarios::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -18366,10 +18122,9 @@ bool CNeuronINFNetScenarios::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronINFNetScenarios layer.                                    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronINFNetScenarios layer.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronINFNetScenarios::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -18417,10 +18172,9 @@ bool CNeuronINFNetScenarios::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronINFNetScenarios trainable weights from the    |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Updates the CNeuronINFNetScenarios trainable weights from the  accumulated gradients.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronINFNetScenarios::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* neuron = NULL;
@@ -18485,10 +18239,9 @@ bool CNeuronINFNetScenarios::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronINFNetScenarios weights toward the source    |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Averages the CNeuronINFNetScenarios weights toward the source  model with factor tau.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronINFNetScenarios::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -18500,10 +18253,9 @@ bool CNeuronINFNetScenarios::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronINFNetScenarios execution state and its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Clears the CNeuronINFNetScenarios execution state and its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronINFNetScenarios::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
@@ -18517,10 +18269,9 @@ bool CNeuronINFNetScenarios::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronINFNetScenarios GPU buffers to the given      |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Rebinds the CNeuronINFNetScenarios GPU buffers to the given  OpenCL context.  |
+//+-------------------------------------------------------------------------------+
 void CNeuronINFNetScenarios::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -18538,10 +18289,9 @@ void CNeuronINFNetScenarios::TrainMode(bool flag)
    cContext.TrainMode(bTrain);
    cGlobal.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronINFNetHUBSequence layer and allocates its |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Initializes the CNeuronINFNetHUBSequence layer and allocates its  GPU buffers.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronINFNetHUBSequence::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                     uint window, uint units_count, uint hub_size, uint variables,
                                     ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -18554,10 +18304,9 @@ bool CNeuronINFNetHUBSequence::Init(uint numOutputs, uint myIndex, COpenCLMy *op
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronINFNetHUBSequence feed-forward pass and writes   |
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronINFNetHUBSequence feed-forward pass and writes  the layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronINFNetHUBSequence::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cProjection.FeedForward(NeuronOCL))
@@ -18567,10 +18316,9 @@ bool CNeuronINFNetHUBSequence::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronINFNetHUBSequence layer.                                  |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronINFNetHUBSequence layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronINFNetHUBSequence::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -18582,10 +18330,9 @@ bool CNeuronINFNetHUBSequence::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronINFNetHUBSequence trainable weights from the  |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Updates the CNeuronINFNetHUBSequence trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronINFNetHUBSequence::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cProjection.UpdateInputWeights(NeuronOCL))
@@ -18607,9 +18354,9 @@ bool CNeuronINFNetHUBSequence::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronINFNetHUBSequence state from the file handle.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Restores the CNeuronINFNetHUBSequence state from the file  handle.  |
+//+---------------------------------------------------------------------+
 bool CNeuronINFNetHUBSequence::Load(const int file_handle)
   {
    if(!CNeuronSpikeConvBlock::Load(file_handle))
@@ -18619,10 +18366,9 @@ bool CNeuronINFNetHUBSequence::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronINFNetHUBSequence weights toward the source  |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Averages the CNeuronINFNetHUBSequence weights toward the source  model with factor tau.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronINFNetHUBSequence::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronSpikeConvBlock::WeightsUpdate(source, tau))
@@ -18632,10 +18378,9 @@ bool CNeuronINFNetHUBSequence::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronINFNetHUBSequence execution state and its GPU  |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Clears the CNeuronINFNetHUBSequence execution state and its GPU  buffers.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronINFNetHUBSequence::Clear(void)
   {
    if(!CNeuronSpikeConvBlock::Clear())
@@ -18645,10 +18390,9 @@ bool CNeuronINFNetHUBSequence::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronINFNetHUBSequence GPU buffers to the given    |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Rebinds the CNeuronINFNetHUBSequence GPU buffers to the given  OpenCL context.  |
+//+---------------------------------------------------------------------------------+
 void CNeuronINFNetHUBSequence::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronSpikeConvBlock::SetOpenCL(obj);
@@ -18662,10 +18406,9 @@ void CNeuronINFNetHUBSequence::TrainMode(bool flag)
    CNeuronSpikeConvBlock::TrainMode(flag);
    cProjection.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronINFNetBlock layer and allocates its GPU   |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Initializes the CNeuronINFNetBlock layer and allocates its GPU  buffers.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronINFNetBlock::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                               uint &dimensions[], uint units_s, uint heads, uint stack_size,
                               uint layers, uint embed_size, uint candidates, uint topK,
@@ -18854,10 +18597,9 @@ bool CNeuronINFNetBlock::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronINFNetBlock feed-forward pass and writes the     |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronINFNetBlock feed-forward pass and writes the  layer output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronINFNetBlock::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cPrepare.FeedForward(NeuronOCL))
@@ -19001,10 +18743,9 @@ bool CNeuronINFNetBlock::INFNetBGU(CNeuronBaseOCL *scale_and_shift, CNeuronBaseO
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the inf net bgu grad step of the CNeuronINFNetBlock     |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Executes the inf net bgu grad step of the CNeuronINFNetBlock  layer.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronINFNetBlock::INFNetBGUGrad(CNeuronBaseOCL *scale_and_shift, CNeuronBaseOCL *sequence_in,
                                        CNeuronBaseOCL *sequence_out, CNeuronBaseOCL *context_in,
                                        CNeuronBaseOCL *context_out, CNeuronBaseOCL *scenarios_in,
@@ -19052,10 +18793,9 @@ bool CNeuronINFNetBlock::INFNetBGUGrad(CNeuronBaseOCL *scale_and_shift, CNeuronB
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronINFNetBlock layer.                                        |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronINFNetBlock layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronINFNetBlock::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -19183,10 +18923,9 @@ bool CNeuronINFNetBlock::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronINFNetBlock trainable weights from the        |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Updates the CNeuronINFNetBlock trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronINFNetBlock::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cPrepare.UpdateInputWeights(NeuronOCL))
@@ -19310,10 +19049,9 @@ bool CNeuronINFNetBlock::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronINFNetBlock execution state and its GPU        |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Clears the CNeuronINFNetBlock execution state and its GPU  buffers.  |
+//+----------------------------------------------------------------------+
 bool CNeuronINFNetBlock::Clear(void)
   {
    if(!CNeuronPerTokenSwiGLU::Clear())
@@ -19332,10 +19070,9 @@ bool CNeuronINFNetBlock::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronINFNetBlock weights toward the source model  |
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Averages the CNeuronINFNetBlock weights toward the source model  with factor tau.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronINFNetBlock::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronPerTokenSwiGLU::WeightsUpdate(source, tau))
@@ -19350,10 +19087,9 @@ bool CNeuronINFNetBlock::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronINFNetBlock GPU buffers to the given OpenCL   |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Rebinds the CNeuronINFNetBlock GPU buffers to the given OpenCL  context.  |
+//+---------------------------------------------------------------------------+
 void CNeuronINFNetBlock::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronPerTokenSwiGLU::SetOpenCL(obj);
@@ -19377,10 +19113,9 @@ void CNeuronINFNetBlock::TrainMode(bool flag)
    cScenarios.TrainMode(bTrain);
    cHUBs.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronSequenceTokenizer layer and allocates its |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Initializes the CNeuronSequenceTokenizer layer and allocates its  GPU buffers.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronSequenceTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                     uint dimension, uint units, uint embed_size,
                                     ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -19406,10 +19141,9 @@ bool CNeuronSequenceTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *op
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronSequenceTokenizer feed-forward pass and writes   |
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronSequenceTokenizer feed-forward pass and writes  the layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronSequenceTokenizer::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cNorm.FeedForward(NeuronOCL))
@@ -19426,10 +19160,9 @@ bool CNeuronSequenceTokenizer::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronSequenceTokenizer layer.                                  |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronSequenceTokenizer layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronSequenceTokenizer::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -19447,10 +19180,9 @@ bool CNeuronSequenceTokenizer::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronSequenceTokenizer trainable weights from the  |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Updates the CNeuronSequenceTokenizer trainable weights from the  accumulated gradients.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronSequenceTokenizer::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!cNorm.UpdateInputWeights(NeuronOCL))
@@ -19482,9 +19214,9 @@ bool CNeuronSequenceTokenizer::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronSequenceTokenizer state from the file handle.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Restores the CNeuronSequenceTokenizer state from the file  handle.  |
+//+---------------------------------------------------------------------+
 bool CNeuronSequenceTokenizer::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -19497,10 +19229,9 @@ bool CNeuronSequenceTokenizer::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronSequenceTokenizer weights toward the source  |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Averages the CNeuronSequenceTokenizer weights toward the source  model with factor tau.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronSequenceTokenizer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -19513,10 +19244,9 @@ bool CNeuronSequenceTokenizer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronSequenceTokenizer GPU buffers to the given    |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Rebinds the CNeuronSequenceTokenizer GPU buffers to the given  OpenCL context.  |
+//+---------------------------------------------------------------------------------+
 void CNeuronSequenceTokenizer::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -19534,10 +19264,9 @@ void CNeuronSequenceTokenizer::TrainMode(bool flag)
    for(uint i = 0; i < cProj.Size(); i++)
       cProj[i].TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronDifferenceTokenizer layer and allocates   |
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Initializes the CNeuronDifferenceTokenizer layer and allocates  its GPU buffers.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronDifferenceTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                       uint inpSize, uint tokenSize, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -19577,10 +19306,9 @@ bool CNeuronDifferenceTokenizer::Init(uint numOutputs, uint myIndex, COpenCLMy *
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronDifferenceTokenizer feed-forward pass and writes |
-//| the layer output.                                                |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Runs the CNeuronDifferenceTokenizer feed-forward pass and writes  the layer output.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronDifferenceTokenizer::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!NeuronOCL || !SecondInput)
@@ -19605,10 +19333,9 @@ bool CNeuronDifferenceTokenizer::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferF
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronDifferenceTokenizer layer.                                |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronDifferenceTokenizer layer.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronDifferenceTokenizer::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
       CBufferFloat *SecondInput,
       CBufferFloat *SecondGradient,
@@ -19641,10 +19368,9 @@ bool CNeuronDifferenceTokenizer::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronDifferenceTokenizer trainable weights from the|
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Updates the CNeuronDifferenceTokenizer trainable weights from  the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronDifferenceTokenizer::updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second)
   {
    CNeuronBaseOCL* neuron = cFlow[0];
@@ -19673,10 +19399,9 @@ bool CNeuronDifferenceTokenizer::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronDifferenceTokenizer state from the file      |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Restores the CNeuronDifferenceTokenizer state from the file  handle.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronDifferenceTokenizer::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -19686,10 +19411,9 @@ bool CNeuronDifferenceTokenizer::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronDifferenceTokenizer weights toward the source|
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------------+
+//| Averages the CNeuronDifferenceTokenizer weights toward the  source  model with factor tau.  |
+//+---------------------------------------------------------------------------------------------+
 bool CNeuronDifferenceTokenizer::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -19699,10 +19423,9 @@ bool CNeuronDifferenceTokenizer::WeightsUpdate(CNeuronBaseOCL *source, float tau
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronDifferenceTokenizer GPU buffers to the given  |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Rebinds the CNeuronDifferenceTokenizer GPU buffers to the given  OpenCL context.  |
+//+-----------------------------------------------------------------------------------+
 void CNeuronDifferenceTokenizer::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -19716,10 +19439,9 @@ void CNeuronDifferenceTokenizer::TrainMode(bool flag)
    CNeuronBaseOCL::TrainMode(flag);
    cFlow.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronReGENTADBackbone layer and allocates its  |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Initializes the CNeuronReGENTADBackbone layer and allocates its  GPU buffers.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronReGENTADBackbone::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                    uint &dimensions[], uint units_s, uint heads, uint stack_size,
                                    uint layers, uint embed_size, uint candidates, uint topK,
@@ -19812,10 +19534,9 @@ bool CNeuronReGENTADBackbone::Init(uint numOutputs, uint myIndex, COpenCLMy *ope
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronReGENTADBackbone feed-forward pass and writes the|
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronReGENTADBackbone feed-forward pass and writes  the  layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronReGENTADBackbone::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -19873,10 +19594,9 @@ bool CNeuronReGENTADBackbone::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronReGENTADBackbone layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronReGENTADBackbone layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronReGENTADBackbone::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -19958,10 +19678,9 @@ bool CNeuronReGENTADBackbone::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronReGENTADBackbone trainable weights from the   |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Updates the CNeuronReGENTADBackbone trainable weights from the  accumulated gradients.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronReGENTADBackbone::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
 //---
@@ -20019,9 +19738,9 @@ bool CNeuronReGENTADBackbone::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronReGENTADBackbone state from the file handle. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Restores the CNeuronReGENTADBackbone state from the file handle.  |
+//+-------------------------------------------------------------------+
 bool CNeuronReGENTADBackbone::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -20037,10 +19756,9 @@ bool CNeuronReGENTADBackbone::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronReGENTADBackbone weights toward the source   |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Averages the CNeuronReGENTADBackbone weights toward the source  model with factor tau.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronReGENTADBackbone::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -20054,10 +19772,9 @@ bool CNeuronReGENTADBackbone::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronReGENTADBackbone execution state and its GPU   |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Clears the CNeuronReGENTADBackbone execution state and its GPU  buffers.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronReGENTADBackbone::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
@@ -20073,10 +19790,9 @@ bool CNeuronReGENTADBackbone::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronReGENTADBackbone GPU buffers to the given     |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Rebinds the CNeuronReGENTADBackbone GPU buffers to the given  OpenCL context.  |
+//+--------------------------------------------------------------------------------+
 void CNeuronReGENTADBackbone::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -20112,10 +19828,9 @@ CNeuronBatchNormOCL* CNeuronReGENTADBackbone::GetNorm(void)
 //---
    return result;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronReGENTADHead layer and allocates its GPU  |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Initializes the CNeuronReGENTADHead layer and allocates its GPU  buffers.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronReGENTADHead::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                uint dimension_in, uint units_in, uint dimension_out,
                                uint units_out, CNeuronBatchNormOCL *norm,
@@ -20184,10 +19899,9 @@ bool CNeuronReGENTADHead::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronReGENTADHead feed-forward pass and writes the    |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Runs the CNeuronReGENTADHead feed-forward pass and writes the  layer output.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronReGENTADHead::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -20202,10 +19916,9 @@ bool CNeuronReGENTADHead::feedForward(CNeuronBaseOCL *NeuronOCL)
      }
    return CNeuronRevINDenormOCL::feedForward(prev);
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronReGENTADHead layer.                                       |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronReGENTADHead layer.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronReGENTADHead::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -20230,10 +19943,9 @@ bool CNeuronReGENTADHead::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronReGENTADHead trainable weights from the       |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Updates the CNeuronReGENTADHead trainable weights from the  accumulated gradients.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronReGENTADHead::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -20272,10 +19984,9 @@ bool CNeuronReGENTADHead::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronReGENTADHead weights toward the source model |
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Averages the CNeuronReGENTADHead weights toward the source model  with factor tau.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronReGENTADHead::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronRevINDenormOCL::WeightsUpdate(source, tau))
@@ -20285,10 +19996,9 @@ bool CNeuronReGENTADHead::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronReGENTADHead execution state and its GPU       |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Clears the CNeuronReGENTADHead execution state and its GPU  buffers.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronReGENTADHead::Clear(void)
   {
    if(!CNeuronRevINDenormOCL::Clear())
@@ -20298,10 +20008,9 @@ bool CNeuronReGENTADHead::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronReGENTADHead GPU buffers to the given OpenCL  |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Rebinds the CNeuronReGENTADHead GPU buffers to the given OpenCL  context.  |
+//+----------------------------------------------------------------------------+
 void CNeuronReGENTADHead::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronRevINDenormOCL::SetOpenCL(obj);
@@ -20343,10 +20052,9 @@ bool CNeuronReGENTADHead::SetNorm(CNeuronBatchNormOCL *norm)
 //---
    return !!BatchOptions;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronReGENTAD layer and allocates its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Initializes the CNeuronReGENTAD layer and allocates its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronReGENTAD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                            uint &dimensions[], uint units_s, uint heads, uint stack_size,
                            uint layers, uint embed_size, uint candidates, uint topK,
@@ -20414,10 +20122,9 @@ bool CNeuronReGENTAD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronReGENTAD feed-forward pass and writes the layer  |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Runs the CNeuronReGENTAD feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronReGENTAD::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || !cBackbone)
@@ -20536,10 +20243,9 @@ bool CNeuronReGENTAD::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronReGENTAD  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronReGENTAD  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronReGENTAD::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || !cBackbone)
@@ -20611,10 +20317,9 @@ bool CNeuronReGENTAD::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronReGENTAD trainable weights from the           |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronReGENTAD trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronReGENTAD::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || !cBackbone)
@@ -20700,10 +20405,9 @@ bool CNeuronReGENTAD::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronReGENTAD weights toward the source model with|
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Averages the CNeuronReGENTAD weights toward the source model  with  factor tau.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronReGENTAD::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source, tau))
@@ -20733,10 +20437,9 @@ bool CNeuronReGENTAD::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronReGENTAD GPU buffers to the given OpenCL      |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Rebinds the CNeuronReGENTAD GPU buffers to the given OpenCL  context.  |
+//+------------------------------------------------------------------------+
 void CNeuronReGENTAD::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -20756,10 +20459,9 @@ void CNeuronReGENTAD::TrainMode(bool flag)
    for(uint i = 0; i < cHeads.Size(); i++)
       cHeads[i].TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronGDformerBackbone layer and allocates its  |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Initializes the CNeuronGDformerBackbone layer and allocates its  GPU buffers.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronGDformerBackbone::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                    uint &dimensions[], uint units_s, uint heads, uint stack_size,
                                    uint layers, uint embed_size, uint candidates, uint topK,
@@ -20877,10 +20579,9 @@ bool CNeuronGDformerBackbone::Init(uint numOutputs, uint myIndex, COpenCLMy *ope
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronGDformerBackbone feed-forward pass and writes the|
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronGDformerBackbone feed-forward pass and writes  the  layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronGDformerBackbone::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -20957,10 +20658,9 @@ bool CNeuronGDformerBackbone::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronGDformerBackbone layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronGDformerBackbone layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronGDformerBackbone::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -21062,10 +20762,9 @@ bool CNeuronGDformerBackbone::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronGDformerBackbone trainable weights from the   |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Updates the CNeuronGDformerBackbone trainable weights from the  accumulated gradients.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronGDformerBackbone::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
 //---
@@ -21105,10 +20804,9 @@ bool CNeuronGDformerBackbone::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMomADTTM layer and allocates its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Initializes the CNeuronMomADTTM layer and allocates its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronMomADTTM::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                            uint latent_dim, uint candidates, uint decisions,
                            uint topK, ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -21178,10 +20876,9 @@ bool CNeuronMomADTTM::MeanScores(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the mean scores gradient step of the CNeuronMomADTTM    |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Executes the mean scores gradient step of the CNeuronMomADTTM  layer.  |
+//+------------------------------------------------------------------------+
 bool CNeuronMomADTTM::MeanScoresGradient(void)
   {
    if(!OpenCL || cMeanDistance.getGradientIndex() < 0)
@@ -21206,10 +20903,9 @@ bool CNeuronMomADTTM::MeanScoresGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMomADTTM feed-forward pass and writes the layer  |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Runs the CNeuronMomADTTM feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronMomADTTM::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!OpenCL || !NeuronOCL || !SecondInput)
@@ -21234,10 +20930,9 @@ bool CNeuronMomADTTM::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Secon
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronMomADTTM  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronMomADTTM  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronMomADTTM::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
       CBufferFloat *SecondInput,
       CBufferFloat *SecondGradient,
@@ -21365,9 +21060,9 @@ bool CNeuronMomADTTM::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Reports checked-transfer support for the MomADTTM ownership tree.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Reports checked-transfer support for the MomADTTM ownership  tree.  |
+//+---------------------------------------------------------------------+
 bool CNeuronMomADTTM::SupportsOpenCLChecked(void) const
   {
    return(Type() == defNeuronMomADTTM && cMeanDistance.SupportsOpenCLChecked() &&
@@ -21403,10 +21098,9 @@ bool CNeuronMomADTTM::SetOpenCLChecked(COpenCLMy *obj)
 //--- Finalize without resetting configuration or cached state.
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMomADTTM GPU buffers to the given OpenCL      |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Rebinds the CNeuronMomADTTM GPU buffers to the given OpenCL  context.  |
+//+------------------------------------------------------------------------+
 void CNeuronMomADTTM::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -21443,10 +21137,9 @@ bool CNeuronMomADTTM::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMomADMPI layer and allocates its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Initializes the CNeuronMomADMPI layer and allocates its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronMomADMPI::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                            uint latent_dim, uint candidates, uint market_dim,
                            uint market_units, uint stack_size, uint topK,
@@ -21478,10 +21171,9 @@ bool CNeuronMomADMPI::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return Clear();
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronMomADMPI feed-forward pass and writes the layer  |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Runs the CNeuronMomADMPI feed-forward pass and writes the layer  output.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronMomADMPI::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!OpenCL || !NeuronOCL || !SecondInput)
@@ -21508,10 +21200,9 @@ bool CNeuronMomADMPI::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Secon
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronMomADMPI  |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronMomADMPI  layer.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronMomADMPI::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
       CBufferFloat *SecondInput,
       CBufferFloat *SecondGradient,
@@ -21576,10 +21267,9 @@ bool CNeuronMomADMPI::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMomADMPI trainable weights from the           |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Updates the CNeuronMomADMPI trainable weights from the  accumulated gradients.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronMomADMPI::updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!OpenCL || !NeuronOCL || !SecondInput)
@@ -21648,10 +21338,9 @@ bool CNeuronMomADMPI::Load(const int file_handle)
 //---
    return Clear();
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMomADMPI GPU buffers to the given OpenCL      |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Rebinds the CNeuronMomADMPI GPU buffers to the given OpenCL  context.  |
+//+------------------------------------------------------------------------+
 void CNeuronMomADMPI::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronCrossAttention::SetOpenCL(obj);
@@ -21681,10 +21370,9 @@ void CNeuronMomADMPI::TrainMode(bool flag)
    cPolicyMarket.TrainMode(bTrain);
    cTTMHistory.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronMomADMPI weights toward the source model with|
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Averages the CNeuronMomADMPI weights toward the source model  with  factor tau.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronMomADMPI::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -21732,10 +21420,9 @@ bool CNeuronMomADMPI::Clear(void)
 //+------------------------------------------------------------------+
 #define RAG_MPI_SERIALIZATION_VERSION 5
 #define RAG_NULL_GATE_SCALE 12.0f
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronVLADriverRAGMPI layer and allocates its   |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Initializes the CNeuronVLADriverRAGMPI layer and allocates its  GPU buffers.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronVLADriverRAGMPI::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                   uint latent_dim, uint candidates, uint market_dim,
                                   uint market_units, uint stack_size, uint topK,
@@ -21834,10 +21521,9 @@ bool CNeuronVLADriverRAGMPI::SetRAGTokens(CBufferFloat *tokens, CBufferFloat *ab
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the rag token gate step of the CNeuronVLADriverRAGMPI   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Executes the rag token gate step of the CNeuronVLADriverRAGMPI  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronVLADriverRAGMPI::RAGTokenGate(void)
   {
    const int token_total = int(iRAGTokenCount * iRAGTokenWidth);
@@ -21879,10 +21565,9 @@ bool CNeuronVLADriverRAGMPI::RAGTokenGate(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the rag token gate gradient step of the                 |
-//| CNeuronVLADriverRAGMPI layer.                                    |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Executes the rag token gate gradient step of the  CNeuronVLADriverRAGMPI layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronVLADriverRAGMPI::RAGTokenGateGradient(void)
   {
    const int token_total = int(iRAGTokenCount * iRAGTokenWidth);
@@ -21925,10 +21610,9 @@ bool CNeuronVLADriverRAGMPI::RAGTokenGateGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronVLADriverRAGMPI feed-forward pass and writes the |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Runs the CNeuronVLADriverRAGMPI feed-forward pass and writes the  layer output.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronVLADriverRAGMPI::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!OpenCL || !NeuronOCL || !SecondInput ||
@@ -21992,10 +21676,9 @@ bool CNeuronVLADriverRAGMPI::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronVLADriverRAGMPI layer.                                    |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronVLADriverRAGMPI layer.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronVLADriverRAGMPI::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
       CBufferFloat *SecondInput, CBufferFloat *SecondGradient,
       ENUM_ACTIVATION SecondActivation = None)
@@ -22093,10 +21776,9 @@ bool CNeuronVLADriverRAGMPI::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronVLADriverRAGMPI trainable weights from the    |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Updates the CNeuronVLADriverRAGMPI trainable weights from the  accumulated gradients.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronVLADriverRAGMPI::updateInputWeights(CNeuronBaseOCL *NeuronOCL,
       CBufferFloat *SecondInput)
   {
@@ -22229,10 +21911,9 @@ bool CNeuronVLADriverRAGMPI::Load(const int file_handle)
    pRAGAbsoluteRelevance = NULL;
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronVLADriverRAGMPI GPU buffers to the given      |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Rebinds the CNeuronVLADriverRAGMPI GPU buffers to the given  OpenCL context.  |
+//+-------------------------------------------------------------------------------+
 void CNeuronVLADriverRAGMPI::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronMomADMPI::SetOpenCL(obj);
@@ -22272,10 +21953,9 @@ void CNeuronVLADriverRAGMPI::TrainMode(bool flag)
    cNullThresholdInput.TrainMode(false);
    cPolicyRAG.TrainMode(flag);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronVLADriverRAGMPI weights toward the source    |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Averages the CNeuronVLADriverRAGMPI weights toward the source  model with factor tau.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronVLADriverRAGMPI::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -22289,10 +21969,9 @@ bool CNeuronVLADriverRAGMPI::WeightsUpdate(CNeuronBaseOCL *source, float tau)
    dWeightsUpdate(cPolicyRAG, src, tau);
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronVLADriverRAGMPI execution state and its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Clears the CNeuronVLADriverRAGMPI execution state and its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronVLADriverRAGMPI::Clear(void)
   {
    if(!CNeuronMomADMPI::Clear())
@@ -22332,10 +22011,9 @@ bool CNeuronVLADriverRAGMPI::Clear(void)
          ReturnFalse;
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUncAD_MSD layer and allocates its GPU     |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Initializes the CNeuronUncAD_MSD layer and allocates its GPU  buffers.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronUncAD_MSD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                             uint dimension, uint units, uint variables, uint quantiles,
                             float range, ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -22355,10 +22033,9 @@ bool CNeuronUncAD_MSD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUncAD_MSD feed-forward pass and writes the layer |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Runs the CNeuronUncAD_MSD feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronUncAD_MSD::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || !OpenCL)
@@ -22418,10 +22095,9 @@ bool CNeuronUncAD_MSD::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronCogDriverData layer and allocates its GPU |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Initializes the CNeuronCogDriverData layer and allocates its GPU  buffers.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronCogDriverData::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                 uint window, uint variables, uint state_stack_size,
                                 uint quant_stack_size, uint quantiles, float range,
@@ -22463,9 +22139,9 @@ bool CNeuronCogDriverData::Init(uint numOutputs, uint myIndex, COpenCLMy *open_c
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the affine stack step of the CNeuronCogDriverData layer.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Executes the affine stack step of the CNeuronCogDriverData  layer.  |
+//+---------------------------------------------------------------------+
 bool CNeuronCogDriverData::AffineStack(void)
   {
    if(!OpenCL)
@@ -22494,10 +22170,9 @@ bool CNeuronCogDriverData::AffineStack(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the affine stack gradient step of the                   |
-//| CNeuronCogDriverData layer.                                      |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Executes the affine stack gradient step of the  CNeuronCogDriverData layer.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronCogDriverData::AffineStackGradient(void)
   {
    if(!OpenCL)
@@ -22520,10 +22195,9 @@ bool CNeuronCogDriverData::AffineStackGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronCogDriverData feed-forward pass and writes the   |
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Runs the CNeuronCogDriverData feed-forward pass and writes the  layer output.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronCogDriverData::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || NeuronOCL.Neurons() < int(iWindow * iVariables))
@@ -22545,10 +22219,9 @@ bool CNeuronCogDriverData::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronCogDriverData layer.                                      |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronCogDriverData layer.  |
+//+-------------------------------------------------------------------------------+
 bool CNeuronCogDriverData::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -22562,10 +22235,9 @@ bool CNeuronCogDriverData::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronCogDriverData trainable weights from the      |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Updates the CNeuronCogDriverData trainable weights from the  accumulated gradients.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronCogDriverData::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -22648,10 +22320,9 @@ bool CNeuronCogDriverData::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronCogDriverData GPU buffers to the given OpenCL |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Rebinds the CNeuronCogDriverData GPU buffers to the given OpenCL  context.  |
+//+-----------------------------------------------------------------------------+
 void CNeuronCogDriverData::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronSpikeConvBlock::SetOpenCL(obj);
@@ -22728,10 +22399,9 @@ void CNeuronCogDriverData::TrainMode(bool flag)
    cQuantStack.TrainMode(bTrain);
    cPrevQuantStack.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronCogDriverData weights toward the source model|
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Averages the CNeuronCogDriverData weights toward the source  model  with factor tau.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronCogDriverData::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -22755,10 +22425,9 @@ bool CNeuronCogDriverData::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronCogDriverData execution state and its GPU      |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Clears the CNeuronCogDriverData execution state and its GPU  buffers.  |
+//+------------------------------------------------------------------------+
 bool CNeuronCogDriverData::Clear(void)
   {
    if(!CNeuronSpikeConvBlock::Clear())
@@ -22778,10 +22447,9 @@ bool CNeuronCogDriverData::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronCogDriverRankTCM layer and allocates its  |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Initializes the CNeuronCogDriverRankTCM layer and allocates its  GPU buffers.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::InitStateBuffers(void)
   {
    uint memory_total = iMemoryLen * iVariables * iQueryDim;
@@ -22819,10 +22487,9 @@ bool CNeuronCogDriverRankTCM::InitStateBuffers(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronCogDriverRankTCM layer and allocates its  |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Initializes the CNeuronCogDriverRankTCM layer and allocates its   GPU buffers.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                    uint input_dim, uint query_dim, uint variables, uint memory_len, uint heads,
                                    ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -22866,10 +22533,9 @@ bool CNeuronCogDriverRankTCM::Init(uint numOutputs, uint myIndex, COpenCLMy *ope
 //---
    return Clear();
   }
-//+------------------------------------------------------------------+
-//| Executes the insert pending query step of the                    |
-//| CNeuronCogDriverRankTCM layer.                                   |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Executes the insert pending query step of the  CNeuronCogDriverRankTCM layer.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::InsertPendingQuery(void)
   {
    if(!bLastQueryValid)
@@ -22902,10 +22568,9 @@ bool CNeuronCogDriverRankTCM::InsertPendingQuery(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the build memory kv step of the CNeuronCogDriverRankTCM |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Executes the build memory kv step of the CNeuronCogDriverRankTCM  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::BuildMemoryKV(void)
   {
    if(!OpenCL || iMemoryCount == 0)
@@ -22930,10 +22595,9 @@ bool CNeuronCogDriverRankTCM::BuildMemoryKV(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the flash attention forward step of the                 |
-//| CNeuronCogDriverRankTCM layer.                                   |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Executes the flash attention forward step of the  CNeuronCogDriverRankTCM layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::FlashAttentionForward(CBufferFloat *query, CBufferFloat *out)
   {
    if(!OpenCL || !query || !out || iMemoryCount == 0)
@@ -22961,10 +22625,9 @@ bool CNeuronCogDriverRankTCM::FlashAttentionForward(CBufferFloat *query, CBuffer
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the flash attention backward step of the                |
-//| CNeuronCogDriverRankTCM layer.                                   |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Executes the flash attention backward step of the  CNeuronCogDriverRankTCM layer.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::FlashAttentionBackward(CBufferFloat *query, CBufferFloat *query_gr,
       CBufferFloat *out, CBufferFloat *out_gr)
   {
@@ -22994,10 +22657,9 @@ bool CNeuronCogDriverRankTCM::FlashAttentionBackward(CBufferFloat *query, CBuffe
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the build self kv step of the CNeuronCogDriverRankTCM   |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Executes the build self kv step of the CNeuronCogDriverRankTCM  layer.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::BuildSelfKV(CBufferFloat *source)
   {
    if(!OpenCL || !source)
@@ -23020,10 +22682,9 @@ bool CNeuronCogDriverRankTCM::BuildSelfKV(CBufferFloat *source)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the self attention forward step of the                  |
-//| CNeuronCogDriverRankTCM layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Executes the self attention forward step of the  CNeuronCogDriverRankTCM layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::SelfAttentionForward(CBufferFloat *query, CBufferFloat *out)
   {
    if(!OpenCL || !query || !out || iVariables == 0)
@@ -23053,10 +22714,9 @@ bool CNeuronCogDriverRankTCM::SelfAttentionForward(CBufferFloat *query, CBufferF
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the self attention backward step of the                 |
-//| CNeuronCogDriverRankTCM layer.                                   |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Executes the self attention backward step of the  CNeuronCogDriverRankTCM layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::SelfAttentionBackward(CBufferFloat *query, CBufferFloat *query_gr,
       CBufferFloat *out, CBufferFloat *out_gr)
   {
@@ -23086,10 +22746,9 @@ bool CNeuronCogDriverRankTCM::SelfAttentionBackward(CBufferFloat *query, CBuffer
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the mean flash scores step of the                       |
-//| CNeuronCogDriverRankTCM layer.                                   |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Executes the mean flash scores step of the  CNeuronCogDriverRankTCM layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::MeanFlashScores(CBufferFloat *query)
   {
    if(!OpenCL || !query || iMemoryCount == 0)
@@ -23115,10 +22774,9 @@ bool CNeuronCogDriverRankTCM::MeanFlashScores(CBufferFloat *query)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronCogDriverRankTCM feed-forward pass and writes the|
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronCogDriverRankTCM feed-forward pass and writes  the  layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || NeuronOCL.Neurons() < int(iInputDim * iVariables))
@@ -23160,10 +22818,9 @@ bool CNeuronCogDriverRankTCM::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronCogDriverRankTCM layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronCogDriverRankTCM layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -23254,10 +22911,9 @@ bool CNeuronCogDriverRankTCM::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronCogDriverRankTCM trainable weights from the   |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Updates the CNeuronCogDriverRankTCM trainable weights from the  accumulated gradients.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -23315,9 +22971,9 @@ bool CNeuronCogDriverRankTCM::AppendParameterFingerprint(ulong &fingerprint)
       ReturnFalse;
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronCogDriverRankTCM state from the file handle. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Restores the CNeuronCogDriverRankTCM state from the file handle.  |
+//+-------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -23371,10 +23027,9 @@ bool CNeuronCogDriverRankTCM::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronCogDriverRankTCM GPU buffers to the given     |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Rebinds the CNeuronCogDriverRankTCM GPU buffers to the given  OpenCL context.  |
+//+--------------------------------------------------------------------------------+
 void CNeuronCogDriverRankTCM::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -23539,10 +23194,9 @@ void CNeuronCogDriverRankTCM::TrainMode(bool flag)
    cMemoryContext.TrainMode(bTrain);
    cSelfContext.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronCogDriverRankTCM weights toward the source   |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Averages the CNeuronCogDriverRankTCM weights toward the source  model with factor tau.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -23564,10 +23218,9 @@ bool CNeuronCogDriverRankTCM::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronCogDriverRankTCM execution state and its GPU   |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Clears the CNeuronCogDriverRankTCM execution state and its GPU  buffers.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronCogDriverRankTCM::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
@@ -23601,10 +23254,9 @@ bool CNeuronCogDriverRankTCM::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the shift state step of the CNeuronCogDriverForecastHead|
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Executes the shift state step of the  CNeuronCogDriverForecastHead  layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::ShiftState(void)
   {
    if(!OpenCL)
@@ -23628,10 +23280,9 @@ bool CNeuronCogDriverForecastHead::ShiftState(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the build context kv step of the                        |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Executes the build context kv step of the  CNeuronCogDriverForecastHead layer.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::BuildContextKV(void)
   {
    if(!OpenCL)
@@ -23655,10 +23306,9 @@ bool CNeuronCogDriverForecastHead::BuildContextKV(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the build context projection gradient step of the       |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------------------+
+//| Executes the build context projection gradient step of the  CNeuronCogDriverForecastHead layer.  |
+//+--------------------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::BuildContextProjectionGradient(void)
   {
    if(!OpenCL)
@@ -23682,10 +23332,9 @@ bool CNeuronCogDriverForecastHead::BuildContextProjectionGradient(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the build error input step of the                       |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Executes the build error input step of the  CNeuronCogDriverForecastHead layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::BuildErrorInput(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || NeuronOCL.Neurons() < int(iVariables * iWindow))
@@ -23696,10 +23345,9 @@ bool CNeuronCogDriverForecastHead::BuildErrorInput(CNeuronBaseOCL *NeuronOCL)
 //---
    return cErrorHead.FeedForward(cErrorInput.AsObject());
   }
-//+------------------------------------------------------------------+
-//| Executes the build error target step of the                      |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Executes the build error target step of the  CNeuronCogDriverForecastHead layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::BuildErrorTarget(void)
   {
    if(!OpenCL)
@@ -23720,10 +23368,9 @@ bool CNeuronCogDriverForecastHead::BuildErrorTarget(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the build confidence step of the                        |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Executes the build confidence step of the  CNeuronCogDriverForecastHead layer.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::BuildConfidence(void)
   {
    if(!OpenCL)
@@ -23743,10 +23390,9 @@ bool CNeuronCogDriverForecastHead::BuildConfidence(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the build delta norm step of the                        |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Executes the build delta norm step of the  CNeuronCogDriverForecastHead layer.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::BuildDeltaNorm(void)
   {
    if(!OpenCL)
@@ -23769,10 +23415,9 @@ bool CNeuronCogDriverForecastHead::BuildDeltaNorm(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronCogDriverForecastHead layer and allocates |
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Initializes the CNeuronCogDriverForecastHead layer and allocates  its GPU buffers.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                         uint dimension, uint horizon, uint variables, uint forecast_blocks,
                                         uint heads, ENUM_OPTIMIZATION optimization_type, uint batch)
@@ -23884,10 +23529,9 @@ bool CNeuronCogDriverForecastHead::Init(uint numOutputs, uint myIndex, COpenCLMy
 //---
    return Clear();
   }
-//+------------------------------------------------------------------+
-//| Executes the cross layer forward step of the                     |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Executes the cross layer forward step of the  CNeuronCogDriverForecastHead layer.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::CrossLayerForward(uint layer,
       CNeuronBaseOCL *plan,
       CNeuronBaseOCL *context)
@@ -23921,10 +23565,9 @@ bool CNeuronCogDriverForecastHead::CrossLayerForward(uint layer,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the cross layer backward step of the                    |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------+
+//| Executes the cross layer backward step of the  CNeuronCogDriverForecastHead layer.  |
+//+-------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::CrossLayerBackward(uint layer, CNeuronBaseOCL *plan,
       CNeuronBaseOCL *context, CBufferFloat *out_grad)
   {
@@ -24005,10 +23648,9 @@ bool CNeuronCogDriverForecastHead::CrossLayerBackward(uint layer, CNeuronBaseOCL
 //---
    return BuildContextProjectionGradient();
   }
-//+------------------------------------------------------------------+
-//| Executes the cross layer update weights step of the              |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------------------+
+//| Executes the cross layer update weights step of the  CNeuronCogDriverForecastHead layer.  |
+//+-------------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::CrossLayerUpdateWeights(uint layer, CNeuronBaseOCL *plan,
       CNeuronBaseOCL *context)
   {
@@ -24029,10 +23671,9 @@ bool CNeuronCogDriverForecastHead::CrossLayerUpdateWeights(uint layer, CNeuronBa
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the self layer forward step of the                      |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Executes the self layer forward step of the  CNeuronCogDriverForecastHead layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::SelfLayerForward(uint layer, CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || layer >= iLayers)
@@ -24079,10 +23720,9 @@ bool CNeuronCogDriverForecastHead::SelfLayerForward(uint layer, CNeuronBaseOCL *
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the self layer backward step of the                     |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Executes the self layer backward step of the  CNeuronCogDriverForecastHead layer.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::SelfLayerBackward(uint layer, CNeuronBaseOCL *NeuronOCL, CBufferFloat *out_grad)
   {
    if(!NeuronOCL || !out_grad || layer >= iLayers)
@@ -24118,10 +23758,9 @@ bool CNeuronCogDriverForecastHead::SelfLayerBackward(uint layer, CNeuronBaseOCL 
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the self layer update weights step of the               |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------------+
+//| Executes the self layer update weights step of the  CNeuronCogDriverForecastHead layer.  |
+//+------------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::SelfLayerUpdateWeights(uint layer, CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || layer >= iLayers)
@@ -24162,10 +23801,9 @@ bool CNeuronCogDriverForecastHead::SelfLayerUpdateWeights(uint layer, CNeuronBas
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronCogDriverForecastHead feed-forward pass and      |
-//| writes the layer output.                                         |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Runs the CNeuronCogDriverForecastHead feed-forward pass and  writes the layer output.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL || NeuronOCL.Neurons() < int(iVariables * iWindow))
@@ -24203,10 +23841,9 @@ bool CNeuronCogDriverForecastHead::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronCogDriverForecastHead layer.                              |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronCogDriverForecastHead layer.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL)
@@ -24240,10 +23877,9 @@ bool CNeuronCogDriverForecastHead::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronCogDriverForecastHead trainable weights from  |
-//| the accumulated gradients.                                       |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------------+
+//| Updates the CNeuronCogDriverForecastHead trainable weights from  the accumulated gradients.  |
+//+----------------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL)
@@ -24270,9 +23906,9 @@ bool CNeuronCogDriverForecastHead::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Saves the CNeuronCogDriverForecastHead state to the file handle. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Saves the CNeuronCogDriverForecastHead state to the file handle.  |
+//+-------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::Save(const int file_handle)
   {
    if(!CNeuronMLMHAttentionOCL::Save(file_handle))
@@ -24293,10 +23929,9 @@ bool CNeuronCogDriverForecastHead::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronCogDriverForecastHead state from the file    |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Restores the CNeuronCogDriverForecastHead state from the file  handle.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::Load(const int file_handle)
   {
    if(!CNeuronMLMHAttentionOCL::Load(file_handle))
@@ -24347,10 +23982,9 @@ bool CNeuronCogDriverForecastHead::Load(const int file_handle)
 //---
    return Clear();
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronCogDriverForecastHead GPU buffers to the given|
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronCogDriverForecastHead GPU buffers to the  given  OpenCL context.  |
+//+--------------------------------------------------------------------------------------+
 void CNeuronCogDriverForecastHead::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronMLMHAttentionOCL::SetOpenCL(obj);
@@ -24374,9 +24008,9 @@ void CNeuronCogDriverForecastHead::SetOpenCL(COpenCLMy *obj)
    cConfidence.BufferCreate(OpenCL);
    cErrorTarget.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Sets the training flag of the CNeuronCogDriverForecastHead layer.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Sets the training flag of the CNeuronCogDriverForecastHead  layer.  |
+//+---------------------------------------------------------------------+
 void CNeuronCogDriverForecastHead::TrainMode(bool flag)
   {
    CNeuronBaseOCL::TrainMode(flag);
@@ -24392,10 +24026,9 @@ void CNeuronCogDriverForecastHead::TrainMode(bool flag)
    cErrorInput.TrainMode(bTrain);
    cErrorHead.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronCogDriverForecastHead weights toward the     |
-//| source model with factor tau.                                    |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------------+
+//| Averages the CNeuronCogDriverForecastHead weights toward the  source model with factor tau.  |
+//+----------------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -24419,10 +24052,9 @@ bool CNeuronCogDriverForecastHead::WeightsUpdate(CNeuronBaseOCL *source, float t
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronCogDriverForecastHead execution state and its  |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Clears the CNeuronCogDriverForecastHead execution state and its  GPU buffers.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastHead::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
@@ -24451,10 +24083,9 @@ bool CNeuronCogDriverForecastHead::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronCogDriverForecastToken layer and allocates|
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Initializes the CNeuronCogDriverForecastToken layer and  allocates  its GPU buffers.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastToken::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
       uint dimension, uint horizon, ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -24475,10 +24106,9 @@ bool CNeuronCogDriverForecastToken::Init(uint numOutputs, uint myIndex, COpenCLM
 //---
    return Clear();
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronCogDriverForecastToken feed-forward pass and     |
-//| writes the layer output.                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Runs the CNeuronCogDriverForecastToken feed-forward pass and  writes the layer output.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastToken::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL || NeuronOCL.Type() != defNeuronCogDriverForecastHead ||
@@ -24496,10 +24126,9 @@ bool CNeuronCogDriverForecastToken::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronCogDriverForecastToken layer.                             |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronCogDriverForecastToken layer.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastToken::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL || NeuronOCL.Type() != defNeuronCogDriverForecastHead)
@@ -24516,9 +24145,9 @@ bool CNeuronCogDriverForecastToken::calcInputGradients(CNeuronBaseOCL *NeuronOCL
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Saves the CNeuronCogDriverForecastToken state to the file handle.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Saves the CNeuronCogDriverForecastToken state to the file  handle.  |
+//+---------------------------------------------------------------------+
 bool CNeuronCogDriverForecastToken::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
@@ -24530,10 +24159,9 @@ bool CNeuronCogDriverForecastToken::Save(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronCogDriverForecastToken state from the file   |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Restores the CNeuronCogDriverForecastToken state from the file  handle.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastToken::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -24548,29 +24176,26 @@ bool CNeuronCogDriverForecastToken::Load(const int file_handle)
 //---
    return Clear();
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronCogDriverForecastToken GPU buffers to the     |
-//| given OpenCL context.                                            |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronCogDriverForecastToken GPU buffers to the  given OpenCL context.  |
+//+--------------------------------------------------------------------------------------+
 void CNeuronCogDriverForecastToken::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
    cRoPE.SetOpenCL(OpenCL);
    cConfidenceGradient.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Sets the training flag of the CNeuronCogDriverForecastToken      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Sets the training flag of the CNeuronCogDriverForecastToken  layer.  |
+//+----------------------------------------------------------------------+
 void CNeuronCogDriverForecastToken::TrainMode(bool flag)
   {
    CNeuronBaseOCL::TrainMode(flag);
    cRoPE.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronCogDriverForecastToken execution state and its |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Clears the CNeuronCogDriverForecastToken execution state and its  GPU buffers.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronCogDriverForecastToken::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear() ||
@@ -24580,10 +24205,9 @@ bool CNeuronCogDriverForecastToken::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUncAD_MUE layer and allocates its GPU     |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Initializes the CNeuronUncAD_MUE layer and allocates its GPU  buffers.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronUncAD_MUE::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                             uint window, uint window_out, uint variables,
                             uint stack_size, uint quantiles, float range,
@@ -24652,10 +24276,9 @@ bool CNeuronUncAD_MUE::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUncAD_MUE feed-forward pass and writes the layer |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Runs the CNeuronUncAD_MUE feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronUncAD_MUE::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    CNeuronBaseOCL* prev = NeuronOCL;
@@ -24706,10 +24329,9 @@ bool CNeuronUncAD_MUE::feedForward(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronUncAD_MUE |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronUncAD_MUE  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronUncAD_MUE::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || cMSDFlow.Total() < 1 || cUncertainty.Total() < 1)
@@ -24767,10 +24389,9 @@ bool CNeuronUncAD_MUE::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronUncAD_MUE trainable weights from the          |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Updates the CNeuronUncAD_MUE trainable weights from the  accumulated gradients.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronUncAD_MUE::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || cMSDFlow.Total() < 1 || cUncertainty.Total() < 1)
@@ -24836,10 +24457,9 @@ bool CNeuronUncAD_MUE::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronUncAD_MUE GPU buffers to the given OpenCL     |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Rebinds the CNeuronUncAD_MUE GPU buffers to the given OpenCL  context.  |
+//+-------------------------------------------------------------------------+
 void CNeuronUncAD_MUE::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronSpikeConvBlock::SetOpenCL(obj);
@@ -24857,10 +24477,9 @@ void CNeuronUncAD_MUE::TrainMode(bool flag)
    cUncertainty.TrainMode(bTrain);
    cConcatenated.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronUncAD_MUE weights toward the source model    |
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Averages the CNeuronUncAD_MUE weights toward the source model  with factor tau.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronUncAD_MUE::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronSpikeConvBlock::WeightsUpdate(source, tau))
@@ -24872,9 +24491,9 @@ bool CNeuronUncAD_MUE::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronUncAD_MUE execution state and its GPU buffers. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Clears the CNeuronUncAD_MUE execution state and its GPU buffers.  |
+//+-------------------------------------------------------------------+
 bool CNeuronUncAD_MUE::Clear(void)
   {
    if(!CNeuronSpikeConvBlock::Clear())
@@ -24888,10 +24507,9 @@ bool CNeuronUncAD_MUE::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUncAD_UGP layer and allocates its GPU     |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Initializes the CNeuronUncAD_UGP layer and allocates its GPU  buffers.  |
+//+-------------------------------------------------------------------------+
 bool CNeuronUncAD_UGP::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                             uint window, uint units, uint context_window,
                             uint context_units, uint heads, uint key_dimension,
@@ -24914,10 +24532,9 @@ bool CNeuronUncAD_UGP::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUncAD_UGP feed-forward pass and writes the layer |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------+
+//| Runs the CNeuronUncAD_UGP feed-forward pass and writes the layer  output.  |
+//+----------------------------------------------------------------------------+
 bool CNeuronUncAD_UGP::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!NeuronOCL || !SecondInput)
@@ -24932,10 +24549,9 @@ bool CNeuronUncAD_UGP::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Seco
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronUncAD_UGP |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronUncAD_UGP  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronUncAD_UGP::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
       CBufferFloat *SecondInput,
       CBufferFloat *SecondGradient,
@@ -24952,10 +24568,9 @@ bool CNeuronUncAD_UGP::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronUncAD_UGP trainable weights from the          |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Updates the CNeuronUncAD_UGP trainable weights from the  accumulated gradients.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronUncAD_UGP::updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!NeuronOCL || !SecondInput)
@@ -24992,10 +24607,9 @@ bool CNeuronUncAD_UGP::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronUncAD_UGP GPU buffers to the given OpenCL     |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------+
+//| Rebinds the CNeuronUncAD_UGP GPU buffers to the given OpenCL  context.  |
+//+-------------------------------------------------------------------------+
 void CNeuronUncAD_UGP::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronSpikeMHCrossAttention::SetOpenCL(obj);
@@ -25009,10 +24623,9 @@ void CNeuronUncAD_UGP::TrainMode(bool flag)
    CNeuronSpikeMHCrossAttention::TrainMode(flag);
    cSelfAttention.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronUncAD_UGP weights toward the source model    |
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Averages the CNeuronUncAD_UGP weights toward the source model  with factor tau.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronUncAD_UGP::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronSpikeMHCrossAttention::WeightsUpdate(source, tau))
@@ -25023,9 +24636,9 @@ bool CNeuronUncAD_UGP::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronUncAD_UGP execution state and its GPU buffers. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Clears the CNeuronUncAD_UGP execution state and its GPU buffers.  |
+//+-------------------------------------------------------------------+
 bool CNeuronUncAD_UGP::Clear(void)
   {
    if(!CNeuronSpikeMHCrossAttention::Clear())
@@ -25035,10 +24648,9 @@ bool CNeuronUncAD_UGP::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUncAD_UGPL layer and allocates its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Initializes the CNeuronUncAD_UGPL layer and allocates its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronUncAD_UGPL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                              uint window, uint units, uint context_window,
                              uint context_units, uint mode_units, uint heads,
@@ -25065,10 +24677,9 @@ bool CNeuronUncAD_UGPL::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUncAD_UGPL feed-forward pass and writes the layer|
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Runs the CNeuronUncAD_UGPL feed-forward pass and writes the  layer  output.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronUncAD_UGPL::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!NeuronOCL || !SecondInput)
@@ -25086,10 +24697,9 @@ bool CNeuronUncAD_UGPL::feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Sec
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronUncAD_UGPL|
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronUncAD_UGPL  layer.  |
+//+-----------------------------------------------------------------------------+
 bool CNeuronUncAD_UGPL::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
       CBufferFloat *SecondInput,
       CBufferFloat *SecondGradient,
@@ -25107,10 +24717,9 @@ bool CNeuronUncAD_UGPL::calcInputGradients(CNeuronBaseOCL *NeuronOCL,
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronUncAD_UGPL trainable weights from the         |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Updates the CNeuronUncAD_UGPL trainable weights from the  accumulated gradients.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronUncAD_UGPL::updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
   {
    if(!NeuronOCL || !SecondInput)
@@ -25153,10 +24762,9 @@ bool CNeuronUncAD_UGPL::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronUncAD_UGPL GPU buffers to the given OpenCL    |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Rebinds the CNeuronUncAD_UGPL GPU buffers to the given OpenCL  context.  |
+//+--------------------------------------------------------------------------+
 void CNeuronUncAD_UGPL::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronSpikeMHCrossAttention::SetOpenCL(obj);
@@ -25172,10 +24780,9 @@ void CNeuronUncAD_UGPL::TrainMode(bool flag)
    cMode.TrainMode(bTrain);
    cModeFusion.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronUncAD_UGPL weights toward the source model   |
-//| with factor tau.                                                 |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Averages the CNeuronUncAD_UGPL weights toward the source model  with factor tau.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronUncAD_UGPL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronSpikeMHCrossAttention::WeightsUpdate(source, tau))
@@ -25187,9 +24794,9 @@ bool CNeuronUncAD_UGPL::WeightsUpdate(CNeuronBaseOCL *source, float tau)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronUncAD_UGPL execution state and its GPU buffers.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Clears the CNeuronUncAD_UGPL execution state and its GPU  buffers.  |
+//+---------------------------------------------------------------------+
 bool CNeuronUncAD_UGPL::Clear(void)
   {
    if(!CNeuronSpikeMHCrossAttention::Clear())
@@ -25201,9 +24808,9 @@ bool CNeuronUncAD_UGPL::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronUncAD layer and allocates its GPU buffers.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Initializes the CNeuronUncAD layer and allocates its GPU  buffers.  |
+//+---------------------------------------------------------------------+
 bool CNeuronUncAD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                         uint &dimensions[], uint units_s, uint heads,
                         uint stack_size, uint quantiles, uint embed_size,
@@ -25353,10 +24960,9 @@ bool CNeuronUncAD::TauEForward(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronUncAD feed-forward pass and writes the layer     |
-//| output.                                                          |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------+
+//| Runs the CNeuronUncAD feed-forward pass and writes the layer  output.  |
+//+------------------------------------------------------------------------+
 bool CNeuronUncAD::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || NeuronOCL.Neurons() < int(iInputDim))
@@ -25441,10 +25047,9 @@ bool CNeuronUncAD::TauEGradients(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the CNeuronUncAD     |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Back-propagates the input gradients through the CNeuronUncAD  layer.  |
+//+-----------------------------------------------------------------------+
 bool CNeuronUncAD::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -25507,10 +25112,9 @@ bool CNeuronUncAD::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronUncAD trainable weights from the accumulated  |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Updates the CNeuronUncAD trainable weights from the accumulated  gradients.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronUncAD::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -25612,9 +25216,9 @@ bool CNeuronUncAD::Load(const int file_handle)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronUncAD GPU buffers to the given OpenCL context.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Rebinds the CNeuronUncAD GPU buffers to the given OpenCL  context.  |
+//+---------------------------------------------------------------------+
 void CNeuronUncAD::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronSpikeConvBlock::SetOpenCL(obj);
@@ -25658,10 +25262,9 @@ void CNeuronUncAD::TrainMode(bool flag)
    cTauEWeighted.TrainMode(bTrain);
    cFusionInput.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronUncAD weights toward the source model with   |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Averages the CNeuronUncAD weights toward the source model with  factor tau.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronUncAD::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!CNeuronSpikeConvBlock::WeightsUpdate(source, tau))
@@ -25707,10 +25310,9 @@ bool CNeuronUncAD::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the detach tau e from mpi step of the CNeuronMomAD      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Executes the detach tau e from mpi step of the CNeuronMomAD  layer.  |
+//+----------------------------------------------------------------------+
 bool CNeuronMomAD::DetachTauEFromMPI(void)
   {
    if(!bTauELinked)
@@ -25769,9 +25371,9 @@ bool CNeuronMomAD::LinkTauEToMPI(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronMomAD layer and allocates its GPU buffers.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Initializes the CNeuronMomAD layer and allocates its GPU  buffers.  |
+//+---------------------------------------------------------------------+
 bool CNeuronMomAD::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                         uint &dimensions[], uint units_s, uint heads,
                         uint stack_size, uint quantiles, uint embed_size,
@@ -25834,10 +25436,9 @@ bool CNeuronMomAD::TauEGradients(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronMomAD trainable weights from the accumulated  |
-//| gradients.                                                       |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Updates the CNeuronMomAD trainable weights from the accumulated  gradients.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronMomAD::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL)
@@ -25890,9 +25491,9 @@ bool CNeuronMomAD::Load(const int file_handle)
 //---
    return LinkTauEToMPI();
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronMomAD GPU buffers to the given OpenCL context.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Rebinds the CNeuronMomAD GPU buffers to the given OpenCL  context.  |
+//+---------------------------------------------------------------------+
 void CNeuronMomAD::SetOpenCL(COpenCLMy *obj)
   {
    DetachTauEFromMPI();
@@ -25909,10 +25510,9 @@ void CNeuronMomAD::TrainMode(bool flag)
    CNeuronUncAD::TrainMode(flag);
    cMPI.TrainMode(bTrain);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronMomAD weights toward the source model with   |
-//| factor tau.                                                      |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------+
+//| Averages the CNeuronMomAD weights toward the source model with  factor tau.  |
+//+------------------------------------------------------------------------------+
 bool CNeuronMomAD::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -25937,10 +25537,9 @@ bool CNeuronMomAD::Clear(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CScenarioCodebook layer and allocates its GPU    |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Initializes the CScenarioCodebook layer and allocates its GPU  buffers.  |
+//+--------------------------------------------------------------------------+
 bool CScenarioCodebook::Init(uint scenarios, uint dimension, COpenCLMy *open_cl)
   {
    if(scenarios == 0 || dimension == 0)
@@ -26014,9 +25613,9 @@ bool CScenarioCodebook::Load(const int file_handle, COpenCLMy *open_cl)
    SetOpenCL(open_cl);
    return true;
   }
-//+------------------------------------------------------------------+
-//| Validates the CScenarioCodebook layer contract before execution. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Validates the CScenarioCodebook layer contract before execution.  |
+//+-------------------------------------------------------------------+
 bool CScenarioCodebook::ValidateContract(uint scenarios, uint dimension)
   {
    if(iScenarios != scenarios || iDimension != dimension ||
@@ -26026,10 +25625,9 @@ bool CScenarioCodebook::ValidateContract(uint scenarios, uint dimension)
       return false;
    return true;
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CScenarioCodebook GPU buffers to the given OpenCL    |
-//| context.                                                         |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Rebinds the CScenarioCodebook GPU buffers to the given OpenCL  context.  |
+//+--------------------------------------------------------------------------+
 void CScenarioCodebook::SetOpenCL(COpenCLMy *open_cl)
   {
    OpenCL = open_cl;
@@ -26042,9 +25640,9 @@ void CScenarioCodebook::SetOpenCL(COpenCLMy *open_cl)
    cInactive.BufferCreate(OpenCL);
    cInactivityAge.BufferCreate(OpenCL);
   }
-//+------------------------------------------------------------------+
-//| Transfers codebook buffers before publishing its OpenCL context. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Transfers codebook buffers before publishing its OpenCL context.  |
+//+-------------------------------------------------------------------+
 bool CScenarioCodebook::SetOpenCLChecked(COpenCLMy *open_cl)
   {
 //--- Validate the target and immutable codebook shape before mutation.
@@ -26105,10 +25703,9 @@ bool CScenarioCodebook::SetOpenCLChecked(COpenCLMy *open_cl)
 //--- Finalize the bounded checked context transfer.
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Validates the GPU launch configuration of the                    |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Validates the GPU launch configuration of the  CNeuronScenarioForecast layer.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::ValidateLaunchConfiguration(COpenCLMy *open_cl, uint scenarios,
       uint horizon, uint latent, uint variables)
   {
@@ -26159,10 +25756,9 @@ bool CNeuronScenarioForecast::ValidateLaunchConfiguration(COpenCLMy *open_cl, ui
            responsibility_limit >= diagnostic_group &&
            codebook_limit >= joint_group && normalize_limit >= normalize_group);
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronScenarioForecast layer and allocates its  |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Initializes the CNeuronScenarioForecast layer and allocates its  GPU buffers.  |
+//+--------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                                    uint scenarios, uint top_k, uint horizon, uint dimension,
                                    ENUM_OPTIMIZATION optimization_type, uint batch, uint variables)
@@ -26220,10 +25816,9 @@ bool CNeuronScenarioForecast::Init(uint numOutputs, uint myIndex, COpenCLMy *ope
 #undef ORION_FORECAST_INIT_STAGE
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronScenarioForecast feed-forward pass and writes the|
-//| layer output.                                                    |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Runs the CNeuronScenarioForecast feed-forward pass and writes  the  layer output.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL || NeuronOCL.Neurons() != int(iVariables * iDimension) ||
@@ -26275,10 +25870,9 @@ bool CNeuronScenarioForecast::feedForward(CNeuronBaseOCL *NeuronOCL)
    kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the bind responsibilities kernel step of the            |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Executes the bind responsibilities kernel step of the  CNeuronScenarioForecast layer.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::BindResponsibilitiesKernel(CBufferFloat *target_source,
       CBufferFloat *observation_by_scenario)
   {
@@ -26316,10 +25910,9 @@ bool CNeuronScenarioForecast::BindResponsibilitiesKernel(CBufferFloat *target_so
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_recovery_events, cRecoveryEvents.GetIndex()) &&
            OpenCL.SetArgumentBuffer(kernel, def_k_sr_age_zero_events, cAgeZeroEvents.GetIndex()));
   }
-//+------------------------------------------------------------------+
-//| Executes the build responsibilities step of the                  |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Executes the build responsibilities step of the  CNeuronScenarioForecast layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::BuildResponsibilities(CBufferFloat *target)
   {
    return BuildResponsibilities(target, target);
@@ -26367,6 +25960,7 @@ bool CNeuronScenarioForecast::BuildResponsibilities(CBufferFloat *target, CBuffe
    setBuffer(normalize, def_k_sgn_confidence_gradient, cConfidenceHead.getGradientIndex())
    setArgument(normalize, def_k_sgn_variables, (int)iVariables)
    setBuffer(normalize, def_k_sgn_batch_control, cBatchControl.GetIndex())
+   setArgument(normalize, def_k_sgn_normalize_gradients, (bGradientNormalization ? 1 : 0))
    kernelExecuteLoc(normalize, global_work_offset, global_work_size, local_work_size)
    if(bCodebookUpdate && !UpdateCodebook(delta_target))
       ReturnFalse;
@@ -26377,10 +25971,9 @@ bool CNeuronScenarioForecast::BuildResponsibilities(CBufferFloat *target, CBuffe
    bLastTargetAccepted = (cBatchControl[0] > 0.5f);
    return bLastTargetAccepted;
   }
-//+------------------------------------------------------------------+
-//| Executes the reset epoch diagnostics step of the                 |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------+
+//| Executes the reset epoch diagnostics step of the  CNeuronScenarioForecast layer.  |
+//+-----------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::ResetEpochDiagnostics(void)
   {
    if(!ValidateLaunchConfiguration(OpenCL, iScenarios, iHorizon, iDimension, iVariables) ||
@@ -26393,10 +25986,9 @@ bool CNeuronScenarioForecast::ResetEpochDiagnostics(void)
    kernelExecute(kernel, offset, global)
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the commit batch diagnostics step of the                |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+------------------------------------------------------------------------------------+
+//| Executes the commit batch diagnostics step of the  CNeuronScenarioForecast layer.  |
+//+------------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::CommitBatchDiagnostics(void)
   {
    if(!ValidateLaunchConfiguration(OpenCL, iScenarios, iHorizon, iDimension, iVariables) ||
@@ -26410,10 +26002,9 @@ bool CNeuronScenarioForecast::CommitBatchDiagnostics(void)
    kernelExecuteLoc(kernel, offset, global, local)
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the build epoch codebook diagnostics step of the        |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------------+
+//| Executes the build epoch codebook diagnostics step of the  CNeuronScenarioForecast layer.  |
+//+--------------------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::BuildEpochCodebookDiagnostics(void)
   {
    if(!ValidateLaunchConfiguration(OpenCL, iScenarios, iHorizon, iDimension, iVariables) ||
@@ -26435,10 +26026,9 @@ bool CNeuronScenarioForecast::BuildEpochCodebookDiagnostics(void)
    kernelExecuteLoc(kernel, reduce_offset, reduce_size, reduce_size)
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the read epoch diagnostics step of the                  |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Executes the read epoch diagnostics step of the  CNeuronScenarioForecast layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::ReadEpochDiagnostics(double &mix_loss, double &router_loss,
       double &trajectory_loss, double &confidence_loss,
       double &latent_error, double &observation_error,
@@ -26465,10 +26055,9 @@ bool CNeuronScenarioForecast::ReadEpochDiagnostics(double &mix_loss, double &rou
    recovered = cEpochDiagnostics[11];
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the read epoch recovery events step of the              |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Executes the read epoch recovery events step of the  CNeuronScenarioForecast layer.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::ReadEpochRecoveryEvents(uint &events[])
   {
    if(cRecoveryEvents.Total() != int(iScenarios) || !cRecoveryEvents.BufferRead())
@@ -26484,10 +26073,9 @@ bool CNeuronScenarioForecast::ReadEpochRecoveryEvents(uint &events[])
      }
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the read epoch age zero events step of the              |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Executes the read epoch age zero events step of the  CNeuronScenarioForecast layer.  |
+//+--------------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::ReadEpochAgeZeroEvents(uint &events[])
   {
    if(cAgeZeroEvents.Total() != int(iScenarios) || !cAgeZeroEvents.BufferRead())
@@ -26513,10 +26101,9 @@ bool CNeuronScenarioForecast::SetRecoveryAge(const uint age)
    iRecoveryAge = age;
    return true;
   }
-//+------------------------------------------------------------------+
-//| Executes the update codebook step of the CNeuronScenarioForecast |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Executes the update codebook step of the CNeuronScenarioForecast  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::UpdateCodebook(CBufferFloat *delta_target, float decay)
   {
    if(!OpenCL || !delta_target || delta_target.Total() < int(iVariables * iHorizon * iDimension) ||
@@ -26554,10 +26141,9 @@ bool CNeuronScenarioForecast::UpdateCodebook(CBufferFloat *delta_target, float d
    kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronScenarioForecast layer.  |
+//+----------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
    if(!OpenCL || !NeuronOCL || NeuronOCL.Neurons() != int(iVariables * iDimension))
@@ -26588,13 +26174,13 @@ bool CNeuronScenarioForecast::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
    setBuffer(kernel, def_k_sgn_confidence_gradient, cConfidenceHead.getGradientIndex())
    setArgument(kernel, def_k_sgn_variables, (int)iVariables)
    setBuffer(kernel, def_k_sgn_batch_control, cBatchControl.GetIndex())
+   setArgument(kernel, def_k_sgn_normalize_gradients, (bGradientNormalization ? 1 : 0))
    kernelExecuteLoc(kernel, global_work_offset, global_work_size, local_work_size)
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronScenarioForecast trainable weights from the   |
-//| accumulated gradients.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Updates the CNeuronScenarioForecast trainable weights from the  accumulated gradients.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::updateInputWeights(CNeuronBaseOCL *NeuronOCL)
   {
    if(!NeuronOCL || !bLastTargetAccepted)
@@ -26627,9 +26213,9 @@ bool CNeuronScenarioForecast::Save(const int file_handle)
            cGenerator.Save(file_handle) && cRouter.Save(file_handle) && cConfidenceHead.Save(file_handle) &&
            cRouterSoftmax.Save(file_handle) && cResponsibilityScores.Save(file_handle) && cTopKSelector.Save(file_handle));
   }
-//+------------------------------------------------------------------+
-//| Append scenario forecast parameters, not batch diagnostics/state.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Append scenario forecast parameters, not batch  diagnostics/state.  |
+//+---------------------------------------------------------------------+
 bool CNeuronScenarioForecast::AppendParameterFingerprint(ulong &fingerprint)
   {
    if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint) ||
@@ -26640,9 +26226,9 @@ bool CNeuronScenarioForecast::AppendParameterFingerprint(ulong &fingerprint)
       ReturnFalse;
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronScenarioForecast state from the file handle. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Restores the CNeuronScenarioForecast state from the file handle.  |
+//+-------------------------------------------------------------------+
 bool CNeuronScenarioForecast::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
@@ -26689,9 +26275,9 @@ bool CNeuronScenarioForecast::Load(const int file_handle)
    SetOpenCL(OpenCL);
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronScenarioForecast state from the file handle. |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------+
+//| Restores the CNeuronScenarioForecast state (OpenCL-aware  overload).  |
+//+-----------------------------------------------------------------------+
 bool CNeuronScenarioForecast::Load(const int file_handle, COpenCLMy *open_cl)
   {
    if(file_handle == INVALID_HANDLE || FileReadInteger(file_handle) != Type())
@@ -26699,10 +26285,9 @@ bool CNeuronScenarioForecast::Load(const int file_handle, COpenCLMy *open_cl)
    SetOpenCL(open_cl);
    return Load(file_handle);
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronScenarioForecast GPU buffers to the given     |
-//| OpenCL context.                                                  |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------+
+//| Rebinds the CNeuronScenarioForecast GPU buffers to the given  OpenCL context.  |
+//+--------------------------------------------------------------------------------+
 void CNeuronScenarioForecast::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronBaseOCL::SetOpenCL(obj);
@@ -26900,10 +26485,9 @@ void CNeuronScenarioForecast::TrainMode(bool flag)
    cRouterSoftmax.TrainMode(flag);
    cTopKSelector.TrainMode(flag);
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronScenarioForecast weights toward the source   |
-//| model with factor tau.                                           |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Averages the CNeuronScenarioForecast weights toward the source  model with factor tau.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -26914,10 +26498,9 @@ bool CNeuronScenarioForecast::WeightsUpdate(CNeuronBaseOCL *source, float tau)
            cRouter.WeightsUpdate(Source.cRouter.AsObject(), tau) &&
            cConfidenceHead.WeightsUpdate(Source.cConfidenceHead.AsObject(), tau));
   }
-//+------------------------------------------------------------------+
-//| Returns the trainable weight parameters of the                   |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Returns the trainable weight parameters of the  CNeuronScenarioForecast layer.  |
+//+---------------------------------------------------------------------------------+
 uint CNeuronScenarioForecast::TrainableWeights(void)
   {
    CBufferFloat *generator = cGenerator.GetWeightsConv();
@@ -26926,10 +26509,9 @@ uint CNeuronScenarioForecast::TrainableWeights(void)
    return uint((generator ? generator.Total() : 0) + (router ? router.Total() : 0) +
                (confidence ? confidence.Total() : 0));
   }
-//+------------------------------------------------------------------+
-//| Executes the active trajectories step of the                     |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------------------+
+//| Executes the active trajectories step of the  CNeuronScenarioForecast layer.  |
+//+-------------------------------------------------------------------------------+
 uint CNeuronScenarioForecast::ActiveTrajectories(void)
   {
    if(!!OpenCL && !cResponsibilities.BufferRead())
@@ -26940,10 +26522,9 @@ uint CNeuronScenarioForecast::ActiveTrajectories(void)
          result++;
    return result;
   }
-//+------------------------------------------------------------------+
-//| Executes the dense router gradient count step of the             |
-//| CNeuronScenarioForecast layer.                                   |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Executes the dense router gradient count step of the  CNeuronScenarioForecast layer.  |
+//+---------------------------------------------------------------------------------------+
 uint CNeuronScenarioForecast::DenseRouterGradientCount(void)
   {
    CBufferFloat *gradient = cRouter.getGradient();
@@ -26969,10 +26550,9 @@ ulong CNeuronScenarioForecast::ContractSignature(void)
      }
    return hash;
   }
-//+------------------------------------------------------------------+
-//| Executes the export detached step of the CNeuronScenarioForecast |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Executes the export detached step of the CNeuronScenarioForecast  layer.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::ExportDetached(CBufferFloat *z, CBufferFloat *u, CBufferFloat *log_u,
       CBufferFloat *pi, CBufferFloat *log_pi)
   {
@@ -26987,10 +26567,9 @@ bool CNeuronScenarioForecast::ExportDetached(CBufferFloat *z, CBufferFloat *u, C
    return (z.Fill(GetPointer(Output)) && u.Fill(GetPointer(cConfidence)) && log_u.Fill(GetPointer(cLogConfidence)) &&
            pi.Fill(cRouterSoftmax.getOutput()) && log_pi.Fill(GetPointer(cLogProbabilities)));
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronScenarioForecast execution state and its GPU   |
-//| buffers.                                                         |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Clears the CNeuronScenarioForecast execution state and its GPU  buffers.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronScenarioForecast::Clear(void)
   {
    bLastTargetAccepted = false;
@@ -27003,10 +26582,9 @@ bool CNeuronScenarioForecast::Clear(void)
            cRecovery.Fill(0) && cRecoveryEvents.Fill(0) && cAgeZeroEvents.Fill(0) && cForwardValidity.Fill(0) &&
            cDiagnosticPartials.Fill(0) && cEpochDiagnostics.Fill(0) && cDiagnosticScratch.Fill(0));
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronScenarioCrossAttention layer and allocates|
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------------+
+//| Initializes the CNeuronScenarioCrossAttention layer and  allocates  its GPU buffers.  |
+//+---------------------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
       uint scenarios, uint horizon, uint latent, bool critic,
       ENUM_OPTIMIZATION optimization_type, uint batch, uint variables, uint stack_size, uint top_k)
@@ -27029,10 +26607,9 @@ bool CNeuronScenarioCrossAttention::Init(uint numOutputs, uint myIndex, COpenCLM
    SetActivationFunction(None);
    return true;
   }
-//+------------------------------------------------------------------+
-//| Initializes the CNeuronScenarioCrossAttention layer and allocates|
-//| its GPU buffers.                                                 |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------------------+
+//| Initializes the CNeuronScenarioCrossAttention layer and  allocates  its GPU buffers (InitHolders).  |
+//+-----------------------------------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::InitHolders(uint myIndex,
       ENUM_OPTIMIZATION optimization_type, uint batch)
   {
@@ -27137,10 +26714,9 @@ bool CNeuronScenarioCrossAttention::InitHolders(uint myIndex,
    cHistoryTokenProjection.SetActivationFunction(None);
    return true;
   }
-//+------------------------------------------------------------------+
-//| Runs the CNeuronScenarioCrossAttention feed-forward pass and     |
-//| writes the layer output.                                         |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------+
+//| Runs the CNeuronScenarioCrossAttention feed-forward pass and  writes the layer output.  |
+//+-----------------------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
       CNeuronBaseOCL *Forecast)
   {
@@ -27205,16 +26781,15 @@ bool CNeuronScenarioCrossAttention::feedForwardSecond(CNeuronBaseOCL *NeuronOCL,
    if(!cQueryResidual.FeedForward(cQueryProjection.AsObject()))
       ReturnFalse;
    if(!SumAndNormalize(cOutputProjection.getOutput(), cQueryResidual.getOutput(), cMHAOutput.getOutput(),
-                       1, true, 0, 0, 0, 1))
+                       iDimension, true, 0, 0, 0, 1))
       ReturnFalse;
    if(!CNeuronMSRes::feedForward(cMHAOutput.AsObject()))
       ReturnFalse;
    return true;
   }
-//+------------------------------------------------------------------+
-//| Back-propagates the input gradients through the                  |
-//| CNeuronScenarioCrossAttention layer.                             |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------------------------+
+//| Back-propagates the input gradients through the  CNeuronScenarioCrossAttention layer.  |
+//+----------------------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL,
       CNeuronBaseOCL *Forecast)
   {
@@ -27291,10 +26866,9 @@ bool CNeuronScenarioCrossAttention::calcInputGradientsSecond(CNeuronBaseOCL *Neu
                           NeuronOCL.Activation());
    return true;
   }
-//+------------------------------------------------------------------+
-//| Updates the CNeuronScenarioCrossAttention trainable weights from |
-//| the accumulated gradients.                                       |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------------+
+//| Updates the CNeuronScenarioCrossAttention trainable weights from  the accumulated gradients.  |
+//+-----------------------------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL,
       CNeuronBaseOCL *Forecast)
   {
@@ -27328,9 +26902,9 @@ bool CNeuronScenarioCrossAttention::updateInputWeightsSecond(CNeuronBaseOCL *Neu
      }
    return true;
   }
-//+------------------------------------------------------------------+
-//| Saves the CNeuronScenarioCrossAttention state to the file handle.|
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------+
+//| Saves the CNeuronScenarioCrossAttention state to the file  handle.  |
+//+---------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::Save(const int file_handle)
   {
    if(!CNeuronMSRes::Save(file_handle))
@@ -27370,9 +26944,9 @@ bool CNeuronScenarioCrossAttention::Save(const int file_handle)
      }
    return true;
   }
-//+------------------------------------------------------------------+
-//| Append scenario cross-attention parameters and nested flow only. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Append scenario cross-attention parameters and nested flow only.  |
+//+-------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::AppendParameterFingerprint(ulong &fingerprint)
   {
    if(!CNeuronMSRes::AppendParameterFingerprint(fingerprint) ||
@@ -27392,10 +26966,9 @@ bool CNeuronScenarioCrossAttention::AppendParameterFingerprint(ulong &fingerprin
       ReturnFalse;
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronScenarioCrossAttention state from the file   |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------+
+//| Restores the CNeuronScenarioCrossAttention state from the file  handle.  |
+//+--------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::Load(const int file_handle)
   {
    if(!CNeuronMSRes::Load(file_handle))
@@ -27445,10 +27018,9 @@ bool CNeuronScenarioCrossAttention::Load(const int file_handle)
    SetOpenCL(OpenCL);
    return true;
   }
-//+------------------------------------------------------------------+
-//| Restores the CNeuronScenarioCrossAttention state from the file   |
-//| handle.                                                          |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------+
+//| Restores the CNeuronScenarioCrossAttention state from the file   handle.  |
+//+---------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::Load(const int file_handle, COpenCLMy *open_cl)
   {
    if(file_handle == INVALID_HANDLE || FileReadInteger(file_handle) != Type())
@@ -27525,9 +27097,9 @@ bool CNeuronScenarioCrossAttention::ValidateScenarioOwnedTreeChecked(void) const
 //--- Finalize the complete capability check without mutating any owner.
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Transfers ScenarioCrossAttention owners before MSRes publishing. |
-//+------------------------------------------------------------------+
+//+-------------------------------------------------------------------+
+//| Transfers ScenarioCrossAttention owners before MSRes publishing.  |
+//+-------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::SetOpenCLChecked(COpenCLMy *obj)
   {
 //--- Reject an invalid target or incomplete tree before any child moves.
@@ -27590,10 +27162,9 @@ bool CNeuronScenarioCrossAttention::SetOpenCLChecked(COpenCLMy *obj)
 //--- Finalize only after every Scenario and inherited owner succeeded.
    return(true);
   }
-//+------------------------------------------------------------------+
-//| Rebinds the CNeuronScenarioCrossAttention GPU buffers to the     |
-//| given OpenCL context.                                            |
-//+------------------------------------------------------------------+
+//+--------------------------------------------------------------------------------------+
+//| Rebinds the CNeuronScenarioCrossAttention GPU buffers to the  given OpenCL context.  |
+//+--------------------------------------------------------------------------------------+
 void CNeuronScenarioCrossAttention::SetOpenCL(COpenCLMy *obj)
   {
    CNeuronMSRes::SetOpenCL(obj);
@@ -27624,10 +27195,9 @@ void CNeuronScenarioCrossAttention::SetOpenCL(COpenCLMy *obj)
       cScenarioHistory.SetOpenCL(OpenCL);
      }
   }
-//+------------------------------------------------------------------+
-//| Sets the training flag of the CNeuronScenarioCrossAttention      |
-//| layer.                                                           |
-//+------------------------------------------------------------------+
+//+----------------------------------------------------------------------+
+//| Sets the training flag of the CNeuronScenarioCrossAttention  layer.  |
+//+----------------------------------------------------------------------+
 void CNeuronScenarioCrossAttention::TrainMode(bool flag)
   {
    CNeuronMSRes::TrainMode(flag);
@@ -27647,10 +27217,9 @@ void CNeuronScenarioCrossAttention::TrainMode(bool flag)
       cScenarioHistory.TrainMode(flag);
      }
   }
-//+------------------------------------------------------------------+
-//| Averages the CNeuronScenarioCrossAttention weights toward the    |
-//| source model with factor tau.                                    |
-//+------------------------------------------------------------------+
+//+-----------------------------------------------------------------------------------------------+
+//| Averages the CNeuronScenarioCrossAttention weights toward the  source model with factor tau.  |
+//+-----------------------------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::WeightsUpdate(CNeuronBaseOCL *source, float tau)
   {
    if(!source || source.Type() != Type())
@@ -27686,10 +27255,9 @@ bool CNeuronScenarioCrossAttention::WeightsUpdate(CNeuronBaseOCL *source, float 
       ReturnFalse;
    return true;
   }
-//+------------------------------------------------------------------+
-//| Clears the CNeuronScenarioCrossAttention execution state and its |
-//| GPU buffers.                                                     |
-//+------------------------------------------------------------------+
+//+---------------------------------------------------------------------------------+
+//| Clears the CNeuronScenarioCrossAttention execution state and its  GPU buffers.  |
+//+---------------------------------------------------------------------------------+
 bool CNeuronScenarioCrossAttention::Clear(void)
   {
    if(!CNeuronMSRes::Clear())
@@ -27723,7 +27291,4 @@ bool CNeuronScenarioCrossAttention::Clear(void)
      }
    return true;
   }
-//+------------------------------------------------------------------+
-
-
-//+------------------------------------------------------------------+
+//+---+

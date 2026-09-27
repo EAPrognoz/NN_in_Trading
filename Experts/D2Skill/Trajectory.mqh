@@ -1,14 +1,11 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
-//|                                                   Copyright DNG® |
+//|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
@@ -34,9 +31,6 @@ enum ENUM_D2SKILL_BANK_MODE
    D2Skill_D2_MODE_STEP,           //Step skill bank
    D2Skill_D2_MODE_FULL            //D2 full mode
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 input group                "---- Indicators ----"
 input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_H1;    //Working timeframe
 //---
@@ -62,9 +56,6 @@ input ENUM_D2SKILL_BANK_MODE InpD2SkillMode = D2Skill_D2_MODE_FULL; //Skill bank
 input bool                 InpD2SkillUtilityAware = true; //Utility-aware retrieval
 input double               InpD2SkillMinUtility = -1.0; //Minimum utility
 input double               InpD2SkillUtilityScale = 1.0; //Utility scale
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 int            iLatentLayer = -1;
 int            iStateRawForecastLayer = 5;
 int            iStateTokenLayer = 6;
@@ -97,9 +88,6 @@ int            iStateTokenLayer = 6;
 #define        Quantiles               8
 #define        StackSize               24*21
 #define        Blocks                  24
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CSymbolInfo          Symb;
 CTrade               Trade;
 MqlRates             Rates[];
@@ -108,9 +96,6 @@ CiRSI                RSI;
 CiCCI                CCI;
 CiATR                ATR;
 CiMACD               MACD;
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 struct SState
   {
    float             state[HistoryBars * BarDescr];
@@ -131,9 +116,8 @@ struct SState
       ArrayCopy(rewards, obj.rewards);
      }
   };
-
 //+------------------------------------------------------------------+
-//| Complete outcome of one independently simulated D2Skill episode.|
+//| Complete outcome of one independently simulated D2Skill episode. |
 //+------------------------------------------------------------------+
 struct SD2SkillEpisodeOutcome
   {
@@ -234,7 +218,7 @@ bool D2SkillOnlinePairBoundary(const bool real_terminal, const bool virtual_term
    return(pair_horizon > 0 && pair_transitions >= (ulong)pair_horizon);
   }
 //+------------------------------------------------------------------+
-//| An independent pair ends as soon as either branch is terminal.  |
+//| An independent pair ends as soon as either branch is terminal.   |
 //+------------------------------------------------------------------+
 bool D2SkillPairReachedTerminal(const bool base_terminal, const bool skill_terminal)
   {
@@ -344,7 +328,7 @@ bool SState::Load(int file_handle)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements CreateStateDescriptions.                              |
 //+------------------------------------------------------------------+
 bool CreateStateDescriptions(CArrayObj *&encoder,
                              CArrayObj *&decoder
@@ -524,7 +508,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements CreateDescriptions.                                   |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *&actor,
                         CArrayObj *&critic
@@ -825,9 +809,6 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
    return (value <= 0);
   }
 #endif
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
 public:
@@ -849,19 +830,19 @@ public:
 //| Creates and manages object lifecycle for CDeal.                  |
 //+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
-// Creates and manages object lifecycle for CloseTime.
+//--- Creates and manages object lifecycle for CloseTime.
    CloseTime(0),
-// Implements Type.
+//--- Implements Type.
    Type(POSITION_TYPE_BUY),
-// Implements Volume.
+//--- Implements Volume.
    Volume(0),
-// Implements OpenPrice.
+//--- Implements OpenPrice.
    OpenPrice(0),
-// Implements StopLos.
+//--- Implements StopLos.
    StopLos(0),
-// Implements TakeProfit.
+//--- Implements TakeProfit.
    TakeProfit(0),
-// Implements point.
+//--- Implements point.
    point(1e-5)
   {
   }
@@ -894,9 +875,6 @@ vector<float> CDeal::Action(datetime current, double ask, double bid, int period
 //---
    return result;
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 class CDeals
   {
 protected:
@@ -1003,7 +981,7 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements Action.                                               |
+//| Implements Action (Action).                                      |
 //+------------------------------------------------------------------+
 vector<float> CDeals::Action(datetime current, double ask, double bid, int period_seconds)
   {
@@ -1144,7 +1122,7 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max
          profit += state.At(i * BarDescr) / Symb.TickSize() * Symb.TickValue();
          if(((buy_lot > 0 && profit < 0) ||
              (sell_lot > 0 && profit > 0))
-            // Implements MathAbs.
+            //--- Implements MathAbs.
             && MathAbs(profit * (buy_lot - sell_lot)) > balance / 2)
            {
             pos_open = i;
@@ -1447,17 +1425,15 @@ const string         D2Skill_OOS_MANIFEST_FILE = "D2SkillOOS.manifest";
 //--- Utility is defined only by the counterfactual paired terminal outcome.
 const int            D2Skill_D2_UTILITY_PAIRED_HINDSIGHT = 0;
 //+------------------------------------------------------------------+
-//| D2Skill builds transitions directly from historical windows      |
-//| Base CNet already provides Layer(int) and                        |
-//| FeedForwardLayer(CNeuronBaseOCL*).                               |
-//| A transient, non-owning layer view lets the library transpose    |
+//| D2Skill builds transitions directly from historical windows Base |
+//| CNet already provides Layer(int) and                             |
+//| FeedForwardLayer(CNeuronBaseOCL*). A transient, non-owning layer |
+//| view lets the library transpose                                  |
 //+------------------------------------------------------------------+
 class CD2SkillBufferView : public CNeuronBaseOCL
   {
 public:
-   //+------------------------------------------------------------------+
-   //| Implements Bind.                                                 |
-   //+------------------------------------------------------------------+
+   //--- Implements Bind.
    bool              Bind(CBufferFloat *source)
      {
       if(!source || source.GetIndex() < 0)
@@ -1467,9 +1443,7 @@ public:
       Output = source;
       return true;
      }
-   //+------------------------------------------------------------------+
-   //| Implements Unbind.                                               |
-   //+------------------------------------------------------------------+
+   //--- Implements Unbind.
    void              Unbind(void)
      {
       Output = NULL;
@@ -1481,17 +1455,13 @@ public:
 class CD2SkillDeviceOps : public CNeuronBaseOCL
   {
 public:
-   //+------------------------------------------------------------------+
-   //| Implements Bind.                                                 |
-   //+------------------------------------------------------------------+
+   //--- Implements Bind.
    bool              Bind(COpenCLMy *open_cl)
      {
       OpenCL = open_cl;
       return (CheckPointer(OpenCL) != POINTER_INVALID);
      }
-   //+------------------------------------------------------------------+
-   //| Creates and manages object lifecycle for Copy.                   |
-   //+------------------------------------------------------------------+
+   //--- Creates and manages object lifecycle for Copy.
    bool              Copy(CBufferFloat *source, CBufferFloat *destination, const uint total)
      {
       if(!source || !destination || source.Total() != int(total) ||
@@ -1592,12 +1562,15 @@ bool                 D2SkillD2RecreateIncompatibleCheckpoint = false;
 int                  D2SkillD2UtilityMode = D2Skill_D2_UTILITY_PAIRED_HINDSIGHT;
 ulong                D2SkillD2PairedUtilityUpdates = 0;
 //+------------------------------------------------------------------+
-//| Reports completed terminal utility updates for online calibration. |
+//| Reports completed terminal utility updates for online            |
+//| calibration.                                                     |
 //+------------------------------------------------------------------+
 bool D2SkillOnlineCalibrationHasClosedUtilityUpdates(void)
   {
    return(D2SkillD2PairedUtilityUpdates > 0);
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillRequiresBankGradientBackward.                  |
 //+------------------------------------------------------------------+
 bool D2SkillRequiresBankGradientBackward(void)
   {
@@ -1655,7 +1628,7 @@ bool D2SkillConfigureForecastRun(const bool recovery_smoke,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Device-resident snapshot data for one Actor trajectory branch.  |
+//| Device-resident snapshot data for one Actor trajectory branch.   |
 //+------------------------------------------------------------------+
 struct SD2SkillActorForwardState
   {
@@ -1889,7 +1862,7 @@ bool ConfigureForecastRecoveryAge(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillInitTrainingBuffers.                             |
+//| Implements D2SkillInitTrainingBuffers.                           |
 //+------------------------------------------------------------------+
 bool D2SkillInitTrainingBuffers(void)
   {
@@ -1911,7 +1884,7 @@ bool D2SkillInitTrainingBuffers(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillAddBase.                                         |
+//| Implements D2SkillAddBase.                                       |
 //+------------------------------------------------------------------+
 bool D2SkillAddBase(CArrayObj *description, const uint count)
   {
@@ -1930,7 +1903,7 @@ bool D2SkillAddBase(CArrayObj *description, const uint count)
    DeleteObjAndFalse(descr);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillNormalizeDescriptionBatch.                       |
+//| Implements D2SkillNormalizeDescriptionBatch.                     |
 //+------------------------------------------------------------------+
 bool D2SkillNormalizeDescriptionBatch(CArrayObj *description)
   {
@@ -1947,14 +1920,12 @@ bool D2SkillNormalizeDescriptionBatch(CArrayObj *description)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCreateDescriptions.                              |
+//| Implements D2SkillCreateDescriptions.                            |
 //+------------------------------------------------------------------+
 bool D2SkillCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
   {
    CArrayObj *legacy_decoder = NULL;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!CreateStateDescriptions(market, legacy_decoder))
      {
       DeleteObj(legacy_decoder);
@@ -1963,15 +1934,11 @@ bool D2SkillCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
    DeleteObj(legacy_decoder);
 //--- Keep exactly CogDriver layers 0..4 (RankTCM is the boundary).
    int layer = market.Total() - 1;
-//+------------------------------------------------------------------+
-//| Function while.                                                  |
-//+------------------------------------------------------------------+
+//--- Function while.
    while(layer >= 0)
      {
       CLayerDescription* descr = market.At(layer);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!descr || descr.type != defNeuronCogDriverRankTCM)
         {
          if(!market.Delete(layer))
@@ -2126,14 +2093,12 @@ bool D2SkillCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCreateNetworks.                                  |
+//| Implements D2SkillCreateNetworks.                                |
 //+------------------------------------------------------------------+
 bool D2SkillCreateNetworks(void)
   {
    CArrayObj *market = NULL, *target = NULL;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillCreateDescriptions(market, target))
      {
       DeleteObj(market);
@@ -2153,18 +2118,14 @@ bool D2SkillCreateNetworks(void)
 //--- then move its device buffers to the Market context; otherwise a later
 //--- Create invalidates buffers belonging to an earlier network.
    D2SkillTarget.SetOpenCL(D2SkillMarket.GetOpenCL());
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillInitTrainingBuffers())
      {
       Print("D2Skill init: training buffers=FAIL");
       ReturnFalse;
      }
    D2SkillForecast = (CNeuronScenarioForecast*)D2SkillMarket.Layer(-1);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillForecast || D2SkillForecast.Type() != defNeuronScenarioForecast)
      {
       Print("D2Skill init: forecast layer=FAIL");
@@ -2177,15 +2138,13 @@ bool D2SkillCreateNetworks(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateShapes.                                  |
+//| Implements D2SkillValidateShapes.                                |
 //+------------------------------------------------------------------+
 bool D2SkillValidateShapes(const bool training = true)
   {
    CNeuronBaseOCL *layer = D2SkillMarket.Layer(0);
    CBufferFloat *buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != HistoryBars * BarDescr)
      {
       PrintFormat("D2Skill shape: market input expected=%d actual=%d", HistoryBars * BarDescr,
@@ -2194,25 +2153,19 @@ bool D2SkillValidateShapes(const bool training = true)
      }
    layer = D2SkillMarket.Layer(4);
    buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != (BarDescr * EmbeddingSize))
      {
       PrintFormat("D2Skill shape: market RankTCM expected=%d actual=%d", BarDescr * EmbeddingSize,
                   (buffer ? buffer.Total() : -1));
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(training)
      {
       layer = D2SkillTarget.Layer(0);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("D2Skill shape: target input expected=%d actual=%d", BarDescr * NForecast,
@@ -2221,9 +2174,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(1);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("D2Skill shape: target PeriodNorm expected=%d actual=%d", BarDescr * NForecast,
@@ -2232,9 +2183,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(2);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("D2Skill shape: target Conv3 expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -2243,9 +2192,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(3);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast * 2 * EmbeddingSize))
         {
          PrintFormat("D2Skill shape: target Conv2 expected=%d actual=%d", BarDescr * NForecast * 2 * EmbeddingSize,
@@ -2254,9 +2201,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(4);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("D2Skill shape: target final Conv expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -2265,9 +2210,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(-1);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("D2Skill shape: target output PeriodNorm expected=%d actual=%d", BarDescr * NForecast * EmbeddingSize,
@@ -2275,9 +2218,7 @@ bool D2SkillValidateShapes(const bool training = true)
          ReturnFalse;
         }
       buffer = D2SkillFutureTranspose.getOutput();
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("D2Skill shape: future transpose expected=%d actual=%d", BarDescr * NForecast,
@@ -2287,9 +2228,7 @@ bool D2SkillValidateShapes(const bool training = true)
      }
    layer = D2SkillMarket.Layer(-1);
    buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != NScenarios * BarDescr * NForecast * EmbeddingSize)
      {
       PrintFormat("D2Skill shape: Scenario Z expected=%d actual=%d", NScenarios * BarDescr * NForecast * EmbeddingSize,
@@ -2297,9 +2236,7 @@ bool D2SkillValidateShapes(const bool training = true)
       ReturnFalse;
      }
    buffer = D2SkillForecast.GetU();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != (NScenarios * BarDescr * NForecast))
      {
       PrintFormat("D2Skill shape: Scenario U expected=%d actual=%d", NScenarios * BarDescr * NForecast,
@@ -2307,9 +2244,7 @@ bool D2SkillValidateShapes(const bool training = true)
       ReturnFalse;
      }
    buffer = D2SkillForecast.GetPi();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != NScenarios)
      {
       PrintFormat("D2Skill shape: Scenario Pi expected=%d actual=%d", NScenarios,
@@ -2318,9 +2253,7 @@ bool D2SkillValidateShapes(const bool training = true)
      }
    if(D2SkillForecast.Variables() != BarDescr || D2SkillForecast.Scenarios() != NScenarios ||
       D2SkillForecast.Horizon() != NForecast || D2SkillForecast.Dimension() != EmbeddingSize ||
-//+------------------------------------------------------------------+
-//| Function ActiveTrajectories.                                     |
-//+------------------------------------------------------------------+
+//--- Function ActiveTrajectories.
       D2SkillForecast.ActiveTrajectories() > TopK)
      {
       PrintFormat("D2Skill shape: Forecast V=%d/%d K=%d/%d H=%d/%d D=%d/%d active=%d/%d",
@@ -2332,7 +2265,7 @@ bool D2SkillValidateShapes(const bool training = true)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillHashUInt.                                        |
+//| Implements D2SkillHashUInt.                                      |
 //+------------------------------------------------------------------+
 ulong D2SkillHashUInt(ulong hash, const ulong value)
   {
@@ -2340,7 +2273,7 @@ ulong D2SkillHashUInt(ulong hash, const ulong value)
    return hash * ulong(1099511628211);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillHashText.                                        |
+//| Implements D2SkillHashText.                                      |
 //+------------------------------------------------------------------+
 ulong D2SkillHashText(ulong hash, const string text)
   {
@@ -2349,7 +2282,7 @@ ulong D2SkillHashText(ulong hash, const string text)
    return hash;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillHashFile.                                        |
+//| Implements D2SkillHashFile.                                      |
 //+------------------------------------------------------------------+
 ulong D2SkillHashFile(ulong hash, const string file_name)
   {
@@ -2361,7 +2294,7 @@ ulong D2SkillHashFile(ulong hash, const string file_name)
      { FileClose(handle); return 0; }
    uchar bytes[];
    if(ArrayResize(bytes, (int)length) != (int)length ||
-// Read file payload as bytes after successful allocation.
+//--- Read file payload as bytes after successful allocation.
       FileReadArray(handle, bytes, 0, (int)length) != (int)length)
      { FileClose(handle); return 0; }
    FileClose(handle);
@@ -2393,7 +2326,7 @@ ulong D2SkillForecastSignature(void)
    return hash;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillForecastTrainingSignature.                       |
+//| Implements D2SkillForecastTrainingSignature.                     |
 //+------------------------------------------------------------------+
 ulong D2SkillForecastTrainingSignature(const ulong forecast_signature)
   {
@@ -2402,7 +2335,7 @@ ulong D2SkillForecastTrainingSignature(const ulong forecast_signature)
    return D2SkillHashFile(forecast_signature, D2Skill_TARGET_FILE);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillWriteManifest.                                   |
+//| Implements D2SkillWriteManifest.                                 |
 //+------------------------------------------------------------------+
 bool D2SkillWriteManifest(const uint completed_epochs)
   {
@@ -2442,7 +2375,7 @@ bool D2SkillWriteManifest(const uint completed_epochs)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillSaveCheckpoint.                                  |
+//| Implements D2SkillSaveCheckpoint.                                |
 //+------------------------------------------------------------------+
 bool D2SkillSaveCheckpoint(const uint completed_epochs)
   {
@@ -2453,7 +2386,7 @@ bool D2SkillSaveCheckpoint(const uint completed_epochs)
    return D2SkillWriteManifest(completed_epochs);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillInitIndicators.                                  |
+//| Implements D2SkillInitIndicators.                                |
 //+------------------------------------------------------------------+
 bool D2SkillInitIndicators(void)
   {
@@ -2463,12 +2396,9 @@ bool D2SkillInitIndicators(void)
            ATR.Create(Symb.Name(), TimeFrame, ATRPeriod) &&
            MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice));
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool D2SkillLoadForecastTraining(void);
 //+------------------------------------------------------------------+
-//| Creates or initializes D2SkillForecastStudy.                       |
+//| Creates or initializes D2SkillForecastStudy.                     |
 //+------------------------------------------------------------------+
 bool CreateD2SkillForecastStudy(void)
   {
@@ -2480,35 +2410,27 @@ bool CreateD2SkillForecastStudy(void)
 //--- A missing, incomplete or incompatible checkpoint falls back to a clean,
 //--- independently randomized Forecast graph.
    bool resumed = D2SkillLoadForecastTraining();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!resumed)
      {
       const int load_error = GetLastError();
       D2SkillForecast = NULL;
       PrintFormat("D2Skill init: forecast restore=FAIL error=%d; creating new random model", load_error);
       ResetLastError();
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!D2SkillCreateNetworks())
         {
          PrintFormat("D2Skill init: forecast create=FAIL error=%d", GetLastError());
          ReturnFalse;
         }
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillValidateShapes())
      {
       Print("D2Skill init: shapes=FAIL");
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillInitIndicators())
      {
       PrintFormat("D2Skill init: indicators=FAIL error=%d", GetLastError());
@@ -2517,9 +2439,7 @@ bool CreateD2SkillForecastStudy(void)
    PrintFormat("D2Skill init: forecast=%s completed_epochs=%u batches=%I64u invalid=%I64u",
                (resumed ? "RESUMED" : "NEW"), D2SkillCompletedEpochs, D2SkillBatches, D2SkillInvalidBatches);
    D2SkillReady = true;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!EventChartCustom(ChartID(), 1, 0, 0, "Init"))
      {
       PrintFormat("D2Skill init: chart event=FAIL error=%d", GetLastError());
@@ -2528,7 +2448,7 @@ bool CreateD2SkillForecastStudy(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements ReleaseD2SkillForecastStudy.                            |
+//| Implements ReleaseD2SkillForecastStudy.                          |
 //+------------------------------------------------------------------+
 void ReleaseD2SkillForecastStudy(const int reason)
   {
@@ -2538,7 +2458,7 @@ void ReleaseD2SkillForecastStudy(const int reason)
    D2SkillReady = false;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillPrepareLatentTarget.                             |
+//| Implements D2SkillPrepareLatentTarget.                           |
 //+------------------------------------------------------------------+
 bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
   {
@@ -2581,7 +2501,7 @@ bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillProbeNet.                                        |
+//| Implements D2SkillProbeNet.                                      |
 //+------------------------------------------------------------------+
 bool D2SkillProbeNet(CNet &net, CBufferFloat *probe_state, double &latent[], const bool restore_training)
   {
@@ -2613,7 +2533,7 @@ bool D2SkillProbeNet(CNet &net, CBufferFloat *probe_state, double &latent[], con
    return (result && cleared && restored);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillProbeDrift.                                      |
+//| Implements D2SkillProbeDrift.                                    |
 //+------------------------------------------------------------------+
 double D2SkillProbeDrift(const double &before[], const double &after[])
   {
@@ -2683,7 +2603,7 @@ bool D2SkillCollectRecoverySmoke(ulong &hits[], double &responsibility_sum[], do
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillLogRecoverySmoke.                              |
 //+------------------------------------------------------------------+
 bool D2SkillLogRecoverySmoke(const ulong &hits[], const double &responsibility_sum[],
                              const double &scale_sum[], const double &absolute_sum[],
@@ -2723,7 +2643,7 @@ bool D2SkillLogRecoverySmoke(const ulong &hits[], const double &responsibility_s
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillTrainBatch.                                      |
+//| Implements D2SkillTrainBatch.                                    |
 //+------------------------------------------------------------------+
 bool D2SkillTrainBatch(const int position)
   {
@@ -2746,9 +2666,7 @@ bool D2SkillTrainBatch(const int position)
    if(!D2SkillPrepareLatentTarget(market_latent))
       ReturnFalse;
    const ulong responsibility_started = GetMicrosecondCount();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillForecast.BuildResponsibilities(GetPointer(D2SkillLatentTarget), GetPointer(D2SkillLatentDelta)))
      {
       //--- Commit only a completed device validation.  Infrastructure failures leave
@@ -2784,7 +2702,7 @@ void D2SkillShowForecastProgress(const double percent, const ulong failed_batche
                         percent, failed_batches));
   }
 //+------------------------------------------------------------------+
-//| Implements TrainD2SkillForecast.                                   |
+//| Implements TrainD2SkillForecast.                                 |
 //+------------------------------------------------------------------+
 void TrainD2SkillForecast(void)
   {
@@ -2822,7 +2740,7 @@ void TrainD2SkillForecast(void)
 //--- every future target out of the diagnostic input.
    const int probe_position = MathMax(end - 1, 0);
    if(!CreateBuffers(probe_position + NForecast, GetPointer(D2SkillProbeState),
-// Gets Pointer.
+//--- Gets Pointer.
                      GetPointer(D2SkillProbeTime), NULL))
      { PrintFormat("%s -> %d fixed probe unavailable", __FUNCTION__, __LINE__); return; }
    uint ticks = GetTickCount();
@@ -2842,7 +2760,7 @@ void TrainD2SkillForecast(void)
       if(D2SkillRecoverySmoke &&
          (ArrayResize(smoke_hits, NScenarios) != NScenarios || ArrayResize(smoke_responsibility_sum, NScenarios) != NScenarios ||
           ArrayResize(smoke_scale_sum, NScenarios) != NScenarios || ArrayResize(smoke_absolute_sum, NScenarios) != NScenarios ||
-          // All temporary smoke buffers must resize to NScenarios.
+          //--- All temporary smoke buffers must resize to NScenarios.
           ArrayResize(smoke_absolute_over_scale_sum, NScenarios) != NScenarios))
         { PrintFormat("%s -> %d smoke counter allocation failed", __FUNCTION__, __LINE__); break; }
       ArrayInitialize(smoke_hits, 0);
@@ -2861,16 +2779,12 @@ void TrainD2SkillForecast(void)
       D2SkillResponsibilityMicroseconds = 0;
       for(int position = start - HistoryBars - NForecast - 1; position >= end && !IsStopped() && !stop; position--)
         {
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(!D2SkillTrainBatch(position))
            {
             epoch_failures++;
             PrintFormat("D2Skill invalid batch epoch=%d position=%d line=%d", epoch, position, __LINE__);
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(GetTickCount() - ticks > 500)
               {
                const double percent = (double(pass) + 1.0 - double(position - end) / MathMax(start - end - HistoryBars - NForecast, 1)) * 100.0 / Epochs;
@@ -2879,9 +2793,7 @@ void TrainD2SkillForecast(void)
               }
             continue;
            }
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(D2SkillRecoverySmoke)
            {
             if(!D2SkillCollectRecoverySmoke(smoke_hits, smoke_responsibility_sum, smoke_scale_sum,
@@ -2891,9 +2803,7 @@ void TrainD2SkillForecast(void)
             if(smoke_batches >= smoke_limit)
                break;
            }
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(GetTickCount() - ticks > 500)
            {
             const double percent = (double(pass) + 1.0 - double(position - end) / MathMax(start - end - HistoryBars - NForecast, 1)) * 100.0 / Epochs;
@@ -2950,9 +2860,7 @@ void TrainD2SkillForecast(void)
       D2SkillCompletedEpochs = epoch + 1;
      }
    Comment("");
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!stop)
      {
       //--- Successful forecast stage is sealed for the later Actor-Critic stage.
@@ -2974,15 +2882,11 @@ string D2SkillManifestValue(const string file_name, const string key)
       return "";
    const string prefix = key + "=";
    string value = "";
-//+------------------------------------------------------------------+
-//| Function while.                                                  |
-//+------------------------------------------------------------------+
+//--- Function while.
    while(!FileIsEnding(handle))
      {
       const string line = FileReadString(handle);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(StringFind(line, prefix) == 0)
         {
          value = StringSubstr(line, StringLen(prefix));
@@ -2993,7 +2897,8 @@ string D2SkillManifestValue(const string file_name, const string key)
    return value;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateForecastManifestHeader. Static checkp... |
+//| Implements D2SkillValidateForecastManifestHeader. Static         |
+//| checkp...                                                        |
 //+------------------------------------------------------------------+
 bool D2SkillValidateForecastManifestHeader(void)
   {
@@ -3016,7 +2921,7 @@ bool D2SkillValidateForecastManifestHeader(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateForecastManifest.                        |
+//| Implements D2SkillValidateForecastManifest.                      |
 //+------------------------------------------------------------------+
 bool D2SkillValidateForecastManifest(const ulong signature, const bool training = false)
   {
@@ -3027,9 +2932,7 @@ bool D2SkillValidateForecastManifest(const ulong signature, const bool training 
 #define D2Skill_MANIFEST_EQ(KEY,VALUE) if(D2SkillManifestValue(D2Skill_MANIFEST_FILE,KEY)!=(VALUE)) ReturnFalse
    D2Skill_MANIFEST_EQ("contract_signature", StringFormat("%I64u", D2SkillForecast.ContractSignature()));
    D2Skill_MANIFEST_EQ("forecast_signature", StringFormat("%I64u", signature));
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(training)
      {
       const ulong target_hash = D2SkillHashFile(ulong(1469598103934665603), D2Skill_TARGET_FILE);
@@ -3046,14 +2949,14 @@ bool D2SkillValidateForecastManifest(const ulong signature, const bool training 
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCaptureFrozenBuffer.                             |
+//| Implements D2SkillCaptureFrozenBuffer.                           |
 //+------------------------------------------------------------------+
 bool D2SkillCaptureFrozenBuffer(CBufferFloat *source, CBufferFloat &baseline)
   {
    return (source && source.BufferRead() && source.Total() > 0 && baseline.AssignArray(source));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillFrozenBufferEqual.                               |
+//| Implements D2SkillFrozenBufferEqual.                             |
 //+------------------------------------------------------------------+
 bool D2SkillFrozenBufferEqual(CBufferFloat *source, CBufferFloat &baseline)
   {
@@ -3065,7 +2968,7 @@ bool D2SkillFrozenBufferEqual(CBufferFloat *source, CBufferFloat &baseline)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCaptureFrozenForecastBaseline.                   |
+//| Implements D2SkillCaptureFrozenForecastBaseline.                 |
 //+------------------------------------------------------------------+
 bool D2SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -3094,7 +2997,7 @@ bool D2SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast = NU
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenWeightsExact.                        |
+//| Implements D2SkillVerifyFrozenWeightsExact.                      |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -3113,7 +3016,7 @@ bool D2SkillVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast = NULL)
            D2SkillFrozenBufferEqual(confidence, D2SkillFrozenConfidenceWeights));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenCodebookExact.                       |
+//| Implements D2SkillVerifyFrozenCodebookExact.                     |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -3128,14 +3031,14 @@ bool D2SkillVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast = NULL)
            D2SkillFrozenBufferEqual(current.GetCodebook().GetInactivityAge(), D2SkillFrozenInactivityAge));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenForecastExact.                       |
+//| Implements D2SkillVerifyFrozenForecastExact.                     |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenForecastExact(CNeuronScenarioForecast *forecast = NULL)
   {
    return (D2SkillVerifyFrozenWeightsExact(forecast) && D2SkillVerifyFrozenCodebookExact(forecast));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadForecastInference.                           |
+//| Implements D2SkillLoadForecastInference.                         |
 //+------------------------------------------------------------------+
 bool D2SkillLoadForecastInference(void)
   {
@@ -3143,18 +3046,14 @@ bool D2SkillLoadForecastInference(void)
    D2SkillForecast = NULL;
    float error = 0, undefine = 0, forecast = 0;
    datetime studied = 0;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillMarket.Load(D2Skill_MARKET_FILE, error, undefine, forecast, studied, true))
      {
       Print("D2Skill inference: model load=FAIL");
       ReturnFalse;
      }
    D2SkillForecast = (CNeuronScenarioForecast*)D2SkillMarket.Layer(-1);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillForecast || D2SkillForecast.Type() != defNeuronScenarioForecast)
      {
       Print("D2Skill inference: forecast layer=FAIL");
@@ -3162,17 +3061,13 @@ bool D2SkillLoadForecastInference(void)
      }
    if(!ConfigureForecastRecoveryAge())
       ReturnFalse;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(D2SkillForecast.GetTopK() != TopK)
      {
       PrintFormat("D2Skill inference: TopK expected=%d actual=%d", TopK, D2SkillForecast.GetTopK());
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| only the Market/Forecast path. Target and its future-window b... |
-//+------------------------------------------------------------------+
+//--- only the Market/Forecast path. Target and its future-window b...
    if(!D2SkillValidateShapes(false))
      {
       Print("D2Skill inference: shape audit=FAIL");
@@ -3180,17 +3075,13 @@ bool D2SkillLoadForecastInference(void)
      }
    D2SkillMarket.TrainMode(false);
    const ulong signature = D2SkillForecastSignature();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillValidateForecastManifest(signature))
      {
       Print("D2Skill inference: manifest=FAIL");
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillCaptureFrozenForecastBaseline())
      {
       Print("D2Skill inference: frozen baseline=FAIL");
@@ -3207,9 +3098,7 @@ bool D2SkillLoadForecastTraining(void)
    if(!FileIsExist(D2Skill_MANIFEST_FILE, FILE_COMMON) ||
       !FileIsExist(D2Skill_MARKET_FILE, FILE_COMMON) || !FileIsExist(D2Skill_TARGET_FILE, FILE_COMMON))
       ReturnFalse;
-//+------------------------------------------------------------------+
-//| Avoid a partial CNet::Load before the fallback random graph i... |
-//+------------------------------------------------------------------+
+//--- Avoid a partial CNet::Load before the fallback random graph i...
    if(!D2SkillValidateForecastManifestHeader())
      {
       Print("D2Skill restore: manifest static contract=FAIL");
@@ -3247,7 +3136,7 @@ bool D2SkillLoadForecastTraining(void)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillAddCross.                                        |
+//| Implements D2SkillAddCross.                                      |
 //+------------------------------------------------------------------+
 bool D2SkillAddCross(CArrayObj *description, const bool critic, const bool d2 = false)
   {
@@ -3271,7 +3160,7 @@ bool D2SkillAddCross(CArrayObj *description, const bool critic, const bool d2 = 
    ReturnFalse;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillAddConv.                                       |
 //+------------------------------------------------------------------+
 bool D2SkillAddConv(CArrayObj *description, const uint count, const uint window, const uint output,
                     const uint variables, const ENUM_ACTIVATION activation)
@@ -3294,7 +3183,7 @@ bool D2SkillAddConv(CArrayObj *description, const uint count, const uint window,
    ReturnFalse;
   }
 //+------------------------------------------------------------------+
-//| Creates or initializes D2SkillActorCriticDescriptions.             |
+//| Creates or initializes D2SkillActorCriticDescriptions.           |
 //+------------------------------------------------------------------+
 bool CreateD2SkillActorCriticDescriptions(CArrayObj *&actor, CArrayObj *&critic)
   {
@@ -3325,7 +3214,7 @@ bool CreateD2SkillActorCriticDescriptions(CArrayObj *&actor, CArrayObj *&critic)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidatePolicyShape.                             |
+//| Implements D2SkillValidatePolicyShape.                           |
 //+------------------------------------------------------------------+
 bool D2SkillValidatePolicyShape(CNet &net, const bool critic)
   {
@@ -3355,7 +3244,7 @@ bool D2SkillValidatePolicyShape(CNet &net, const bool critic)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillForwardForecast.                                 |
+//| Implements D2SkillForwardForecast.                               |
 //+------------------------------------------------------------------+
 bool D2SkillForwardForecast(const int position, CBufferFloat *state, CBufferFloat *time)
   {
@@ -3409,9 +3298,7 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
   {
    reward = 0;
    if(!account || !action || position < 0 || position + HistoryBars + NForecast > int(Rates.Size()) ||
-//+------------------------------------------------------------------+
-//| Function Total.                                                  |
-//+------------------------------------------------------------------+
+//--- Function Total.
       account.Total() != AccountDescr)
      {
       PrintFormat("BuildTeacherAction input position=%d rates=%d account=%d action=%d",
@@ -3419,9 +3306,7 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
       ReturnFalse;
      }
    CBufferFloat teacher_state, teacher_time;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!CreateBuffers(position, GetPointer(teacher_state), GetPointer(teacher_time), GetPointer(D2SkillFuture)))
      {
       PrintFormat("BuildTeacherAction CreateBuffers position=%d future=%d index=%d",
@@ -3429,51 +3314,39 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
       ReturnFalse;
      }
    vector<float> account_values;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(account.GetData(account_values) != AccountDescr)
      {
       PrintFormat("BuildTeacherAction account data total=%d index=%d", account.Total(), account.GetIndex());
       ReturnFalse;
      }
    const vector<float> teacher = OraculAction(account_values, GetPointer(D2SkillFuture));
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(teacher.Size() != NActions)
      {
       PrintFormat("BuildTeacherAction oracle size=%d expected=%d", teacher.Size(), NActions);
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!action.AssignArray(teacher))
      {
       Print("BuildTeacherAction action AssignArray");
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(action.GetIndex() < 0 && !action.BufferCreate(D2SkillMarket.GetOpenCL()))
      {
       PrintFormat("BuildTeacherAction action BufferCreate total=%d index=%d", action.Total(), action.GetIndex());
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(action.GetIndex() >= 0 && !action.BufferWrite())
      {
       PrintFormat("BuildTeacherAction action BufferWrite total=%d index=%d", action.Total(), action.GetIndex());
       ReturnFalse;
      }
    reward = EvaluateAction(action, MathMax(0.0, double(account_values[0]) * EtalonBalance), (uint)position);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!MathIsValidNumber(reward))
      {
       PrintFormat("BuildTeacherAction reward invalid %.8f", reward);
@@ -3527,7 +3400,7 @@ bool BuildRandomAction(const int position, CBufferFloat *account, CBufferFloat *
    return MathIsValidNumber(reward);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillClampAction.                                     |
+//| Implements D2SkillClampAction.                                   |
 //+------------------------------------------------------------------+
 bool D2SkillClampAction(CBufferFloat *source, CBufferFloat *target)
   {
@@ -3542,7 +3415,7 @@ bool D2SkillClampAction(CBufferFloat *source, CBufferFloat *target)
    return (target.GetIndex() < 0 || target.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillWriteACManifest.                                 |
+//| Implements D2SkillWriteACManifest.                               |
 //+------------------------------------------------------------------+
 bool D2SkillWriteACManifest(const ulong forecast_signature)
   {
@@ -3579,7 +3452,7 @@ bool D2SkillWriteACManifest(const ulong forecast_signature)
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateACManifest.                              |
+//| Implements D2SkillValidateACManifest.                            |
 //+------------------------------------------------------------------+
 bool D2SkillValidateManifestRepresentation(const string manifest_file,
                                            const bool allow_bank_reset,
@@ -3605,6 +3478,8 @@ bool D2SkillValidateManifestRepresentation(const string manifest_file,
                   expected, actual);
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillValidateACManifestFile.                        |
 //+------------------------------------------------------------------+
 bool D2SkillValidateACManifestFile(const bool required, const string manifest_file,
                                    const bool allow_bank_reset)
@@ -3636,9 +3511,7 @@ bool D2SkillValidateACManifestFile(const bool required, const string manifest_fi
    D2Skill_AC_MANIFEST_EQ("q1_hash", StringFormat("%I64u", D2SkillHashFile(ulong(1469598103934665603), D2Skill_Q1_FILE)));
    D2Skill_AC_MANIFEST_EQ("q2_hash", StringFormat("%I64u", D2SkillHashFile(ulong(1469598103934665603), D2Skill_Q2_FILE)));
 #undef D2Skill_AC_MANIFEST_EQ
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(D2SkillManifestValue(manifest_file, "generation") == "")
      {
       Print("D2Skill policy manifest: generation is absent");
@@ -3647,12 +3520,16 @@ bool D2SkillValidateACManifestFile(const bool required, const string manifest_fi
    return true;
   }
 //+------------------------------------------------------------------+
+//| Implements D2SkillValidateACManifest                             |
+//| (D2SkillValidateACManifest).                                     |
+//+------------------------------------------------------------------+
 bool D2SkillValidateACManifest(const bool required)
   {
    return(D2SkillValidateACManifestFile(required, D2Skill_AC_MANIFEST_FILE, false));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadPolicyNet. Shared Actor-Critic lifecycle ... |
+//| Implements D2SkillLoadPolicyNet. Shared Actor-Critic lifecycle   |
+//| ...                                                              |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
   {
@@ -3674,7 +3551,7 @@ bool D2SkillConfigureBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| A newly created policy has no durable checkpoint state to keep. |
+//| A newly created policy has no durable checkpoint state to keep.  |
 //+------------------------------------------------------------------+
 bool D2SkillSetNewBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
   {
@@ -3684,6 +3561,8 @@ bool D2SkillSetNewBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
    step.SetRepresentation(D2SkillD2Representation);
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillSetNewPolicyRepresentation.                    |
 //+------------------------------------------------------------------+
 bool D2SkillSetNewPolicyRepresentation(CNet &net)
   {
@@ -3696,6 +3575,8 @@ bool D2SkillSetNewPolicyRepresentation(CNet &net)
    return(D2SkillSetNewBankRepresentation(skill.TaskBank(), skill.StepBank()));
   }
 //+------------------------------------------------------------------+
+//| Implements D2SkillLoadPolicyNet.                                 |
+//+------------------------------------------------------------------+
 bool D2SkillLoadPolicyNet(CNet &net, const string file_name)
   {
    float error = 0, undefine = 0, forecast = 0;
@@ -3703,7 +3584,7 @@ bool D2SkillLoadPolicyNet(CNet &net, const string file_name)
    return(net.Load(file_name, error, undefine, forecast, studied, true));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCreatePolicySet.                                 |
+//| Implements D2SkillCreatePolicySet.                               |
 //+------------------------------------------------------------------+
 bool D2SkillCreatePolicySet(CNet &actor, CNet &q1, CNet &q2)
   {
@@ -3723,9 +3604,7 @@ bool D2SkillCreatePolicySet(CNet &actor, CNet &q1, CNet &q2)
       q2.SetOpenCL(D2SkillMarket.GetOpenCL());
    DeleteObj(actor_descr);
    DeleteObj(critic_descr);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(result)
      {
       //--- A CNet temporary OpenCL context must be released before creating the
@@ -3738,7 +3617,7 @@ bool D2SkillCreatePolicySet(CNet &actor, CNet &q1, CNet &q2)
    return(result && D2SkillSetNewPolicyRepresentation(actor));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2BankFlags.                                   |
 //+------------------------------------------------------------------+
 void D2SkillD2BankFlags(bool &task_enabled, bool &step_enabled)
   {
@@ -3751,7 +3630,7 @@ void D2SkillD2BankFlags(bool &task_enabled, bool &step_enabled)
                     D2SkillD2Mode == D2Skill_D2_MODE_FULL));
   }
 //+------------------------------------------------------------------+
-//| Selects the only utility interpretation accepted by this run.   |
+//| Selects the only utility interpretation accepted by this run.    |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureD2UtilityMode(const int utility_mode)
   {
@@ -3763,7 +3642,7 @@ bool D2SkillConfigureD2UtilityMode(const int utility_mode)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillEnableD2Banks.                                 |
 //+------------------------------------------------------------------+
 bool D2SkillEnableD2Banks(CNet &actor)
   {
@@ -3837,7 +3716,7 @@ bool D2SkillApplyD2Utility(CNet &actor, const double value, bool &applied)
   }
 //+------------------------------------------------------------------+
 //| Applies paired hindsight delta JSkill-JBase to selected skills.  |
-//| Utility is separate from Actor gradients and pseudo-residuals.  |
+//| Utility is separate from Actor gradients and pseudo-residuals.   |
 //+------------------------------------------------------------------+
 bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j, bool &applied)
   {
@@ -3855,6 +3734,8 @@ bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j, bool &applie
       D2SkillD2PairedUtilityUpdates++;
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillUpdateD2UtilityDelta.                          |
 //+------------------------------------------------------------------+
 bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j)
   {
@@ -3875,7 +3756,7 @@ bool D2SkillResetEpisodeInfluence(CNet &actor)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Closes the offline episode through paired utility then reset.     |
+//| Closes the offline episode through paired utility then reset.    |
 //+------------------------------------------------------------------+
 bool D2SkillCloseOfflineEpisode(CNet &actor, const bool paired_active,
                                 const bool pair_terminal, const bool episode_limit,
@@ -3903,7 +3784,7 @@ bool D2SkillCloseOfflineEpisode(CNet &actor, const bool paired_active,
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillCanCreatePolicyCheckpoint.                     |
 //+------------------------------------------------------------------+
 bool D2SkillCanCreatePolicyCheckpoint(const bool manifest_exists, const bool allow_create)
   {
@@ -3911,6 +3792,8 @@ bool D2SkillCanCreatePolicyCheckpoint(const bool manifest_exists, const bool all
       return(allow_create);
    return(D2SkillD2RecreateIncompatibleCheckpoint);
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillLoadOrCreatePolicySetFile.                     |
 //+------------------------------------------------------------------+
 bool D2SkillLoadOrCreatePolicySetFile(CNet &actor, CNet &q1, CNet &q2,
                                       const bool allow_create, const string manifest_file)
@@ -3956,6 +3839,8 @@ bool D2SkillLoadOrCreatePolicySetFile(CNet &actor, CNet &q1, CNet &q2,
    return true;
   }
 //+------------------------------------------------------------------+
+//| Implements D2SkillLoadOrCreatePolicySet.                         |
+//+------------------------------------------------------------------+
 bool D2SkillLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
                                   const bool allow_create)
   {
@@ -3963,7 +3848,7 @@ bool D2SkillLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
                                             D2Skill_AC_MANIFEST_FILE));
   }
 //+------------------------------------------------------------------+
-//| Configures the Actor-Critic write permissions for the D2 mode.  |
+//| Configures the Actor-Critic write permissions for the D2 mode.   |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureActorCriticUpdates(CNet &actor, CNet &q1, CNet &q2)
   {
@@ -3999,7 +3884,7 @@ bool D2SkillConfigureActorCriticUpdates(CNet &actor, CNet &q1, CNet &q2)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillSavePolicySet.                                   |
+//| Implements D2SkillSavePolicySet.                                 |
 //+------------------------------------------------------------------+
 bool D2SkillSavePolicySet(CNet &actor, CNet &q1, CNet &q2)
   {
@@ -4013,7 +3898,7 @@ bool D2SkillSavePolicySet(CNet &actor, CNet &q1, CNet &q2)
            D2SkillWriteACManifest(D2SkillLastSignature));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadInferenceActor.                              |
+//| Implements D2SkillLoadInferenceActor.                            |
 //+------------------------------------------------------------------+
 bool D2SkillLoadInferenceActor(CNet &actor)
   {
@@ -4046,7 +3931,7 @@ bool ReadAction(CNet &net, CBufferFloat *target)
    return (output == target && target.Total() == NActions);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillAdvanceAccountTime.                              |
+//| Implements D2SkillAdvanceAccountTime.                            |
 //+------------------------------------------------------------------+
 bool D2SkillAdvanceAccountTime(CBufferFloat *current, const datetime next_time, CBufferFloat *next)
   {
@@ -4072,7 +3957,7 @@ bool D2SkillAdvanceAccountTime(CBufferFloat *current, const datetime next_time, 
    return (next.GetIndex() < 0 || next.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillForwardForecastState.                            |
+//| Implements D2SkillForwardForecastState.                          |
 //+------------------------------------------------------------------+
 bool D2SkillForwardForecastState(CBufferFloat *state)
   {
@@ -4090,7 +3975,7 @@ bool D2SkillForwardForecastState(CBufferFloat *state)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillBuildLiveAccount.                              |
 //+------------------------------------------------------------------+
 bool D2SkillBuildLiveAccount(const double previous_balance, const double previous_equity,
                              const datetime state_time, CBufferFloat *account,
@@ -4141,7 +4026,7 @@ bool D2SkillBuildLiveAccount(const double previous_balance, const double previou
    return (account.AssignArray(values) && (account.GetIndex() < 0 || account.BufferWrite()));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillRefreshLiveMarket.                               |
+//| Implements D2SkillRefreshLiveMarket.                             |
 //+------------------------------------------------------------------+
 bool D2SkillRefreshLiveMarket(CBufferFloat *state, CBufferFloat *time_state)
   {
@@ -4182,7 +4067,7 @@ double NormalizeLot(const double lot)
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateAction.                                  |
+//| Implements D2SkillValidateAction.                                |
 //+------------------------------------------------------------------+
 bool D2SkillValidateAction(CBufferFloat *action)
   {
@@ -4195,7 +4080,7 @@ bool D2SkillValidateAction(CBufferFloat *action)
    return true;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillExecuteAction.                                 |
 //+------------------------------------------------------------------+
 bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_value, double &margin_penalty,
                           bool &market_closed)
@@ -4222,23 +4107,17 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
       if((buy_value - lot) >= min_lot)
          ClosePartial(POSITION_TYPE_BUY, buy_value - lot);
       else
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if((lot - buy_value) >= min_lot && !Trade.Buy(lot - buy_value, Symb.Name(), Symb.Ask(), sl, tp))
            {
             const uint retcode = Trade.ResultRetcode();
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(retcode == TRADE_RETCODE_MARKET_CLOSED)
               {
                market_closed = true;
                return true;
               }
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(retcode != 10019)
               {
                PrintFormat("D2Skill buy execution failed: retcode=%u %s", retcode, Trade.ResultRetcodeDescription());
@@ -4261,23 +4140,17 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
       if((sell_value - lot) >= min_lot)
          ClosePartial(POSITION_TYPE_SELL, sell_value - lot);
       else
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if((lot - sell_value) >= min_lot && !Trade.Sell(lot - sell_value, Symb.Name(), Symb.Bid(), sl, tp))
            {
             const uint retcode = Trade.ResultRetcode();
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(retcode == TRADE_RETCODE_MARKET_CLOSED)
               {
                market_closed = true;
                return true;
               }
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(retcode != 10019)
               {
                PrintFormat("D2Skill sell execution failed: retcode=%u %s", retcode, Trade.ResultRetcodeDescription());
@@ -4289,7 +4162,8 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
    return true;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillExecuteAction. Inference callers do not train... |
+//| Implements D2SkillExecuteAction. Inference callers do not        |
+//| train...                                                         |
 //+------------------------------------------------------------------+
 bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_value)
   {
@@ -4298,6 +4172,9 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
    return D2SkillExecuteAction(action, buy_value, sell_value, margin_penalty, market_closed);
   }
 #endif
+//+------------------------------------------------------------------+
+//| Implements PolicyBackward.                                       |
+//+------------------------------------------------------------------+
 bool PolicyBackward(CNet &actor, CNet &critic, CBufferFloat *actor_target,
                     CNet *scenario_net, const int scenario_layer)
   {
@@ -4324,7 +4201,8 @@ bool PolicyBackward(CNet &actor, CNet &critic, CBufferFloat *actor_target,
    return result;
   }
 //+------------------------------------------------------------------+
-//| Finalizes projected balance before writing terminal account state.|
+//| Finalizes projected balance before writing terminal account      |
+//| state.                                                           |
 //+------------------------------------------------------------------+
 bool D2SkillFinalizeAccountBalance(const double balance, const double realized,
                                    const double min_balance, double &next_balance,
@@ -4363,9 +4241,7 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    if(!OrderCalcMargin(ORDER_TYPE_BUY, Symb.Name(), 1, Rates[position].open, margin))
       ReturnFalse;
    const double min_lot = Symb.LotsMin();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(balance <= min_balance || balance < margin * min_lot)
      {
       terminal = true;
@@ -4388,25 +4264,19 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    double next_buy = 0, next_sell = 0;
    double next_buy_profit = 0, next_sell_profit = 0;
    double realized = 0;
-//+------------------------------------------------------------------+
-//| An invalid target liquidates every open position at the curre... |
-//+------------------------------------------------------------------+
+//--- An invalid target liquidates every open position at the curre...
    if(!open_buy && !open_sell)
      {
       realized = current_buy_profit + current_sell_profit;
      }
    else
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(open_buy)
         {
          //--- A reverse target closes the Sell; a same-side reduction realizes only its
          //--- proportional carried P/L.  The retained Buy keeps its marked-to-market P/L.
          realized += current_sell_profit;
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(current_buy > target_buy && current_buy > 0)
            {
             const double closed = current_buy - target_buy;
@@ -4433,9 +4303,7 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
         {
          //--- Symmetric Sell lifecycle.  The SL-before-TP order matches CheckAction.
          realized += current_buy_profit;
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(current_sell > target_sell && current_sell > 0)
            {
             const double closed = current_sell - target_sell;
@@ -4479,7 +4347,4 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    terminal = (balance_terminal || next_equity < margin * min_lot);
    return (next.GetIndex() < 0 || next.BufferWrite());
   }
-//+------------------------------------------------------------------+
-
-
-//+------------------------------------------------------------------+
+//+---+

@@ -1,10 +1,16 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //| StudyOnline.mq5                                                  |
+//| Copyright 2026, DNG                                              |
+//| https://www.mql5.com/ru/users/dng                                |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 #property strict
+#property description "Онлайн-обучение D2Skill (OMPB) в реальном времени."
+#property description "Один обучающий переход на закрытом баре."
+#property description "Использует live-поток и обновление банков D2."
+#property description "Только для тестового счёта; ордера выставляет сам EA."
 #define  D2SKILL
 #include "Trajectory.mqh"
 //---
@@ -136,7 +142,7 @@ void D2SkillLogOnlineUtilityDiagnostics(CNet &actor, const bool task_applied,
                step_stable, step_pending, step_protected);
   }
 //+------------------------------------------------------------------+
-//| Accumulates one causal online virtual account outcome.            |
+//| Accumulates one causal online virtual account outcome.           |
 //+------------------------------------------------------------------+
 bool AccumulateOnlineOutcome(SD2SkillEpisodeOutcome &outcome,
                              CBufferFloat *account, const double reward)
@@ -255,7 +261,7 @@ bool FinishOnlinePair(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Drops an incomplete pair without emitting terminal utility.     |
+//| Drops an incomplete pair without emitting terminal utility.      |
 //+------------------------------------------------------------------+
 bool AbortOnlinePair(void)
   {
@@ -270,7 +276,8 @@ bool AbortOnlinePair(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Produces a Base action without disturbing the Skill recurrent state. |
+//| Produces a Base action without disturbing the Skill recurrent    |
+//| state.                                                           |
 //+------------------------------------------------------------------+
 bool BuildOnlineBaselineAction(void)
   {
@@ -321,16 +328,26 @@ bool StorePrevious(void)
            (PreviousAccount.GetIndex() < 0 || PreviousAccount.BufferWrite()));
   }
 //+------------------------------------------------------------------+
-//| Target objects are runtime-only. They start as exact copies o... |
+//| LoadOnlineTargets binds runtime target networks to market        |
+//| OpenCL.                                                          |
 //+------------------------------------------------------------------+
 bool LoadOnlineTargets(void)
   {
+//--- Load the runtime-only target networks from the canonical policy files.
    if(!D2SkillLoadPolicyNet(TargetActor, D2Skill_ACTOR_FILE) ||
       !D2SkillLoadPolicyNet(TargetQ1, D2Skill_Q1_FILE) || !D2SkillLoadPolicyNet(TargetQ2, D2Skill_Q2_FILE))
       ReturnFalse;
-   TargetActor.SetOpenCL(D2SkillMarket.GetOpenCL());
-   TargetQ1.SetOpenCL(D2SkillMarket.GetOpenCL());
-   TargetQ2.SetOpenCL(D2SkillMarket.GetOpenCL());
+//--- Bind every target network to the market OpenCL context with checked transfer.
+   COpenCLMy *target = D2SkillMarket.GetOpenCL();
+   if(CheckPointer(target) == POINTER_INVALID)
+      ReturnFalseEx("online target OpenCL");
+   if(!TargetActor.SetOpenCLChecked(target))
+      ReturnFalseEx("online TargetActor OpenCL transfer");
+   if(!TargetQ1.SetOpenCLChecked(target))
+      ReturnFalseEx("online TargetQ1 OpenCL transfer");
+   if(!TargetQ2.SetOpenCLChecked(target))
+      ReturnFalseEx("online TargetQ2 OpenCL transfer");
+//--- Validate target graph shapes and freeze target parameters.
    if(!D2SkillValidatePolicyShape(TargetActor, false) || !D2SkillValidatePolicyShape(TargetQ1, true) ||
       !D2SkillValidatePolicyShape(TargetQ2, true))
       ReturnFalse;
@@ -347,9 +364,7 @@ bool TrainPreviousTransition(const bool terminal)
 //--- The live Forecast is at s_next.  Online reward is one step, so TD
 //--- bootstrap uses runtime-only target objects initialized from live files.
    double q1_target = 0, q2_target = 0;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!terminal)
      {
       if(!TargetActor.feedForward(GetPointer(Account), 1, false, GetPointer(D2SkillMarket), -1))
@@ -369,9 +384,7 @@ bool TrainPreviousTransition(const bool terminal)
       CBufferFloat *qt1 = NULL, *qt2 = NULL;
       TargetQ1.getResults(qt1);
       TargetQ2.getResults(qt2);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!qt1 || !qt2 || qt1.Total() != 1 || qt2.Total() != 1)
         {
          DeleteObj(qt1);
@@ -385,9 +398,7 @@ bool TrainPreviousTransition(const bool terminal)
    double observed = (AccountInfoDouble(ACCOUNT_EQUITY) - PreviousEquity +
                       AccountInfoDouble(ACCOUNT_BALANCE) - PreviousBalance) * PreviousBalance / EtalonBalance +
                      PreviousMarginPenalty;
-//+------------------------------------------------------------------+
-//| Match offline D2Skill: missing a move is penalized at one execu... |
-//+------------------------------------------------------------------+
+//--- Match offline D2Skill: missing a move is penalized at one execu...
    if(MathMax(double(Account[4]), double(Account[5])) < Symb.LotsMin())
      {
       const double point_cost = Symb.TickValue() / Symb.TickSize();
@@ -510,9 +521,7 @@ void OnTick(void)
   {
    if(!IsNewBar())
       return;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillRefreshLiveMarket(GetPointer(State), GetPointer(TimeState)))
      {
       PrintFormat("%s -> %d market", __FUNCTION__, __LINE__);
@@ -520,9 +529,7 @@ void OnTick(void)
          ExpertRemove();
       return;
      }
-//+------------------------------------------------------------------+
-//| clears/reruns explicit states, so sequence boundaries remain ... |
-//+------------------------------------------------------------------+
+//--- clears/reruns explicit states, so sequence boundaries remain ...
    if(!D2SkillForwardForecastState(GetPointer(State)))
      {
       PrintFormat("%s -> %d forecast", __FUNCTION__, __LINE__);
@@ -531,9 +538,7 @@ void OnTick(void)
       return;
      }
    double buy_value = 0, sell_value = 0;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillBuildLiveAccount(PreviousBalance, PreviousEquity, Rates[0].time,
                                GetPointer(Account), buy_value, sell_value))
      {
@@ -560,15 +565,11 @@ void OnTick(void)
 //--- deposit is the only financial terminal state for online training.
    const bool terminal = (AccountInfoDouble(ACCOUNT_BALANCE) <= MinBalance);
    bool online_pair_boundary = false;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(HavePrevious)
      {
       PolicyCheckpointSafe = false;
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!TrainPreviousTransition(terminal))
         {
          PrintFormat("%s -> %d train: terminal recurrent-state failure", __FUNCTION__, __LINE__);
@@ -594,9 +595,7 @@ void OnTick(void)
       //--- Training ended at previous state. A terminal transition has no next
       //--- action, hence it must not rerun the current policy state.
       if(!terminal && (!CreateBuffers(0, GetPointer(State), GetPointer(TimeState), (CBufferFloat*)NULL) ||
-                       //+------------------------------------------------------------------+
-                       //| Function D2SkillForwardForecastState.                              |
-                       //+------------------------------------------------------------------+
+                       //--- Function D2SkillForwardForecastState.
                        !D2SkillForwardForecastState(GetPointer(State))))
         {
          PrintFormat("%s -> %d restore: terminal recurrent-state failure", __FUNCTION__, __LINE__);
@@ -628,9 +627,7 @@ void OnTick(void)
            }
         }
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(terminal)
      {
       PrintFormat("D2Skill online terminal: balance=%.2f "
@@ -651,9 +648,7 @@ void OnTick(void)
       return;
      }
    if(!Actor.feedForward(GetPointer(Account), 1, false, GetPointer(D2SkillMarket), -1) ||
-//+------------------------------------------------------------------+
-//| Function ReadAction.                                             |
-//+------------------------------------------------------------------+
+//--- Function ReadAction.
       !ReadAction(Actor, GetPointer(Action)) || !D2SkillValidateAction(GetPointer(Action)))
      {
       PrintFormat("%s -> %d action", __FUNCTION__, __LINE__);
@@ -671,9 +666,7 @@ void OnTick(void)
      }
    double margin_penalty = 0;
    bool market_closed = false;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillExecuteAction(GetPointer(Action), buy_value, sell_value, margin_penalty, market_closed))
      {
       PrintFormat("%s -> %d execute: terminal partial-trade risk", __FUNCTION__, __LINE__);
@@ -681,9 +674,7 @@ void OnTick(void)
       ExpertRemove();
       return;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(market_closed)
      {
       Print("D2Skill online execution deferred: market closed");
@@ -695,9 +686,7 @@ void OnTick(void)
      }
    if(margin_penalty < 0)
       PrintFormat("D2Skill online insufficient margin: penalty=%.2f", margin_penalty);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!StorePrevious())
      {
       PrintFormat("%s -> %d metadata: terminal post-trade failure", __FUNCTION__, __LINE__);
@@ -712,7 +701,4 @@ void OnTick(void)
    if(OnlinePairActive)
       OnlineVirtualTransitionPending = true;
   }
-//+------------------------------------------------------------------+
-
-
-//+------------------------------------------------------------------+
+//+---+

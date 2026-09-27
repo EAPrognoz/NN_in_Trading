@@ -1,10 +1,15 @@
+﻿//+------------------------------------------------------------------+
+//|                                                        Study.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| Study.mq5                                                        |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 #property strict
+#property description "Харнесс обучения D2Skill: формирование и калибровка банков навыков."
+#property description "Проходит стадии жизненного цикла D2 и обучает пару актор-критик."
+#property description "Только для тестов; ордера не выставляет."
 
 #include "Trajectory.mqh"
 //---
@@ -22,9 +27,6 @@ input int                         Iterations    = 1000000; //Training iterations
 input int                         EpisodeBars   = 2 * StackSize; //Bars per episode
 input double                      MinBalance    = 50.0; //Minimum account balance
 input int                         UpdatePolicy  = 5; //Actor update interval
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 int            Epochs        = 0;
 CNet Actor;
 CNet Q1;
@@ -70,7 +72,7 @@ bool ResetD2SkillEpisodeInfluence(CNet &actor)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Adds one simulated account transition to its own episode result.|
+//| Adds one simulated account transition to its own episode result. |
 //+------------------------------------------------------------------+
 bool AccumulateEpisodeOutcome(SD2SkillEpisodeOutcome &outcome,
                               CBufferFloat *account,
@@ -87,14 +89,14 @@ bool AccumulateEpisodeOutcome(SD2SkillEpisodeOutcome &outcome,
    return(outcome.Accumulate(reward, balance, equity, drawdown, cost, 1, risk));
   }
 //+------------------------------------------------------------------+
-//| Loads OrCreateD2SkillPolicies.                                     |
+//| Loads OrCreateD2SkillPolicies.                                   |
 //+------------------------------------------------------------------+
 bool LoadOrCreateD2SkillPolicies(void)
   {
    return D2SkillLoadOrCreatePolicySet(Actor, Q1, Q2, true);
   }
 //+------------------------------------------------------------------+
-//| Saves D2SkillPolicies.                                             |
+//| Saves D2SkillPolicies.                                           |
 //+------------------------------------------------------------------+
 bool SaveD2SkillPolicies(void)
   {
@@ -290,9 +292,7 @@ bool TrainTransition(const int position, const int iteration, bool &skill_termin
      { Print("TrainTransition stage=q1_forward"); ReturnFalse; }
    if(!Q2.feedForward(GetPointer(CriticInput), 1, false, GetPointer(D2SkillMarket), -1))
      { Print("TrainTransition stage=q2_forward"); ReturnFalse; }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(trace_td)
      {
       CNeuronBaseOCL *q1_layer = Q1.Layer(3);
@@ -365,9 +365,7 @@ bool TrainTransition(const int position, const int iteration, bool &skill_termin
    double random_reward = 0;
    if(!BuildRandomAction(position, GetPointer(Account), GetPointer(RandomAction), random_reward))
      { Print("TrainTransition stage=random_action"); ReturnFalse; }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(random_reward > 0)
      {
       if(!Actor.backProp(GetPointer(RandomAction), GetPointer(D2SkillMarket), -1))
@@ -390,7 +388,7 @@ bool TrainTransition(const int position, const int iteration, bool &skill_termin
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements TrainD2SkillActorCritic.                                |
+//| Implements TrainD2SkillActorCritic.                              |
 //+------------------------------------------------------------------+
 void TrainD2SkillActorCritic(void)
   {
@@ -598,4 +596,4 @@ void OnTimer(void)
    TrainD2SkillActorCritic();
    ExpertRemove();
   }
-//+------------------------------------------------------------------+
+//+---+

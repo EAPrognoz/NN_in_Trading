@@ -1,11 +1,14 @@
+﻿//+------------------------------------------------------------------+
+//|                                                         Test.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| Research.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
+#property description "Харнесс вневыборочного (OOS) теста MASAAT."
+#property description "Прогоняет инференс на отложенном интервале и оценивает качество банков."
+#property description "Только для тестов; ордера не выставляет."
 //+------------------------------------------------------------------+
 //| Includes                                                         |
 //+------------------------------------------------------------------+
@@ -35,9 +38,6 @@ input int                  SlowPeriod  =  26;            //Slow
 input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input int                  Agent = 1;
-//+------------------------------------------------------------------+
-//| |
-//+------------------------------------------------------------------+
 SState               sState;
 STrajectory          Base;
 STrajectory          Buffer[];
@@ -127,16 +127,16 @@ int OnInit()
 void OnDeinit(const int reason)
   {
 //---
-//if(Base.Total > 0)
-//  {
-//   LoadTotalBase();
-//   int total = ArraySize(Buffer);
-//   if(ArrayResize(Buffer, total + 1, 0) < 0)
-//      return;
-//   Buffer[total] = Base;
-//   printf("total %d", MathMin(total + 1, MaxReplayBuffer));
-//   SaveTotalBase();
-//  }
+//---if(Base.Total > 0)
+//---  {
+//---   LoadTotalBase();
+//---   int total = ArraySize(Buffer);
+//---   if(ArrayResize(Buffer, total + 1, 0) < 0)
+//---      return;
+//---   Buffer[total] = Base;
+//---   printf("total %d", MathMin(total + 1, MaxReplayBuffer));
+//---   SaveTotalBase();
+//---  }
    delete Result;
   }
 //+------------------------------------------------------------------+
@@ -310,5 +310,4 @@ void OnTick()
         }
      }
   }
-//+------------------------------------------------------------------+
-
+//+---+

@@ -1,19 +1,22 @@
-//+------------------------------------------------------------------+
-//|                                                     Research.mq5 |
-//|                                                   Copyright DNG® |
+﻿//+------------------------------------------------------------------+
+//|                                                         Test.mq5 |
+//|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
+#property description "Харнесс вневыборочного (OOS) теста ADAPT."
+#property description "Прогоняет инференс на отложенном интервале и оценивает качество адаптивных политик."
+#property description "Только для тестов; ордера не выставляет."
 //+------------------------------------------------------------------+
-//| Includes                                                    |
+//| Includes                                                         |
 //+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
 input group                "---- RSI ----"
 input int                  RSIPeriod   =  14;            //Period
@@ -55,7 +58,7 @@ vector<float>        check;
 double               PrevBalance = 0;
 double               PrevEquity = 0;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
   {
    if(!Symb.Name(_Symbol))
@@ -77,7 +80,7 @@ double               PrevEquity = 0;
      }
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
       return INIT_FAILED;
-// Load Models.
+//--- Load Models.
    float temp;
    if(!ADAPTEncoder.Load(FileName + "Enc.nnw", temp, temp, temp, dtStudied, true) ||
       !ADAPTEndpoints.Load(FileName + "Endp.nnw", temp, temp, temp, dtStudied, true) ||
@@ -119,23 +122,23 @@ double               PrevEquity = 0;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
   {
-//if(Base.Total > 0)
-//  {
-//   LoadTotalBase();
-//   int total = ArraySize(Buffer);
-//   if(ArrayResize(Buffer, total + 1, 0) < 0)
-//      return;
-//   Buffer[total] = Base;
-//   printf("total %d", MathMin(total + 1, MaxReplayBuffer));
-//   SaveTotalBase();
-//  }
+//---if(Base.Total > 0)
+//---  {
+//---   LoadTotalBase();
+//---   int total = ArraySize(Buffer);
+//---   if(ArrayResize(Buffer, total + 1, 0) < 0)
+//---      return;
+//---   Buffer[total] = Base;
+//---   printf("total %d", MathMin(total + 1, MaxReplayBuffer));
+//---   SaveTotalBase();
+//---  }
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                        |
+//| Expert tick function                                             |
 //+------------------------------------------------------------------+
   {
    if(!IsNewBar())
@@ -238,19 +241,19 @@ double               PrevEquity = 0;
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-// State embedding.
+//--- State embedding.
    if(!StateEncoder.feedForward((CNet *)GetPointer(ADAPTEncoder), -1, (CBufferFloat*)GetPointer(bAccount)))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-// Endpoint embedding.
+//--- Endpoint embedding.
    if(!EndpointEncoder.feedForward((CNet *)GetPointer(ADAPTEndpoints), -1, (CNet*)GetPointer(ADAPTProbability)))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
-// Actor.
+//--- Actor.
    if(!Actor.feedForward((CNet *)GetPointer(StateEncoder), -1, (CNet*)GetPointer(EndpointEncoder)))
      {
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -275,7 +278,7 @@ double               PrevEquity = 0;
       temp[3] -= temp[0];
       temp[0] = 0;
      }
-// Buy Control.
+//--- Buy Control.
    if(temp[0] < min_lot || (temp[1] * MaxTP * Symb.Point()) <= stops || (temp[2] * MaxSL * Symb.Point()) <= stops)
      {
       if(buy_value > 0)
@@ -296,7 +299,7 @@ double               PrevEquity = 0;
             Trade.Buy(buy_lot - buy_value, Symb.Name(), Symb.Ask(), buy_sl, buy_tp);
         }
      }
-// Sell Control.
+//--- Sell Control.
    if(temp[3] < min_lot || (temp[4] * MaxTP * Symb.Point()) <= stops || (temp[5] * MaxSL * Symb.Point()) <= stops)
      {
       if(sell_value > 0)
@@ -318,5 +321,4 @@ double               PrevEquity = 0;
         }
      }
   }
-//+------------------------------------------------------------------+
-
+//+---+

@@ -1,10 +1,16 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //| Study.mq5                                                        |
+//| Copyright 2026, DNG                                              |
+//| https://www.mql5.com/ru/users/dng                                |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 #property strict
+#property description "Обучение базовой политики OMPB (D2Skill) на исторических данных."
+#property description "Конвейер: формирование банков D2, обучение актора и критика, чекпоинтинг."
+#property description "Проверка целостности чекпоинтов между этапами."
+#property description "Прогон в Strategy Tester; на демо-символе без реальной торговли."
 #define  D2SKILL
 #include "Trajectory.mqh"
 //---
@@ -85,7 +91,7 @@ bool ResetD2SkillEpisodeInfluence(CNet &actor)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Adds one simulated account transition to its own episode result.|
+//| Adds one simulated account transition to its own episode result. |
 //+------------------------------------------------------------------+
 bool AccumulateEpisodeOutcome(SD2SkillEpisodeOutcome &outcome,
                               CBufferFloat *account,
@@ -102,14 +108,14 @@ bool AccumulateEpisodeOutcome(SD2SkillEpisodeOutcome &outcome,
    return(outcome.Accumulate(reward, balance, equity, drawdown, cost, 1, risk));
   }
 //+------------------------------------------------------------------+
-//| Loads OrCreateD2SkillPolicies.                                     |
+//| Loads OrCreateD2SkillPolicies.                                   |
 //+------------------------------------------------------------------+
 bool LoadOrCreateD2SkillPolicies(void)
   {
    return(D2SkillLoadOrCreatePolicySet(Actor, Q1, Q2, true));
   }
 //+------------------------------------------------------------------+
-//| Saves D2SkillPolicies.                                             |
+//| Saves D2SkillPolicies.                                           |
 //+------------------------------------------------------------------+
 bool SaveD2SkillPolicies(void)
   {
@@ -482,7 +488,7 @@ bool TrainTransition(const int position, const int iteration, bool &skill_termin
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements TrainD2SkillActorCritic.                                |
+//| Implements TrainD2SkillActorCritic.                              |
 //+------------------------------------------------------------------+
 void TrainD2SkillActorCritic(void)
   {
@@ -663,7 +669,7 @@ void TrainD2SkillActorCritic(void)
                   PairedTransitions, PairedDeltaSum / double(PairedTransitions));
   }
 //+------------------------------------------------------------------+
-//| Initializes the Stage 03 BasePolicy Expert.                     |
+//| Initializes the Stage 03 BasePolicy Expert.                      |
 //+------------------------------------------------------------------+
 int OnInit()
   {
@@ -729,7 +735,4 @@ void OnTimer(void)
    TrainD2SkillActorCritic();
    ExpertRemove();
   }
-//+------------------------------------------------------------------+
-
-
-//+------------------------------------------------------------------+
+//+---+

@@ -1,11 +1,14 @@
+﻿//+------------------------------------------------------------------+
+//|                                                  StudyOnline.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| StudyOnline.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
+#property description "Харнесс онлайн-обучения и калибровки политик MDL."
+#property description "Выполняет обучающие переходы на закрытых барах в режиме онлайн-калибровки целевых сетей."
+#property description "Только для тестов; ордера не выставляет."
 //+------------------------------------------------------------------+
 //| Includes                                                         |
 //+------------------------------------------------------------------+
@@ -20,9 +23,6 @@
 //+------------------------------------------------------------------+
 input group                "---- Other ----"
 input int                  Agent = 1;
-//+------------------------------------------------------------------+
-//| |
-//+------------------------------------------------------------------+
 CNet                 cActor[2];
 CNet                 cCritic[3];
 //---
@@ -302,7 +302,7 @@ void OnTick()
          return;
         }
       if((PrevEquity - AccountInfoDouble(ACCOUNT_EQUITY) + PrevBalance - AccountInfoDouble(ACCOUNT_BALANCE)) <= 0 &&
-         // Implements MathAbs.
+         //--- Implements MathAbs.
          MathAbs(bState[0]) > Symb.StopsLevel()*Symb.Point())
         {
          double point_cost = Symb.TickValue() / Symb.TickSize();
@@ -479,9 +479,7 @@ void OnTick()
      }
   }
 //+------------------------------------------------------------------+
-//|                                                                |
-//+------------------------------------------------------------------+
-//| | Implements FillStack.                                          |
+//| Implements FillStack.                                            |
 //+------------------------------------------------------------------+
 bool FillStack(void)
   {
@@ -566,5 +564,4 @@ bool FillStack(void)
 //---
    return true;
   }
-//+------------------------------------------------------------------+
-
+//+---+

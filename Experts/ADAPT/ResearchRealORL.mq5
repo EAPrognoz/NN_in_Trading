@@ -1,19 +1,22 @@
-//+------------------------------------------------------------------+
-//|                                                     Research.mq5 |
-//|                                                   Copyright DNG® |
+﻿//+------------------------------------------------------------------+
+//|                                              ResearchRealORL.mq5 |
+//|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
+#property description "Харнесс исследований ADAPT с реальным онлайн-обучением."
+#property description "Прогоняет исследование на реальном потоке баров и калибрует целевые сети."
+#property description "Только для тестов; ордера не выставляет."
 //+------------------------------------------------------------------+
-//| Includes                                                    |
+//| Includes                                                         |
 //+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
 input double               MinProfit   =  -10000;
 input group                "---- RSI ----"
@@ -46,7 +49,7 @@ CiMACD               MACD;
 double               PrevBalance = 0;
 double               PrevEquity = 0;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
   {
    if(!Symb.Name(_Symbol))
@@ -68,7 +71,7 @@ double               PrevEquity = 0;
      }
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
       return INIT_FAILED;
-// Load History.
+//--- Load History.
    if(!Deals.LoadDeals(SignalFile(Agent), "EURUSD", SymbolInfoDouble(_Symbol, SYMBOL_POINT)))
       return INIT_FAILED;
    PrevBalance = AccountInfoDouble(ACCOUNT_BALANCE);
@@ -76,12 +79,12 @@ double               PrevEquity = 0;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
   {
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                        |
+//| Expert tick function                                             |
 //+------------------------------------------------------------------+
   {
    if(!IsNewBar())
@@ -166,7 +169,7 @@ double               PrevEquity = 0;
       temp[3] -= temp[0];
       temp[0] = 0;
      }
-// Buy Control.
+//--- Buy Control.
    if(temp[0] < min_lot || (temp[1] > 0 && (temp[1] * MaxTP * Symb.Point()) <= stops) || (temp[2] > 0 && (temp[2] * MaxSL * Symb.Point()) <= stops))
      {
       if(buy_value > 0)
@@ -187,7 +190,7 @@ double               PrevEquity = 0;
             Trade.Buy(buy_lot - buy_value, Symb.Name(), Symb.Ask(), buy_sl, buy_tp);
         }
      }
-// Sell Control.
+//--- Sell Control.
    if(temp[3] < min_lot || (temp[4] > 0 && (temp[4] * MaxTP * Symb.Point()) <= stops) || (temp[5] > 0 && (temp[5] * MaxSL * Symb.Point()) <= stops))
      {
       if(sell_value > 0)
@@ -218,7 +221,7 @@ double               PrevEquity = 0;
       ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| Tester function                                             |
+//| Tester function                                                  |
 //+------------------------------------------------------------------+
 double OnTester()
   {
@@ -230,14 +233,14 @@ double OnTester()
    return(ret);
   }
 //+------------------------------------------------------------------+
-//| TesterInit function                                         |
+//| TesterInit function                                              |
 //+------------------------------------------------------------------+
 void OnTesterInit()
   {
    LoadTotalBase();
   }
 //+------------------------------------------------------------------+
-//| TesterPass function                                         |
+//| TesterPass function                                              |
 //+------------------------------------------------------------------+
 void OnTesterPass()
   {
@@ -291,7 +294,7 @@ void OnTesterPass()
      }
   }
 //+------------------------------------------------------------------+
-//| TesterDeinit function                                       |
+//| TesterDeinit function                                            |
 //+------------------------------------------------------------------+
   {
    int total = ArraySize(Buffer);
@@ -300,5 +303,4 @@ void OnTesterPass()
    SaveTotalBase();
    Print("Saved");
   }
-//+------------------------------------------------------------------+
-
+//+---+

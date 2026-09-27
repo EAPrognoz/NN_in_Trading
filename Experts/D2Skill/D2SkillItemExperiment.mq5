@@ -1,9 +1,13 @@
-//+------------------------------------------------------------------+
-//|                                      D2SkillItemExperiment.mq5   |
-//| Article 1: synthetic pseudo-residual representation experiment.  |
+﻿//+------------------------------------------------------------------+
+//|                                        D2SkillItemExperiment.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property strict
 #property version   "1.00"
+#property description "Харнесс экспериментов с предметными навыками D2."
+#property description "Прогоняет серию сценариев на синтетических данных малой размерности."
+#property description "Только для тестов; ордера не выставляет."
 
 #include "..\\NeuroNet_DNG\\NeuroNet.mqh"
 
@@ -16,7 +20,8 @@ CNet           g_net;
 CNeuronBaseOCL g_source;
 CBufferFloat   g_target;
 bool           g_completed = false;
-
+//+------------------------------------------------------------------+
+//| Implements CreateOpenCLHost.                                     |
 //+------------------------------------------------------------------+
 bool CreateOpenCLHost(void)
   {
@@ -46,6 +51,8 @@ bool CreateOpenCLHost(void)
    return(result && g_net.GetOpenCL() != NULL);
   }
 //+------------------------------------------------------------------+
+//| Implements TargetValue.                                          |
+//+------------------------------------------------------------------+
 float TargetValue(const int sample, const int dimension)
   {
 //--- Stable direction is +X; bounded noise is deliberately injected.
@@ -56,6 +63,8 @@ float TargetValue(const int sample, const int dimension)
       value += (dimension == 0 ? -2.5f : (dimension == 1 ? 2.0f : 0.0f));
    return(value);
   }
+//+------------------------------------------------------------------+
+//| Implements RunRepresentation.                                    |
 //+------------------------------------------------------------------+
 bool RunRepresentation(const ED2SkillRepresentation representation, const float beta,
                        float &final_skill_loss, float &final_cosine,
@@ -186,7 +195,8 @@ bool CreateCoverageHost(CNet &net, const uint dimension)
    return(result && net.GetOpenCL() != NULL);
   }
 //+------------------------------------------------------------------+
-//| Compare one deterministic GPU update with the complete CPU state.|
+//| Compare one deterministic GPU update with the complete CPU       |
+//| state.                                                           |
 //+------------------------------------------------------------------+
 bool RunArbitraryDimensionCoverage(void)
   {
@@ -293,6 +303,8 @@ bool RunArbitraryDimensionCoverage(void)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Implements OnInit.                                               |
+//+------------------------------------------------------------------+
 int OnInit()
   {
    if(!CreateOpenCLHost() ||
@@ -341,15 +353,19 @@ int OnInit()
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
+//| Implements OnTimer.                                              |
+//+------------------------------------------------------------------+
 void OnTimer()
   {
    if(g_completed)
       ExpertRemove();
   }
 //+------------------------------------------------------------------+
+//| Implements OnDeinit.                                             |
+//+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
    EventKillTimer();
    g_source.Clear();
   }
-//+------------------------------------------------------------------+
+//+---+

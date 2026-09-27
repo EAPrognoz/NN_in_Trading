@@ -1,14 +1,11 @@
+﻿//+------------------------------------------------------------------+
+//| Trajectory.mqh                                                   |
+//| Copyright 2026, DNG                                              |
+//| https://www.mql5.com/ru/users/dng                                |
 //+------------------------------------------------------------------+
-//|                                                   Trajectory.mqh |
-//|                                                   Copyright DNG® |
-//|                                https://www.mql5.com/ru/users/dng |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
@@ -35,8 +32,9 @@ enum ENUM_D2SKILL_BANK_MODE
    D2Skill_D2_MODE_FULL            //D2 full mode
   };
 //+------------------------------------------------------------------+
-//| OMPB lifecycle stage.  Stage 02 is intentionally a scaffold in |
-//| this block; only the MarketEncoder stage is executable here.    |
+//| OMPB lifecycle stage. Stage 02 is intentionally a scaffold in    |
+//| this                                                             |
+//|  block; only the MarketEncoder stage is executable here.         |
 //+------------------------------------------------------------------+
 enum ENUM_OMPB_STAGE
   {
@@ -47,9 +45,6 @@ enum ENUM_OMPB_STAGE
    OMPB_STAGE_OPTIMIZATION,
    OMPB_STAGE_INFERENCE
   };
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 input group                "---- Indicators ----"
 input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_H1;    //Working timeframe
 //---
@@ -77,9 +72,6 @@ input bool                 InpD2SkillUtilityAware = true; //Utility-aware retrie
 input double               InpD2SkillMinUtility = -1.0; //Minimum utility
 input double               InpD2SkillUtilityScale = 1.0; //Utility scale
 #endif
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 int            iLatentLayer = -1;
 int            iStateRawForecastLayer = 5;
 int            iStateTokenLayer = 6;
@@ -116,9 +108,6 @@ int            iStateTokenLayer = 6;
 #define        Quantiles               8
 #define        StackSize               24*21
 #define        Blocks                  24
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 CSymbolInfo          Symb;
 CTrade               Trade;
 MqlRates             Rates[];
@@ -127,9 +116,6 @@ CiRSI                RSI;
 CiCCI                CCI;
 CiATR                ATR;
 CiMACD               MACD;
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 struct SState
   {
    float             state[HistoryBars * BarDescr];
@@ -150,9 +136,8 @@ struct SState
       ArrayCopy(rewards, obj.rewards);
      }
   };
-
 //+------------------------------------------------------------------+
-//| Complete outcome of one independently simulated D2Skill episode.|
+//| Complete outcome of one independently simulated D2Skill episode. |
 //+------------------------------------------------------------------+
 struct SD2SkillEpisodeOutcome
   {
@@ -253,7 +238,7 @@ bool D2SkillOnlinePairBoundary(const bool real_terminal, const bool virtual_term
    return(pair_horizon > 0 && pair_transitions >= (ulong)pair_horizon);
   }
 //+------------------------------------------------------------------+
-//| An independent pair ends as soon as either branch is terminal.  |
+//| An independent pair ends as soon as either branch is terminal.   |
 //+------------------------------------------------------------------+
 bool D2SkillPairReachedTerminal(const bool base_terminal, const bool skill_terminal)
   {
@@ -363,7 +348,7 @@ bool SState::Load(int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements CreateStateDescriptions.                              |
 //+------------------------------------------------------------------+
 bool CreateStateDescriptions(CArrayObj *&encoder,
                              CArrayObj *&decoder
@@ -543,7 +528,7 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements CreateDescriptions.                                   |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *&actor,
                         CArrayObj *&critic
@@ -844,9 +829,6 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
    return(value <= 0);
   }
 #endif
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
 public:
@@ -868,19 +850,19 @@ public:
 //| Creates and manages object lifecycle for CDeal.                  |
 //+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
-// Creates and manages object lifecycle for CloseTime.
+//--- Creates and manages object lifecycle for CloseTime.
    CloseTime(0),
-// Implements Type.
+//--- Implements Type.
    Type(POSITION_TYPE_BUY),
-// Implements Volume.
+//--- Implements Volume.
    Volume(0),
-// Implements OpenPrice.
+//--- Implements OpenPrice.
    OpenPrice(0),
-// Implements StopLos.
+//--- Implements StopLos.
    StopLos(0),
-// Implements TakeProfit.
+//--- Implements TakeProfit.
    TakeProfit(0),
-// Implements point.
+//--- Implements point.
    point(1e-5)
   {
   }
@@ -913,9 +895,6 @@ vector<float> CDeal::Action(datetime current, double ask, double bid, int period
 //---
    return(result);
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 class CDeals
   {
 protected:
@@ -1022,7 +1001,7 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements Action.                                               |
+//| Implements Action (Action).                                      |
 //+------------------------------------------------------------------+
 vector<float> CDeals::Action(datetime current, double ask, double bid, int period_seconds)
   {
@@ -1163,7 +1142,7 @@ const vector<float> SampleAccount(CBufferFloat *state, datetime time, double max
          profit += state.At(i * BarDescr) / Symb.TickSize() * Symb.TickValue();
          if(((buy_lot > 0 && profit < 0) ||
              (sell_lot > 0 && profit > 0))
-            // Implements MathAbs.
+            //--- Implements MathAbs.
             && MathAbs(profit * (buy_lot - sell_lot)) > balance / 2)
            {
             pos_open = i;
@@ -1282,7 +1261,7 @@ double CheckAction(CBufferFloat *action, double balance, uint start_position)
          return(loss);
         }
       tp = Rates[start_position].open - (tp + spread) * Symb.Point();
-      sl = Rates[start_position].open + (sl - spread) * Symb.Point();
+      sl = Rates[start_position].open + (sl + spread) * Symb.Point();
       for(uint i = start_position; i > 0; i--)
         {
          if(sl <= Rates[i].high)
@@ -1460,7 +1439,17 @@ const string         D2Skill_ACTOR_FILE = "OMPBActor.nnw";
 const string         D2Skill_Q1_FILE = "OMPBQ1.nnw";
 const string         D2Skill_Q2_FILE = "OMPBQ2.nnw";
 const string         D2Skill_AC_MANIFEST_FILE = "OMPBActorCritic.manifest";
+const string         D2Skill_ACTOR_NEXT_FILE = "OMPBActor.next.nnw";
+const string         D2Skill_Q1_NEXT_FILE = "OMPBQ1.next.nnw";
+const string         D2Skill_Q2_NEXT_FILE = "OMPBQ2.next.nnw";
+const string         D2Skill_AC_MANIFEST_NEXT_FILE = "OMPBActorCritic.next.manifest";
+const string         D2Skill_ACTOR_PREVIOUS_FILE = "OMPBActor.previous.nnw";
+const string         D2Skill_Q1_PREVIOUS_FILE = "OMPBQ1.previous.nnw";
+const string         D2Skill_Q2_PREVIOUS_FILE = "OMPBQ2.previous.nnw";
+const string         D2Skill_AC_MANIFEST_PREVIOUS_FILE = "OMPBActorCritic.previous.manifest";
+const string         D2Skill_AC_TRANSACTION_FILE = "OMPBActorCritic.transaction";
 const uint           D2Skill_AC_FORMAT_VERSION = 13;
+const uint           D2Skill_AC_TRANSACTION_VERSION = 1;
 const string         D2Skill_OOS_FILE = "OMPBOOS.csv";
 const string         D2Skill_OOS_MANIFEST_FILE = "OMPBOOS.manifest";
 //--- Stage 02 publishes only the canonical production tuple.  A complete
@@ -1499,17 +1488,15 @@ string               D2SkillActiveManifestFile = D2Skill_MANIFEST_FILE;
 //--- Utility is defined only by the counterfactual paired terminal outcome.
 const int            D2Skill_D2_UTILITY_PAIRED_HINDSIGHT = 0;
 //+------------------------------------------------------------------+
-//| D2Skill builds transitions directly from historical windows      |
-//| Base CNet already provides Layer(int) and                        |
-//| FeedForwardLayer(CNeuronBaseOCL*).                               |
-//| A transient, non-owning layer view lets the library transpose    |
+//| D2Skill builds transitions directly from historical windows Base |
+//|     CNet already provides Layer(int) and                         |
+//| FeedForwardLayer(CNeuronBaseOCL*). A transient, non-owning layer |
+//|     view lets the library transpose                              |
 //+------------------------------------------------------------------+
 class CD2SkillBufferView : public CNeuronBaseOCL
   {
 public:
-   //+------------------------------------------------------------------+
-   //| Implements Bind.                                                 |
-   //+------------------------------------------------------------------+
+   //--- Implements Bind.
    bool              Bind(CBufferFloat *source)
      {
       if(!source || source.GetIndex() < 0)
@@ -1519,9 +1506,7 @@ public:
       Output = source;
       return(true);
      }
-   //+------------------------------------------------------------------+
-   //| Implements Unbind.                                               |
-   //+------------------------------------------------------------------+
+   //--- Implements Unbind.
    void              Unbind(void)
      {
       Output = NULL;
@@ -1533,17 +1518,13 @@ public:
 class CD2SkillDeviceOps : public CNeuronBaseOCL
   {
 public:
-   //+------------------------------------------------------------------+
-   //| Implements Bind.                                                 |
-   //+------------------------------------------------------------------+
+   //--- Implements Bind.
    bool              Bind(COpenCLMy *open_cl)
      {
       OpenCL = open_cl;
       return(CheckPointer(OpenCL) != POINTER_INVALID);
      }
-   //+------------------------------------------------------------------+
-   //| Creates and manages object lifecycle for Copy.                   |
-   //+------------------------------------------------------------------+
+   //--- Creates and manages object lifecycle for Copy.
    bool              Copy(CBufferFloat *source, CBufferFloat *destination, const uint total)
      {
       if(!source || !destination || source.Total() != int(total) ||
@@ -1601,23 +1582,23 @@ CNet                 D2SkillMarket;
 CNet                 D2SkillTarget;
 CNeuronScenarioForecast *D2SkillForecast = NULL;
 //+------------------------------------------------------------------+
-//| Resolves RankTCM at its fixed OMPB graph slot.                  |
+//| Resolves RankTCM at its fixed OMPB graph slot.                   |
 //+------------------------------------------------------------------+
 CNeuronBaseOCL *GetRankTCM(void)
   {
-   //--- Resolve RankTCM only when the fixed OMPB graph slot has its declared type.
+//--- Resolve RankTCM only when the fixed OMPB graph slot has its declared type.
    CNeuronBaseOCL *layer = D2SkillMarket.Layer(4);
-   //--- Return the typed predecessor or NULL for a stale or incompatible graph.
+//--- Return the typed predecessor or NULL for a stale or incompatible graph.
    return(layer && layer.Type() == defNeuronCogDriverRankTCM ? layer : NULL);
   }
 //+------------------------------------------------------------------+
-//| Resolves OMPB at its fixed MarketEncoder graph slot.            |
+//| Resolves OMPB at its fixed MarketEncoder graph slot.             |
 //+------------------------------------------------------------------+
 CNeuronOMPBOCL *GetOMPB(void)
   {
-   //--- Resolve OMPB only when the fixed MarketEncoder graph slot has its declared type.
+//--- Resolve OMPB only when the fixed MarketEncoder graph slot has its declared type.
    CNeuronBaseOCL *layer = D2SkillMarket.Layer(5);
-   //--- Return the typed layer or NULL for a stale or incompatible graph.
+//--- Return the typed layer or NULL for a stale or incompatible graph.
    return(layer && layer.Type() == defNeuronOMPBOCL ? (CNeuronOMPBOCL *)layer : NULL);
   }
 //+------------------------------------------------------------------+
@@ -1625,61 +1606,61 @@ CNeuronOMPBOCL *GetOMPB(void)
 //+------------------------------------------------------------------+
 bool SetOMPBMode(const ENUM_OMPB_MODE mode)
   {
-   //--- Clear source-anchor state before selecting the requested OMPB runtime mode.
+//--- Clear source-anchor state before selecting the requested OMPB runtime mode.
    CNeuronOMPBOCL *layer = GetOMPB();
-   //--- Finalize the mode change only for a validated OMPB layer.
+//--- Finalize the mode change only for a validated OMPB layer.
    return(layer && layer.SetSourceAnchor(false) && layer.SetMode(mode));
   }
 //+------------------------------------------------------------------+
-//| Configures OMPB mode and BYPASS training safeguards.            |
+//| Configures OMPB mode and BYPASS training safeguards.             |
 //+------------------------------------------------------------------+
 bool ConfigureOMPB(const ENUM_OMPB_MODE mode)
   {
-   //--- Resolve the layer and install the requested OMPB runtime mode.
+//--- Resolve the layer and install the requested OMPB runtime mode.
    CNeuronOMPBOCL *layer = GetOMPB();
    if(!layer || !SetOMPBMode(mode))
       ReturnFalse;
-   //--- BYPASS must not retain a trainable OMPB layer during MarketEncoder training.
+//--- BYPASS must not retain a trainable OMPB layer during MarketEncoder training.
    if(mode == OMPB_BYPASS)
       layer.TrainMode(false);
-   //--- Finalize the OMPB configuration after the runtime safeguards are applied.
+//--- Finalize the OMPB configuration after the runtime safeguards are applied.
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Resets only the OMPB immutable Reference history.               |
+//| Resets only the OMPB immutable Reference history.                |
 //+------------------------------------------------------------------+
 bool ResetOMPBReference(void)
   {
-   //--- Resolve OMPB before discarding its immutable Reference history explicitly.
+//--- Resolve OMPB before discarding its immutable Reference history explicitly.
    CNeuronOMPBOCL *layer = GetOMPB();
-   //--- Finalize only when the validated layer reset succeeds.
+//--- Finalize only when the validated layer reset succeeds.
    return(layer && layer.ResetReference());
   }
 //+------------------------------------------------------------------+
-//| Reads OMPB runtime diagnostic counters and regularizer values.  |
+//| Reads OMPB runtime diagnostic counters and regularizer values.   |
 //+------------------------------------------------------------------+
 bool ReadOMPBDiagnostics(uint &reference_count, uint &current_count,
                          float &disagreement, float &kl, float &alpha_prior,
                          uint &invalid_fallbacks, uint &kl_rejects)
   {
-   //--- Resolve OMPB before exporting its runtime-only diagnostic counters.
+//--- Resolve OMPB before exporting its runtime-only diagnostic counters.
    CNeuronOMPBOCL *layer = GetOMPB();
    if(!layer)
       ReturnFalse;
-   //--- Read the immutable Reference and rolling Current occupancy counters.
+//--- Read the immutable Reference and rolling Current occupancy counters.
    reference_count = layer.ReferenceCount();
    current_count = layer.CurrentCount();
-   //--- Read the latest regularizer values and guarded-inference counters.
+//--- Read the latest regularizer values and guarded-inference counters.
    disagreement = layer.LastDisagreement();
    kl = layer.LastKL();
    alpha_prior = layer.LastAlphaPrior();
    invalid_fallbacks = layer.InvalidFallbacks();
    kl_rejects = layer.KLRejects();
-   //--- Finalize the diagnostics snapshot after all values have been read.
+//--- Finalize the diagnostics snapshot after all values have been read.
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Checks that BYPASS leaves OMPB diagnostics unchanged.           |
+//| Checks that BYPASS leaves OMPB diagnostics unchanged.            |
 //+------------------------------------------------------------------+
 bool D2SkillCheckOMPBBypassInvariant(const uint reference_count_before,
                                      const uint current_count_before,
@@ -1766,12 +1747,15 @@ bool                 D2SkillD2RecreateIncompatibleCheckpoint = false;
 int                  D2SkillD2UtilityMode = D2Skill_D2_UTILITY_PAIRED_HINDSIGHT;
 ulong                D2SkillD2PairedUtilityUpdates = 0;
 //+------------------------------------------------------------------+
-//| Reports completed terminal utility updates for online calibration. |
+//| Reports completed terminal utility updates for online            |
+//| calibration.                                                     |
 //+------------------------------------------------------------------+
 bool D2SkillOnlineCalibrationHasClosedUtilityUpdates(void)
   {
    return(D2SkillD2PairedUtilityUpdates > 0);
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillRequiresBankGradientBackward.                  |
 //+------------------------------------------------------------------+
 bool D2SkillRequiresBankGradientBackward(void)
   {
@@ -1828,7 +1812,7 @@ bool D2SkillConfigureForecastRun(const bool recovery_smoke,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Device-resident snapshot data for one Actor trajectory branch.  |
+//| Device-resident snapshot data for one Actor trajectory branch.   |
 //+------------------------------------------------------------------+
 struct SD2SkillActorForwardState
   {
@@ -2062,7 +2046,7 @@ bool ConfigureForecastRecoveryAge(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillInitTrainingBuffers.                             |
+//| Implements D2SkillInitTrainingBuffers.                           |
 //+------------------------------------------------------------------+
 bool D2SkillInitTrainingBuffers(void)
   {
@@ -2084,7 +2068,7 @@ bool D2SkillInitTrainingBuffers(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillAddBase.                                         |
+//| Implements D2SkillAddBase.                                       |
 //+------------------------------------------------------------------+
 bool D2SkillAddBase(CArrayObj *description, const uint count)
   {
@@ -2103,7 +2087,7 @@ bool D2SkillAddBase(CArrayObj *description, const uint count)
    DeleteObjAndFalse(descr);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillNormalizeDescriptionBatch.                       |
+//| Implements D2SkillNormalizeDescriptionBatch.                     |
 //+------------------------------------------------------------------+
 bool D2SkillNormalizeDescriptionBatch(CArrayObj *description)
   {
@@ -2120,14 +2104,12 @@ bool D2SkillNormalizeDescriptionBatch(CArrayObj *description)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCreateDescriptions.                              |
+//| Implements D2SkillCreateDescriptions.                            |
 //+------------------------------------------------------------------+
 bool D2SkillCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
   {
    CArrayObj *legacy_decoder = NULL;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!CreateStateDescriptions(market, legacy_decoder))
      {
       DeleteObj(legacy_decoder);
@@ -2136,15 +2118,11 @@ bool D2SkillCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
    DeleteObj(legacy_decoder);
 //--- Keep exactly CogDriver layers 0..4 (RankTCM is the boundary).
    int layer = market.Total() - 1;
-//+------------------------------------------------------------------+
-//| Function while.                                                  |
-//+------------------------------------------------------------------+
+//--- Function while.
    while(layer >= 0)
      {
       CLayerDescription* descr = market.At(layer);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!descr || descr.type != defNeuronCogDriverRankTCM)
         {
          if(!market.Delete(layer))
@@ -2317,14 +2295,12 @@ bool D2SkillCreateDescriptions(CArrayObj *&market, CArrayObj *&target)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCreateNetworks.                                  |
+//| Implements D2SkillCreateNetworks.                                |
 //+------------------------------------------------------------------+
 bool D2SkillCreateNetworks(void)
   {
    CArrayObj *market = NULL, *target = NULL;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillCreateDescriptions(market, target))
      {
       DeleteObj(market);
@@ -2345,18 +2321,14 @@ bool D2SkillCreateNetworks(void)
 //--- Create invalidates buffers belonging to an earlier network.
    if(!D2SkillTarget.SetOpenCLChecked(D2SkillMarket.GetOpenCL()))
       ReturnFalseEx("target OpenCL transfer failed");
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillInitTrainingBuffers())
      {
       PrintFormat("%s init: training buffers=FAIL", OMPB_LOG_PREFIX);
       ReturnFalse;
      }
    D2SkillForecast = (CNeuronScenarioForecast*)D2SkillMarket.Layer(-1);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillForecast || D2SkillForecast.Type() != defNeuronScenarioForecast)
      {
       PrintFormat("%s init: forecast layer=FAIL", OMPB_LOG_PREFIX);
@@ -2373,15 +2345,13 @@ bool D2SkillCreateNetworks(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateShapes.                                  |
+//| Implements D2SkillValidateShapes.                                |
 //+------------------------------------------------------------------+
 bool D2SkillValidateShapes(const bool training = true)
   {
    CNeuronBaseOCL *layer = D2SkillMarket.Layer(0);
    CBufferFloat *buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != HistoryBars * BarDescr)
      {
       PrintFormat("%s shape: market input expected=%d actual=%d", OMPB_LOG_PREFIX, HistoryBars * BarDescr,
@@ -2390,9 +2360,7 @@ bool D2SkillValidateShapes(const bool training = true)
      }
    layer = D2SkillMarket.Layer(4);
    buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != (BarDescr * EmbeddingSize))
      {
       PrintFormat("%s shape: market RankTCM expected=%d actual=%d", OMPB_LOG_PREFIX, BarDescr * EmbeddingSize,
@@ -2407,16 +2375,12 @@ bool D2SkillValidateShapes(const bool training = true)
                   (buffer ? buffer.Total() : -1));
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(training)
      {
       layer = D2SkillTarget.Layer(0);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("%s shape: target input expected=%d actual=%d", OMPB_LOG_PREFIX, BarDescr * NForecast,
@@ -2425,9 +2389,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(1);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("%s shape: target PeriodNorm expected=%d actual=%d", OMPB_LOG_PREFIX, BarDescr * NForecast,
@@ -2436,9 +2398,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(2);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("%s shape: target Conv3 expected=%d actual=%d", OMPB_LOG_PREFIX,
@@ -2448,9 +2408,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(3);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast * 2 * EmbeddingSize))
         {
          PrintFormat("%s shape: target Conv2 expected=%d actual=%d", OMPB_LOG_PREFIX,
@@ -2460,9 +2418,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(4);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("%s shape: target final Conv expected=%d actual=%d", OMPB_LOG_PREFIX,
@@ -2472,9 +2428,7 @@ bool D2SkillValidateShapes(const bool training = true)
         }
       layer = D2SkillTarget.Layer(-1);
       buffer = (layer ? layer.getOutput() : NULL);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast * EmbeddingSize))
         {
          PrintFormat("%s shape: target output PeriodNorm expected=%d actual=%d", OMPB_LOG_PREFIX,
@@ -2483,9 +2437,7 @@ bool D2SkillValidateShapes(const bool training = true)
          ReturnFalse;
         }
       buffer = D2SkillFutureTranspose.getOutput();
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!buffer || buffer.Total() != (BarDescr * NForecast))
         {
          PrintFormat("%s shape: future transpose expected=%d actual=%d", OMPB_LOG_PREFIX, BarDescr * NForecast,
@@ -2495,9 +2447,7 @@ bool D2SkillValidateShapes(const bool training = true)
      }
    layer = D2SkillMarket.Layer(-1);
    buffer = (layer ? layer.getOutput() : NULL);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != NScenarios * BarDescr * NForecast * EmbeddingSize)
      {
       PrintFormat("%s shape: Scenario Z expected=%d actual=%d", OMPB_LOG_PREFIX,
@@ -2506,9 +2456,7 @@ bool D2SkillValidateShapes(const bool training = true)
       ReturnFalse;
      }
    buffer = D2SkillForecast.GetU();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != (NScenarios * BarDescr * NForecast))
      {
       PrintFormat("%s shape: Scenario U expected=%d actual=%d", OMPB_LOG_PREFIX, NScenarios * BarDescr * NForecast,
@@ -2516,9 +2464,7 @@ bool D2SkillValidateShapes(const bool training = true)
       ReturnFalse;
      }
    buffer = D2SkillForecast.GetPi();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!buffer || buffer.Total() != NScenarios)
      {
       PrintFormat("%s shape: Scenario Pi expected=%d actual=%d", OMPB_LOG_PREFIX, NScenarios,
@@ -2527,9 +2473,7 @@ bool D2SkillValidateShapes(const bool training = true)
      }
    if(D2SkillForecast.Variables() != BarDescr || D2SkillForecast.Scenarios() != NScenarios ||
       D2SkillForecast.Horizon() != NForecast || D2SkillForecast.Dimension() != EmbeddingSize ||
-//+------------------------------------------------------------------+
-//| Function ActiveTrajectories.                                     |
-//+------------------------------------------------------------------+
+//--- Function ActiveTrajectories.
       D2SkillForecast.ActiveTrajectories() > TopK)
      {
       PrintFormat("%s shape: Forecast V=%d/%d K=%d/%d H=%d/%d D=%d/%d active=%d/%d", OMPB_LOG_PREFIX,
@@ -2541,7 +2485,7 @@ bool D2SkillValidateShapes(const bool training = true)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillHashUInt.                                        |
+//| Implements D2SkillHashUInt.                                      |
 //+------------------------------------------------------------------+
 ulong D2SkillHashUInt(ulong hash, const ulong value)
   {
@@ -2549,7 +2493,7 @@ ulong D2SkillHashUInt(ulong hash, const ulong value)
    return(hash * ulong(1099511628211));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillHashText.                                        |
+//| Implements D2SkillHashText.                                      |
 //+------------------------------------------------------------------+
 ulong D2SkillHashText(ulong hash, const string text)
   {
@@ -2558,7 +2502,7 @@ ulong D2SkillHashText(ulong hash, const string text)
    return(hash);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillHashFile.                                        |
+//| Implements D2SkillHashFile.                                      |
 //+------------------------------------------------------------------+
 ulong D2SkillHashFile(ulong hash, const string file_name)
   {
@@ -2570,7 +2514,7 @@ ulong D2SkillHashFile(ulong hash, const string file_name)
      { FileClose(handle); return 0; }
    uchar bytes[];
    if(ArrayResize(bytes, (int)length) != (int)length ||
-// Read file payload as bytes after successful allocation.
+//--- Read file payload as bytes after successful allocation.
       FileReadArray(handle, bytes, 0, (int)length) != (int)length)
      { FileClose(handle); return 0; }
    FileClose(handle);
@@ -2599,13 +2543,13 @@ ulong D2SkillForecastSignature(const string market_file = "")
    hash = D2SkillHashUInt(hash, D2SkillForecast.ContractSignature());
    hash = D2SkillHashText(hash, "z_layout=K,V,H,D;u_layout=K,V,H;pi_layout=K;codebook_layout=K,V,H,D");
    hash = D2SkillHashText(hash,
-                           "market_layout=RankTCM_then_OMPB_then_ScenarioForecast;" +
-                           "variable_order=BarDescr_feature_series_0_to_8");
+                          "market_layout=RankTCM_then_OMPB_then_ScenarioForecast;" +
+                          "variable_order=BarDescr_feature_series_0_to_8");
    hash = D2SkillHashText(hash, "OHLC_deltas_from_open;tick_volume_div_1000;RSI_CCI_ATR_MACD_raw");
    return(hash);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillForecastTrainingSignature.                       |
+//| Implements D2SkillForecastTrainingSignature.                     |
 //+------------------------------------------------------------------+
 ulong D2SkillForecastTrainingSignature(const ulong forecast_signature, const string target_file = "")
   {
@@ -2615,7 +2559,7 @@ ulong D2SkillForecastTrainingSignature(const ulong forecast_signature, const str
    return(D2SkillHashFile(forecast_signature, checkpoint));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillWriteManifest.                                   |
+//| Implements D2SkillWriteManifest.                                 |
 //+------------------------------------------------------------------+
 bool D2SkillWriteManifest(const uint completed_epochs)
   {
@@ -2656,14 +2600,14 @@ bool D2SkillWriteManifest(const uint completed_epochs)
   }
 bool D2SkillStage01SaveCheckpoint(const uint completed_epochs);
 //+------------------------------------------------------------------+
-//| Implements D2SkillSaveCheckpoint.                               |
+//| Implements D2SkillSaveCheckpoint.                                |
 //+------------------------------------------------------------------+
 bool D2SkillSaveCheckpoint(const uint completed_epochs)
   {
    return(D2SkillStage01SaveCheckpoint(completed_epochs));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillInitIndicators.                                  |
+//| Implements D2SkillInitIndicators.                                |
 //+------------------------------------------------------------------+
 bool D2SkillInitIndicators(void)
   {
@@ -2673,30 +2617,41 @@ bool D2SkillInitIndicators(void)
            ATR.Create(Symb.Name(), TimeFrame, ATRPeriod) &&
            MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice));
   }
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
 bool D2SkillLoadForecastTraining(void);
 bool D2SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast);
 bool D2SkillVerifyFrozenForecastExact(CNeuronScenarioForecast *forecast);
 bool D2SkillForwardForecast(const int position, CBufferFloat *state, CBufferFloat *time);
 string D2SkillManifestValue(const string file_name, const string key);
+//+------------------------------------------------------------------+
+//| Implements OMPBStage02ExplicitCheckpointFilesValid.              |
+//+------------------------------------------------------------------+
 bool OMPBStage02ExplicitCheckpointFilesValid(const string market_file, const string target_file,
       const string manifest_file);
+//+------------------------------------------------------------------+
+//| Implements OMPBStage02LoadExplicitCheckpoint.                    |
+//+------------------------------------------------------------------+
 bool OMPBStage02LoadExplicitCheckpoint(const string market_file, const string target_file,
                                        const string manifest_file);
+//+------------------------------------------------------------------+
+//| Implements OMPBStage02ReloadProofDeterministic.                  |
+//+------------------------------------------------------------------+
 bool OMPBStage02ReloadProofDeterministic(const string market_file, const string target_file,
       const string manifest_file, const int position,
       CBufferFloat *state, CBufferFloat *time);
+//+------------------------------------------------------------------+
+//| Implements OMPBStage02ReloadCheckpointProof.                     |
+//+------------------------------------------------------------------+
 bool OMPBStage02ReloadCheckpointProof(const string market_file, const string target_file,
                                       const string manifest_file, const ulong expected_market,
                                       const ulong expected_target, const ulong expected_posterior);
 bool OMPBStage02FinalizeSteadySelector(void);
 //+------------------------------------------------------------------+
-//| Stage 02 preflight and Reference collection only.  This path is  |
+//|  Stage 02 preflight and Reference collection only. This path is  |
 //| intentionally separate from CreateD2SkillForecastStudy(): Stage  |
-//| 02 must reject a missing/incompatible Stage 01 checkpoint rather |
-//| than creating a new random Market graph.                         |
+//| 02                                                               |
+//| must reject a missing/incompatible Stage 01 checkpoint rather    |
+//| than                                                             |
+//|  creating a new random Market graph.                             |
 //+------------------------------------------------------------------+
 datetime             OMPBStage02ReferenceStart = 0;
 datetime             OMPBStage02ReferenceSplit = 0;
@@ -2721,14 +2676,37 @@ ulong                OMPBStage02BaseFingerprint = 0;
 ulong                OMPBStage02ForecastFingerprint = 0;
 ulong                OMPBStage02TargetFingerprint = 0;
 ulong                OMPBStage02PosteriorFingerprint = 0;
+bool                 OMPBStage02SignaturesCaptured = false;
+bool                 OMPBStage02StopReported = false;
 //--- The Stage 01 state remains the only production checkpoint until an
 //--- accepted Stage 02 transaction has completed its reload smoke.
 bool                 OMPBStage02CheckpointPublished = false;
+//+------------------------------------------------------------------+
+//| Implements OMPBStage02Finite.                                    |
 //+------------------------------------------------------------------+
 bool OMPBStage02Finite(const double value)
   {
    return(MathIsValidNumber(value));
   }
+//+------------------------------------------------------------------+
+//| Returns whether Stage 02 must terminate after a manual stop.     |
+//+------------------------------------------------------------------+
+bool OMPBStage02StopHandled(const string phase = "")
+  {
+   if(!IsStopped())
+      return(false);
+//--- Leave both graphs outside training mode without finalizing or saving.
+   D2SkillMarket.TrainMode(false);
+   D2SkillTarget.TrainMode(false);
+   if(phase != "" && !OMPBStage02StopReported)
+     {
+      PrintFormat("OMPB_STAGE02_STOP_REQUESTED phase=%s", phase);
+      OMPBStage02StopReported = true;
+     }
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Implements OMPBStage02Configure.                                 |
 //+------------------------------------------------------------------+
 bool OMPBStage02Configure(const datetime reference_start, const datetime reference_end,
                           const datetime calibration_start, const datetime calibration_end,
@@ -2788,6 +2766,8 @@ bool OMPBStage02Configure(const datetime reference_start, const datetime referen
                tau_value, lambda_dis, lambda_kl, lambda_alpha, alpha_prior, max_kl);
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Implements OMPBStage02PrepareData.                               |
 //+------------------------------------------------------------------+
 bool OMPBStage02PrepareData(void)
   {
@@ -2877,7 +2857,6 @@ uint OMPBStage02ProgressQuota(const uint rows, const uint cap, const bool smoke,
    uint quota = (cap == 0 ? rows : (uint)MathMin(rows, cap));
    if(smoke)
       quota = (uint)MathMin(quota, smoke_limit);
-
    return(quota);
   }
 //+------------------------------------------------------------------+
@@ -2887,7 +2866,6 @@ double OMPBStage02ProgressPercent(const uint done, const uint quota)
   {
    if(quota == 0)
       return(0.0);
-
    return(100.0 * double(MathMin(done, quota)) / double(quota));
   }
 //+------------------------------------------------------------------+
@@ -2908,7 +2886,6 @@ void OMPBStage02ShowProgress(const string phase, const uint done, const uint tot
    const bool read_metrics = (!phase_changed && (timer_elapsed || end));
    if(!phase_changed && !end && !timer_elapsed)
       return;
-
    string lmix_text = "n/a";
    string valid_text = "n/a";
    string diagnostic_invalid_text = "n/a";
@@ -2952,7 +2929,7 @@ void OMPBStage02ShowProgress(const string phase, const uint done, const uint tot
      }
    const string phase_label = (phase == "calibration" ?
                                StringFormat("%s epoch %u/%u", phase,
-                                            ExtOMPBCalibrationEpoch, ExtOMPBCalibrationEpochs) : phase);
+                                     ExtOMPBCalibrationEpoch, ExtOMPBCalibrationEpochs) : phase);
    Comment(StringFormat("%s Stage02 %s %6.2f%% state=%s\n" +
                         "processed %u/%u attempts %u invalid %u L_mix %s valid %s invalid %s\n" +
                         "KL %s disagreement %s source_updates %u source_attempts %u source_invalid %u\n%s",
@@ -2962,7 +2939,6 @@ void OMPBStage02ShowProgress(const string phase, const uint done, const uint tot
    if(end && IsStopped())
       PrintFormat("OMPB_STAGE02_PROGRESS_STOP phase=%s valid=%u total=%u attempts=%u invalid=%u",
                   phase, done, total, attempts, invalid);
-
    last_phase = phase;
    last_tick = now;
   }
@@ -2981,7 +2957,7 @@ bool OMPBStage02CollectReference(void)
    uint collected = 0;
    const uint rows = uint(OMPBStage02ReferenceFirst - OMPBStage02ReferenceLast + 1);
    const uint quota = OMPBStage02ProgressQuota(rows, OMPBReferenceSize, OMPBStage02Smoke,
-                                                OMPBStage02SmokeLimit);
+                      OMPBStage02SmokeLimit);
    OMPBStage02ShowProgress("reference", collected, quota, collected, 0, false, false, false,
                            false,
                            0, 0, 0, "");
@@ -3003,6 +2979,13 @@ bool OMPBStage02CollectReference(void)
          break;
       if(ompb.ReferenceCount() >= OMPBReferenceSize)
          break;
+     }
+//--- A partial Reference is never a successful collection.
+   if(IsStopped())
+     {
+      Print("OMPB_STAGE02_STOP_REQUESTED phase=reference");
+      OMPBStage02StopReported = true;
+      return(false);
      }
    if(collected == 0 || (!OMPBStage02Smoke && ompb.ReferenceCount() != OMPBReferenceSize))
      {
@@ -3032,7 +3015,7 @@ bool OMPBStage02Baseline(const int first, const int last, const string scope,
    uint attempts = 0;
    const uint rows = uint(first - last + 1);
    const uint quota = OMPBStage02ProgressQuota(rows, 0, OMPBStage02Smoke,
-                                                OMPBStage02SmokeLimit);
+                      OMPBStage02SmokeLimit);
    const string progress_phase = (StringFind(scope, "source") >= 0 ?
                                   "baseline source" : "baseline target");
    if(first < last || !D2SkillForecast || !ConfigureOMPB(OMPB_BYPASS) ||
@@ -3063,12 +3046,22 @@ bool OMPBStage02Baseline(const int first, const int last, const string scope,
       if(OMPBStage02Smoke && valid_batches >= OMPBStage02SmokeLimit)
          break;
      }
+//--- A stopped partial baseline cannot supply acceptance metrics.
+   if(IsStopped())
+     {
+      if(scope == "source_eval")
+         Print("OMPB_STAGE02_STOP_REQUESTED phase=baseline_source");
+      else
+         Print("OMPB_STAGE02_STOP_REQUESTED phase=baseline_target");
+      OMPBStage02StopReported = true;
+      return(false);
+     }
    double lmix, router, trajectory, confidence, latent, observation;
    double valid, invalid, entropy, distance, inactive, recovered;
    if(valid_batches == 0 || !D2SkillForecast.BuildEpochCodebookDiagnostics() ||
       !D2SkillForecast.ReadEpochDiagnostics(
-            lmix, router, trajectory, confidence, latent, observation,
-            valid, invalid, entropy, distance, inactive, recovered) ||
+         lmix, router, trajectory, confidence, latent, observation,
+         valid, invalid, entropy, distance, inactive, recovered) ||
       valid < double(valid_batches) || !OMPBStage02Finite(lmix) ||
       !OMPBStage02Finite(valid) || !OMPBStage02Finite(invalid))
      {
@@ -3119,6 +3112,7 @@ bool OMPBStage02MarketFingerprint(const int first, const int last, ulong &finger
 //+------------------------------------------------------------------+
 bool OMPBStage02CaptureSignatures(void)
   {
+   OMPBStage02SignaturesCaptured = false;
    CNeuronOMPBOCL *ompb = GetOMPB();
    if(!ompb || !OMPBStage02MarketFingerprint(0, 4, OMPBStage02BaseFingerprint) ||
       !OMPBStage02MarketFingerprint(6, 6, OMPBStage02ForecastFingerprint) ||
@@ -3131,6 +3125,7 @@ bool OMPBStage02CaptureSignatures(void)
    PrintFormat("OMPB_STAGE02_SIGNATURES_BEFORE base=%I64u forecast=%I64u target=%I64u posterior=%I64u",
                OMPBStage02BaseFingerprint, OMPBStage02ForecastFingerprint,
                OMPBStage02TargetFingerprint, OMPBStage02PosteriorFingerprint);
+   OMPBStage02SignaturesCaptured = true;
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -3138,6 +3133,11 @@ bool OMPBStage02CaptureSignatures(void)
 //+------------------------------------------------------------------+
 bool OMPBStage02VerifySignatures(void)
   {
+   if(!OMPBStage02SignaturesCaptured)
+     {
+      Print("OMPB_STAGE02_SIGNATURES_FAIL reason=not_captured");
+      return(false);
+     }
    ulong base = 0, forecast = 0, target = 0;
    ulong posterior = ulong(1469598103934665603);
    CNeuronOMPBOCL *ompb = GetOMPB();
@@ -3162,6 +3162,43 @@ bool OMPBStage02VerifySignatures(void)
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Verifies that pre-calibration inference preserved frozen state.  |
+//+------------------------------------------------------------------+
+bool OMPBStage02VerifyPreCalibrationSignatures(void)
+  {
+   if(!OMPBStage02SignaturesCaptured)
+     {
+      Print("OMPB_STAGE02_PRECALIBRATION_SIGNATURES_FAIL reason=not_captured");
+      return(false);
+     }
+   ulong base = 0, forecast = 0, target = 0;
+   ulong ompb = ulong(1469598103934665603);
+   CNeuronOMPBOCL *layer = GetOMPB();
+//--- Capture the OMPB and frozen outer-network fingerprints before calibration.
+   if(!layer || !OMPBStage02MarketFingerprint(0, 4, base) ||
+      !OMPBStage02MarketFingerprint(6, 6, forecast) ||
+      !D2SkillTarget.ParameterFingerprint(target) ||
+      !layer.AppendParameterFingerprint(ompb))
+     {
+      Print("OMPB_STAGE02_PRECALIBRATION_SIGNATURES_FAIL reason=fingerprint_read");
+      return(false);
+     }
+//--- Compare every protected fingerprint with the BYPASS/signature baseline.
+   const bool unchanged = (base == OMPBStage02BaseFingerprint &&
+                           forecast == OMPBStage02ForecastFingerprint &&
+                           target == OMPBStage02TargetFingerprint &&
+                           ompb == OMPBStage02PosteriorFingerprint);
+   PrintFormat("OMPB_STAGE02_PRECALIBRATION_SIGNATURES base=%I64u forecast=%I64u " +
+               "target=%I64u ompb=%I64u unchanged=%s", base, forecast, target, ompb,
+               (unchanged ? "true" : "false"));
+   if(!unchanged)
+     {
+      Print("OMPB_STAGE02_PRECALIBRATION_SIGNATURES_FAIL reason=state_changed");
+      return(false);
+     }
+   return(true);
+  }
+//+------------------------------------------------------------------+
 //| Computes an evaluation loss through posterior-mean inference.    |
 //+------------------------------------------------------------------+
 bool OMPBStage02InferenceEvaluation(const int first, const int last, const string scope,
@@ -3174,7 +3211,7 @@ bool OMPBStage02InferenceEvaluation(const int first, const int last, const strin
    uint attempts = 0;
    const uint rows = uint(first - last + 1);
    const uint quota = OMPBStage02ProgressQuota(rows, 0, OMPBStage02Smoke,
-                                                OMPBStage02SmokeLimit);
+                      OMPBStage02SmokeLimit);
    const string progress_phase = (StringFind(scope, "source") >= 0 ?
                                   "eval source" : "eval target");
    CNeuronOMPBOCL *ompb = GetOMPB();
@@ -3208,6 +3245,22 @@ bool OMPBStage02InferenceEvaluation(const int first, const int last, const strin
                               0, 0, 0, "");
       if(OMPBStage02Smoke && valid_batches >= OMPBStage02SmokeLimit)
          break;
+     }
+//--- A stopped partial inference pass cannot supply evaluation metrics.
+   if(IsStopped())
+     {
+      if(scope == "pre_source_inference")
+         Print("OMPB_STAGE02_STOP_REQUESTED phase=pre_inference_source");
+      else
+         if(scope == "pre_target_inference")
+            Print("OMPB_STAGE02_STOP_REQUESTED phase=pre_inference_target");
+         else
+            if(scope == "source_inference")
+               Print("OMPB_STAGE02_STOP_REQUESTED phase=post_inference_source");
+            else
+               Print("OMPB_STAGE02_STOP_REQUESTED phase=post_inference_target");
+      OMPBStage02StopReported = true;
+      return(false);
      }
    double lmix, router, trajectory, confidence, latent, observation;
    double valid, invalid, entropy, distance, inactive, recovered;
@@ -3288,6 +3341,8 @@ ulong OMPBStage02ForecastSignature(const string market_file,
    return(D2SkillHashText(hash, "OHLC_deltas_from_open;tick_volume_div_1000;RSI_CCI_ATR_MACD_raw"));
   }
 //+------------------------------------------------------------------+
+//| Implements OMPBStage02WriteCandidateManifest.                    |
+//+------------------------------------------------------------------+
 bool OMPBStage02WriteCandidateManifest(const string market_file, const string target_file,
                                        const string manifest_file, const uint completed_epochs)
   {
@@ -3328,6 +3383,8 @@ bool OMPBStage02WriteCandidateManifest(const string market_file, const string ta
    return(written);
   }
 //+------------------------------------------------------------------+
+//| Implements OMPBStage02ValidateCandidateManifest.                 |
+//+------------------------------------------------------------------+
 bool OMPBStage02ValidateCandidateManifest(const string market_file, const string target_file,
       const string manifest_file,
       CNeuronScenarioForecast *forecast)
@@ -3362,7 +3419,8 @@ bool OMPBStage02ValidateCandidateManifest(const string market_file, const string
           D2SkillManifestValue(manifest_file, "invalid_batches") != "");
   }
 //+------------------------------------------------------------------+
-//| Reload-probes one immutable candidate before selector activation. |
+//| Reload-probes one immutable candidate before selector            |
+//| activation.                                                      |
 //+------------------------------------------------------------------+
 bool OMPBStage02ValidateCandidate(const string market_file, const string target_file,
                                   const string manifest_file)
@@ -3441,7 +3499,8 @@ bool OMPBStage02ValidateCheckpointSet(const string market_file, const string tar
                 checkpoint_forecast));
   }
 //+------------------------------------------------------------------+
-//| Identifies the clean initial state before the first Stage 01 save.|
+//| Identifies the clean initial state before the first Stage 01     |
+//| save.                                                            |
 //+------------------------------------------------------------------+
 bool OMPBStage02CanonicalTupleMissing(const string market_file, const string target_file,
                                       const string manifest_file)
@@ -3451,7 +3510,8 @@ bool OMPBStage02CanonicalTupleMissing(const string market_file, const string tar
           !FileIsExist(manifest_file, FILE_COMMON));
   }
 //+------------------------------------------------------------------+
-//| Captures the immutable checkpoint fingerprints for rollback proof.|
+//| Captures the immutable checkpoint fingerprints for rollback      |
+//| proof.                                                           |
 //+------------------------------------------------------------------+
 bool OMPBStage02CheckpointFingerprints(const string market_file, const string target_file,
                                        ulong &market_fingerprint, ulong &target_fingerprint,
@@ -3486,7 +3546,7 @@ void OMPBStage02ResetActiveCheckpointFiles(void)
    D2SkillActiveManifestFile = D2Skill_MANIFEST_FILE;
   }
 //+------------------------------------------------------------------+
-//| Accepts only generated identifiers, never arbitrary filenames.  |
+//| Accepts only generated identifiers, never arbitrary filenames.   |
 //+------------------------------------------------------------------+
 bool OMPBStage02GenerationIdValid(const string generation)
   {
@@ -3510,7 +3570,7 @@ bool OMPBStage02GenerationIdValid(const string generation)
    return(separator > 0 && separator < length - 1);
   }
 //+------------------------------------------------------------------+
-//| Maps a selector generation to its immutable checkpoint trio.    |
+//| Maps a selector generation to its immutable checkpoint trio.     |
 //+------------------------------------------------------------------+
 bool OMPBStage02GenerationFiles(const string generation, string &market_file,
                                 string &target_file, string &manifest_file)
@@ -3530,7 +3590,7 @@ bool OMPBStage02GenerationFiles(const string generation, string &market_file,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Accepts only the fixed Stage 01 trio or one exact generation.   |
+//| Accepts only the fixed Stage 01 trio or one exact generation.    |
 //+------------------------------------------------------------------+
 bool OMPBStage02ExplicitCheckpointFilesValid(const string market_file, const string target_file,
       const string manifest_file)
@@ -3558,7 +3618,8 @@ bool OMPBStage02ExplicitCheckpointFilesValid(const string market_file, const str
           manifest_file == expected_manifest);
   }
 //+------------------------------------------------------------------+
-//| Rejects interrupted publish sidecars instead of guessing recovery.|
+//| Rejects interrupted publish sidecars instead of guessing         |
+//| recovery.                                                        |
 //+------------------------------------------------------------------+
 bool OMPBStage02RecoverySidecarPresent(string &sidecar_file)
   {
@@ -3595,7 +3656,8 @@ bool OMPBStage02RecoverySidecarPresent(string &sidecar_file)
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Reads exactly one strict selector without allowing path injection.|
+//| Reads exactly one strict selector without allowing path          |
+//| injection.                                                       |
 //+------------------------------------------------------------------+
 bool OMPBStage02ReadSelector(const string selector_file, string &generation)
   {
@@ -3650,7 +3712,7 @@ bool OMPBStage02ReadSelector(const string selector_file, string &generation)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Binds one selector to the exact expected checkpoint generation. |
+//| Binds one selector to the exact expected checkpoint generation.  |
 //+------------------------------------------------------------------+
 bool OMPBStage02SelectorMatchesExpected(const string selector_file,
                                         const string expected_generation,
@@ -3671,7 +3733,7 @@ bool OMPBStage02SelectorMatchesExpected(const string selector_file,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Writes and rereads one non-active selector file before a switch.|
+//| Writes and rereads one non-active selector file before a switch. |
 //+------------------------------------------------------------------+
 bool OMPBStage02WriteSelectorFile(const string selector_file, const string generation)
   {
@@ -3691,7 +3753,8 @@ bool OMPBStage02WriteSelectorFile(const string selector_file, const string gener
    return(written && OMPBStage02ReadSelector(selector_file, reread) && reread == generation);
   }
 //+------------------------------------------------------------------+
-//| Ensures three tuple names describe three distinct physical files.|
+//| Ensures three tuple names describe three distinct physical       |
+//| files.                                                           |
 //+------------------------------------------------------------------+
 bool OMPBStage02TupleNamesValid(const string market_file, const string target_file,
                                 const string manifest_file)
@@ -3718,8 +3781,10 @@ bool OMPBStage02CopyTuple(const string source_market, const string source_target
           FileCopy(source_manifest, FILE_COMMON, destination_manifest, flags));
   }
 //+------------------------------------------------------------------+
-//| Publishes a staged tuple through three canonical active filenames.|
-//| The staged and previous tuples remain until reload proof completes.|
+//| Publishes a staged tuple through three canonical active          |
+//| filenames.                                                       |
+//|  The staged and previous tuples remain until reload proof        |
+//|  completes.                                                      |
 //+------------------------------------------------------------------+
 bool OMPBStage02PublishCanonicalTuple(const string market_file, const string target_file,
                                       const string manifest_file, const string next_market,
@@ -3745,7 +3810,8 @@ bool OMPBStage02PublishCanonicalTuple(const string market_file, const string tar
           OMPBStage02ValidateCheckpointSet(market_file, target_file, manifest_file));
   }
 //+------------------------------------------------------------------+
-//| Restores the retained tuple using the manifest as the final write.|
+//| Restores the retained tuple using the manifest as the final      |
+//| write.                                                           |
 //+------------------------------------------------------------------+
 bool OMPBStage02RestoreCanonicalTuple(const string market_file, const string target_file,
                                       const string manifest_file, const string previous_market,
@@ -3778,12 +3844,14 @@ bool D2SkillStage01TupleStateValid(const bool market_exists,
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Removes only files owned by a completed Stage 01 transaction.   |
+//| Removes only files owned by a completed Stage 01 transaction.    |
 //+------------------------------------------------------------------+
 bool D2SkillStage01DeleteFile(const string file_name)
   {
    return(!FileIsExist(file_name, FILE_COMMON) || FileDelete(file_name, FILE_COMMON));
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillStage01Cleanup.                                |
 //+------------------------------------------------------------------+
 bool D2SkillStage01Cleanup(void)
   {
@@ -3797,7 +3865,7 @@ bool D2SkillStage01Cleanup(void)
           D2SkillStage01DeleteFile(OMPB_STAGE01_TRANSACTION_FILE));
   }
 //+------------------------------------------------------------------+
-//| Writes one durable marker before canonical Stage 01 publication.|
+//| Writes one durable marker before canonical Stage 01 publication. |
 //+------------------------------------------------------------------+
 bool D2SkillStage01WriteTransaction(const bool had_previous, const string phase,
                                     const ulong market, const ulong target,
@@ -3825,7 +3893,7 @@ bool D2SkillStage01WriteTransaction(const bool had_previous, const string phase,
    return(written);
   }
 //+------------------------------------------------------------------+
-//| Rewrites only a complete transaction marker state transition.   |
+//| Rewrites only a complete transaction marker state transition.    |
 //+------------------------------------------------------------------+
 bool D2SkillStage01AdvanceTransaction(const bool had_previous, const string phase,
                                       const ulong market, const ulong target,
@@ -3836,7 +3904,7 @@ bool D2SkillStage01AdvanceTransaction(const bool had_previous, const string phas
    return(D2SkillStage01WriteTransaction(had_previous, phase, market, target, posterior));
   }
 //+------------------------------------------------------------------+
-//| Reads one strict Stage 01 transaction marker.                   |
+//| Reads one strict Stage 01 transaction marker.                    |
 //+------------------------------------------------------------------+
 bool D2SkillStage01ReadTransaction(bool &had_previous, string &phase,
                                    string &market, string &target, string &posterior)
@@ -3865,7 +3933,7 @@ bool D2SkillStage01ReadTransaction(bool &had_previous, string &phase,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Compares a complete tuple against its transaction marker.       |
+//| Compares a complete tuple against its transaction marker.        |
 //+------------------------------------------------------------------+
 bool D2SkillStage01TupleMatches(const string market_file, const string target_file,
                                 const string manifest_file, const string market,
@@ -3875,13 +3943,13 @@ bool D2SkillStage01TupleMatches(const string market_file, const string target_fi
    ulong actual_posterior = ulong(1469598103934665603);
    return(OMPBStage02ValidateCheckpointSet(market_file, target_file, manifest_file) &&
           OMPBStage02CheckpointFingerprints(market_file, target_file, actual_market,
-                                            actual_target, actual_posterior) &&
+                actual_target, actual_posterior) &&
           StringFormat("%I64u", actual_market) == market &&
           StringFormat("%I64u", actual_target) == target &&
           StringFormat("%I64u", actual_posterior) == posterior);
   }
 //+------------------------------------------------------------------+
-//| Recovers only an interrupted Stage 01-owned publication.        |
+//| Recovers only an interrupted Stage 01-owned publication.         |
 //+------------------------------------------------------------------+
 bool D2SkillStage01RecoverInterruptedCheckpoint(void)
   {
@@ -3894,13 +3962,13 @@ bool D2SkillStage01RecoverInterruptedCheckpoint(void)
                                   FileIsExist(OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, FILE_COMMON));
    if(!marker_exists)
      {
-//--- Uncommitted staging never changed canonical names and is safe to discard.
+      //--- Uncommitted staging never changed canonical names and is safe to discard.
       if(!temporary_exists)
          return(true);
       if(!OMPBStage02ValidateCheckpointSet(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
                                            D2Skill_MANIFEST_FILE) &&
          !OMPBStage02CanonicalTupleMissing(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
-                                            D2Skill_MANIFEST_FILE))
+                                           D2Skill_MANIFEST_FILE))
          return(false);
       return(D2SkillStage01Cleanup());
      }
@@ -3914,13 +3982,13 @@ bool D2SkillStage01RecoverInterruptedCheckpoint(void)
       return(D2SkillStage01Cleanup());
 //--- Before previous-ready canonical names are still the earlier valid tuple.
    if(phase == "prepared" && OMPBStage02ValidateCheckpointSet(D2Skill_MARKET_FILE,
-      D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE))
+         D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE))
       return(D2SkillStage01Cleanup());
    if(had_previous)
      {
       if(!D2SkillStage01TupleStateValid(FileIsExist(OMPB_STAGE01_MARKET_PREVIOUS_FILE, FILE_COMMON),
-         FileIsExist(OMPB_STAGE01_TARGET_PREVIOUS_FILE, FILE_COMMON),
-         FileIsExist(OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, FILE_COMMON), true, phase) ||
+                                        FileIsExist(OMPB_STAGE01_TARGET_PREVIOUS_FILE, FILE_COMMON),
+                                        FileIsExist(OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, FILE_COMMON), true, phase) ||
          !OMPBStage02RestoreCanonicalTuple(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
                                            D2Skill_MANIFEST_FILE,
                                            OMPB_STAGE01_MARKET_PREVIOUS_FILE,
@@ -3937,7 +4005,7 @@ bool D2SkillStage01RecoverInterruptedCheckpoint(void)
    return(D2SkillStage01Cleanup());
   }
 //+------------------------------------------------------------------+
-//| Publishes one fully validated Stage 01 checkpoint transaction.  |
+//| Publishes one fully validated Stage 01 checkpoint transaction.   |
 //+------------------------------------------------------------------+
 bool D2SkillStage01SaveCheckpoint(const uint completed_epochs)
   {
@@ -3951,17 +4019,17 @@ bool D2SkillStage01SaveCheckpoint(const uint completed_epochs)
       return(false);
 //--- Classify the pre-save canonical state before staging any new model bytes.
    const bool had_previous = OMPBStage02ValidateCheckpointSet(D2Skill_MARKET_FILE,
-                                                               D2Skill_TARGET_FILE,
-                                                               D2Skill_MANIFEST_FILE);
+                             D2Skill_TARGET_FILE,
+                             D2Skill_MANIFEST_FILE);
    if(!had_previous && !OMPBStage02CanonicalTupleMissing(D2Skill_MARKET_FILE,
-      D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE))
+         D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE))
       return(false);
 //--- The next tuple is self-contained and validated before a commit marker exists.
    const datetime now = TimeCurrent();
    if(!D2SkillMarket.Save(OMPB_STAGE01_MARKET_NEXT_FILE, 0.0f, 0.0f, 0.0f, now, true) ||
       !D2SkillTarget.Save(OMPB_STAGE01_TARGET_NEXT_FILE, 0.0f, 0.0f, 0.0f, now, true) ||
       !OMPBStage02WriteCandidateManifest(OMPB_STAGE01_MARKET_NEXT_FILE,
-         OMPB_STAGE01_TARGET_NEXT_FILE, OMPB_STAGE01_MANIFEST_NEXT_FILE, completed_epochs) ||
+                                         OMPB_STAGE01_TARGET_NEXT_FILE, OMPB_STAGE01_MANIFEST_NEXT_FILE, completed_epochs) ||
       !OMPBStage02ValidateCheckpointSet(OMPB_STAGE01_MARKET_NEXT_FILE,
                                         OMPB_STAGE01_TARGET_NEXT_FILE,
                                         OMPB_STAGE01_MANIFEST_NEXT_FILE))
@@ -3976,17 +4044,17 @@ bool D2SkillStage01SaveCheckpoint(const uint completed_epochs)
 //--- Retain the old complete tuple before any short canonical file is replaced.
    if(had_previous &&
       (!OMPBStage02CopyTuple(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE,
-                              OMPB_STAGE01_MARKET_PREVIOUS_FILE,
-                              OMPB_STAGE01_TARGET_PREVIOUS_FILE,
-                              OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, false) ||
+                             OMPB_STAGE01_MARKET_PREVIOUS_FILE,
+                             OMPB_STAGE01_TARGET_PREVIOUS_FILE,
+                             OMPB_STAGE01_MANIFEST_PREVIOUS_FILE, false) ||
        !OMPBStage02ValidateCheckpointSet(OMPB_STAGE01_MARKET_PREVIOUS_FILE,
                                          OMPB_STAGE01_TARGET_PREVIOUS_FILE,
                                          OMPB_STAGE01_MANIFEST_PREVIOUS_FILE)))
       return(false);
    if(!D2SkillStage01AdvanceTransaction(had_previous, "previous_ready", market, target, posterior) ||
       !OMPBStage02CopyTuple(OMPB_STAGE01_MARKET_NEXT_FILE, OMPB_STAGE01_TARGET_NEXT_FILE,
-                             OMPB_STAGE01_MANIFEST_NEXT_FILE, D2Skill_MARKET_FILE,
-                             D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE, true) ||
+                            OMPB_STAGE01_MANIFEST_NEXT_FILE, D2Skill_MARKET_FILE,
+                            D2Skill_TARGET_FILE, D2Skill_MANIFEST_FILE, true) ||
       !D2SkillStage01TupleMatches(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
                                   D2Skill_MANIFEST_FILE, StringFormat("%I64u", market),
                                   StringFormat("%I64u", target), StringFormat("%I64u", posterior)))
@@ -3998,7 +4066,8 @@ bool D2SkillStage01SaveCheckpoint(const uint completed_epochs)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Proves deterministic serialized parameters without live mutation.|
+//| Proves deterministic serialized parameters without live          |
+//| mutation.                                                        |
 //+------------------------------------------------------------------+
 bool OMPBStage02ReloadProofDeterministicTuple(const string market_file,
       const string target_file,
@@ -4047,9 +4116,12 @@ bool OMPBStage02CanonicalSidecarPresent(string &sidecar_file)
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Resolves only the canonical production checkpoint or fails closed.|
+//|  Resolves only the canonical production checkpoint or fails      |
+//|  closed.                                                         |
+//| Lightweight mode is valid only when the caller validates loaded  |
+//|   graph.                                                         |
 //+------------------------------------------------------------------+
-bool OMPBStage02ResolveActiveCheckpoint(void)
+bool OMPBStage02ResolveActiveCheckpoint(const bool validate_tuple = true)
   {
    OMPBStage02RecoveryFailed = false;
    OMPBStage02ResetActiveCheckpointFiles();
@@ -4075,6 +4147,10 @@ bool OMPBStage02ResolveActiveCheckpoint(void)
       return(false);
      }
 //--- A partial or unreadable tuple is not a new-model state and remains fail-closed.
+   if(!validate_tuple)
+     {
+      return(true);
+     }
    if(!OMPBStage02ValidateCheckpointSet(D2Skill_MARKET_FILE, D2Skill_TARGET_FILE,
                                         D2Skill_MANIFEST_FILE))
      {
@@ -4086,7 +4162,7 @@ bool OMPBStage02ResolveActiveCheckpoint(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Retains the previous selection before the one-file activation.  |
+//| Retains the previous selection before the one-file activation.   |
 //+------------------------------------------------------------------+
 bool OMPBStage02PreparePreviousSelector(void)
   {
@@ -4129,7 +4205,7 @@ bool OMPBStage02PreparePreviousSelector(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Switches exactly one active file after full generation proof.   |
+//| Switches exactly one active file after full generation proof.    |
 //+------------------------------------------------------------------+
 bool OMPBStage02ActivateGeneration(const string generation)
   {
@@ -4179,7 +4255,7 @@ bool OMPBStage02RestorePreviousSelector(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Stages and reload-probes the complete temporary canonical tuple.|
+//| Stages and reload-probes the complete temporary canonical tuple. |
 //+------------------------------------------------------------------+
 bool OMPBStage02StageCandidate(void)
   {
@@ -4214,7 +4290,7 @@ bool OMPBStage02StageCandidate(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Publishes only a fully validated temporary canonical tuple.     |
+//| Publishes only a fully validated temporary canonical tuple.      |
 //+------------------------------------------------------------------+
 bool OMPBStage02PublishCandidate(void)
   {
@@ -4236,7 +4312,8 @@ bool OMPBStage02PublishCandidate(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Loads exactly the supplied checkpoint without resolving a selector.|
+//| Loads exactly the supplied checkpoint without resolving a        |
+//| selector.                                                        |
 //+------------------------------------------------------------------+
 bool OMPBStage02LoadExplicitCheckpoint(const string market_file, const string target_file,
                                        const string manifest_file)
@@ -4289,7 +4366,8 @@ bool OMPBStage02LoadExplicitCheckpoint(const string market_file, const string ta
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Compares one immutable reload output and names the failed tensor.|
+//| Compares one immutable reload output and names the failed        |
+//| tensor.                                                          |
 //+------------------------------------------------------------------+
 bool OMPBStage02ReloadTensorEqual(const string tensor, CBufferFloat *actual,
                                   CBufferFloat &expected)
@@ -4313,7 +4391,8 @@ bool OMPBStage02ReloadTensorEqual(const string tensor, CBufferFloat *actual,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Proves the first inference result after two clean explicit loads.|
+//| Proves the first inference result after two clean explicit       |
+//| loads.                                                           |
 //+------------------------------------------------------------------+
 bool OMPBStage02ReloadProofDeterministic(const string market_file, const string target_file,
       const string manifest_file, const int position,
@@ -4336,7 +4415,8 @@ bool OMPBStage02ReloadProofDeterministic(const string market_file, const string 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Reloads one selected checkpoint and proves deterministic mean inference.|
+//| Reloads one selected checkpoint and proves deterministic mean    |
+//| inference.                                                       |
 //+------------------------------------------------------------------+
 bool OMPBStage02ReloadCheckpointProof(const string market_file, const string target_file,
                                       const string manifest_file, const ulong expected_market,
@@ -4358,7 +4438,8 @@ bool OMPBStage02ReloadCheckpointProof(const string market_file, const string tar
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Reloads the canonical tuple and proves deterministic mean inference.|
+//| Reloads the canonical tuple and proves deterministic mean        |
+//| inference.                                                       |
 //+------------------------------------------------------------------+
 bool OMPBStage02ReloadSmoke(const ulong expected_market, const ulong expected_target,
                             const ulong expected_posterior)
@@ -4370,7 +4451,8 @@ bool OMPBStage02ReloadSmoke(const ulong expected_market, const ulong expected_ta
                                            expected_market, expected_target, expected_posterior));
   }
 //+------------------------------------------------------------------+
-//| Cleans temporary tuples only after deterministic canonical reload.|
+//| Cleans temporary tuples only after deterministic canonical       |
+//| reload.                                                          |
 //+------------------------------------------------------------------+
 bool OMPBStage02FinalizeSteadySelector(void)
   {
@@ -4428,31 +4510,78 @@ bool OMPBStage02SaveAcceptedCheckpoint(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Runs one frozen-graph OMPB update.  CNet owns full gradient      |
-//| propagation but has parameter writes disabled; the explicit      |
-//| OMPB call below is therefore the only update in Stage 02.        |
+//|     Runs one frozen-graph OMPB update. CNet owns full gradient   |
+//| propagation but has parameter writes disabled; the explicit OMPB |
+//|     call below is therefore the only update in Stage 02.         |
 //+------------------------------------------------------------------+
 bool OMPBStage02RunBatch(const int position, const bool source_anchor)
   {
    CNeuronOMPBOCL *ompb = GetOMPB();
    CNeuronBaseOCL *rank_tcm = GetRankTCM();
-   if(!ompb || !rank_tcm || !ConfigureOMPB(OMPB_CALIBRATE) ||
-      !ompb.SetSourceAnchor(source_anchor))
-      ReturnFalse;
+   if(!ompb || !rank_tcm)
+      ReturnFalseEx("Stage 02 batch layers are null");
+   if(!ConfigureOMPB(OMPB_CALIBRATE))
+      ReturnFalseEx("Stage 02 batch configuration");
+   if(!ompb.SetSourceAnchor(source_anchor))
+      ReturnFalseEx("Stage 02 source-anchor setup");
    ompb.TrainMode(true);
+//--- Target batches publish Current only after the complete update succeeds.
+   if(!source_anchor && !ompb.BeginCurrentTransaction())
+      ReturnFalseEx("Stage 02 Current transaction begin");
    if(!D2SkillTrainBatch(position))
-      ReturnFalse;
+     {
+      if(source_anchor)
+        {
+         if(!ompb.SetSourceAnchor(false))
+            ReturnFalseEx("Stage 02 source-anchor cleanup after training failure");
+        }
+      else
+        {
+         if(!ompb.RollbackCurrentTransaction())
+            ReturnFalseEx("Stage 02 Current rollback after training failure");
+        }
+      ReturnFalseEx("Stage 02 batch training");
+     }
 //--- A source anchor has already created its mean Forecast gradient.  Its
 //--- forward/backward phase must retain the anchor flag so Current and both
 //--- regularizers remain untouched.  Clear only the update guard afterwards
 //--- to apply that already-computed mean posterior gradient.
-   if(source_anchor && !ompb.SetSourceAnchor(false))
-      ReturnFalse;
-   return(ompb.UpdateInputWeights(rank_tcm));
+   if(source_anchor)
+     {
+      const bool accepted = ompb.ForwardAccepted();
+      if(!ompb.SetSourceAnchor(false))
+         ReturnFalseEx("Stage 02 source-anchor cleanup");
+      if(!accepted)
+         ReturnFalseEx("Stage 02 source-anchor forward rejected");
+      if(!ompb.UpdateInputWeights(rank_tcm))
+         ReturnFalseEx("Stage 02 source-anchor update");
+      return(true);
+     }
+//--- A fallback output cannot update weights or advance Current accounting.
+   if(!ompb.ForwardAccepted())
+     {
+      if(!ompb.RollbackCurrentTransaction())
+         ReturnFalseEx("Stage 02 Current rollback after rejected forward");
+      ReturnFalseEx("Stage 02 target forward rejected");
+     }
+   if(!ompb.UpdateInputWeights(rank_tcm))
+     {
+      if(!ompb.RollbackCurrentTransaction())
+         ReturnFalseEx("Stage 02 Current rollback after update failure");
+      ReturnFalseEx("Stage 02 target update");
+     }
+   if(!ompb.CommitCurrentTransaction())
+     {
+      if(!ompb.RollbackCurrentTransaction())
+         ReturnFalseEx("Stage 02 Current rollback after commit failure");
+      ReturnFalseEx("Stage 02 Current transaction commit");
+     }
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| Stage 02 online calibration.  The outer network stays frozen;   |
-//| only the OMPB posterior and alpha receive explicit updates.      |
+//| Stage 02 online calibration. The outer network stays frozen;     |
+//| only                                                             |
+//|  the OMPB posterior and alpha receive explicit updates.          |
 //+------------------------------------------------------------------+
 bool OMPBStage02CalibrateEpoch(void)
   {
@@ -4472,14 +4601,25 @@ bool OMPBStage02CalibrateEpoch(void)
    uint target_attempts = 0;
    uint target_updates = 0;
    uint target_invalid = 0;
+   uint target_fallbacks_epoch = 0;
+   uint target_kl_rejects_epoch = 0;
    uint source_attempts = 0;
    uint source_updates = 0;
    uint source_invalid = 0;
+   uint source_fallbacks_epoch = 0;
+   uint source_kl_rejects_epoch = 0;
+   uint target_metric_count = 0;
+   double target_kl_sum = 0.0;
+   double target_disagreement_sum = 0.0;
+   double target_alpha_prior_sum = 0.0;
+   double target_kl_max = 0.0;
+   double target_disagreement_max = 0.0;
+   double target_alpha_prior_max = 0.0;
    const uint source_rows = uint(OMPBStage02ReferenceFirst - OMPBStage02ReferenceLast + 1);
    const uint target_rows = uint(OMPBStage02TargetCalibrationFirst -
                                  OMPBStage02TargetCalibrationLast + 1);
    const uint target_quota = OMPBStage02ProgressQuota(target_rows, 0, OMPBStage02Smoke,
-                                                       OMPBStage02SmokeLimit);
+                             OMPBStage02SmokeLimit);
    if(source_rows == 0)
      {
       Print("OMPB_STAGE02_CALIBRATION_FAIL reason=source_rows");
@@ -4492,48 +4632,104 @@ bool OMPBStage02CalibrateEpoch(void)
        position >= OMPBStage02TargetCalibrationLast && !IsStopped(); position--)
      {
       target_attempts++;
-      if(!OMPBStage02RunBatch(position, false))
+      uint target_reference_before, target_current_before;
+      uint target_invalid_fallbacks_before, target_kl_rejects_before;
+      float target_disagreement_before, target_kl_before, target_alpha_prior_before;
+      if(!ReadOMPBDiagnostics(target_reference_before, target_current_before,
+                              target_disagreement_before, target_kl_before,
+                              target_alpha_prior_before, target_invalid_fallbacks_before,
+                              target_kl_rejects_before))
+        {
+         Print("OMPB_STAGE02_CALIBRATION_FAIL reason=target_diagnostics_before");
+         ReturnFalse;
+        }
+      const bool target_committed = OMPBStage02RunBatch(position, false);
+      uint target_reference_after, target_current_after;
+      uint target_invalid_fallbacks_after, target_kl_rejects_after;
+      float target_disagreement_preupdate, target_kl_preupdate, target_alpha_prior_preupdate;
+      if(!ReadOMPBDiagnostics(target_reference_after, target_current_after,
+                              target_disagreement_preupdate, target_kl_preupdate,
+                              target_alpha_prior_preupdate, target_invalid_fallbacks_after,
+                              target_kl_rejects_after) ||
+         target_invalid_fallbacks_after < target_invalid_fallbacks_before ||
+         target_kl_rejects_after < target_kl_rejects_before)
+        {
+         PrintFormat("OMPB_STAGE02_CALIBRATION_FAIL reason=target_diagnostics_after position=%d", position);
+         ReturnFalse;
+        }
+      target_fallbacks_epoch += target_invalid_fallbacks_after - target_invalid_fallbacks_before;
+      target_kl_rejects_epoch += target_kl_rejects_after - target_kl_rejects_before;
+      if(!target_committed)
         {
          target_invalid++;
         }
       else
         {
-         uint reference_count, current_count, invalid_fallbacks, kl_rejects;
-         float disagreement, kl, alpha_prior;
-         if(!ReadOMPBDiagnostics(reference_count, current_count, disagreement, kl,
-                                 alpha_prior, invalid_fallbacks, kl_rejects) ||
-            !OMPBStage02Finite(disagreement) || !OMPBStage02Finite(kl) ||
-            !OMPBStage02Finite(alpha_prior))
+         if(!OMPBStage02Finite(target_disagreement_preupdate) ||
+            !OMPBStage02Finite(target_kl_preupdate) ||
+            !OMPBStage02Finite(target_alpha_prior_preupdate))
            {
             PrintFormat("OMPB_STAGE02_CALIBRATION_FAIL reason=target_diagnostics position=%d", position);
             ReturnFalse;
            }
+         if(target_metric_count == 0)
+           {
+            target_kl_max = double(target_kl_preupdate);
+            target_disagreement_max = double(target_disagreement_preupdate);
+            target_alpha_prior_max = double(target_alpha_prior_preupdate);
+            PrintFormat("OMPB_STAGE02_INITIAL_KL epoch=%u value=%.9g", ExtOMPBCalibrationEpoch,
+                        double(target_kl_preupdate));
+           }
+         target_kl_sum += double(target_kl_preupdate);
+         target_disagreement_sum += double(target_disagreement_preupdate);
+         target_alpha_prior_sum += double(target_alpha_prior_preupdate);
+         target_kl_max = MathMax(target_kl_max, double(target_kl_preupdate));
+         target_disagreement_max = MathMax(target_disagreement_max, double(target_disagreement_preupdate));
+         target_alpha_prior_max = MathMax(target_alpha_prior_max, double(target_alpha_prior_preupdate));
+         target_metric_count++;
          target_updates++;
          if(OMPBStage02SourcePeriod > 0 && target_updates % OMPBStage02SourcePeriod == 0)
            {
             const int source_position = OMPBStage02ReferenceFirst - int(source_updates % source_rows);
-            uint reference_before, current_before, invalid_before, kl_rejects_before;
-            float disagreement_before, kl_before, alpha_before;
-            if(!ReadOMPBDiagnostics(reference_before, current_before, disagreement_before, kl_before,
-                                    alpha_before, invalid_before, kl_rejects_before))
+            uint source_reference_before, source_current_before;
+            uint source_invalid_fallbacks_before, source_kl_rejects_before;
+            float source_disagreement_before, source_kl_before, source_alpha_prior_before;
+            if(!ReadOMPBDiagnostics(source_reference_before, source_current_before,
+                                    source_disagreement_before, source_kl_before,
+                                    source_alpha_prior_before, source_invalid_fallbacks_before,
+                                    source_kl_rejects_before))
               {
                Print("OMPB_STAGE02_CALIBRATION_FAIL reason=anchor_diagnostics_before");
                ReturnFalse;
               }
             source_attempts++;
-            if(!OMPBStage02RunBatch(source_position, true))
+            const bool source_committed = OMPBStage02RunBatch(source_position, true);
+            uint source_reference_after, source_current_after;
+            uint source_invalid_fallbacks_after, source_kl_rejects_after;
+            float source_disagreement_after, source_kl_after, source_alpha_prior_after;
+            if(!ReadOMPBDiagnostics(source_reference_after, source_current_after,
+                                    source_disagreement_after, source_kl_after,
+                                    source_alpha_prior_after, source_invalid_fallbacks_after,
+                                    source_kl_rejects_after) ||
+               source_invalid_fallbacks_after < source_invalid_fallbacks_before ||
+               source_kl_rejects_after < source_kl_rejects_before)
+              {
+               PrintFormat("OMPB_STAGE02_CALIBRATION_FAIL reason=anchor_diagnostics_after position=%d", source_position);
+               ReturnFalse;
+              }
+            source_fallbacks_epoch += source_invalid_fallbacks_after - source_invalid_fallbacks_before;
+            source_kl_rejects_epoch += source_kl_rejects_after - source_kl_rejects_before;
+            if(!source_committed)
               {
                source_invalid++;
               }
             else
               {
-               uint reference_after, current_after, invalid_after, kl_rejects_after;
-               float disagreement_after, kl_after, alpha_after;
-               if(!ReadOMPBDiagnostics(reference_after, current_after, disagreement_after, kl_after,
-                                       alpha_after, invalid_after, kl_rejects_after) ||
-                  current_after != current_before || reference_after != reference_before ||
-                  !OMPBStage02Finite(disagreement_after) || !OMPBStage02Finite(kl_after) ||
-                  !OMPBStage02Finite(alpha_after))
+               if(source_current_after != source_current_before ||
+                  source_reference_after != source_reference_before ||
+                  !OMPBStage02Finite(source_disagreement_after) ||
+                  !OMPBStage02Finite(source_kl_after) ||
+                  !OMPBStage02Finite(source_alpha_prior_after))
                  {
                   PrintFormat("OMPB_STAGE02_CALIBRATION_FAIL reason=anchor_contract position=%d", source_position);
                   ReturnFalse;
@@ -4548,9 +4744,18 @@ bool OMPBStage02CalibrateEpoch(void)
       if(OMPBStage02Smoke && target_attempts >= OMPBStage02SmokeLimit)
          break;
      }
+//--- A stopped epoch is terminal and cannot be reported as calibration failure.
+   if(IsStopped())
+     {
+      OMPBStage02ShowProgress("calibration", target_attempts, target_quota, target_attempts,
+                              target_invalid, true, false, true, true, source_updates,
+                              source_attempts, source_invalid,
+                              StringFormat("target_updates=%u result=stopped", target_updates));
+      return(false);
+     }
    double lmix, router, trajectory, confidence, latent, observation;
    double valid, invalid, entropy, distance, inactive, recovered;
-   if(IsStopped() || target_attempts < target_quota || target_updates == 0 ||
+   if(target_attempts < target_quota || target_updates == 0 || target_metric_count == 0 ||
       !D2SkillForecast.BuildEpochCodebookDiagnostics() ||
       !D2SkillForecast.ReadEpochDiagnostics(lmix, router, trajectory, confidence, latent,
             observation, valid, invalid, entropy, distance,
@@ -4573,13 +4778,20 @@ bool OMPBStage02CalibrateEpoch(void)
                "source_attempts=%u source_updates=%u source_invalid=%u loss=%.9f reference=%u current=%u smoke=%s",
                target_attempts, target_updates, target_invalid, source_attempts, source_updates,
                source_invalid, lmix / valid, ompb.ReferenceCount(), ompb.CurrentCount(),
-                (OMPBStage02Smoke ? "true" : "false"));
-   PrintFormat("OMPB_STAGE02_EPOCH_PASS epoch=%u epochs=%u loss=%.9f " +
-               "kl_last=%.9g disagreement_last=%.9g alpha_prior_loss_last=%.9g " +
-               "invalid_fallbacks=%u kl_rejects=%u",
+               (OMPBStage02Smoke ? "true" : "false"));
+   PrintFormat("OMPB_STAGE02_EPOCH_PASS epoch=%u epochs=%u loss_all_calls=%.9f " +
+               "target_kl_preupdate_mean=%.9g target_kl_preupdate_max=%.9g " +
+               "target_disagreement_preupdate_mean=%.9g target_disagreement_preupdate_max=%.9g " +
+               "target_alpha_prior_preupdate_mean=%.9g target_alpha_prior_preupdate_max=%.9g " +
+               "target_failed_batches=%u source_failed_batches=%u " +
+               "target_fallbacks_epoch=%u source_fallbacks_epoch=%u " +
+               "target_kl_rejects_epoch=%u source_kl_rejects_epoch=%u source_updates=%u",
                ExtOMPBCalibrationEpoch, ExtOMPBCalibrationEpochs, lmix / valid,
-               ompb.LastKL(), ompb.LastDisagreement(), ompb.LastAlphaPrior(),
-               ompb.InvalidFallbacks(), ompb.KLRejects());
+               target_kl_sum / double(target_metric_count), target_kl_max,
+               target_disagreement_sum / double(target_metric_count), target_disagreement_max,
+               target_alpha_prior_sum / double(target_metric_count), target_alpha_prior_max,
+               target_invalid, source_invalid, target_fallbacks_epoch, source_fallbacks_epoch,
+               target_kl_rejects_epoch, source_kl_rejects_epoch, source_updates);
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -4596,14 +4808,16 @@ bool OMPBStage02Calibrate(void)
       PrintFormat("OMPB_STAGE02_EPOCH_BEGIN epoch=%u epochs=%u",
                   ExtOMPBCalibrationEpoch, ExtOMPBCalibrationEpochs);
       OMPBStage02ShowProgress("epoch setup", 0, 1, 0, 0, false, false, false, false,
-                             0, 0, 0, StringFormat("epoch=%u/%u", ExtOMPBCalibrationEpoch,
-                                                   ExtOMPBCalibrationEpochs));
+                              0, 0, 0, StringFormat("epoch=%u/%u", ExtOMPBCalibrationEpoch,
+                                    ExtOMPBCalibrationEpochs));
       if(!OMPBStage02CalibrateEpoch())
          return(false);
      }
 //--- Only a complete run may proceed to held-out evaluation and publication.
    return(!IsStopped() && ExtOMPBCalibrationEpoch == ExtOMPBCalibrationEpochs);
   }
+//+------------------------------------------------------------------+
+//| Implements CreateOMPBStage02ReferenceStudy.                      |
 //+------------------------------------------------------------------+
 bool CreateOMPBStage02ReferenceStudy(const datetime reference_start, const datetime reference_end,
                                      const datetime calibration_start, const datetime calibration_end,
@@ -4617,6 +4831,8 @@ bool CreateOMPBStage02ReferenceStudy(const datetime reference_start, const datet
       ReturnFalseEx("calibration epochs is zero");
    ExtOMPBCalibrationEpochs = (smoke ? 1 : calibration_epochs);
    ExtOMPBCalibrationEpoch = 0;
+   OMPBStage02SignaturesCaptured = false;
+   OMPBStage02StopReported = false;
    PrintFormat("OMPB_STAGE02_EPOCH_CONFIG requested=%u effective=%u smoke=%s",
                calibration_epochs, ExtOMPBCalibrationEpochs, (smoke ? "true" : "false"));
    ResetLastError();
@@ -4637,7 +4853,8 @@ bool CreateOMPBStage02ReferenceStudy(const datetime reference_start, const datet
       rank_tcm.Type() != defNeuronCogDriverRankTCM || ompb_layer.Type() != defNeuronOMPBOCL ||
       forecast_layer.Type() != defNeuronScenarioForecast || !GetOMPB() ||
       !D2SkillValidateShapes() || !D2SkillInitIndicators() ||
-      !D2SkillMarket.SetWeightsUpdate(false) || !D2SkillTarget.SetWeightsUpdate(false))
+      !D2SkillMarket.SetWeightsUpdate(false) || !D2SkillTarget.SetWeightsUpdate(false) ||
+      !D2SkillForecast.SetGradientNormalization(true))
      {
       Print("OMPB_STAGE02_PREFLIGHT_FAIL reason=loaded_contract");
       ReturnFalse;
@@ -4660,12 +4877,16 @@ bool CreateOMPBStage02ReferenceStudy(const datetime reference_start, const datet
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Implements RunOMPBStage02ReferenceStudy.                         |
+//+------------------------------------------------------------------+
 void RunOMPBStage02ReferenceStudy(void)
   {
    OMPBStage02ShowProgress("preparing", 0, 1, 0, 0, false, false, false, false,
                            0, 0, 0, "");
    if(!D2SkillReady || !OMPBStage02PrepareData() || !OMPBStage02CollectReference())
      {
+      if(OMPBStage02StopHandled("reference"))
+         return;
       OMPBStage02ShowProgress("preparing", 0, 1, 0, 0, true, false, false, false,
                               0, 0, 0,
                               "result=failed");
@@ -4689,22 +4910,70 @@ void RunOMPBStage02ReferenceStudy(void)
    const bool source_ok = OMPBStage02Baseline(OMPBStage02SourceEvalFirst,
                           OMPBStage02SourceEvalLast, "source_eval",
                           source_loss, source_valid, source_invalid);
+   if(OMPBStage02StopHandled("baseline_source"))
+      return;
    const bool target_ok = (source_ok &&
                            OMPBStage02Baseline(OMPBStage02TargetEvalFirst,
                                  OMPBStage02TargetEvalLast, "target_eval",
                                  target_loss, target_valid, target_invalid));
+   if(OMPBStage02StopHandled("baseline_target"))
+      return;
    bool calibration_ok = false;
    bool evaluation_ok = false;
    bool acceptance_ok = false;
    bool checkpoint_saved = false;
-   double source_inference_loss = 0.0, target_inference_loss = 0.0;
-   uint source_inference_valid = 0, source_inference_invalid = 0;
-   uint target_inference_valid = 0, target_inference_invalid = 0;
+    double pre_source_inference_loss = 0.0, pre_target_inference_loss = 0.0;
+    uint pre_source_inference_valid = 0, pre_source_inference_invalid = 0;
+    uint pre_target_inference_valid = 0, pre_target_inference_invalid = 0;
+    double post_source_inference_loss = 0.0, post_target_inference_loss = 0.0;
+    uint post_source_inference_valid = 0, post_source_inference_invalid = 0;
+    uint post_target_inference_valid = 0, post_target_inference_invalid = 0;
    if(target_ok && D2SkillVerifyFrozenForecastExact() && OMPBStage02CaptureSignatures())
      {
       PrintFormat("OMPB_STAGE02_REFERENCE_READY source_loss=%.9f target_loss=%.9f source_valid=%u target_valid=%u",
                   source_loss, target_loss, source_valid, target_valid);
-      calibration_ok = OMPBStage02Calibrate();
+      const bool pre_source_ok =
+         (ConfigureOMPB(OMPB_INFERENCE) &&
+          OMPBStage02InferenceEvaluation(OMPBStage02SourceEvalFirst, OMPBStage02SourceEvalLast,
+                                           "pre_source_inference", pre_source_inference_loss,
+                                           pre_source_inference_valid, pre_source_inference_invalid));
+      if(OMPBStage02StopHandled("pre_inference_source"))
+         return;
+      const bool pre_target_ok =
+         (pre_source_ok && ConfigureOMPB(OMPB_INFERENCE) &&
+          OMPBStage02InferenceEvaluation(OMPBStage02TargetEvalFirst, OMPBStage02TargetEvalLast,
+                                          "pre_target_inference", pre_target_inference_loss,
+                                          pre_target_inference_valid, pre_target_inference_invalid));
+      if(OMPBStage02StopHandled("pre_inference_target"))
+         return;
+      const bool pre_signatures_ok = OMPBStage02VerifyPreCalibrationSignatures();
+      const bool pre_inference_ok = (pre_source_ok && pre_target_ok && pre_signatures_ok);
+      PrintFormat("OMPB_STAGE02_PREUPDATE_INFERENCE mode=inference source_loss=%.9f " +
+                  "target_loss=%.9f source_valid=%u source_invalid=%u target_valid=%u " +
+                  "target_invalid=%u signatures_unchanged=%s status=%s",
+                   pre_source_inference_loss, pre_target_inference_loss, pre_source_inference_valid,
+                   pre_source_inference_invalid, pre_target_inference_valid, pre_target_inference_invalid,
+                  (pre_signatures_ok ? "true" : "false"),
+                  (pre_inference_ok ? "pass" : "fail"));
+      if(pre_inference_ok && D2SkillForecast.SetGradientNormalization(false))
+        {
+         Print("OMPB_STAGE02_GRADIENT_MODE mode=raw_forecast");
+         calibration_ok = OMPBStage02Calibrate();
+         if(OMPBStage02StopHandled("calibration"))
+            return;
+        }
+      else
+        {
+         if(!pre_inference_ok)
+            Print("OMPB_STAGE02_CALIBRATION_FAIL reason=preupdate_inference");
+         else
+            Print("OMPB_STAGE02_CALIBRATION_FAIL reason=gradient_mode");
+        }
+      if(!D2SkillForecast.SetGradientNormalization(true))
+        {
+         Print("OMPB_STAGE02_CALIBRATION_FAIL reason=gradient_mode_restore");
+         calibration_ok = false;
+        }
      }
    else
       Print("OMPB_STAGE02_REFERENCE_FAIL reason=baseline_frozen_or_signatures");
@@ -4715,18 +4984,63 @@ void RunOMPBStage02ReferenceStudy(void)
      {
       const bool source_inference_ok =
          OMPBStage02InferenceEvaluation(OMPBStage02SourceEvalFirst, OMPBStage02SourceEvalLast,
-                                        "source_inference", source_inference_loss,
-                                        source_inference_valid, source_inference_invalid);
+                                         "source_inference", post_source_inference_loss,
+                                         post_source_inference_valid, post_source_inference_invalid);
+      if(OMPBStage02StopHandled("post_inference_source"))
+         return;
       const bool target_inference_ok =
          (source_inference_ok &&
           OMPBStage02InferenceEvaluation(OMPBStage02TargetEvalFirst, OMPBStage02TargetEvalLast,
-                                         "target_inference", target_inference_loss,
-                                         target_inference_valid, target_inference_invalid));
-      evaluation_ok = (target_inference_ok && OMPBStage02VerifySignatures());
-      if(evaluation_ok)
-         acceptance_ok = OMPBStage02Accept(source_loss, target_loss, source_inference_loss,
-                                           target_inference_loss, source_inference_valid,
-                                           target_inference_valid);
+                                          "target_inference", post_target_inference_loss,
+                                          post_target_inference_valid, post_target_inference_invalid));
+      if(OMPBStage02StopHandled("post_inference_target"))
+         return;
+       evaluation_ok = (target_inference_ok && OMPBStage02VerifySignatures());
+       if(evaluation_ok)
+         {
+          const double continuation_source_denominator = MathAbs(pre_source_inference_loss);
+          const double continuation_target_denominator = MathAbs(pre_target_inference_loss);
+          const bool continuation_finite =
+             (OMPBStage02Finite(pre_source_inference_loss) &&
+              OMPBStage02Finite(pre_target_inference_loss) &&
+              OMPBStage02Finite(post_source_inference_loss) &&
+              OMPBStage02Finite(post_target_inference_loss) &&
+              continuation_source_denominator > 0.0 && continuation_target_denominator > 0.0);
+          const double continuation_target_improvement =
+             (continuation_finite ?
+              (pre_target_inference_loss - post_target_inference_loss) /
+              continuation_target_denominator : 0.0);
+          const double continuation_source_degradation =
+             (continuation_finite ?
+              (post_source_inference_loss - pre_source_inference_loss) /
+              continuation_source_denominator : 0.0);
+          const bool continuation_status =
+             (continuation_finite && pre_source_inference_valid > 0 &&
+              pre_target_inference_valid > 0 && post_source_inference_valid > 0 &&
+              post_target_inference_valid > 0);
+          PrintFormat("OMPB_STAGE02_CONTINUATION target_improvement=%.8f " +
+                      "source_degradation=%.8f pre_source_loss=%.9f " +
+                      "post_source_loss=%.9f pre_target_loss=%.9f " +
+                      "post_target_loss=%.9f pre_source_valid=%u " +
+                      "pre_source_invalid=%u post_source_valid=%u " +
+                      "post_source_invalid=%u pre_target_valid=%u " +
+                      "pre_target_invalid=%u post_target_valid=%u " +
+                      "post_target_invalid=%u finite=%s status=%s",
+                      continuation_target_improvement, continuation_source_degradation,
+                      pre_source_inference_loss, post_source_inference_loss,
+                      pre_target_inference_loss, post_target_inference_loss,
+                      pre_source_inference_valid, pre_source_inference_invalid,
+                      post_source_inference_valid, post_source_inference_invalid,
+                      pre_target_inference_valid, pre_target_inference_invalid,
+                      post_target_inference_valid, post_target_inference_invalid,
+                      (continuation_finite ? "true" : "false"),
+                      (continuation_status ? "pass" : "fail"));
+          acceptance_ok = OMPBStage02Accept(source_loss, target_loss,
+                                            post_source_inference_loss,
+                                            post_target_inference_loss,
+                                            post_source_inference_valid,
+                                            post_target_inference_valid);
+         }
       else
          Print("OMPB_STAGE02_ACCEPTANCE_FAIL reason=evaluation_or_signatures");
      }
@@ -4741,14 +5055,14 @@ void RunOMPBStage02ReferenceStudy(void)
    else
      {
       ompb.TrainMode(false);
-//--- Quality acceptance is diagnostic; unchanged frozen parameters remain mandatory.
+      //--- Quality acceptance is diagnostic; unchanged frozen parameters remain mandatory.
       const bool checkpoint_integrity = OMPBStage02VerifySignatures();
       OMPBStage02ShowProgress("saving", 0, 1, 0, 0, false, false, false, false,
                               0, 0, 0,
                               StringFormat("accepted=%s smoke=%s",
                                            (acceptance_ok ? "true" : "false"),
                                            (OMPBStage02Smoke ? "true" : "false")));
-      if(checkpoint_integrity && !OMPBStage02Smoke)
+      if(calibration_ok && checkpoint_integrity && !OMPBStage02Smoke && !IsStopped())
          checkpoint_saved = OMPBStage02SaveAcceptedCheckpoint();
       else
          if(OMPBStage02Smoke)
@@ -4777,7 +5091,7 @@ void RunOMPBStage02ReferenceStudy(void)
    D2SkillTarget.TrainMode(false);
    const uint final_rows = uint(OMPBStage02TargetEvalFirst - OMPBStage02TargetEvalLast + 1);
    const uint final_quota = OMPBStage02ProgressQuota(final_rows, 0, OMPBStage02Smoke,
-                                                      OMPBStage02SmokeLimit);
+                            OMPBStage02SmokeLimit);
    string final_detail = StringFormat("source_degradation=n/a target_improvement=n/a accepted=%s saved=%s",
                                       (acceptance_ok ? "true" : "false"),
                                       (checkpoint_saved ? "true" : "false"));
@@ -4785,28 +5099,28 @@ void RunOMPBStage02ReferenceStudy(void)
      {
       const double source_denominator = MathMax(MathAbs(source_loss), 1.0e-12);
       const double target_denominator = MathMax(MathAbs(target_loss), 1.0e-12);
-      const double source_degradation = (source_inference_loss - source_loss) /
-                                        source_denominator;
-      const double target_improvement = (target_loss - target_inference_loss) /
-                                        target_denominator;
+       const double source_degradation = (post_source_inference_loss - source_loss) /
+                                         source_denominator;
+       const double target_improvement = (target_loss - post_target_inference_loss) /
+                                         target_denominator;
       final_detail = StringFormat("source_degradation=%.2f%% target_improvement=%.2f%% accepted=%s saved=%s",
                                   100.0 * source_degradation, 100.0 * target_improvement,
                                   (acceptance_ok ? "true" : "false"),
                                   (checkpoint_saved ? "true" : "false"));
      }
-   const uint final_done = (OMPBStage02Smoke ? target_inference_valid :
-                           target_inference_valid + target_inference_invalid);
-   OMPBStage02ShowProgress("final", final_done, final_quota,
-                           target_inference_valid + target_inference_invalid,
-                           target_inference_invalid, true, finalized && calibration_ok && evaluation_ok,
-                           false, false, source_inference_valid,
-                           source_inference_valid + source_inference_invalid,
-                           source_inference_invalid,
+    const uint final_done = (OMPBStage02Smoke ? post_target_inference_valid :
+                             post_target_inference_valid + post_target_inference_invalid);
+    OMPBStage02ShowProgress("final", final_done, final_quota,
+                            post_target_inference_valid + post_target_inference_invalid,
+                            post_target_inference_invalid, true, finalized && calibration_ok && evaluation_ok,
+                            false, false, post_source_inference_valid,
+                            post_source_inference_valid + post_source_inference_invalid,
+                            post_source_inference_invalid,
                            final_detail);
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| Creates or initializes D2SkillForecastStudy.                       |
+//| Creates or initializes D2SkillForecastStudy.                     |
 //+------------------------------------------------------------------+
 bool CreateD2SkillForecastStudy(void)
   {
@@ -4818,9 +5132,7 @@ bool CreateD2SkillForecastStudy(void)
 //--- Only a clean initial checkpoint miss falls back to a new randomized graph.
 //--- Partial, incompatible and transaction states remain fail-closed.
    bool resumed = D2SkillLoadForecastTraining();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!resumed)
      {
       if(OMPBStage02RecoveryFailed)
@@ -4832,18 +5144,14 @@ bool CreateD2SkillForecastStudy(void)
       D2SkillForecast = NULL;
       PrintFormat("%s init: forecast restore=FAIL error=%d; creating new random model", OMPB_LOG_PREFIX, load_error);
       ResetLastError();
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(!D2SkillCreateNetworks())
         {
          PrintFormat("%s init: forecast create=FAIL error=%d", OMPB_LOG_PREFIX, GetLastError());
          ReturnFalse;
         }
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillValidateShapes())
      {
       PrintFormat("%s init: shapes=FAIL", OMPB_LOG_PREFIX);
@@ -4863,9 +5171,7 @@ bool CreateD2SkillForecastStudy(void)
    PrintFormat("%s init: forecast=%s completed_epochs=%u batches=%I64u invalid=%I64u", OMPB_LOG_PREFIX,
                (resumed ? "RESUMED" : "NEW"), D2SkillCompletedEpochs, D2SkillBatches, D2SkillInvalidBatches);
    D2SkillReady = true;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!EventChartCustom(ChartID(), 1, 0, 0, "Init"))
      {
       PrintFormat("%s init: chart event=FAIL error=%d", OMPB_LOG_PREFIX, GetLastError());
@@ -4874,7 +5180,7 @@ bool CreateD2SkillForecastStudy(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements ReleaseD2SkillForecastStudy.                            |
+//| Implements ReleaseD2SkillForecastStudy.                          |
 //+------------------------------------------------------------------+
 void ReleaseD2SkillForecastStudy(const int reason)
   {
@@ -4884,7 +5190,7 @@ void ReleaseD2SkillForecastStudy(const int reason)
    D2SkillReady = false;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillPrepareLatentTarget.                             |
+//| Implements D2SkillPrepareLatentTarget.                           |
 //+------------------------------------------------------------------+
 bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
   {
@@ -4927,7 +5233,7 @@ bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillProbeNet.                                        |
+//| Implements D2SkillProbeNet.                                      |
 //+------------------------------------------------------------------+
 bool D2SkillProbeNet(CNet &net, CBufferFloat *probe_state, double &latent[], const bool restore_training)
   {
@@ -4965,7 +5271,7 @@ bool D2SkillProbeNet(CNet &net, CBufferFloat *probe_state, double &latent[], con
    return(result && cleared && restored);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillProbeDrift.                                      |
+//| Implements D2SkillProbeDrift.                                    |
 //+------------------------------------------------------------------+
 double D2SkillProbeDrift(const double &before[], const double &after[])
   {
@@ -5036,7 +5342,7 @@ bool D2SkillCollectRecoverySmoke(ulong &hits[], double &responsibility_sum[], do
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillLogRecoverySmoke.                              |
 //+------------------------------------------------------------------+
 bool D2SkillLogRecoverySmoke(const ulong &hits[], const double &responsibility_sum[],
                              const double &scale_sum[], const double &absolute_sum[],
@@ -5080,7 +5386,7 @@ bool D2SkillLogRecoverySmoke(const ulong &hits[], const double &responsibility_s
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillTrainBatch.                                      |
+//| Implements D2SkillTrainBatch.                                    |
 //+------------------------------------------------------------------+
 bool D2SkillTrainBatch(const int position)
   {
@@ -5103,9 +5409,7 @@ bool D2SkillTrainBatch(const int position)
    if(!D2SkillPrepareLatentTarget(market_latent))
       ReturnFalse;
    const ulong responsibility_started = GetMicrosecondCount();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillForecast.BuildResponsibilities(GetPointer(D2SkillLatentTarget), GetPointer(D2SkillLatentDelta)))
      {
       //--- Commit only a completed device validation.  Infrastructure failures leave
@@ -5141,7 +5445,7 @@ void D2SkillShowForecastProgress(const double percent, const ulong failed_batche
                         OMPB_LOG_PREFIX, percent, failed_batches));
   }
 //+------------------------------------------------------------------+
-//| Implements TrainD2SkillForecast.                                   |
+//| Implements TrainD2SkillForecast.                                 |
 //+------------------------------------------------------------------+
 void TrainD2SkillForecast(void)
   {
@@ -5179,7 +5483,7 @@ void TrainD2SkillForecast(void)
 //--- every future target out of the diagnostic input.
    const int probe_position = MathMax(end - 1, 0);
    if(!CreateBuffers(probe_position + NForecast, GetPointer(D2SkillProbeState),
-// Gets Pointer.
+//--- Gets Pointer.
                      GetPointer(D2SkillProbeTime), NULL))
      { PrintFormat("%s -> %d fixed probe unavailable", __FUNCTION__, __LINE__); return; }
    uint ticks = GetTickCount();
@@ -5201,7 +5505,7 @@ void TrainD2SkillForecast(void)
           ArrayResize(smoke_responsibility_sum, NScenarios) != NScenarios ||
           ArrayResize(smoke_scale_sum, NScenarios) != NScenarios ||
           ArrayResize(smoke_absolute_sum, NScenarios) != NScenarios ||
-          // All temporary smoke buffers must resize to NScenarios.
+          //--- All temporary smoke buffers must resize to NScenarios.
           ArrayResize(smoke_absolute_over_scale_sum, NScenarios) != NScenarios))
         { PrintFormat("%s -> %d smoke counter allocation failed", __FUNCTION__, __LINE__); break; }
       ArrayInitialize(smoke_hits, 0);
@@ -5233,16 +5537,12 @@ void TrainD2SkillForecast(void)
       D2SkillResponsibilityMicroseconds = 0;
       for(int position = start - HistoryBars - NForecast - 1; position >= end && !IsStopped() && !stop; position--)
         {
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(!D2SkillTrainBatch(position))
            {
             epoch_failures++;
             PrintFormat("%s invalid batch epoch=%d position=%d line=%d", OMPB_LOG_PREFIX, epoch, position, __LINE__);
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(GetTickCount() - ticks > 500)
               {
                const double percent = (double(pass) + 1.0 -
@@ -5254,9 +5554,7 @@ void TrainD2SkillForecast(void)
               }
             continue;
            }
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(D2SkillRecoverySmoke)
            {
             if(!D2SkillCollectRecoverySmoke(smoke_hits, smoke_responsibility_sum, smoke_scale_sum,
@@ -5266,9 +5564,7 @@ void TrainD2SkillForecast(void)
             if(smoke_batches >= smoke_limit)
                break;
            }
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(GetTickCount() - ticks > 500)
            {
             const double percent = (double(pass) + 1.0 -
@@ -5348,9 +5644,7 @@ void TrainD2SkillForecast(void)
       D2SkillCompletedEpochs = epoch + 1;
      }
    Comment("");
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!stop)
      {
       //--- Successful forecast stage is sealed for the later Actor-Critic stage.
@@ -5372,15 +5666,11 @@ string D2SkillManifestValue(const string file_name, const string key)
       return("");
    const string prefix = key + "=";
    string value = "";
-//+------------------------------------------------------------------+
-//| Function while.                                                  |
-//+------------------------------------------------------------------+
+//--- Function while.
    while(!FileIsEnding(handle))
      {
       const string line = FileReadString(handle);
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(StringFind(line, prefix) == 0)
         {
          value = StringSubstr(line, StringLen(prefix));
@@ -5391,7 +5681,8 @@ string D2SkillManifestValue(const string file_name, const string key)
    return(value);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateForecastManifestHeader. Static checkp... |
+//| Implements D2SkillValidateForecastManifestHeader. Static         |
+//| checkp...                                                        |
 //+------------------------------------------------------------------+
 bool D2SkillValidateForecastManifestHeader(void)
   {
@@ -5414,7 +5705,7 @@ bool D2SkillValidateForecastManifestHeader(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateForecastManifest.                        |
+//| Implements D2SkillValidateForecastManifest.                      |
 //+------------------------------------------------------------------+
 bool D2SkillValidateForecastManifest(const ulong signature, const bool training = false)
   {
@@ -5425,9 +5716,7 @@ bool D2SkillValidateForecastManifest(const ulong signature, const bool training 
 #define D2Skill_MANIFEST_EQ(KEY,VALUE) if(D2SkillManifestValue(D2SkillActiveManifestFile,KEY)!=(VALUE)) ReturnFalse
    D2Skill_MANIFEST_EQ("contract_signature", StringFormat("%I64u", D2SkillForecast.ContractSignature()));
    D2Skill_MANIFEST_EQ("forecast_signature", StringFormat("%I64u", signature));
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(training)
      {
       const ulong target_hash = D2SkillHashFile(ulong(1469598103934665603), D2SkillActiveTargetFile);
@@ -5444,14 +5733,14 @@ bool D2SkillValidateForecastManifest(const ulong signature, const bool training 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCaptureFrozenBuffer.                             |
+//| Implements D2SkillCaptureFrozenBuffer.                           |
 //+------------------------------------------------------------------+
 bool D2SkillCaptureFrozenBuffer(CBufferFloat *source, CBufferFloat &baseline)
   {
    return(source && source.BufferRead() && source.Total() > 0 && baseline.AssignArray(source));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillFrozenBufferEqual.                               |
+//| Implements D2SkillFrozenBufferEqual.                             |
 //+------------------------------------------------------------------+
 bool D2SkillFrozenBufferEqual(CBufferFloat *source, CBufferFloat &baseline)
   {
@@ -5463,7 +5752,7 @@ bool D2SkillFrozenBufferEqual(CBufferFloat *source, CBufferFloat &baseline)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCaptureFrozenForecastBaseline.                   |
+//| Implements D2SkillCaptureFrozenForecastBaseline.                 |
 //+------------------------------------------------------------------+
 bool D2SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -5492,7 +5781,7 @@ bool D2SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast = NU
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenWeightsExact.                        |
+//| Implements D2SkillVerifyFrozenWeightsExact.                      |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -5511,7 +5800,7 @@ bool D2SkillVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast = NULL)
            D2SkillFrozenBufferEqual(confidence, D2SkillFrozenConfidenceWeights));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenCodebookExact.                       |
+//| Implements D2SkillVerifyFrozenCodebookExact.                     |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast = NULL)
   {
@@ -5526,38 +5815,34 @@ bool D2SkillVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast = NULL)
            D2SkillFrozenBufferEqual(current.GetCodebook().GetInactivityAge(), D2SkillFrozenInactivityAge));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenForecastExact.                       |
+//| Implements D2SkillVerifyFrozenForecastExact.                     |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenForecastExact(CNeuronScenarioForecast *forecast = NULL)
   {
    return(D2SkillVerifyFrozenWeightsExact(forecast) && D2SkillVerifyFrozenCodebookExact(forecast));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadForecastInference.                           |
+//| Implements D2SkillLoadForecastInference.                         |
 //+------------------------------------------------------------------+
 bool D2SkillLoadForecastInference(void)
   {
    D2SkillFrozenBaselineReady = false;
    D2SkillForecast = NULL;
-   if(!OMPBStage02ResolveActiveCheckpoint())
+   if(!OMPBStage02ResolveActiveCheckpoint(false))
      {
       Print("OMPB checkpoint selector=FAIL before=inference_load");
       ReturnFalse;
      }
    float error = 0, undefine = 0, forecast = 0;
    datetime studied = 0;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillMarket.Load(D2SkillActiveMarketFile, error, undefine, forecast, studied, true))
      {
       PrintFormat("%s inference: model load=FAIL", OMPB_LOG_PREFIX);
       ReturnFalse;
      }
    D2SkillForecast = (CNeuronScenarioForecast*)D2SkillMarket.Layer(-1);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillForecast || D2SkillForecast.Type() != defNeuronScenarioForecast)
      {
       PrintFormat("%s inference: forecast layer=FAIL", OMPB_LOG_PREFIX);
@@ -5565,17 +5850,13 @@ bool D2SkillLoadForecastInference(void)
      }
    if(!ConfigureForecastRecoveryAge())
       ReturnFalse;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(D2SkillForecast.GetTopK() != TopK)
      {
       PrintFormat("%s inference: TopK expected=%d actual=%d", OMPB_LOG_PREFIX, TopK, D2SkillForecast.GetTopK());
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| only the Market/Forecast path. Target and its future-window b... |
-//+------------------------------------------------------------------+
+//--- only the Market/Forecast path. Target and its future-window b...
    if(!D2SkillValidateShapes(false))
      {
       PrintFormat("%s inference: shape audit=FAIL", OMPB_LOG_PREFIX);
@@ -5583,17 +5864,13 @@ bool D2SkillLoadForecastInference(void)
      }
    D2SkillMarket.TrainMode(false);
    const ulong signature = D2SkillForecastSignature();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillValidateForecastManifest(signature))
      {
       PrintFormat("%s inference: manifest=FAIL", OMPB_LOG_PREFIX);
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!D2SkillCaptureFrozenForecastBaseline())
      {
       PrintFormat("%s inference: frozen baseline=FAIL", OMPB_LOG_PREFIX);
@@ -5616,9 +5893,7 @@ bool D2SkillLoadForecastTraining(void)
       !FileIsExist(D2SkillActiveMarketFile, FILE_COMMON) ||
       !FileIsExist(D2SkillActiveTargetFile, FILE_COMMON))
       ReturnFalse;
-//+------------------------------------------------------------------+
-//| Avoid a partial CNet::Load before the fallback random graph i... |
-//+------------------------------------------------------------------+
+//--- Avoid a partial CNet::Load before the fallback random graph i...
    if(!D2SkillValidateForecastManifestHeader())
      {
       PrintFormat("%s restore: manifest static contract=FAIL", OMPB_LOG_PREFIX);
@@ -5715,7 +5990,7 @@ bool D2SkillValidateProductionOMPBCheckpoint(void)
       return(false);
      }
    const ulong signature = D2SkillForecastSignature();
-   const bool valid = (OMPBStage02ResolveActiveCheckpoint() &&
+   const bool valid = (OMPBStage02ResolveActiveCheckpoint(false) &&
                        !OMPBStage02RecoveryFailed &&
                        D2SkillActiveMarketFile == D2Skill_MARKET_FILE &&
                        D2SkillActiveTargetFile == D2Skill_TARGET_FILE &&
@@ -5737,7 +6012,8 @@ bool D2SkillValidateProductionOMPBCheckpoint(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Captures Market-base and OMPB parameter fingerprints for Stage 03.|
+//| Captures Market-base and OMPB parameter fingerprints for Stage   |
+//| 03.                                                              |
 //+------------------------------------------------------------------+
 bool D2SkillCaptureProductionOMPBFingerprints(void)
   {
@@ -5774,7 +6050,7 @@ bool D2SkillVerifyProductionOMPBFingerprints(void)
    return(unchanged);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillAddCross.                                        |
+//| Implements D2SkillAddCross.                                      |
 //+------------------------------------------------------------------+
 bool D2SkillAddCross(CArrayObj *description, const bool critic, const bool d2 = false)
   {
@@ -5798,7 +6074,7 @@ bool D2SkillAddCross(CArrayObj *description, const bool critic, const bool d2 = 
    ReturnFalse;
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillAddConv.                                       |
 //+------------------------------------------------------------------+
 bool D2SkillAddConv(CArrayObj *description, const uint count, const uint window, const uint output,
                     const uint variables, const ENUM_ACTIVATION activation)
@@ -5821,7 +6097,7 @@ bool D2SkillAddConv(CArrayObj *description, const uint count, const uint window,
    ReturnFalse;
   }
 //+------------------------------------------------------------------+
-//| Creates or initializes D2SkillActorCriticDescriptions.             |
+//| Creates or initializes D2SkillActorCriticDescriptions.           |
 //+------------------------------------------------------------------+
 bool CreateD2SkillActorCriticDescriptions(CArrayObj *&actor, CArrayObj *&critic)
   {
@@ -5852,7 +6128,7 @@ bool CreateD2SkillActorCriticDescriptions(CArrayObj *&actor, CArrayObj *&critic)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidatePolicyShape.                             |
+//| Implements D2SkillValidatePolicyShape.                           |
 //+------------------------------------------------------------------+
 bool D2SkillValidatePolicyShape(CNet &net, const bool critic)
   {
@@ -5882,7 +6158,7 @@ bool D2SkillValidatePolicyShape(CNet &net, const bool critic)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillForwardForecast.                                 |
+//| Implements D2SkillForwardForecast.                               |
 //+------------------------------------------------------------------+
 bool D2SkillForwardForecast(const int position, CBufferFloat *state, CBufferFloat *time)
   {
@@ -5936,9 +6212,7 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
   {
    reward = 0;
    if(!account || !action || position < 0 || position + HistoryBars + NForecast > int(Rates.Size()) ||
-//+------------------------------------------------------------------+
-//| Function Total.                                                  |
-//+------------------------------------------------------------------+
+//--- Function Total.
       account.Total() != AccountDescr)
      {
       PrintFormat("BuildTeacherAction input position=%d rates=%d account=%d action=%d",
@@ -5946,9 +6220,7 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
       ReturnFalse;
      }
    CBufferFloat teacher_state, teacher_time;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!CreateBuffers(position, GetPointer(teacher_state), GetPointer(teacher_time), GetPointer(D2SkillFuture)))
      {
       PrintFormat("BuildTeacherAction CreateBuffers position=%d future=%d index=%d",
@@ -5956,51 +6228,39 @@ bool BuildTeacherAction(const int position, CBufferFloat *account, CBufferFloat 
       ReturnFalse;
      }
    vector<float> account_values;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(account.GetData(account_values) != AccountDescr)
      {
       PrintFormat("BuildTeacherAction account data total=%d index=%d", account.Total(), account.GetIndex());
       ReturnFalse;
      }
    const vector<float> teacher = OraculAction(account_values, GetPointer(D2SkillFuture));
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(teacher.Size() != NActions)
      {
       PrintFormat("BuildTeacherAction oracle size=%d expected=%d", teacher.Size(), NActions);
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!action.AssignArray(teacher))
      {
       Print("BuildTeacherAction action AssignArray");
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(action.GetIndex() < 0 && !action.BufferCreate(D2SkillMarket.GetOpenCL()))
      {
       PrintFormat("BuildTeacherAction action BufferCreate total=%d index=%d", action.Total(), action.GetIndex());
       ReturnFalse;
      }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(action.GetIndex() >= 0 && !action.BufferWrite())
      {
       PrintFormat("BuildTeacherAction action BufferWrite total=%d index=%d", action.Total(), action.GetIndex());
       ReturnFalse;
      }
    reward = EvaluateAction(action, MathMax(0.0, double(account_values[0]) * EtalonBalance), (uint)position);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(!MathIsValidNumber(reward))
      {
       PrintFormat("BuildTeacherAction reward invalid %.8f", reward);
@@ -6054,7 +6314,7 @@ bool BuildRandomAction(const int position, CBufferFloat *account, CBufferFloat *
    return(MathIsValidNumber(reward));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillClampAction.                                     |
+//| Implements D2SkillClampAction.                                   |
 //+------------------------------------------------------------------+
 bool D2SkillClampAction(CBufferFloat *source, CBufferFloat *target)
   {
@@ -6069,44 +6329,339 @@ bool D2SkillClampAction(CBufferFloat *source, CBufferFloat *target)
    return(target.GetIndex() < 0 || target.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillWriteACManifest.                                 |
+//| Implements D2SkillACTupleNamesValid.                             |
 //+------------------------------------------------------------------+
-bool D2SkillWriteACManifest(const ulong forecast_signature)
+bool D2SkillACTupleNamesValid(const string actor_file, const string q1_file,
+                              const string q2_file, const string manifest_file)
   {
-   if(forecast_signature == 0 || forecast_signature != D2SkillLastSignature)
-      ReturnFalse;
-   const ulong actor_hash = D2SkillHashFile(ulong(1469598103934665603), D2Skill_ACTOR_FILE);
-   const ulong q1_hash = D2SkillHashFile(ulong(1469598103934665603), D2Skill_Q1_FILE);
-   const ulong q2_hash = D2SkillHashFile(ulong(1469598103934665603), D2Skill_Q2_FILE);
-   if(actor_hash == 0 || q1_hash == 0 || q2_hash == 0)
-      ReturnFalse;
-   int handle = FileOpen(D2Skill_AC_MANIFEST_FILE, FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
-   if(handle == INVALID_HANDLE)
-      ReturnFalse;
-   FileWrite(handle, "format=OMPB_ACTOR_CRITIC");
-   FileWrite(handle, StringFormat("version=%u", D2Skill_AC_FORMAT_VERSION));
-   FileWrite(handle, StringFormat("d2_representation=%u", D2SkillD2Representation));
-   FileWrite(handle, StringFormat("forecast_signature=%I64u", forecast_signature));
-   FileWrite(handle, StringFormat("actor_context=%u", (3 * EmbeddingSize)));
-   FileWrite(handle, StringFormat("critic_context=%u", (5 * EmbeddingSize)));
-   FileWrite(handle, "action_order=BuyLot,BuyTP,BuySL,SellLot,SellTP,SellSL");
-   FileWrite(handle, "scenario_policy=preserve_KV_no_probability_aggregation");
-   FileWrite(handle, "teacher_policy=realized_future_oracul_positive_actor_all_critic");
-   FileWrite(handle, "no_trade_penalty=min_executable_lot");
-   FileWrite(handle, "account_execution=target_position_tp_sl_bar_lifecycle");
-   FileWrite(handle, "critic_target=direct_episode_return");
-   FileWrite(handle, "actor_policy_gradient=executable_action_only");
-   FileWrite(handle, "critic_coverage=policy_teacher_all_random_executable");
-   FileWrite(handle, "actor_supervision=positive_teacher_and_random");
-   FileWrite(handle, StringFormat("actor_hash=%I64u", actor_hash));
-   FileWrite(handle, StringFormat("q1_hash=%I64u", q1_hash));
-   FileWrite(handle, StringFormat("q2_hash=%I64u", q2_hash));
-   FileWrite(handle, StringFormat("generation=%I64u", (ulong)TimeCurrent()));
-   FileClose(handle);
+   return(actor_file != "" && q1_file != "" && q2_file != "" && manifest_file != "" &&
+          actor_file != q1_file && actor_file != q2_file && actor_file != manifest_file &&
+          q1_file != q2_file && q1_file != manifest_file && q2_file != manifest_file);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACDeleteFile.                                  |
+//+------------------------------------------------------------------+
+bool D2SkillACDeleteFile(const string file_name)
+  {
+   return(!FileIsExist(file_name, FILE_COMMON) || FileDelete(file_name, FILE_COMMON));
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACCopyTuple.                                   |
+//+------------------------------------------------------------------+
+bool D2SkillACCopyTuple(const string source_actor, const string source_q1,
+                        const string source_q2, const string source_manifest,
+                        const string destination_actor, const string destination_q1,
+                        const string destination_q2, const string destination_manifest,
+                        const bool rewrite)
+  {
+   if(!D2SkillACTupleNamesValid(source_actor, source_q1, source_q2, source_manifest) ||
+      !D2SkillACTupleNamesValid(destination_actor, destination_q1, destination_q2,
+                                destination_manifest))
+      ReturnFalseEx("Actor-Critic tuple names");
+   const uint flags = (rewrite ? FILE_COMMON | FILE_REWRITE : FILE_COMMON);
+   if(!FileCopy(source_actor, FILE_COMMON, destination_actor, flags))
+      ReturnFalseEx("Actor-Critic Actor copy");
+   if(!FileCopy(source_q1, FILE_COMMON, destination_q1, flags))
+      ReturnFalseEx("Actor-Critic Q1 copy");
+   if(!FileCopy(source_q2, FILE_COMMON, destination_q2, flags))
+      ReturnFalseEx("Actor-Critic Q2 copy");
+//--- Write the manifest last so a complete tuple has an unambiguous commit point.
+   if(!FileCopy(source_manifest, FILE_COMMON, destination_manifest, flags))
+      ReturnFalseEx("Actor-Critic manifest copy");
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateACManifest.                              |
+//| Implements D2SkillACTupleComplete.                               |
+//+------------------------------------------------------------------+
+bool D2SkillACTupleComplete(const string actor_file, const string q1_file,
+                            const string q2_file, const string manifest_file)
+  {
+   const ulong seed = ulong(1469598103934665603);
+   return(D2SkillACTupleNamesValid(actor_file, q1_file, q2_file, manifest_file) &&
+          D2SkillHashFile(seed, actor_file) != 0 && D2SkillHashFile(seed, q1_file) != 0 &&
+          D2SkillHashFile(seed, q2_file) != 0 && D2SkillHashFile(seed, manifest_file) != 0);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACTuplesEqual.                                 |
+//+------------------------------------------------------------------+
+bool D2SkillACTuplesEqual(const string first_actor, const string first_q1,
+                          const string first_q2, const string first_manifest,
+                          const string second_actor, const string second_q1,
+                          const string second_q2, const string second_manifest)
+  {
+   const ulong seed = ulong(1469598103934665603);
+   return(D2SkillACTupleComplete(first_actor, first_q1, first_q2, first_manifest) &&
+          D2SkillACTupleComplete(second_actor, second_q1, second_q2, second_manifest) &&
+          D2SkillHashFile(seed, first_actor) == D2SkillHashFile(seed, second_actor) &&
+          D2SkillHashFile(seed, first_q1) == D2SkillHashFile(seed, second_q1) &&
+          D2SkillHashFile(seed, first_q2) == D2SkillHashFile(seed, second_q2) &&
+          D2SkillHashFile(seed, first_manifest) == D2SkillHashFile(seed, second_manifest));
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACWriteTransactionLine.                        |
+//+------------------------------------------------------------------+
+bool D2SkillACWriteTransactionLine(const int handle, const string value,
+                                   const string context)
+  {
+   if(FileWrite(handle, value) <= 0)
+     {
+      PrintFormat("D2Skill policy transaction write failed field=%s error=%d",
+                  context, GetLastError());
+      return(false);
+     }
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACWriteTransaction.                            |
+//+------------------------------------------------------------------+
+bool D2SkillACWriteTransaction(const string transaction_file, const bool had_previous,
+                               const string phase, const ulong actor_hash,
+                               const ulong q1_hash, const ulong q2_hash,
+                               const ulong manifest_hash)
+  {
+   const string staged_file = transaction_file + ".next";
+   if(transaction_file == "" || (phase != "prepared" && phase != "previous_ready") ||
+      actor_hash == 0 || q1_hash == 0 || q2_hash == 0 || manifest_hash == 0 ||
+      FileIsExist(transaction_file, FILE_COMMON) || FileIsExist(staged_file, FILE_COMMON))
+      ReturnFalseEx("Actor-Critic transaction arguments");
+   int handle = FileOpen(staged_file, FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
+   if(handle == INVALID_HANDLE)
+      ReturnFalseEx("Actor-Critic transaction open");
+   if(!D2SkillACWriteTransactionLine(handle, "format=OMPB_ACTOR_CRITIC_TRANSACTION", "format") ||
+      !D2SkillACWriteTransactionLine(handle,
+                                     StringFormat("version=%u", D2Skill_AC_TRANSACTION_VERSION),
+                                     "version") ||
+      !D2SkillACWriteTransactionLine(handle, StringFormat("phase=%s", phase), "phase") ||
+      !D2SkillACWriteTransactionLine(handle, StringFormat("had_previous=%s",
+                                     (had_previous ? "true" : "false")), "had_previous") ||
+      !D2SkillACWriteTransactionLine(handle, StringFormat("actor_hash=%I64u", actor_hash),
+                                     "actor_hash") ||
+      !D2SkillACWriteTransactionLine(handle, StringFormat("q1_hash=%I64u", q1_hash), "q1_hash") ||
+      !D2SkillACWriteTransactionLine(handle, StringFormat("q2_hash=%I64u", q2_hash), "q2_hash") ||
+      !D2SkillACWriteTransactionLine(handle, StringFormat("manifest_hash=%I64u", manifest_hash),
+                                     "manifest_hash"))
+     {
+      FileClose(handle);
+      D2SkillACDeleteFile(staged_file);
+      ReturnFalse;
+     }
+   FileFlush(handle);
+   FileClose(handle);
+//--- Publish the complete marker in one rename after all fields are flushed.
+   if(!FileMove(staged_file, FILE_COMMON, transaction_file, FILE_COMMON | FILE_REWRITE))
+      ReturnFalseEx("Actor-Critic transaction publish");
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACReadTransaction.                             |
+//+------------------------------------------------------------------+
+bool D2SkillACReadTransaction(const string transaction_file, bool &had_previous,
+                              string &phase, ulong &actor_hash, ulong &q1_hash,
+                              ulong &q2_hash, ulong &manifest_hash)
+  {
+   had_previous = false;
+   phase = "";
+   actor_hash = 0;
+   q1_hash = 0;
+   q2_hash = 0;
+   manifest_hash = 0;
+   if(!FileIsExist(transaction_file, FILE_COMMON) ||
+      D2SkillManifestValue(transaction_file, "format") != "OMPB_ACTOR_CRITIC_TRANSACTION" ||
+      D2SkillManifestValue(transaction_file, "version") != IntegerToString(D2Skill_AC_TRANSACTION_VERSION))
+      return(false);
+   const string previous = D2SkillManifestValue(transaction_file, "had_previous");
+   phase = D2SkillManifestValue(transaction_file, "phase");
+   const string actor = D2SkillManifestValue(transaction_file, "actor_hash");
+   const string q1 = D2SkillManifestValue(transaction_file, "q1_hash");
+   const string q2 = D2SkillManifestValue(transaction_file, "q2_hash");
+   const string manifest = D2SkillManifestValue(transaction_file, "manifest_hash");
+   if((previous != "true" && previous != "false") ||
+      (phase != "prepared" && phase != "previous_ready") || actor == "" || q1 == "" ||
+      q2 == "" || manifest == "")
+      return(false);
+   had_previous = (previous == "true");
+   actor_hash = (ulong)StringToInteger(actor);
+   q1_hash = (ulong)StringToInteger(q1);
+   q2_hash = (ulong)StringToInteger(q2);
+   manifest_hash = (ulong)StringToInteger(manifest);
+   return(actor_hash != 0 && q1_hash != 0 && q2_hash != 0 && manifest_hash != 0);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACAdvanceTransaction.                          |
+//+------------------------------------------------------------------+
+bool D2SkillACAdvanceTransaction(const string transaction_file, const bool had_previous,
+                                 const string phase, const ulong actor_hash,
+                                 const ulong q1_hash, const ulong q2_hash,
+                                 const ulong manifest_hash)
+  {
+   if(!D2SkillACDeleteFile(transaction_file))
+      ReturnFalse;
+   return(D2SkillACWriteTransaction(transaction_file, had_previous, phase,
+                                    actor_hash, q1_hash, q2_hash, manifest_hash));
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACCleanupTransaction.                          |
+//+------------------------------------------------------------------+
+bool D2SkillACCleanupTransaction(const string transaction_file,
+                                 const string next_actor, const string next_q1,
+                                 const string next_q2, const string next_manifest,
+                                 const string previous_actor, const string previous_q1,
+                                 const string previous_q2, const string previous_manifest)
+  {
+   const string staged_transaction = transaction_file + ".next";
+   const string files[] = {next_manifest, next_q2, next_q1, next_actor,
+                           previous_manifest, previous_q2, previous_q1, previous_actor,
+                           staged_transaction, transaction_file
+                          };
+   for(int i = 0; i < ArraySize(files); i++)
+      if(!D2SkillACDeleteFile(files[i]))
+        {
+         PrintFormat("D2Skill policy transaction cleanup failed file=%s error=%d",
+                     files[i], GetLastError());
+         return(false);
+        }
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillACRecoverTransaction.                          |
+//+------------------------------------------------------------------+
+bool D2SkillACRecoverTransaction(const string canonical_actor, const string canonical_q1,
+                                 const string canonical_q2, const string canonical_manifest,
+                                 const string next_actor, const string next_q1,
+                                 const string next_q2, const string next_manifest,
+                                 const string previous_actor, const string previous_q1,
+                                 const string previous_q2, const string previous_manifest,
+                                 const string transaction_file)
+  {
+   const bool marker_exists = FileIsExist(transaction_file, FILE_COMMON);
+   const bool staged_marker_exists = FileIsExist(transaction_file + ".next", FILE_COMMON);
+   const bool sidecars_exist = (FileIsExist(next_actor, FILE_COMMON) ||
+                                FileIsExist(next_q1, FILE_COMMON) ||
+                                FileIsExist(next_q2, FILE_COMMON) ||
+                                FileIsExist(next_manifest, FILE_COMMON) ||
+                                FileIsExist(previous_actor, FILE_COMMON) ||
+                                FileIsExist(previous_q1, FILE_COMMON) ||
+                                FileIsExist(previous_q2, FILE_COMMON) ||
+                                FileIsExist(previous_manifest, FILE_COMMON) ||
+                                staged_marker_exists);
+   if(!marker_exists)
+     {
+      if(!sidecars_exist)
+         return(true);
+      if(D2SkillACTupleComplete(canonical_actor, canonical_q1, canonical_q2, canonical_manifest))
+         return(D2SkillACCleanupTransaction(transaction_file, next_actor, next_q1, next_q2,
+                                            next_manifest, previous_actor, previous_q1,
+                                            previous_q2, previous_manifest));
+      if(D2SkillACTupleComplete(previous_actor, previous_q1, previous_q2, previous_manifest) &&
+         D2SkillACCopyTuple(previous_actor, previous_q1, previous_q2, previous_manifest,
+                            canonical_actor, canonical_q1, canonical_q2, canonical_manifest, true) &&
+         D2SkillACTuplesEqual(previous_actor, previous_q1, previous_q2, previous_manifest,
+                              canonical_actor, canonical_q1, canonical_q2, canonical_manifest))
+         return(D2SkillACCleanupTransaction(transaction_file, next_actor, next_q1, next_q2,
+                                            next_manifest, previous_actor, previous_q1,
+                                            previous_q2, previous_manifest));
+      if(!FileIsExist(canonical_actor, FILE_COMMON) &&
+         !FileIsExist(canonical_q1, FILE_COMMON) &&
+         !FileIsExist(canonical_q2, FILE_COMMON) &&
+         !FileIsExist(canonical_manifest, FILE_COMMON))
+         return(D2SkillACCleanupTransaction(transaction_file, next_actor, next_q1, next_q2,
+                                            next_manifest, previous_actor, previous_q1,
+                                            previous_q2, previous_manifest));
+      ReturnFalse;
+     }
+   bool had_previous = false;
+   string phase = "";
+   ulong actor_hash = 0, q1_hash = 0, q2_hash = 0, manifest_hash = 0;
+   if(!D2SkillACReadTransaction(transaction_file, had_previous, phase, actor_hash, q1_hash,
+                                q2_hash, manifest_hash))
+      ReturnFalse;
+   if(D2SkillHashFile(ulong(1469598103934665603), canonical_actor) == actor_hash &&
+      D2SkillHashFile(ulong(1469598103934665603), canonical_q1) == q1_hash &&
+      D2SkillHashFile(ulong(1469598103934665603), canonical_q2) == q2_hash &&
+      D2SkillHashFile(ulong(1469598103934665603), canonical_manifest) == manifest_hash)
+      return(D2SkillACCleanupTransaction(transaction_file, next_actor, next_q1, next_q2,
+                                         next_manifest, previous_actor, previous_q1,
+                                         previous_q2, previous_manifest));
+   if(phase == "prepared" && had_previous &&
+      D2SkillACTupleComplete(canonical_actor, canonical_q1, canonical_q2, canonical_manifest))
+      return(D2SkillACCleanupTransaction(transaction_file, next_actor, next_q1, next_q2,
+                                         next_manifest, previous_actor, previous_q1,
+                                         previous_q2, previous_manifest));
+   if(had_previous && D2SkillACTupleComplete(previous_actor, previous_q1, previous_q2, previous_manifest) &&
+      D2SkillACCopyTuple(previous_actor, previous_q1, previous_q2, previous_manifest,
+                         canonical_actor, canonical_q1, canonical_q2, canonical_manifest, true) &&
+      D2SkillACTuplesEqual(previous_actor, previous_q1, previous_q2, previous_manifest,
+                           canonical_actor, canonical_q1, canonical_q2, canonical_manifest))
+      return(D2SkillACCleanupTransaction(transaction_file, next_actor, next_q1, next_q2,
+                                         next_manifest, previous_actor, previous_q1,
+                                         previous_q2, previous_manifest));
+   if(!had_previous && phase == "prepared" &&
+      D2SkillACTupleComplete(next_actor, next_q1, next_q2, next_manifest) &&
+      D2SkillACCopyTuple(next_actor, next_q1, next_q2, next_manifest,
+                         canonical_actor, canonical_q1, canonical_q2, canonical_manifest, true) &&
+      D2SkillHashFile(ulong(1469598103934665603), canonical_actor) == actor_hash &&
+      D2SkillHashFile(ulong(1469598103934665603), canonical_q1) == q1_hash &&
+      D2SkillHashFile(ulong(1469598103934665603), canonical_q2) == q2_hash &&
+      D2SkillHashFile(ulong(1469598103934665603), canonical_manifest) == manifest_hash)
+      return(D2SkillACCleanupTransaction(transaction_file, next_actor, next_q1, next_q2,
+                                         next_manifest, previous_actor, previous_q1,
+                                         previous_q2, previous_manifest));
+   ReturnFalse;
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillWriteACManifestFile.                           |
+//+------------------------------------------------------------------+
+bool D2SkillWriteACManifestFile(const ulong forecast_signature, const string actor_file,
+                                const string q1_file, const string q2_file,
+                                const string manifest_file)
+  {
+   if(forecast_signature == 0 || forecast_signature != D2SkillLastSignature ||
+      !D2SkillACTupleNamesValid(actor_file, q1_file, q2_file, manifest_file))
+      ReturnFalse;
+   const ulong seed = ulong(1469598103934665603);
+   const ulong actor_hash = D2SkillHashFile(seed, actor_file);
+   const ulong q1_hash = D2SkillHashFile(seed, q1_file);
+   const ulong q2_hash = D2SkillHashFile(seed, q2_file);
+   if(actor_hash == 0 || q1_hash == 0 || q2_hash == 0)
+      ReturnFalse;
+   int handle = FileOpen(manifest_file, FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
+   if(handle == INVALID_HANDLE)
+      ReturnFalse;
+   const bool written = (FileWrite(handle, "format=OMPB_ACTOR_CRITIC") > 0 &&
+                         FileWrite(handle, StringFormat("version=%u", D2Skill_AC_FORMAT_VERSION)) > 0 &&
+                         FileWrite(handle, StringFormat("d2_representation=%u", D2SkillD2Representation)) > 0 &&
+                         FileWrite(handle, StringFormat("forecast_signature=%I64u", forecast_signature)) > 0 &&
+                         FileWrite(handle, StringFormat("actor_context=%u", (3 * EmbeddingSize))) > 0 &&
+                         FileWrite(handle, StringFormat("critic_context=%u", (5 * EmbeddingSize))) > 0 &&
+                         FileWrite(handle, "action_order=BuyLot,BuyTP,BuySL,SellLot,SellTP,SellSL") > 0 &&
+                         FileWrite(handle, "scenario_policy=preserve_KV_no_probability_aggregation") > 0 &&
+                         FileWrite(handle, "teacher_policy=realized_future_oracul_positive_actor_all_critic") > 0 &&
+                         FileWrite(handle, "no_trade_penalty=min_executable_lot") > 0 &&
+                         FileWrite(handle, "account_execution=target_position_tp_sl_bar_lifecycle") > 0 &&
+                         FileWrite(handle, "critic_target=direct_episode_return") > 0 &&
+                         FileWrite(handle, "actor_policy_gradient=executable_action_only") > 0 &&
+                         FileWrite(handle, "critic_coverage=policy_teacher_all_random_executable") > 0 &&
+                         FileWrite(handle, "actor_supervision=positive_teacher_and_random") > 0 &&
+                         FileWrite(handle, StringFormat("actor_hash=%I64u", actor_hash)) > 0 &&
+                         FileWrite(handle, StringFormat("q1_hash=%I64u", q1_hash)) > 0 &&
+                         FileWrite(handle, StringFormat("q2_hash=%I64u", q2_hash)) > 0 &&
+                         FileWrite(handle, StringFormat("generation=%I64u", (ulong)TimeCurrent())) > 0);
+   if(written)
+      FileFlush(handle);
+   FileClose(handle);
+   return(written);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillWriteACManifest.                               |
+//+------------------------------------------------------------------+
+bool D2SkillWriteACManifest(const ulong forecast_signature)
+  {
+   return(D2SkillWriteACManifestFile(forecast_signature, D2Skill_ACTOR_FILE,
+                                     D2Skill_Q1_FILE, D2Skill_Q2_FILE,
+                                     D2Skill_AC_MANIFEST_FILE));
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillValidateManifestRepresentation.                |
 //+------------------------------------------------------------------+
 bool D2SkillValidateManifestRepresentation(const string manifest_file,
       const bool allow_bank_reset,
@@ -6133,10 +6688,14 @@ bool D2SkillValidateManifestRepresentation(const string manifest_file,
    return(true);
   }
 //+------------------------------------------------------------------+
-bool D2SkillValidateACManifestFile(const bool required, const string manifest_file,
-                                   const bool allow_bank_reset)
+//| Implements D2SkillValidateACManifestTuple.                       |
+//+------------------------------------------------------------------+
+bool D2SkillValidateACManifestTuple(const bool required, const string manifest_file,
+                                    const string actor_file, const string q1_file,
+                                    const string q2_file, const bool allow_bank_reset)
   {
-   if(D2SkillManifestValue(manifest_file, "format") == "")
+   if(!D2SkillACTupleNamesValid(actor_file, q1_file, q2_file, manifest_file) ||
+      D2SkillManifestValue(manifest_file, "format") == "")
       return(!required);
 #define D2Skill_AC_MANIFEST_EQ(KEY,VALUE) \
    { const string actual=D2SkillManifestValue(manifest_file,KEY); const string expected=(VALUE); \
@@ -6159,13 +6718,17 @@ bool D2SkillValidateACManifestFile(const bool required, const string manifest_fi
    D2Skill_AC_MANIFEST_EQ("actor_policy_gradient", "executable_action_only");
    D2Skill_AC_MANIFEST_EQ("critic_coverage", "policy_teacher_all_random_executable");
    D2Skill_AC_MANIFEST_EQ("actor_supervision", "positive_teacher_and_random");
-   D2Skill_AC_MANIFEST_EQ("actor_hash", StringFormat("%I64u", D2SkillHashFile(ulong(1469598103934665603), D2Skill_ACTOR_FILE)));
-   D2Skill_AC_MANIFEST_EQ("q1_hash", StringFormat("%I64u", D2SkillHashFile(ulong(1469598103934665603), D2Skill_Q1_FILE)));
-   D2Skill_AC_MANIFEST_EQ("q2_hash", StringFormat("%I64u", D2SkillHashFile(ulong(1469598103934665603), D2Skill_Q2_FILE)));
+   D2Skill_AC_MANIFEST_EQ("actor_hash",
+                          StringFormat("%I64u",
+                                       D2SkillHashFile(ulong(1469598103934665603), actor_file)));
+   D2Skill_AC_MANIFEST_EQ("q1_hash",
+                          StringFormat("%I64u",
+                                       D2SkillHashFile(ulong(1469598103934665603), q1_file)));
+   D2Skill_AC_MANIFEST_EQ("q2_hash",
+                          StringFormat("%I64u",
+                                       D2SkillHashFile(ulong(1469598103934665603), q2_file)));
 #undef D2Skill_AC_MANIFEST_EQ
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(D2SkillManifestValue(manifest_file, "generation") == "")
      {
       Print("D2Skill policy manifest: generation is absent");
@@ -6174,12 +6737,24 @@ bool D2SkillValidateACManifestFile(const bool required, const string manifest_fi
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Implements D2SkillValidateACManifestFile.                        |
+//+------------------------------------------------------------------+
+bool D2SkillValidateACManifestFile(const bool required, const string manifest_file,
+                                   const bool allow_bank_reset)
+  {
+   return(D2SkillValidateACManifestTuple(required, manifest_file, D2Skill_ACTOR_FILE,
+                                         D2Skill_Q1_FILE, D2Skill_Q2_FILE, allow_bank_reset));
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillValidateACManifest.                            |
+//+------------------------------------------------------------------+
 bool D2SkillValidateACManifest(const bool required)
   {
    return(D2SkillValidateACManifestFile(required, D2Skill_AC_MANIFEST_FILE, false));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadPolicyNet. Shared Actor-Critic lifecycle ... |
+//| Implements D2SkillLoadPolicyNet. Shared Actor-Critic lifecycle   |
+//| ...                                                              |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
   {
@@ -6201,7 +6776,7 @@ bool D2SkillConfigureBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| A newly created policy has no durable checkpoint state to keep. |
+//| A newly created policy has no durable checkpoint state to keep.  |
 //+------------------------------------------------------------------+
 bool D2SkillSetNewBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
   {
@@ -6211,6 +6786,8 @@ bool D2SkillSetNewBankRepresentation(CD2SkillBank *task, CD2SkillBank *step)
    step.SetRepresentation(D2SkillD2Representation);
    return(true);
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillSetNewPolicyRepresentation.                    |
 //+------------------------------------------------------------------+
 bool D2SkillSetNewPolicyRepresentation(CNet &net)
   {
@@ -6223,6 +6800,23 @@ bool D2SkillSetNewPolicyRepresentation(CNet &net)
    return(D2SkillSetNewBankRepresentation(skill.TaskBank(), skill.StepBank()));
   }
 //+------------------------------------------------------------------+
+//| Binds Actor and both Critics to the Market OpenCL context.       |
+//+------------------------------------------------------------------+
+bool D2SkillBindPolicyOpenCLChecked(CNet &actor, CNet &q1, CNet &q2)
+  {
+   COpenCLMy *target = D2SkillMarket.GetOpenCL();
+   if(CheckPointer(target) == POINTER_INVALID ||
+      !actor.SupportsOpenCLChecked() || !q1.SupportsOpenCLChecked() ||
+      !q2.SupportsOpenCLChecked())
+      ReturnFalse;
+   if(!actor.SetOpenCLChecked(target) || !q1.SetOpenCLChecked(target) ||
+      !q2.SetOpenCLChecked(target))
+      ReturnFalse;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillLoadPolicyNet.                                 |
+//+------------------------------------------------------------------+
 bool D2SkillLoadPolicyNet(CNet &net, const string file_name)
   {
    float error = 0, undefine = 0, forecast = 0;
@@ -6230,7 +6824,7 @@ bool D2SkillLoadPolicyNet(CNet &net, const string file_name)
    return(net.Load(file_name, error, undefine, forecast, studied, true));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCreatePolicySet.                                 |
+//| Implements D2SkillCreatePolicySet.                               |
 //+------------------------------------------------------------------+
 bool D2SkillCreatePolicySet(CNet &actor, CNet &q1, CNet &q2)
   {
@@ -6239,33 +6833,21 @@ bool D2SkillCreatePolicySet(CNet &actor, CNet &q1, CNet &q2)
      { DeleteObj(actor_descr); DeleteObj(critic_descr); ReturnFalse; }
    bool result = actor.Create(actor_descr);
    if(result)
-      actor.SetOpenCL(D2SkillMarket.GetOpenCL());
+      result = actor.SetOpenCLChecked(D2SkillMarket.GetOpenCL());
    if(result)
       result = q1.Create(critic_descr);
    if(result)
-      q1.SetOpenCL(D2SkillMarket.GetOpenCL());
+      result = q1.SetOpenCLChecked(D2SkillMarket.GetOpenCL());
    if(result)
       result = q2.Create(critic_descr);
    if(result)
-      q2.SetOpenCL(D2SkillMarket.GetOpenCL());
+      result = q2.SetOpenCLChecked(D2SkillMarket.GetOpenCL());
    DeleteObj(actor_descr);
    DeleteObj(critic_descr);
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
-   if(result)
-     {
-      //--- A CNet temporary OpenCL context must be released before creating the
-      //--- next policy net.  Otherwise nested MSRes buffers can retain stale
-      //--- device handles from the preceding Create call.
-      actor.SetOpenCL(D2SkillMarket.GetOpenCL());
-      q1.SetOpenCL(D2SkillMarket.GetOpenCL());
-      q2.SetOpenCL(D2SkillMarket.GetOpenCL());
-     }
    return(result && D2SkillSetNewPolicyRepresentation(actor));
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2BankFlags.                                   |
 //+------------------------------------------------------------------+
 void D2SkillD2BankFlags(bool &task_enabled, bool &step_enabled)
   {
@@ -6278,7 +6860,7 @@ void D2SkillD2BankFlags(bool &task_enabled, bool &step_enabled)
                     D2SkillD2Mode == D2Skill_D2_MODE_FULL));
   }
 //+------------------------------------------------------------------+
-//| Selects the only utility interpretation accepted by this run.   |
+//| Selects the only utility interpretation accepted by this run.    |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureD2UtilityMode(const int utility_mode)
   {
@@ -6290,7 +6872,7 @@ bool D2SkillConfigureD2UtilityMode(const int utility_mode)
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillEnableD2Banks.                                 |
 //+------------------------------------------------------------------+
 bool D2SkillEnableD2Banks(CNet &actor)
   {
@@ -6364,6 +6946,8 @@ bool D2SkillApplyD2Utility(CNet &actor, const double value, bool &applied,
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Implements D2SkillApplyD2Utility.                                |
+//+------------------------------------------------------------------+
 bool D2SkillApplyD2Utility(CNet &actor, const double value, bool &applied)
   {
    bool task_applied = false;
@@ -6372,7 +6956,7 @@ bool D2SkillApplyD2Utility(CNet &actor, const double value, bool &applied)
   }
 //+------------------------------------------------------------------+
 //| Applies paired hindsight delta JSkill-JBase to selected skills.  |
-//| Utility is separate from Actor gradients and pseudo-residuals.  |
+//| Utility is separate from Actor gradients and pseudo-residuals.   |
 //+------------------------------------------------------------------+
 bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j, bool &applied,
                                  bool &task_applied, bool &step_applied)
@@ -6394,12 +6978,16 @@ bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j, bool &applie
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Implements D2SkillUpdateD2UtilityDelta.                          |
+//+------------------------------------------------------------------+
 bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j, bool &applied)
   {
    bool task_applied = false;
    bool step_applied = false;
    return(D2SkillUpdateD2UtilityDelta(actor, delta_j, applied, task_applied, step_applied));
   }
+//+------------------------------------------------------------------+
+//| Implements D2SkillUpdateD2UtilityDelta#2.                        |
 //+------------------------------------------------------------------+
 bool D2SkillUpdateD2UtilityDelta(CNet &actor, const double delta_j)
   {
@@ -6420,7 +7008,7 @@ bool D2SkillResetEpisodeInfluence(CNet &actor)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Closes the offline episode through paired utility then reset.     |
+//| Closes the offline episode through paired utility then reset.    |
 //+------------------------------------------------------------------+
 bool D2SkillCloseOfflineEpisode(CNet &actor, const bool paired_active,
                                 const bool pair_terminal, const bool episode_limit,
@@ -6448,7 +7036,17 @@ bool D2SkillCloseOfflineEpisode(CNet &actor, const bool paired_active,
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| D2SkillCanPublishACCheckpoint validates replacement permission   |
+//+------------------------------------------------------------------+
+bool D2SkillCanPublishACCheckpoint(const bool canonical_exists,
+                                   const bool canonical_valid)
+  {
+   if(!canonical_exists || canonical_valid)
+      return(true);
+   return(D2SkillD2RecreateIncompatibleCheckpoint);
+  }
+//+------------------------------------------------------------------+
+//| Implements D2SkillCanCreatePolicyCheckpoint.                     |
 //+------------------------------------------------------------------+
 bool D2SkillCanCreatePolicyCheckpoint(const bool manifest_exists, const bool allow_create)
   {
@@ -6457,9 +7055,23 @@ bool D2SkillCanCreatePolicyCheckpoint(const bool manifest_exists, const bool all
    return(D2SkillD2RecreateIncompatibleCheckpoint);
   }
 //+------------------------------------------------------------------+
+//| Implements D2SkillLoadOrCreatePolicySetFile.                     |
+//+------------------------------------------------------------------+
 bool D2SkillLoadOrCreatePolicySetFile(CNet &actor, CNet &q1, CNet &q2,
                                       const bool allow_create, const string manifest_file)
   {
+   if(manifest_file == D2Skill_AC_MANIFEST_FILE &&
+      !D2SkillACRecoverTransaction(D2Skill_ACTOR_FILE, D2Skill_Q1_FILE, D2Skill_Q2_FILE,
+                                   D2Skill_AC_MANIFEST_FILE, D2Skill_ACTOR_NEXT_FILE,
+                                   D2Skill_Q1_NEXT_FILE, D2Skill_Q2_NEXT_FILE,
+                                   D2Skill_AC_MANIFEST_NEXT_FILE, D2Skill_ACTOR_PREVIOUS_FILE,
+                                   D2Skill_Q1_PREVIOUS_FILE, D2Skill_Q2_PREVIOUS_FILE,
+                                   D2Skill_AC_MANIFEST_PREVIOUS_FILE,
+                                   D2Skill_AC_TRANSACTION_FILE))
+     {
+      Print("D2Skill policy recovery=FAIL; incomplete checkpoint requires repair");
+      ReturnFalse;
+     }
    const bool manifest_exists = FileIsExist(manifest_file, FILE_COMMON);
    bool loaded = false;
    if(manifest_exists)
@@ -6487,9 +7099,8 @@ bool D2SkillLoadOrCreatePolicySetFile(CNet &actor, CNet &q1, CNet &q2,
       if(!D2SkillCreatePolicySet(actor, q1, q2))
          ReturnFalse;
      }
-   actor.SetOpenCL(D2SkillMarket.GetOpenCL());
-   q1.SetOpenCL(D2SkillMarket.GetOpenCL());
-   q2.SetOpenCL(D2SkillMarket.GetOpenCL());
+   if(!D2SkillBindPolicyOpenCLChecked(actor, q1, q2))
+      ReturnFalse;
    if(!D2SkillValidatePolicyShape(actor, false) || !D2SkillValidatePolicyShape(q1, true) ||
       !D2SkillValidatePolicyShape(q2, true))
       ReturnFalse;
@@ -6501,6 +7112,8 @@ bool D2SkillLoadOrCreatePolicySetFile(CNet &actor, CNet &q1, CNet &q2,
    return(true);
   }
 //+------------------------------------------------------------------+
+//| Implements D2SkillLoadOrCreatePolicySet.                         |
+//+------------------------------------------------------------------+
 bool D2SkillLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
                                   const bool allow_create)
   {
@@ -6508,7 +7121,7 @@ bool D2SkillLoadOrCreatePolicySet(CNet &actor, CNet &q1, CNet &q2,
                                            D2Skill_AC_MANIFEST_FILE));
   }
 //+------------------------------------------------------------------+
-//| Configures the Actor-Critic write permissions for the D2 mode.  |
+//| Configures the Actor-Critic write permissions for the D2 mode.   |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureActorCriticUpdates(CNet &actor, CNet &q1, CNet &q2)
   {
@@ -6544,21 +7157,93 @@ bool D2SkillConfigureActorCriticUpdates(CNet &actor, CNet &q1, CNet &q2)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillSavePolicySet.                                   |
+//| Implements D2SkillSavePolicySet.                                 |
 //+------------------------------------------------------------------+
 bool D2SkillSavePolicySet(CNet &actor, CNet &q1, CNet &q2)
   {
    if(!D2SkillVerifyFrozenWeightsExact() || !D2SkillVerifyFrozenCodebookExact() ||
       D2SkillForecastSignature() != D2SkillLastSignature)
       ReturnFalse;
+   if(!D2SkillACRecoverTransaction(D2Skill_ACTOR_FILE, D2Skill_Q1_FILE, D2Skill_Q2_FILE,
+                                   D2Skill_AC_MANIFEST_FILE, D2Skill_ACTOR_NEXT_FILE,
+                                   D2Skill_Q1_NEXT_FILE, D2Skill_Q2_NEXT_FILE,
+                                   D2Skill_AC_MANIFEST_NEXT_FILE, D2Skill_ACTOR_PREVIOUS_FILE,
+                                   D2Skill_Q1_PREVIOUS_FILE, D2Skill_Q2_PREVIOUS_FILE,
+                                   D2Skill_AC_MANIFEST_PREVIOUS_FILE,
+                                   D2Skill_AC_TRANSACTION_FILE))
+      ReturnFalse;
+   const bool canonical_exists = (FileIsExist(D2Skill_ACTOR_FILE, FILE_COMMON) ||
+                                  FileIsExist(D2Skill_Q1_FILE, FILE_COMMON) ||
+                                  FileIsExist(D2Skill_Q2_FILE, FILE_COMMON) ||
+                                  FileIsExist(D2Skill_AC_MANIFEST_FILE, FILE_COMMON));
+   const bool canonical_valid = D2SkillValidateACManifestFile(true, D2Skill_AC_MANIFEST_FILE, false);
+   const bool had_previous = canonical_valid;
+   if(!D2SkillCanPublishACCheckpoint(canonical_exists, canonical_valid))
+     {
+      Print("D2Skill policy checkpoint=FAIL reason=canonical_tuple_invalid");
+      ReturnFalse;
+     }
+   if(canonical_exists && !canonical_valid)
+      Print("D2Skill policy checkpoint=RECREATE reason=canonical_tuple_invalid");
    const datetime now = TimeCurrent();
-   return (actor.Save(D2Skill_ACTOR_FILE, 0, 0, 0, now, true) &&
-           q1.Save(D2Skill_Q1_FILE, q1.getRecentAverageError(), 0, 0, now, true) &&
-           q2.Save(D2Skill_Q2_FILE, q2.getRecentAverageError(), 0, 0, now, true) &&
-           D2SkillWriteACManifest(D2SkillLastSignature));
+//--- Stage every model and write the candidate manifest without touching the active tuple.
+   if(!actor.Save(D2Skill_ACTOR_NEXT_FILE, 0, 0, 0, now, true))
+      ReturnFalseEx("Actor-Critic Actor candidate");
+   if(!q1.Save(D2Skill_Q1_NEXT_FILE, q1.getRecentAverageError(), 0, 0, now, true))
+      ReturnFalseEx("Actor-Critic Q1 candidate");
+   if(!q2.Save(D2Skill_Q2_NEXT_FILE, q2.getRecentAverageError(), 0, 0, now, true))
+      ReturnFalseEx("Actor-Critic Q2 candidate");
+   if(!D2SkillWriteACManifestFile(D2SkillLastSignature, D2Skill_ACTOR_NEXT_FILE,
+                                  D2Skill_Q1_NEXT_FILE, D2Skill_Q2_NEXT_FILE,
+                                  D2Skill_AC_MANIFEST_NEXT_FILE))
+      ReturnFalseEx("Actor-Critic candidate manifest");
+   if(!D2SkillValidateACManifestTuple(true, D2Skill_AC_MANIFEST_NEXT_FILE,
+                                      D2Skill_ACTOR_NEXT_FILE, D2Skill_Q1_NEXT_FILE,
+                                      D2Skill_Q2_NEXT_FILE, false))
+      ReturnFalseEx("Actor-Critic candidate validation");
+   const ulong seed = ulong(1469598103934665603);
+   const ulong actor_hash = D2SkillHashFile(seed, D2Skill_ACTOR_NEXT_FILE);
+   const ulong q1_hash = D2SkillHashFile(seed, D2Skill_Q1_NEXT_FILE);
+   const ulong q2_hash = D2SkillHashFile(seed, D2Skill_Q2_NEXT_FILE);
+   const ulong manifest_hash = D2SkillHashFile(seed, D2Skill_AC_MANIFEST_NEXT_FILE);
+   if(!D2SkillACWriteTransaction(D2Skill_AC_TRANSACTION_FILE, had_previous, "prepared",
+                                 actor_hash, q1_hash, q2_hash, manifest_hash))
+      ReturnFalse;
+   if(had_previous)
+     {
+      if(!D2SkillACCopyTuple(D2Skill_ACTOR_FILE, D2Skill_Q1_FILE, D2Skill_Q2_FILE,
+                             D2Skill_AC_MANIFEST_FILE, D2Skill_ACTOR_PREVIOUS_FILE,
+                             D2Skill_Q1_PREVIOUS_FILE, D2Skill_Q2_PREVIOUS_FILE,
+                             D2Skill_AC_MANIFEST_PREVIOUS_FILE, false) ||
+         !D2SkillValidateACManifestTuple(true, D2Skill_AC_MANIFEST_PREVIOUS_FILE,
+                                         D2Skill_ACTOR_PREVIOUS_FILE, D2Skill_Q1_PREVIOUS_FILE,
+                                         D2Skill_Q2_PREVIOUS_FILE, false) ||
+         !D2SkillACAdvanceTransaction(D2Skill_AC_TRANSACTION_FILE, true, "previous_ready",
+                                      actor_hash, q1_hash, q2_hash, manifest_hash))
+         ReturnFalse;
+     }
+//--- Publish the candidate tuple and validate it before removing recovery sidecars.
+   if(!D2SkillACCopyTuple(D2Skill_ACTOR_NEXT_FILE, D2Skill_Q1_NEXT_FILE, D2Skill_Q2_NEXT_FILE,
+                          D2Skill_AC_MANIFEST_NEXT_FILE, D2Skill_ACTOR_FILE,
+                          D2Skill_Q1_FILE, D2Skill_Q2_FILE, D2Skill_AC_MANIFEST_FILE, true))
+      ReturnFalseEx("Actor-Critic canonical publication");
+   if(!D2SkillValidateACManifestFile(true, D2Skill_AC_MANIFEST_FILE, false))
+      ReturnFalseEx("Actor-Critic canonical validation");
+   if(D2SkillHashFile(seed, D2Skill_ACTOR_FILE) != actor_hash ||
+      D2SkillHashFile(seed, D2Skill_Q1_FILE) != q1_hash ||
+      D2SkillHashFile(seed, D2Skill_Q2_FILE) != q2_hash ||
+      D2SkillHashFile(seed, D2Skill_AC_MANIFEST_FILE) != manifest_hash)
+      ReturnFalseEx("Actor-Critic canonical hash");
+   if(!D2SkillACCleanupTransaction(D2Skill_AC_TRANSACTION_FILE, D2Skill_ACTOR_NEXT_FILE,
+                                   D2Skill_Q1_NEXT_FILE, D2Skill_Q2_NEXT_FILE,
+                                   D2Skill_AC_MANIFEST_NEXT_FILE, D2Skill_ACTOR_PREVIOUS_FILE,
+                                   D2Skill_Q1_PREVIOUS_FILE, D2Skill_Q2_PREVIOUS_FILE,
+                                   D2Skill_AC_MANIFEST_PREVIOUS_FILE))
+      ReturnFalseEx("Actor-Critic transaction cleanup");
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| Saves a Stage 03 checkpoint only for the active production OMPB.|
+//| Saves a Stage 03 checkpoint only for the active production OMPB. |
 //+------------------------------------------------------------------+
 bool D2SkillSaveStage03StopCheckpoint(CNet &actor, CNet &q1, CNet &q2)
   {
@@ -6567,7 +7252,7 @@ bool D2SkillSaveStage03StopCheckpoint(CNet &actor, CNet &q1, CNet &q2)
    return(D2SkillSavePolicySet(actor, q1, q2));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadInferenceActor.                              |
+//| Implements D2SkillLoadInferenceActor.                            |
 //+------------------------------------------------------------------+
 bool D2SkillLoadInferenceActor(CNet &actor)
   {
@@ -6575,7 +7260,10 @@ bool D2SkillLoadInferenceActor(CNet &actor)
                                      D2SkillD2ResetBanksOnRepresentationMismatch) ||
       !D2SkillLoadPolicyNet(actor, D2Skill_ACTOR_FILE))
       ReturnFalse;
-   actor.SetOpenCL(D2SkillMarket.GetOpenCL());
+   if(CheckPointer(D2SkillMarket.GetOpenCL()) == POINTER_INVALID ||
+      !actor.SupportsOpenCLChecked() ||
+      !actor.SetOpenCLChecked(D2SkillMarket.GetOpenCL()))
+      ReturnFalse;
    if(!D2SkillValidatePolicyShape(actor, false))
       ReturnFalse;
    if(!D2SkillEnableD2Banks(actor))
@@ -6600,7 +7288,7 @@ bool ReadAction(CNet &net, CBufferFloat *target)
    return(output == target && target.Total() == NActions);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillAdvanceAccountTime.                              |
+//| Implements D2SkillAdvanceAccountTime.                            |
 //+------------------------------------------------------------------+
 bool D2SkillAdvanceAccountTime(CBufferFloat *current, const datetime next_time, CBufferFloat *next)
   {
@@ -6626,7 +7314,7 @@ bool D2SkillAdvanceAccountTime(CBufferFloat *current, const datetime next_time, 
    return(next.GetIndex() < 0 || next.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillForwardForecastState.                            |
+//| Implements D2SkillForwardForecastState.                          |
 //+------------------------------------------------------------------+
 bool D2SkillForwardForecastState(CBufferFloat *state)
   {
@@ -6644,7 +7332,7 @@ bool D2SkillForwardForecastState(CBufferFloat *state)
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillBuildLiveAccount.                              |
 //+------------------------------------------------------------------+
 bool D2SkillBuildLiveAccount(const double previous_balance, const double previous_equity,
                              const datetime state_time, CBufferFloat *account,
@@ -6695,7 +7383,7 @@ bool D2SkillBuildLiveAccount(const double previous_balance, const double previou
    return(account.AssignArray(values) && (account.GetIndex() < 0 || account.BufferWrite()));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillRefreshLiveMarket.                               |
+//| Implements D2SkillRefreshLiveMarket.                             |
 //+------------------------------------------------------------------+
 bool D2SkillRefreshLiveMarket(CBufferFloat *state, CBufferFloat *time_state)
   {
@@ -6736,7 +7424,7 @@ double NormalizeLot(const double lot)
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateAction.                                  |
+//| Implements D2SkillValidateAction.                                |
 //+------------------------------------------------------------------+
 bool D2SkillValidateAction(CBufferFloat *action)
   {
@@ -6749,7 +7437,7 @@ bool D2SkillValidateAction(CBufferFloat *action)
    return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillExecuteAction.                                 |
 //+------------------------------------------------------------------+
 bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_value, double &margin_penalty,
                           bool &market_closed)
@@ -6760,9 +7448,10 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
       ReturnFalse;
 //--- Canonical CogDriver mutual exclusion and broker constraints.
    if(action[0] >= action[3])
-     { action.Update(0, action[0] - action[3]); action.Update(3, 0); }
+     { action.Update(0, (action[0] - action[3])); action.Update(3, 0); }
    else
-     { action.Update(3, action[3] - action[0]); action.Update(0, 0); }
+     { action.Update(3, (action[3] - action[0])); action.Update(0, 0); }
+//---
    const double min_lot = Symb.LotsMin();
    if(!IsExecutableOrder(action[0], action[1], action[2]))
      { if(buy_value > 0) CloseByDirection(POSITION_TYPE_BUY); }
@@ -6776,23 +7465,17 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
       if((buy_value - lot) >= min_lot)
          ClosePartial(POSITION_TYPE_BUY, buy_value - lot);
       else
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if((lot - buy_value) >= min_lot && !Trade.Buy(lot - buy_value, Symb.Name(), Symb.Ask(), sl, tp))
            {
             const uint retcode = Trade.ResultRetcode();
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(retcode == TRADE_RETCODE_MARKET_CLOSED)
               {
                market_closed = true;
                return(true);
               }
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(retcode != 10019)
               {
                PrintFormat("D2Skill buy execution failed: retcode=%u %s", retcode, Trade.ResultRetcodeDescription());
@@ -6815,23 +7498,17 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
       if((sell_value - lot) >= min_lot)
          ClosePartial(POSITION_TYPE_SELL, sell_value - lot);
       else
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if((lot - sell_value) >= min_lot && !Trade.Sell(lot - sell_value, Symb.Name(), Symb.Bid(), sl, tp))
            {
             const uint retcode = Trade.ResultRetcode();
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(retcode == TRADE_RETCODE_MARKET_CLOSED)
               {
                market_closed = true;
                return(true);
               }
-            //+------------------------------------------------------------------+
-            //| Function if.                                                     |
-            //+------------------------------------------------------------------+
+            //--- Function if.
             if(retcode != 10019)
               {
                PrintFormat("D2Skill sell execution failed: retcode=%u %s", retcode, Trade.ResultRetcodeDescription());
@@ -6843,7 +7520,8 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillExecuteAction. Inference callers do not train... |
+//| Implements D2SkillExecuteAction. Inference callers do not        |
+//| train...                                                         |
 //+------------------------------------------------------------------+
 bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_value)
   {
@@ -6852,6 +7530,9 @@ bool D2SkillExecuteAction(CBufferFloat *action, double buy_value, double sell_va
    return(D2SkillExecuteAction(action, buy_value, sell_value, margin_penalty, market_closed));
   }
 #endif
+//+------------------------------------------------------------------+
+//| Calculates the actor policy gradient from the current critic.    |
+//+------------------------------------------------------------------+
 bool PolicyBackward(CNet &actor, CNet &critic, CBufferFloat *actor_target,
                     CNet *scenario_net, const int scenario_layer)
   {
@@ -6859,10 +7540,19 @@ bool PolicyBackward(CNet &actor, CNet &critic, CBufferFloat *actor_target,
    CNeuronBaseOCL *critic_base = critic.Layer(0);
    CNeuronBaseOCL *actor_output = actor.Layer(3);
    if(!critic_output || !critic_base || !actor_output || !actor_target ||
-      critic_output.getOutput().Total() != 1 || actor_output.getGradient().Total() != NActions ||
-      !actor_target.BufferInit(1, 1.0f) ||
-      (actor_target.GetIndex() < 0 && !actor_target.BufferCreate(D2SkillMarket.GetOpenCL())) ||
-      !D2SkillDevice.Add(critic_output.getOutput(), actor_target, actor_target, 1))
+      critic_output.getOutput().Total() != 1 || actor_output.getGradient().Total() != NActions)
+      ReturnFalse;
+//--- Reset the scalar policy target on the host.
+   if(!actor_target.BufferInit(1, 1.0f))
+      ReturnFalse;
+//--- Create the device buffer on the first policy update.
+   if(actor_target.GetIndex() < 0 && !actor_target.BufferCreate(D2SkillMarket.GetOpenCL()))
+      ReturnFalse;
+//--- Refresh a reused device buffer before adding the current Q value.
+   if(actor_target.GetIndex() >= 0 && !actor_target.BufferWrite())
+      ReturnFalse;
+//--- Form the additive target used by the critic backward pass.
+   if(!D2SkillDevice.Add(critic_output.getOutput(), actor_target, actor_target, 1))
       ReturnFalse;
    critic.TrainMode(false);
    bool result = critic.backProp(actor_target, scenario_net, scenario_layer);
@@ -6878,7 +7568,8 @@ bool PolicyBackward(CNet &actor, CNet &critic, CBufferFloat *actor_target,
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Finalizes projected balance before writing terminal account state.|
+//| Finalizes projected balance before writing terminal account      |
+//| state.                                                           |
 //+------------------------------------------------------------------+
 bool D2SkillFinalizeAccountBalance(const double balance, const double realized,
                                    const double min_balance, double &next_balance,
@@ -6917,9 +7608,7 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    if(!OrderCalcMargin(ORDER_TYPE_BUY, Symb.Name(), 1, Rates[position].open, margin))
       ReturnFalse;
    const double min_lot = Symb.LotsMin();
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(balance <= min_balance || balance < margin * min_lot)
      {
       terminal = true;
@@ -6942,25 +7631,19 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    double next_buy = 0, next_sell = 0;
    double next_buy_profit = 0, next_sell_profit = 0;
    double realized = 0;
-//+------------------------------------------------------------------+
-//| An invalid target liquidates every open position at the curre... |
-//+------------------------------------------------------------------+
+//--- An invalid target liquidates every open position at the curre...
    if(!open_buy && !open_sell)
      {
       realized = current_buy_profit + current_sell_profit;
      }
    else
-      //+------------------------------------------------------------------+
-      //| Function if.                                                     |
-      //+------------------------------------------------------------------+
+      //--- Function if.
       if(open_buy)
         {
          //--- A reverse target closes the Sell; a same-side reduction realizes only its
          //--- proportional carried P/L.  The retained Buy keeps its marked-to-market P/L.
          realized += current_sell_profit;
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(current_buy > target_buy && current_buy > 0)
            {
             const double closed = current_buy - target_buy;
@@ -6987,9 +7670,7 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
         {
          //--- Symmetric Sell lifecycle.  The SL-before-TP order matches CheckAction.
          realized += current_buy_profit;
-         //+------------------------------------------------------------------+
-         //| Function if.                                                     |
-         //+------------------------------------------------------------------+
+         //--- Function if.
          if(current_sell > target_sell && current_sell > 0)
            {
             const double closed = current_sell - target_sell;
@@ -6999,7 +7680,7 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
          const double added = MathMax(0.0, target_sell - current_sell);
          current_sell_profit -= spread * point_cost * added;
          const double tp = entry - (action[4] * MaxTP + Symb.Spread()) * Symb.Point();
-         const double sl = entry + (action[5] * MaxSL - Symb.Spread()) * Symb.Point();
+         const double sl = entry + (action[5] * MaxSL + Symb.Spread()) * Symb.Point();
          const MqlRates bar = Rates[position - 1];
          if(sl <= bar.high)
             realized += current_sell_profit + (entry - sl) * point_cost * target_sell;
@@ -7033,7 +7714,4 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    terminal = (balance_terminal || next_equity < margin * min_lot);
    return(next.GetIndex() < 0 || next.BufferWrite());
   }
-//+------------------------------------------------------------------+
-
-
-//+------------------------------------------------------------------+
+//+---+

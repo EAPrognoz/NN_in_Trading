@@ -1,9 +1,14 @@
+﻿//+------------------------------------------------------------------+
+//|                                                         Test.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| Test.mq5                                                         |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
+#property description "Харнесс вневыборочного (OOS) теста ORION."
+#property description "Прогоняет инференс на отложенном интервале и оценивает качество политик."
+#property description "Только для тестов; ордера не выставляет."
 #define StudyOnline
 #include "Trajectory.mqh"
 CNet Actor;
@@ -63,4 +68,4 @@ void OnTick(void)
    PreviousBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity = AccountInfoDouble(ACCOUNT_EQUITY);
   }
-//+------------------------------------------------------------------+
+//+---+

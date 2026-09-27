@@ -1,10 +1,16 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //| StudyForecast.mq5                                                |
+//| Copyright 2026, DNG                                              |
+//| https://www.mql5.com/ru/users/dng                                |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 #property strict
+#property description "Обучение Forecast и калибровка OMPB."
+#property description "Обучает прогнозный энкодер и выполняет калибровку Stage 02."
+#property description "Контроль референсных и калибровочных периодов."
+#property description "Прогон в Strategy Tester без реальной торговли."
 //---
 #include "Trajectory.mqh"
 //---
@@ -96,4 +102,4 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam,
          TrainD2SkillForecast();
      }
   }
-//+------------------------------------------------------------------+
+//+---+

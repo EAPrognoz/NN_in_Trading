@@ -1,10 +1,17 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //| Test.mq5                                                         |
+//| Copyright 2026, DNG                                              |
+//| https://www.mql5.com/ru/users/dng                                |
 //+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 #property strict
+#property description "Инференс обученной политики D2Skill (OMPB) на счёте."
+#property description "Оценка вне выборки (OOS) и банковский режим инференса."
+#property description "Параметры заморожены; обучение не запускается."
+#property description "Прогон на тестовом счёте."
+#define  D2SKILL
 #include "Trajectory.mqh"
 //---
 input group                       "---- D2Skill OOS ----"
@@ -30,9 +37,8 @@ double OOSReward = 0;
 ulong OOSTradeCount = 0;
 ulong OOSGpuBoundaryLatencyTotal = 0, OOSGpuBoundaryLatencyMaximum = 0;
 ulong OOSGpuBoundaryLatencySamples = 0;
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillWriteD2OOSHeader.                              |
 //+------------------------------------------------------------------+
 bool D2SkillWriteD2OOSHeader(const int handle)
   {
@@ -57,9 +63,8 @@ bool D2SkillWriteD2OOSHeader(const int handle)
       ReturnFalse;
    return(true);
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2StageToString.                               |
 //+------------------------------------------------------------------+
 string D2SkillD2StageToString(const int stage)
   {
@@ -75,9 +80,8 @@ string D2SkillD2StageToString(const int stage)
       return("online");
    return("unknown");
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2ModeToString.                                |
 //+------------------------------------------------------------------+
 string D2SkillD2ModeToString(const ENUM_D2SKILL_BANK_MODE mode)
   {
@@ -91,9 +95,8 @@ string D2SkillD2ModeToString(const ENUM_D2SKILL_BANK_MODE mode)
       return("full");
    return("unknown");
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2ExecutionModeToString.                       |
 //+------------------------------------------------------------------+
 string D2SkillD2ExecutionModeToString(const ENUM_D2SKILL_MODE mode)
   {
@@ -112,9 +115,8 @@ string D2SkillD2ExecutionModeToString(const ENUM_D2SKILL_MODE mode)
      }
    return("unknown");
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2UtilitySource.                               |
 //+------------------------------------------------------------------+
 string D2SkillD2UtilitySource(void)
   {
@@ -122,9 +124,8 @@ string D2SkillD2UtilitySource(void)
       return("paired_terminal");
    return("disabled");
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillReadD2Selection.                               |
 //+------------------------------------------------------------------+
 bool D2SkillReadD2Selection(const bool task_bank, int &selected_slot, float &selected_score)
   {
@@ -153,9 +154,8 @@ bool D2SkillReadD2Selection(const bool task_bank, int &selected_slot, float &sel
    return(selected_slot >= 0 && (uint)selected_slot < bank.Slots() &&
           MathIsValidNumber(double(selected_score)) && selected_score > -1.0e30f);
   }
-
 //+------------------------------------------------------------------+
-//| Reads diagnostic counters only at the OOS reporting boundary.   |
+//| Reads diagnostic counters only at the OOS reporting boundary.    |
 //+------------------------------------------------------------------+
 bool D2SkillReadD2OOSBankStats(const bool task_bank, ulong &retrievals,
                                ulong &no_skill, ulong &promotions,
@@ -189,17 +189,15 @@ bool D2SkillReadD2OOSBankStats(const bool task_bank, ulong &retrievals,
    replacements = (ulong)MathMax(0.0, double(diagnostics[7]));
    return(true);
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2OOSCounterText.                              |
 //+------------------------------------------------------------------+
 string D2SkillD2OOSCounterText(const bool valid, const ulong value)
   {
    return(valid ? StringFormat("%I64u", value) : "NA");
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2OOSRateText.                                 |
 //+------------------------------------------------------------------+
 string D2SkillD2OOSRateText(const bool valid, const ulong numerator, const ulong denominator)
   {
@@ -207,17 +205,15 @@ string D2SkillD2OOSRateText(const bool valid, const ulong numerator, const ulong
       return("NA");
    return(StringFormat("%.8f", (denominator > 0 ? double(numerator) / denominator : 0.0)));
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillD2OOSReadError.                                |
 //+------------------------------------------------------------------+
 string D2SkillD2OOSReadError(const bool valid)
   {
    return(valid ? "none" : "bank_or_diagnostics_unavailable");
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillWriteD2OOSBankConfiguration.                   |
 //+------------------------------------------------------------------+
 bool D2SkillWriteD2OOSBankConfiguration(const int handle, const string prefix,
                                         CD2SkillBank *bank)
@@ -255,9 +251,8 @@ bool D2SkillWriteD2OOSBankConfiguration(const int handle, const string prefix,
    FileWrite(handle, prefix + "_inactivity_age=256");
    return(true);
   }
-
 //+------------------------------------------------------------------+
-//| Counts closed position exits in the exact tested symbol window. |
+//| Counts closed position exits in the exact tested symbol window.  |
 //+------------------------------------------------------------------+
 ulong D2SkillOOSClosedTrades(void)
   {
@@ -276,9 +271,8 @@ ulong D2SkillOOSClosedTrades(void)
      }
    return(trades);
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillAppendOOSResultRow.                            |
 //+------------------------------------------------------------------+
 bool D2SkillAppendOOSResultRow(const double final_balance, const double final_equity)
   {
@@ -373,9 +367,8 @@ bool D2SkillAppendOOSResultRow(const double final_balance, const double final_eq
    Print("D2Skill D2 OOS table: row appended to ", D2Skill_OOS_FILE);
    return(true);
   }
-
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Implements D2SkillWriteD2OOSManifest.                            |
 //+------------------------------------------------------------------+
 bool D2SkillWriteD2OOSManifest(const double final_balance, const double final_equity)
   {
@@ -465,7 +458,6 @@ bool D2SkillWriteD2OOSManifest(const double final_balance, const double final_eq
    Print("D2Skill D2 OOS manifest: ", D2Skill_OOS_MANIFEST_FILE);
    return(true);
   }
-
 //+------------------------------------------------------------------+
 //| Function OnInit.                                                 |
 //+------------------------------------------------------------------+
@@ -601,4 +593,4 @@ void OnTick(void)
    PreviousBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity = current_equity;
   }
-//+------------------------------------------------------------------+
+//+---+

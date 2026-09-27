@@ -1,0 +1,21 @@
+; AC-SRM Stage 05 inference/evaluation (rev9) — Test
+TimeFrame=PERIOD_H1
+RSIPeriod=14
+RSIPrice=1
+CCIPeriod=14
+CCIPrice=6
+ATRPeriod=14
+FastPeriod=12
+SlowPeriod=26
+SignalPeriod=9
+MACDPrice=1
+Start=D'2026.06.16'
+End=D'2026.06.28'
+InpDealHorizon=24
+MinBalance=50.0
+InpSeed=20260920
+InpRiskType=2
+InpRiskParameter=0.1
+InpMeanWeight=0.0
+InpQuantiles=32
+InpOMPBStage=3

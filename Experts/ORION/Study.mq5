@@ -1,9 +1,14 @@
+﻿//+------------------------------------------------------------------+
+//|                                                        Study.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| Study.mq5                                                        |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
+#property description "Харнесс обучения политик ORION: формирование и калибровка пары актор-критик."
+#property description "Проходит стадии жизненного цикла ORION и обучает актор, критиков Q1 и Q2 на исторических барах."
+#property description "Только для тестов; ордера не выставляет."
 
 #define Study
 #include "Trajectory.mqh"
@@ -116,7 +121,7 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
                   sell_lot, double(CurrentAction[4]), double(CurrentAction[5]));
    double reward = 0;
    if(!AdvanceAccount(GetPointer(Account), GetPointer(CurrentAction), position, MinBalance,
-                      // Gets Pointer.
+                      //--- Gets Pointer.
                       GetPointer(NextAccount), reward, terminal))
      { Print("TrainTransition stage=advance_account"); ReturnFalse; }
    const double target_value = reward;
@@ -141,9 +146,7 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
      { Print("TrainTransition stage=q1_forward"); ReturnFalse; }
    if(!Q2.feedForward(GetPointer(CriticInput), 1, false, GetPointer(ORIONMarket), -1))
      { Print("TrainTransition stage=q2_forward"); ReturnFalse; }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(trace_td)
      {
       CNeuronBaseOCL *q1_layer = Q1.Layer(3);
@@ -163,14 +166,10 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
 //--- move Actor back into the executable action manifold.
    const bool executable_action = (IsExecutableOrder(buy_lot, CurrentAction[1], CurrentAction[2]) ||
                                    IsExecutableOrder(sell_lot, CurrentAction[4], CurrentAction[5]));
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(iteration > 0 && UpdatePolicy > 0 && iteration % UpdatePolicy == 0)
      {
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
       if(executable_action)
         {
          if(!PolicyBackward())
@@ -189,9 +188,7 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
    double teacher_reward = 0;
    if(!BuildTeacherAction(position, GetPointer(Account), GetPointer(TeacherAction), teacher_reward))
      { Print("TrainTransition stage=teacher_action"); ReturnFalse; }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(teacher_reward > 0)
      {
       if(trace_td)
@@ -223,9 +220,7 @@ bool TrainTransition(const int position, const int iteration, bool &terminal)
    double random_reward = 0;
    if(!BuildRandomAction(position, GetPointer(Account), GetPointer(RandomAction), random_reward))
      { Print("TrainTransition stage=random_action"); ReturnFalse; }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(random_reward > 0)
      {
       if(!Actor.backProp(GetPointer(RandomAction), GetPointer(ORIONMarket), -1))
@@ -269,9 +264,7 @@ void TrainORIONActorCritic(void)
    PolicySkippedInvalid = 0;
    for(int iteration = 0; iteration < Iterations && !IsStopped(); iteration++)
      {
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
       if(episode == 0)
         {
          if(!ORIONForwardForecast(position, GetPointer(State), GetPointer(TimeState)))
@@ -282,9 +275,7 @@ void TrainORIONActorCritic(void)
             break;
         }
       bool terminal = false;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
       if(!TrainTransition(position, iteration, terminal))
         {
          failed_iteration = iteration;
@@ -297,18 +288,14 @@ void TrainORIONActorCritic(void)
         { failed_iteration = iteration; failed_position = position; break; }
       position--;
       episode++;
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
       if(position < first || terminal || episode >= MathMax(1, EpisodeBars))
         {
          if(position < first)
             position = last;
          episode = 0;
         }
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
       if(GetTickCount() - shown > 500)
         {
          const double q1_rmse = MathSqrt(MathMax(0.0, double(Q1.getRecentAverageError()))) / MathMax(EtalonBalance, 1.0);
@@ -322,9 +309,7 @@ void TrainORIONActorCritic(void)
         }
      }
    Comment("");
-//+------------------------------------------------------------------+
-//| Function if.                                                     |
-//+------------------------------------------------------------------+
+//--- Function if.
    if(completed_iterations != Iterations)
      {
       if(failed_iteration >= 0)
@@ -347,9 +332,7 @@ int OnInit()
   {
    ResetLastError();
    if(!ORIONInitIndicators() || !ORIONLoadForecastInference() || !LoadOrCreateORIONPolicies() ||
-//+------------------------------------------------------------------+
-//| Function ORIONVerifyFrozenForecastExact.                         |
-//+------------------------------------------------------------------+
+//--- Function ORIONVerifyFrozenForecastExact.
       !ORIONVerifyFrozenForecastExact())
      {
       PrintFormat("ORION Actor-Critic initialization failed at line %d error=%d", __LINE__, GetLastError());
@@ -376,4 +359,4 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    if(id == 1001)
       TrainORIONActorCritic();
   }
-//+------------------------------------------------------------------+
+//+---+

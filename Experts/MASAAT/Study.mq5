@@ -1,23 +1,20 @@
+﻿//+------------------------------------------------------------------+
+//|                                                        Study.mq5 |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
-//| Study.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
-//+------------------------------------------------------------------+
-#property copyright "Copyright DNG®"
+#property copyright "Copyright 2026, DNG"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
-//+------------------------------------------------------------------+
-//| |
-//+------------------------------------------------------------------+
+#property description "Харнесс обучения MASAAT: формирование и калибровка банков навыков."
+#property description "Проходит стадии жизненного цикла MASAAT и обучает пару актор-критик."
+#property description "Только для тестов; ордера не выставляет."
 #define Study
 #include "Trajectory.mqh"
 //+------------------------------------------------------------------+
 //| Input parameters                                                 |
 //+------------------------------------------------------------------+
 input int                  Iterations     = 100000;
-//+------------------------------------------------------------------+
-//| |
-//+------------------------------------------------------------------+
 STrajectory          Buffer[];
 CNet                 Actor;
 CNet                 Critic;
@@ -156,7 +153,7 @@ void Train(void)
          continue;
         }
       if(!state.Assign(Buffer[tr].States[i].state) ||
-         // Implements MathAbs.
+         //--- Implements MathAbs.
          MathAbs(state).Sum() == 0 ||
          !bState.AssignArray(state))
         {
@@ -276,5 +273,4 @@ void Train(void)
    ExpertRemove();
 //---
   }
-//+------------------------------------------------------------------+
-
+//+---+
