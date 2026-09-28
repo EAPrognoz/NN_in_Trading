@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                  StudyOnline.mq5 |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -9,13 +9,10 @@
 #property description "AC-SRM Stage 03 online: дообучение политики на LIVE-потоке (кросс-таргет TD)."
 #property description "Один переход на закрытый бар: r — прирост баланса/эквити, бутстрап y1/y2 от TargetQ1/Q2."
 #property description "Источник — LIVE-котировки и счёт тестерного терминала; результат — состояние энкодера/критиков."
-#property strict
+#define Online
 #include "Trajectory.mqh"
 //---
 input group                       "---- AC-SRM online training ----"
-input datetime                    Start          = 0; //Stream start (informational: live mode processes the whole stream)
-input datetime                    End            = 0; //Stream end (informational: live summary emits on deinit)
-input int                         Iterations     = 200000; //Training steps cap (0 = stream-driven, until EA deinit)
 input int                         EpisodeBars    = 2 * StackSize; //Bars per episode (unused in live mode; kept for symmetry)
 input int                         InpDealHorizon = 24; //Offline pretraining horizon; checkpoint compatibility
 input double                      MinBalance     = 50.0; //Minimum account balance
@@ -776,8 +773,6 @@ bool LiveActForBar(const double balance_now, const double equity_now,
    LivePrevEquity  = AccountInfoDouble(ACCOUNT_EQUITY);
    LiveIteration = action_iteration;
    LiveSteps++;
-   if(Iterations > 0 && LiveSteps >= Iterations)
-      return(LiveFinish(true));
    return(true);
   }
 //+-------------------------------------------------------------------------------------------------------------------------+

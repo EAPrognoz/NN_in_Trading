@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                         Test.mq5 |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -9,17 +9,14 @@
 #property description "AC-SRM Stage 03/05: инференс замороженной политики с оценкой на LIVE-счете."
 #property description "На старте бара Actor принимает решение; реальные ордера исполняются на тестерном счете."
 #property description "Источник — LIVE-котировки; результат — журнал PASS/FAIL и манифест-проверка."
-#property strict
+#define Online
 #include "Trajectory.mqh"
 //---
-int            Epochs = 0;
+int                              Epochs = 0;
 //---
 input group                       "---- AC-SRM inference ----"
-input datetime                    Start          = 0; //Stream start (informational: live mode processes the whole stream)
-input datetime                    End            = 0; //Stream end (informational: live summary emits on deinit)
 input int                         InpDealHorizon = 24; //Deal horizon (manifest validation symmetry)
 input double                      MinBalance     = 50.0; //Minimum account balance (irrecoverable threshold)
-input int                         InpSeed        = 20260921; //Replay seed base (per-owner)
 //---
 input group                       "---- SRM critic head ----"
 input int                         InpRiskType    = defSRM_MEAN_CVAR; //Risk measure (defSRM_*)

@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -5228,6 +5228,7 @@ void SkillShowForecastProgress(const double percent, const ulong failed_batches)
 //+------------------------------------------------------------------+
 //| Implements TrainSkillForecast.                                   |
 //+------------------------------------------------------------------+
+#ifndef Online
 void TrainSkillForecast(void)
   {
    if(!SkillReady)
@@ -5437,6 +5438,7 @@ void TrainSkillForecast(void)
      }
    ExpertRemove();
   }
+#endif
 //+-------------------------------------------------------------------+
 //| Actor-Critic inference and composition helpers Implements ORI...  |
 //+-------------------------------------------------------------------+
