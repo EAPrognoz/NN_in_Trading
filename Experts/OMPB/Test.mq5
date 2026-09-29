@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //| Test.mq5                                                         |
 //| Copyright 2026, DNG                                              |
 //| https://www.mql5.com/ru/users/dng                                |
@@ -593,4 +593,4 @@ void OnTick(void)
    PreviousBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity = current_equity;
   }
-//+---+
+//+------------------------------------------------------------------+

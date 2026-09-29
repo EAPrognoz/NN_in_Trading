@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                NeuroNet_Core.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -21173,4 +21173,4 @@ void CNeuronFieldPatternEmbedding::TrainMode(bool flag)
    cCandidates.TrainMode(bTrain);
    cScore.TrainMode(bTrain);
   }
-//+---+
+//+------------------------------------------------------------------+

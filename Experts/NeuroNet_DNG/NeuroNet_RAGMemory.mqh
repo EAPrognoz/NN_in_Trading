@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                           NeuroNet_RAGMemory.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -2349,4 +2349,4 @@ CLayerDescription* CNeuronRAGMemory::GetLayerInfo(void)
   }
 
 #endif // NEURONET_RAG_MEMORY_MQH
-//+---+
+//+------------------------------------------------------------------+

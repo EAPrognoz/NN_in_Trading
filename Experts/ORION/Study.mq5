@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                        Study.mq5 |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -359,4 +359,4 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    if(id == 1001)
       TrainORIONActorCritic();
   }
-//+---+
+//+------------------------------------------------------------------+

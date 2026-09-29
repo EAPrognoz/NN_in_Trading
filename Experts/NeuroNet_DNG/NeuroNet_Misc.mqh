@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                NeuroNet_Misc.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -3783,4 +3783,4 @@ CLayerDescription *CNeuronBayesianLinearOCL::GetLayerInfo(void)
 //--- Return the inherited description when its allocation succeeded.
    return(r);
   }
-//+---+
+//+------------------------------------------------------------------+

@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                           NeuroNet_SpikeFlow.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -19371,4 +19371,4 @@ void CNeuronResFlowLattice::TrainMode(bool flag)
    cAdaptFlow.TrainMode(bTrain);
    cConcat.TrainMode(bTrain);
   }
-//+---+
+//+------------------------------------------------------------------+

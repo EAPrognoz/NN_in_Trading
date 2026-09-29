@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                         NeuroNet_GraphSparse.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -5706,4 +5706,4 @@ void CNeuronGlobLocGraphAtt::TrainMode(bool flag)
    cLocal.TrainMode(flag);
    cConcat.TrainMode(flag);
   }
-//+---+
+//+------------------------------------------------------------------+

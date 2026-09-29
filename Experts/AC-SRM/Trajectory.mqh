@@ -7112,4 +7112,4 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    terminal = (balance_terminal || next_equity < margin * min_lot);
    return(next.GetIndex() < 0 || next.BufferWrite());
   }
-//+---+
+//+------------------------------------------------------------------+

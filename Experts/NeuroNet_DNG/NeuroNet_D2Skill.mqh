@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                             NeuroNet_D2Skill.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -3197,4 +3197,4 @@ bool CD2SkillBank::ResetDurableState(void)
    return(SetCorrectionBuffer(GetPointer(m_selected_correction)));
   }
 #endif // NEURONET_D2SKILL_MQH
-//+---+
+//+------------------------------------------------------------------+

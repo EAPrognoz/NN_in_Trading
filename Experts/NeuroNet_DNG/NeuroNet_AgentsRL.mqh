@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                            NeuroNet_AgentsRL.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -5612,4 +5612,4 @@ void CNeuronHiSSDLowLevelControler::SetOpenCL(COpenCLMy * obj)
    for(uint i = 0; i < cActionDecoder.Size(); i++)
       cActionDecoder[i].SetOpenCL(OpenCL);
   }
-//+---+
+//+------------------------------------------------------------------+

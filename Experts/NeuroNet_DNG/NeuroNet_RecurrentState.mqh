@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                      NeuroNet_RecurrentState.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -2218,4 +2218,4 @@ void CMamba4CastEmbeding::SetOpenCL(COpenCLMy * obj)
    cNorm.SetOpenCL(OpenCL);
    cProjectionWithTE.SetOpenCL(OpenCL);
   }
-//+---+
+//+------------------------------------------------------------------+

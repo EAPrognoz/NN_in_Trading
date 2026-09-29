@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                        Study.mq5 |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -375,4 +375,4 @@ COpenCLMy           *OpenCL;
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Probability", ADAPTProbability.getRecentAverageError());
    ExpertRemove();
   }
-//+---+
+//+------------------------------------------------------------------+

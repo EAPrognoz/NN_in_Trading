@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -4347,4 +4347,4 @@ bool AdvanceAccount(CBufferFloat *current, CBufferFloat *action, const int posit
    terminal = (balance_terminal || next_equity < margin * min_lot);
    return (next.GetIndex() < 0 || next.BufferWrite());
   }
-//+---+
+//+------------------------------------------------------------------+

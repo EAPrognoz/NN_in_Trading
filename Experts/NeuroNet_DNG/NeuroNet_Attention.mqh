@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                           NeuroNet_Attention.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -28451,4 +28451,4 @@ void CNeuronDictionaryCrossAtt::SetOpenCL(COpenCLMy *obj)
    if(!!OpenCL && cLevels.Neurons() > 0)
       bufLogSumExp = OpenCL.AddBuffer(sizeof(float) * cLevels.Neurons(), CL_MEM_READ_WRITE);
   }
-//+---+
+//+------------------------------------------------------------------+
