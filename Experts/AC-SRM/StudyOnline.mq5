@@ -13,23 +13,22 @@
 #include "Trajectory.mqh"
 //---
 input group                       "---- AC-SRM online training ----"
-input int                         EpisodeBars    = 2 * StackSize; //Bars per episode (unused in live mode; kept for symmetry)
-input int                         InpDealHorizon = 24; //Offline pretraining horizon; checkpoint compatibility
-input double                      MinBalance     = 50.0; //Minimum account balance
-input int                         UpdatePolicy   = 2; //Actor update interval at deal-open states
-input int                         InpUpdateTargets = 2; //Target-network update interval
-input float                       InpTauT        = 0.05f; //Cross-Polyak target smoothing tauT
-input float                       InpGamma       = 0.5f; //TD discount per resolved bar (gamma)
-input int                         InpSelector    = 0; //Policy SRM gradient source (0=event-hash 1=Q1 2=Q2)
-input int                         InpSeed        = 20260921; //Replay seed base (per-owner)
+input int                         InpDealHorizon = 24;            //Offline pretraining horizon; checkpoint compatibility
+input double                      MinBalance     = 50.0;          //Minimum account balance
+input int                         UpdatePolicy   = 2;             //Actor update interval at deal-open states
+input int                         InpUpdateTargets = 2;           //Target-network update interval
+input float                       InpTauT        = 0.05f;         //Cross-Polyak target smoothing tauT
+input float                       InpGamma       = 0.5f;          //TD discount per resolved bar (gamma)
+input int                         InpSelector    = 0;             //Policy SRM gradient source (0=event-hash 1=Q1 2=Q2)
+input int                         InpSeed        = 20260921;      //Replay seed base (per-owner)
 //---
 input group                       "---- SRM critic head ----"
 input int                         InpRiskType    = defSRM_MEAN_CVAR; //Risk measure (defSRM_*)
-input float                       InpRiskParameter = 0.1f; //Risk parameter (alpha/lambda/nu)
-input float                       InpMeanWeight  = 0.0f; //Mean-CVaR omega
-input float                       InpProbWeight  = 1.0f; //Distribution probability weight
-input float                       InpValueWeight = 1.0f; //Distribution value weight
-input int                         InpQuantiles   = 32; //Head quantiles (factory-fixed)
+input float                       InpRiskParameter = 0.1f;           //Risk parameter (alpha/lambda/nu)
+input float                       InpMeanWeight  = 0.0f;             //Mean-CVaR omega
+input float                       InpProbWeight  = 1.0f;             //Distribution probability weight
+input float                       InpValueWeight = 1.0f;             //Distribution value weight
+input int                         InpQuantiles   = 32;               //Head quantiles (factory-fixed)
 //---
 input group                       "---- AC-SRM production checkpoint ----"
 input ENUM_OMPB_STAGE             InpOMPBStage   = OMPB_STAGE_BASE_POLICY; //Chain stage: keep 03 (base policy)
