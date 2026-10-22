@@ -24,7 +24,7 @@ input string InpM05TrainingPhase = "AUTO";
 input bool InpUseM05 = true;
 input ENUM_DPCC_RESUME_MODE InpResumeMode = DPCC_RESUME_UNASSIGNED;    // Режим восстановления сохранённой модели.
 input ENUM_DPCC_MODE InpMode = DPCC_P0;                                // Режим DPCC: P0, P1 или P2.
-//--- 0 — весь доступный набор; больше 0 — указанное число обновлений.
+//--- 0 — весь доступный набор fit 2025; больше 0 — указанное число обновлений.
 input uint InpMaxUpdates = 0;
 
 input group "---- Дополнительные режимы и параметры ценовой ошибки ----"
