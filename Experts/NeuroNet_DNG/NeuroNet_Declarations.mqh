@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                        NeuroNet_Declarations.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -15,28 +15,135 @@
 #include "NeuroNet_Definitions.mqh"
 #endif // NEURONET_DEFINITIONS_MQH
 //+------------------------------------------------------------------+
+//| DPCC tensor shape and host context layout                        |
+//+------------------------------------------------------------------+
+struct SDPCCShape
+  {
+   uint              K;
+   uint              V;
+   uint              H;
+   uint              D;
+   uint              M;
+   uint              J;
+   uint              E;
+   uint              PlanBatch;
+   uint              NActions;
+   uint              StateSize;
+   uint              Embedding;
+   uint              Heads;
+   uint              KeyDimension;
+   uint              Depth;
+  };
+
+struct SDPCCLayout
+  {
+   uint              version;
+   ulong             offsets[11];
+   ulong             lengths[11];
+   ulong             total;
+  };
+//+------------------------------------------------------------------+
+//| DPCC fixed profile configured explicitly before execution        |
+//+------------------------------------------------------------------+
+struct SDPCCConfig
+  {
+   SDPCCShape        shape;
+   uint              contract_version;
+   uint              binary_layer_version;
+   ENUM_DPCC_MODE    mode;
+   uint              projection_max_iterations;
+   uint              projection_max_evaluations;
+   double            projection_improvement_atol;
+   double            projection_distance_tie_atol;
+   uint              projection_lookback_steps;
+   double            volume_scale;
+   double            price_scale;
+   double            money_scale;
+   uint              price_basis;
+   uint              quote_adapter;
+   uint              event_model;
+   double            max_quote_age_seconds;
+   double            max_last_age_seconds;
+   int               risk_type;
+   float             risk_parameter;
+   float             mean_weight;
+   float             gamma;
+   float             action_bias[6];
+   float             action_scale[6];
+   float             probability_tolerance;
+   uint              normalization_mode;
+   uint              loss_coordinates;
+   uint              randomness_version;
+   uint              margin_fx_profile;
+   uint              account_currency_digits;
+  };
+//+------------------------------------------------------------------+
+//| Explicit Action6 configuration for the ABI3 composite            |
+//+------------------------------------------------------------------+
+struct SDPCCRuntimeConfig
+  {
+   SDPCCConfig       financial;
+   double            beta[], alpha_bar[], sigma[];
+   float             condition_scale[109], condition_bias[109];
+  };
+//--- Integer/string identity for one immutable Action6 market/account decision.
+struct SDPCCDecisionMeta
+  {
+   ulong             decision_id;
+   ulong             market_state_id;
+   ulong             q1_state_id;
+   ulong             q2_state_id;
+   ulong             noise_seed;
+   long              decision_server_time;
+   long              bar_index;
+   uint              mode;
+   string            market_sha256;
+   string            profile_sha256;
+  };
+//+------------------------------------------------------------------+
+//| DPCC host snapshot identity and random key                       |
+//+------------------------------------------------------------------+
+struct SDPCCSnapshotMeta
+  {
+   ulong             decision_key;
+   ulong             base_seed;
+   datetime          decision_time;
+   uint              repeat;
+   string            symbol;
+   string            account_currency;
+   ENUM_TIMEFRAMES   timeframe;
+   long              bar_open_times[];
+   long              bar_close_times[];
+   long              previous_mark_time;
+  };
+//+------------------------------------------------------------------+
 //| NeuroNet class declarations in original dependency order         |
 //+------------------------------------------------------------------+
 class CConnection : public CObject
   {
 public:
-   float             weight;        ///< Current weight
-   float             deltaWeight;   ///< last delta of weight used in SGD optimization
-   float             mt;            ///< First moment in Adam optimization
-   float             vt;            ///< Second moment in Adam optimization
+   //--- Current weight
+   float             weight;
+   //--- last delta of weight used in SGD optimization
+   float             deltaWeight;
+   //--- First moment in Adam optimization
+   float             mt;
+   //--- Second moment in Adam optimization
+   float             vt;
 
    /** Constructor @param[in] w initial weight */ CConnection(float w) { weight = w; deltaWeight = 0; mt = 0; vt = 0; }
    /** Destructor */ ~CConnection() {};
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
-   virtual int       Type(void)   const   {  return defConnect;   }  ///< Identificator of class.@return Type of class
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defConnect);   }
   };
-//+------------------------------------------------------------------+
 //---\class CArrayCon
 //---\brief Array of connections to anothe neuron
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para51">the link.</A>
-//+------------------------------------------------------------------+
 class CArrayCon  :    public CArrayObj
   {
 public:
@@ -44,69 +151,100 @@ public:
                      CArrayCon(void) {};
    /** Destructor */ ~CArrayCon(void) {};
    //---
-   virtual bool      CreateElement(int const index); ///< Method for cearing new element by index @param[in] index Index of new element @return logical result of operation
-   virtual void      IncreaseTotal()   {  m_data_total++; } ///< Increase number of elements in array
-   virtual int       Type(void)  const { return defArrayConnects; }  ///< Identificator of class.@return Type of class
+   //--- Method for cearing new element by index @param[in] index Index of new element @return logical result of operation
+   virtual bool      CreateElement(int const index);
+   //--- Increase number of elements in array
+   virtual void      IncreaseTotal()   {  m_data_total++; }
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)  const { return(defArrayConnects); }
   };
-//+------------------------------------------------------------------+
 //---\class CLayer
 //--- Class of neurons collection in one layer of Neural Net.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para53">the link.</A>
-//+------------------------------------------------------------------+
 class CLayer;
 class CNeuronBaseOCL;
 class CNeuronAddToStack;
-//+------------------------------------------------------------------+
 //---\class CNeuronBase
 //--- The base class of neuron.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para52">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronBase    :  public CObject
   {
 protected:
-   float             outputVal;  ///< Output value
-   float             prevVal;    ///< Previous output value
-   uint              m_myIndex;  ///< Index of neuron in layer
-   float             gradient;   ///< Current gradient of neuron
-   CArrayCon         *Connections;  ///< Array of connections with neurons in next layer
-   ENUM_ACTIVATION   activation;    ///< Activation type (#ENUM_ACTIVATION)
-   ENUM_OPTIMIZATION optimization;  ///< Optimization method (#ENUM_OPTIMIZATION)
-   int               t;             ///< Count of iterations
+   //--- Output value
+   float             outputVal;
+   //--- Previous output value
+   float             prevVal;
+   //--- Index of neuron in layer
+   uint              m_myIndex;
+   //--- Current gradient of neuron
+   float             gradient;
+   //--- Array of connections with neurons in next layer
+   CArrayCon         *Connections;
+   //--- Activation type (#ENUM_ACTIVATION)
+   ENUM_ACTIVATION   activation;
+   //--- Optimization method (#ENUM_OPTIMIZATION)
+   ENUM_OPTIMIZATION optimization;
+   //--- Count of iterations
+   int               t;
    //---
-   virtual bool      feedForward(CLayer *prevLayer)               {  ReturnFalse;    }   ///< Feed Forward method.@param prevLayer Pointer to previos layer.
-   virtual bool      calcHiddenGradients(CLayer *&nextLayer)     {  ReturnFalse;     }   ///< Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
-   virtual bool      updateInputWeights(CLayer *&prevLayer)       {  ReturnFalse;    }   ///< Method for updating weights.@param prevLayer Pointer to previos layer.
-   virtual float     activationFunction(float x);                                        ///< Method to calculate activation function.@param x Input data. @return Result of activation function.
-   virtual float     SigmoidFunction(float x)                    {  return (float)MathPow(1 + exp(-x), -1); } ///< Calculating Sigmoid \f$\frac{1}{1+e^x}\f$.@param x Input data.@return Result of calculation
-   virtual float     TanhFunction(float x)                       {  return (float)tanh(x);   }              ///< Calculating \f$tanh(x)\f$.@param x Input data.@return Result of calculation
-   virtual CLayer    *getOutputLayer(void)                        {  return NULL;      }  ///< Method for getting a pointer to the resulting neural layer. Not used in fully connected neural networks.@return Pointer to layer.
+   //--- Feed Forward method.@param prevLayer Pointer to previos layer.
+   virtual bool      feedForward(CLayer *prevLayer)               {  ReturnFalse;    }
+   //--- Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
+   virtual bool      calcHiddenGradients(CLayer *&nextLayer)     {  ReturnFalse;     }
+   //--- Method for updating weights.@param prevLayer Pointer to previos layer.
+   virtual bool      updateInputWeights(CLayer *&prevLayer)       {  ReturnFalse;    }
+   //--- Method to calculate activation function.@param x Input data. @return Result of activation function.
+   virtual float     activationFunction(float x);
+   //--- Calculating Sigmoid \f$\frac{1}{1+e^x}\f$.@param x Input data.@return Result of calculation
+   virtual float     SigmoidFunction(float x)                    {  return(float)MathPow(1 + exp(-x), -1); }
+   //--- Calculating \f$tanh(x)\f$.@param x Input data.@return Result of calculation
+   virtual float     TanhFunction(float x)                       {  return(float)tanh(x);   }
+   //--- Method for getting a pointer to the resulting neural layer. Not used in fully connected neural networks.@return Pointer to layer.
+   virtual CLayer    *getOutputLayer(void)                        {  return(NULL);      }
 public:
    /** Constructor */
                      CNeuronBase(void);
    /** Destructor */~CNeuronBase(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, ENUM_OPTIMIZATION optimization_type);  ///< Method of initialization class.@param numOutputs Number of connections to next layer.@param myIndex Index of neuron in layer.@param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
-   virtual void      SetActivationFunction(ENUM_ACTIVATION value) {  activation = value; }      ///< Set the type of activation function (#ENUM_ACTIVATION)
+   //--- Method of initialization class.@param numOutputs Number of connections to next layer.@param myIndex Index of neuron in layer.@param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
+   virtual bool      Init(uint numOutputs, uint myIndex, ENUM_OPTIMIZATION optimization_type);
+   //--- Set the type of activation function (#ENUM_ACTIVATION)
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) {  activation = value; }
    //---
    //---static float            lr;
-   static float            alpha;        ///< Multiplier to momentum in SGD optimization
+   //--- Multiplier to momentum in SGD optimization
+   static float            alpha;
    //---
-   virtual void      setOutputVal(float val)                     {  prevVal = outputVal;   outputVal = val;    } ///< Set the output value
-   virtual float     getOutputVal()                               {  return outputVal; }                      ///< Return result of feed forward operations.@return Output value
-   virtual float     getPrevVal()                                 {  return prevVal;   }                      ///< Return result of feed forward operations at previous iteration.@return Previous output value
-   virtual void      setGradient(float val)                      {  gradient = val;     }                    ///< Set gradient value to neuron.
-   virtual float     getGradient()                                {  return gradient;  }                      ///< Return gradient of neuron.@return Gradient
-   virtual CArrayCon *getConnections()                            {  return Connections;}                     ///< Method to get access to array of connections.@return Pointer to connections array
-   virtual float     activationFunctionDerivative(float x);   ///< Calculate derivative of activation function.@param[in] x Input data@return Derivative
-   virtual float     SigmoidFunctionDerivative(float x)          {  return x * (1 - x);   } ///< Calculate derivative of Sigmoid function.@param x Input data@return Derivative
-   virtual float     TanhFunctionDerivative(float x)             {  return (1 + x) * (1 - x);  } ///< Calculate derivative of \f$tanh(x)\f$.@param x Input data@return Derivative
+   //--- Set the output value
+   virtual void      setOutputVal(float val)                     {  prevVal = outputVal;   outputVal = val;    }
+   //--- Return result of feed forward operations.@return Output value
+   virtual float     getOutputVal()                               {  return(outputVal); }
+   //--- Return result of feed forward operations at previous iteration.@return Previous output value
+   virtual float     getPrevVal()                                 {  return(prevVal);   }
+   //--- Set gradient value to neuron.
+   virtual void      setGradient(float val)                      {  gradient = val;     }
+   //--- Return gradient of neuron.@return Gradient
+   virtual float     getGradient()                                {  return(gradient);  }
+   //--- Method to get access to array of connections.@return Pointer to connections array
+   virtual CArrayCon *getConnections()                            {  return(Connections);}
+   //--- Calculate derivative of activation function.@param[in] x Input data@return Derivative
+   virtual float     activationFunctionDerivative(float x);
+   //--- Calculate derivative of Sigmoid function.@param x Input data@return Derivative
+   virtual float     SigmoidFunctionDerivative(float x)          {  return(x * (1 - x));   }
+   //--- Calculate derivative of \f$tanh(x)\f$.@param x Input data@return Derivative
+   virtual float     TanhFunctionDerivative(float x)             {  return(1 + x) * (1 - x);  }
    //---
-   virtual bool      feedForward(CObject *&SourceObject);            ///< Dispatch method for defining the subroutine for Feed Forward process.@param SourceObject Pointer to previos layer.
-   virtual bool      calcHiddenGradients(CObject *&TargetObject);    ///< Dispatch method for defining the subroutine for transfer gradient to previous layer.@param TargetObject Pointer to next layer.
-   virtual bool      updateInputWeights(CObject *&SourceObject);     ///< Dispatch method for defining the subroutine for updating weights.@param SourceObject Pointer to previos layer.
+   //--- Dispatch method for defining the subroutine for Feed Forward process.@param SourceObject Pointer to previos layer.
+   virtual bool      feedForward(CObject *&SourceObject);
+   //--- Dispatch method for defining the subroutine for transfer gradient to previous layer.@param TargetObject Pointer to next layer.
+   virtual bool      calcHiddenGradients(CObject *&TargetObject);
+   //--- Dispatch method for defining the subroutine for updating weights.@param SourceObject Pointer to previos layer.
+   virtual bool      updateInputWeights(CObject *&SourceObject);
    //---
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
    //--- Loads .
-   virtual bool      Load(int const file_handle)///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle)
      {
       activation = (ENUM_ACTIVATION)FileReadInteger(file_handle, INT_VALUE);
       optimization = (ENUM_OPTIMIZATION)FileReadInteger(file_handle, INT_VALUE);
@@ -114,51 +252,61 @@ public:
       return(Connections.Load(file_handle));
      }
    //---
-   virtual int       Type(void)        const                      {  return defNeuronBase;                  }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronBase);                  }
   };
-//+------------------------------------------------------------------+
 //---\class CNeuron
 //--- Class of neuron for full connected layers.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para52">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuron  :  public CNeuronBase
   {
 private:
-   virtual bool      feedForward(CLayer *prevLayer);                          ///< Feed Forward method.@param prevLayer Pointer to previos layer.
-   virtual bool      calcHiddenGradients(CLayer *&nextLayer);                 ///< Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
-   virtual bool      updateInputWeights(CLayer *&prevLayer);                  ///< Method for updating weights.@param prevLayer Pointer to previos layer.
+   //--- Feed Forward method.@param prevLayer Pointer to previos layer.
+   virtual bool      feedForward(CLayer *prevLayer);
+   //--- Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
+   virtual bool      calcHiddenGradients(CLayer *&nextLayer);
+   //--- Method for updating weights.@param prevLayer Pointer to previos layer.
+   virtual bool      updateInputWeights(CLayer *&prevLayer);
 
 public:
    /** Constructor */
                      CNeuron(void)  {};
    /** Destructor */~CNeuron(void) { Connections.Shutdown(); }
    //---
-   virtual bool      calcOutputGradients(float targetVals);                  ///< Method of output gradients calculation.@param targetVals Traget value
-   virtual float     sumDOW(CLayer *&nextLayer) ;                             ///< A method for collecting gradients from the next layer.@param[in] nextLayer Pointer to next layer@return Total gradient to neuron.
-   virtual int       Type(void)   const   {  return defNeuron;   } ///< Identificator of class.@return Type of class
+   //--- Method of output gradients calculation.@param targetVals Traget value
+   virtual bool      calcOutputGradients(float targetVals);
+   //--- A method for collecting gradients from the next layer.@param[in] nextLayer Pointer to next layer@return Total gradient to neuron.
+   virtual float     sumDOW(CLayer *&nextLayer) ;
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuron);   }
   };
-//+------------------------------------------------------------------+
 //---\class COpenCLMy
 //--- Class for working with OpenCL
-//+------------------------------------------------------------------+
+class CNet;
 class COpenCLMy   :  public COpenCL
   {
 protected:
+   CNet                    *m_inference_owner;
    uaLongChar              uLocalDimension;
    uaLongChar              uMaxWorkGroup;
 
 public:
    /** Constructor */
-                     COpenCLMy(void)   {};
+                     COpenCLMy(CNet *owner = NULL) : m_inference_owner(owner) {};
+   bool              InferenceRuntimeLoadActive(void) const;
    /** Destructor */~COpenCLMy(void)   { for(int i = 0; i < m_kernels_total; i++) KernelFree(i); }
    bool              Initialize(const string program, const bool show_log = true);
    template<typename T>
-   int               AddBufferFromArray(T &data[], const uint data_array_offset, const uint data_array_count, const uint flags);
+   int               AddBufferFromArray(T &data[],
+                                        const uint data_array_offset,
+                                        const uint data_array_count,
+                                        const uint flags
+                                       );
    //---< Method for creating OpenCL buffer from array.@param data[] Array of data.@param data_array_offset Offset of data in array.@param data_array_count Number of data items in array.@param flags Buffer's properties (CL_MEM_READ_WRITE, CL_MEM_WRITE_ONLY, CL_MEM_READ_ONLY, CL_MEM_ALLOC_HOST_PTR)
    int               AddBuffer(uint size_in_bytes, const uint flags);
    //---
-   long              GetMaxLocalSize(const int dimension) const { return uLocalDimension.data[dimension]; }
-   long              GetMaxWorkGroupSize(void) const { return uMaxWorkGroup.data[0]; }
+   long              GetMaxLocalSize(const int dimension) const { return(uLocalDimension.data[dimension]); }
+   long              GetMaxWorkGroupSize(void) const { return(uMaxWorkGroup.data[0]); }
    ulong             GetBufferSize(const int buffer_index) const;
   };
 //+------------------------------------------------------------------+
@@ -167,9 +315,12 @@ public:
 class CLayer: public CArrayObj
   {
 private:
-   uint              iOutputs;                                 ///< Number of output connections from 1 neuron to neurons in next layer.
-   int               iFileHandle;                              ///< File handle for download result of previous study.
-   COpenCLMy         *OpenCL;                                   ///< Class for working with OpenCL
+   //--- Number of output connections from 1 neuron to neurons in next layer.
+   uint              iOutputs;
+   //--- File handle for download result of previous study.
+   int               iFileHandle;
+   //--- Class for working with OpenCL
+   COpenCLMy         *OpenCL;
 
 public:
    /** Constructor */
@@ -177,11 +328,15 @@ public:
    //---< @param[in] outputs Number of output connections from 1 neuron to neurons in next layer @param[in] handle File handle for download result of previous study @param[in] OpenCL Pointer to class for working with OpenCL
    /** Destructor */~CLayer(void) {};
    //---
-   virtual bool      CreateElement(int const index);           ///< Method for creating new element in layer
-   virtual void      IncreaseTotal()   {  m_data_total++;   }  ///< Method for increase number of items in layer
-   virtual int       Type(void)  const { return defLayer; }    ///< Identificator of class.@return Type of class
-   virtual bool      Load(const int file_handle);              ///< Load method @param[in] file_handle handle of file @return logical result of operation
-   virtual uint      Outputs(void)  { return iOutputs;   }
+   //--- Method for creating new element in layer
+   virtual bool      CreateElement(int const index);
+   //--- Method for increase number of items in layer
+   virtual void      IncreaseTotal()   {  m_data_total++;   }
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)  const { return(defLayer); }
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(const int file_handle);
+   virtual uint      Outputs(void)  { return(iOutputs);   }
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual bool      SupportsOpenCLChecked(void) const;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj);
@@ -191,19 +346,17 @@ public:
    CObject           *At(const int index) const
      {
       if(index >= m_data_total || (-index) > m_data_total)
-         return NULL;
+         return(NULL);
       if(index < 0)
          return(m_data[m_data_total + index]);
       return(m_data[index]);
      }
-   virtual CNeuronBaseOCL* operator[](const int index) const { return (CNeuronBaseOCL*)At(index); }
-   virtual CObject*        AsObject(void) { return GetPointer(this); }
+   virtual CNeuronBaseOCL* operator[](const int index) const { return(CNeuronBaseOCL*)At(index); }
+   virtual CObject*        AsObject(void) { return(GetPointer(this)); }
   };
-//+------------------------------------------------------------------+
 //---\class CArrayLayer
 //--- Class of layers collection in Neural Net.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para53">the link.</A>
-//+------------------------------------------------------------------+
 class CArrayLayer  :    public CArrayObj
   {
 public:
@@ -211,70 +364,93 @@ public:
                      CArrayLayer(void) {};
    /** Destructor */~CArrayLayer(void) {};
    //---
-   virtual bool      CreateElement(uint neurons,  uint outputs);  ///< Method for creating new element
-   virtual int       Type(void)  const { return defArrayLayer; }  ///< Identificator of class.@return Type of class
+   //--- Method for creating new element
+   virtual bool      CreateElement(uint neurons,  uint outputs);
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)  const { return(defArrayLayer); }
   };
-//+------------------------------------------------------------------+
 //---\class CNeuronProof
 //--- Class of pooling layer
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8234#para42">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronProof : public CNeuronBase
   {
 protected:
-   CLayer            *OutputLayer;                                      ///< Layer of output data. Used for connection with next layer.
-   int               iWindow;                                           ///< Input window size
-   int               iStep;                                             ///< Size of step
-
-   virtual bool      feedForward(CLayer *prevLayer);                    ///< Feed Forward method.@param prevLayer Pointer to previos layer.
-   virtual bool      calcHiddenGradients(CLayer *&nextLayer);           ///< Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
+   //--- Layer of output data. Used for connection with next layer.
+   CLayer            *OutputLayer;
+   //--- Input window size
+   int               iWindow;
+   //--- Size of step
+   int               iStep;
+   //--- Feed Forward method.@param prevLayer Pointer to previos layer.
+   virtual bool      feedForward(CLayer *prevLayer);
+   //--- Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
+   virtual bool      calcHiddenGradients(CLayer *&nextLayer);
 
 public:
    /** Constructor */
                      CNeuronProof(void) {};
    /** Destructor */~CNeuronProof(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, int window, int step, int units_count, ENUM_OPTIMIZATION optimization_type);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          int window,
+                          int step,
+                          int units_count,
+                          ENUM_OPTIMIZATION optimization_type
+                         );
    //---< Method of initialization class.@param numOutputs Number of connections to next layer.@param myIndex Index of neuron in layer.@param window Size of input window @param step Step size.@param units_countNumber of neurons.@param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual CLayer    *getOutputLayer(void)  { return OutputLayer;  }    ///< Method for getting a pointer to the resulting neural layer. Not used in fully connected neural networks.@return Pointer to layer.
-   virtual bool      calcInputGradients(CLayer *prevLayer);             ///< Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
-   virtual bool      calcInputGradients(CNeuronBase *prevNeuron, uint index); ///< Method to transfer gradients to neuron in previous layer @param[in] prevNeuron Pointer to neuron.@param[in] index Index of neuron in previous layer
+   //--- Method for getting a pointer to the resulting neural layer. Not used in fully connected neural networks.@return Pointer to layer.
+   virtual CLayer    *getOutputLayer(void)  { return(OutputLayer);  }
+   //--- Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   virtual bool      calcInputGradients(CLayer *prevLayer);
+   //--- Method to transfer gradients to neuron in previous layer @param[in] prevNeuron Pointer to neuron.@param[in] index Index of neuron in previous layer
+   virtual bool      calcInputGradients(CNeuronBase *prevNeuron, uint index);
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
-   virtual int       Type(void)   const   {  return defNeuronProof;   }///< Identificator of class.@return Type of class
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronProof);   }
   };
-//+------------------------------------------------------------------+
 //---\class CNeuronConv
 //--- Class of convolution layer
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8234#para43">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronConv  :  public CNeuronProof
   {
 protected:
-   float             param;   //PReLU param
-   virtual bool      feedForward(CLayer *prevLayer);                    ///< Feed Forward method.@param prevLayer Pointer to previos layer.
-   virtual bool      calcHiddenGradients(CLayer *&nextLayer);           ///< Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
-   virtual float     activationFunction(float x);                      ///< Method to calculate activation function.@param x Input data. @return Result of activation function.
-   virtual bool      updateInputWeights(CLayer *&prevLayer);            ///< Method for updating weights.@param prevLayer Pointer to previos layer.
+   //--- PReLU param
+   float             param;
+   //--- Feed Forward method.@param prevLayer Pointer to previos layer.
+   virtual bool      feedForward(CLayer *prevLayer);
+   //--- Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
+   virtual bool      calcHiddenGradients(CLayer *&nextLayer);
+   //--- Method to calculate activation function.@param x Input data. @return Result of activation function.
+   virtual float     activationFunction(float x);
+   //--- Method for updating weights.@param prevLayer Pointer to previos layer.
+   virtual bool      updateInputWeights(CLayer *&prevLayer);
 public:
    /** Constructor */
                      CNeuronConv() :   param((float)0.01) { };
    /** Destructor */~CNeuronConv(void)             { };
    //---
-   virtual bool      calcInputGradients(CLayer *prevLayer);                  ///< Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
-   virtual bool      calcInputGradients(CNeuronBase *prevNeuron, uint index);///< Method to transfer gradients to neuron in previous layer @param[in] prevNeuron Pointer to neuron.@param[in] index Index of neuron in previous layer
-   virtual float     activationFunctionDerivative(float x);                 ///< Calculate derivative of activation function.@param[in] x Input data@return Derivative
-   virtual int       Type(void)   const   {  return defNeuronConv;   }///< Identificator of class.@return Type of class
+   //--- Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   virtual bool      calcInputGradients(CLayer *prevLayer);
+   //--- Method to transfer gradients to neuron in previous layer @param[in] prevNeuron Pointer to neuron.@param[in] index Index of neuron in previous layer
+   virtual bool      calcInputGradients(CNeuronBase *prevNeuron, uint index);
+   //--- Calculate derivative of activation function.@param[in] x Input data@return Derivative
+   virtual float     activationFunctionDerivative(float x);
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronConv);   }
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
   };
-//+------------------------------------------------------------------+
 //---\class CLayerDescription
 //--- Class of layer decription. Used to describe the structure of a neural network from the main program.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8234#para44">the link.</A>
-//+------------------------------------------------------------------+
 class CLayerDescription    :  public CObject
   {
 public:
@@ -282,16 +458,26 @@ public:
                      CLayerDescription(void);
    /** Destructor */~CLayerDescription(void) {};
    //---
-   uint              type;          ///< Type of neurons in layer (\ref ObjectTypes)
-   uint              count;         ///< Number of neurons
-   uint              window;        ///< Size of input window
-   uint              window_out;    ///< Size of output window
-   uint              step;          ///< Step size
-   uint              layers;        ///< Layers count
-   uint              batch;         ///< Batch Size
-   ENUM_ACTIVATION   activation;    ///< Type of activation function (#ENUM_ACTIVATION)
-   ENUM_OPTIMIZATION optimization;  ///< Type of optimization method (#ENUM_OPTIMIZATION)
-   float             probability;   ///< Probability of neurons shutdown, only Dropout used
+   //--- Type of neurons in layer (\ref ObjectTypes)
+   uint              type;
+   //--- Number of neurons
+   uint              count;
+   //--- Size of input window
+   uint              window;
+   //--- Size of output window
+   uint              window_out;
+   //--- Step size
+   uint              step;
+   //--- Layers count
+   uint              layers;
+   //--- Batch Size
+   uint              batch;
+   //--- Type of activation function (#ENUM_ACTIVATION)
+   ENUM_ACTIVATION   activation;
+   //--- Type of optimization method (#ENUM_OPTIMIZATION)
+   ENUM_OPTIMIZATION optimization;
+   //--- Probability of neurons shutdown, only Dropout used
+   float             probability;
    uint              windows[];
    uint              units[];
    uint              heads[];
@@ -300,42 +486,62 @@ public:
    //---
    virtual bool      Copy(CLayerDescription *source);
    //---
-   virtual bool      operator= (CLayerDescription *source)  { return Copy(source); }
+   virtual bool      operator= (CLayerDescription *source)  { return(Copy(source)); }
   };
 //+------------------------------------------------------------------+
 //| Bayesian linear posterior layer with grouped sampling.           |
 //+------------------------------------------------------------------+
 class CBufferFloat;
 class CNeuronRAGMemory;
-//+------------------------------------------------------------------+
 //---\class CNet
 //--- The main class of the neural network. Contains basic methods for the functioning of a neural network.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para53">the link.</A>
-//+------------------------------------------------------------------+
 class CNet : public CObject
   {
 protected:
-   bool                    backPropOCL(CBufferFloat *targetVals, CBufferFloat *SecondInput = NULL, CBufferFloat *SecondGradient = NULL, bool layer_by_layer = false, ENUM_ACTIVATION SecondActivation = None);       ///< Back propagation method for GPU calculation. @param[in] targetVals Target values
+   //--- Back propagation method for GPU calculation. @param[in] targetVals Target values
+   bool                    backPropOCL(CBufferFloat *targetVals,
+                                       CBufferFloat *SecondInput = NULL,
+                                       CBufferFloat *SecondGradient = NULL,
+                                       bool layer_by_layer = false,
+                                       ENUM_ACTIVATION SecondActivation = None
+                                      );
    int                     backPropCount;
-   float                   recentAverageError;                 ///< Average error
-   CArrayLayer            *layers;                             ///< Array of layers
-   COpenCLMy              *opencl;                             ///< Class for working with OpenCL
-   COpenCLMy              *pendingOpenCL;                       ///< Target context during a checked transfer
-   bool                    bOwnOpenCL;                         ///< This net created and must release OpenCL
-   bool                    bWeightsUpdate;                     ///< Allows trainable-parameter updates without suppressing gradients
+   //--- Average error
+   float                   recentAverageError;
+   //--- Array of layers
+   CArrayLayer            *layers;
+   //--- Class for working with OpenCL
+   COpenCLMy              *opencl;
+   //--- Target context during a checked transfer
+   COpenCLMy              *pendingOpenCL;
+   bool                    m_inference_load_active;
+   bool                    InferenceSnapshotLoadFile(const string file_name, const bool common);
+   bool                    InferenceSnapshotGraph(void) const;
+   bool                    DPCCPolicyParametersGraph(void);
+   int                     DPCCPolicyTrainingGraphKind(void);
+   bool                    ReadDPCCPolicyParametersOnly(const int file_handle, const bool apply);
+   bool                    ReadDPCCPolicyTrainingStateOnly(const int file_handle, const bool apply);
+   //--- This net created and must release OpenCL
+   bool                    bOwnOpenCL;
+   //--- Allows trainable-parameter updates without suppressing gradients
+   bool                    bWeightsUpdate;
    virtual bool            OpenCLInit(void);
+   bool                    PreflightForward(void) const;
 
 public:
    /** Constructor */
                      CNet(void)
-      :              pendingOpenCL(NULL),
+      :              m_inference_load_active(false),
+                     pendingOpenCL(NULL),
                      bOwnOpenCL(false),
                      bWeightsUpdate(true)
      {
       Create(NULL);
      }
                      CNet(CArrayObj *Description)
-      :              pendingOpenCL(NULL),
+      :              m_inference_load_active(false),
+                     pendingOpenCL(NULL),
                      bOwnOpenCL(false),
                      bWeightsUpdate(true)
      {
@@ -343,43 +549,111 @@ public:
      }
    bool                    Create(CArrayObj *Description);
    /** Destructor */      ~CNet(void);
-   bool                    feedForward(CArrayFloat *inputVals, int window = 1, bool tem = true, CBufferFloat *SecondInput = NULL); ///< Feed Forward method.@param[in] prevLayer Pointer to previos layer. @param[in] window Window of input data. @param[in] tem Use Time Embedding.
+   //--- Feed Forward method.@param[in] prevLayer Pointer to previos layer. @param[in] window Window of input data. @param[in] tem Use Time Embedding.
+   bool                    feedForward(CArrayFloat *inputVals,
+                                       int window = 1,
+                                       bool tem = true,
+                                       CBufferFloat *SecondInput = NULL
+                                      );
    bool                    feedForward(CNet *inputNet, int inputLayer = -1, CBufferFloat *SecondInput = NULL);
-   bool                    feedForward(CNet *inputNet, int inputLayer = -1, CNet *secondNet = NULL, int secondLayer = -1);
-   bool                    feedForward(CArrayFloat *inputVals, int window = 1, bool tem = true, CNet *secondNet = NULL, int secondLayer = -1);
-   bool                    backProp(CArrayFloat *targetVals, CBufferFloat *SecondInput = NULL, CBufferFloat *SecondGradient = NULL);               ///< Back propagation method. @param[in] targetVals Target values
-   bool                    backProp(CArrayFloat *targetVals, CNet *secondNet = NULL, int secondLayer = -1);               ///< Back propagation method. @param[in] targetVals Target values
-   bool                    backPropGradient(CBufferFloat *SecondInput = NULL, CBufferFloat *SecondGradient = NULL, int LastLayer = -1, bool load_weights = true);     ///< Back propagation method for GPU calculation. @param[in] targetVals Target values
-   bool                    backPropGradient(CNet *secondNet, int secondLayer = -1, int LastLayer = -1, bool load_weights = true);
-   void                    getResults(CBufferFloat *&resultVals);                ///< Method to get results of feed forward process.@param[out] resultVals Array of result values
-   void                    getResults(vector<float> &resultVals);                ///< Method to get results of feed forward process.@param[out] resultVals Array of result values
-   void                    getResults(float &resultVals[]);                      ///< Method to get results of feed forward process.@param[out] resultVals Array of result values
-   float                   getRecentAverageError()  { return recentAverageError; } ///< Method to check quality of study. @return Average error
-   bool                    Save(string file_name, float error, float undefine, float forecast, datetime time, bool common = true);
+   bool                    feedForward(CNet *inputNet,
+                                       int inputLayer = -1,
+                                       CNet *secondNet = NULL,
+                                       int secondLayer = -1
+                                      );
+   bool                    feedForward(CArrayFloat *inputVals,
+                                       int window = 1,
+                                       bool tem = true,
+                                       CNet *secondNet = NULL,
+                                       int secondLayer = -1
+                                      );
+   //--- Back propagation method. @param[in] targetVals Target values
+   bool                    backProp(CArrayFloat *targetVals,
+                                    CBufferFloat *SecondInput = NULL,
+                                    CBufferFloat *SecondGradient = NULL
+                                   );
+   //--- Back propagation method. @param[in] targetVals Target values
+   bool                    backProp(CArrayFloat *targetVals, CNet *secondNet = NULL, int secondLayer = -1);
+   //--- Back propagation method for GPU calculation. @param[in] targetVals Target values
+   bool                    backPropGradient(CBufferFloat *SecondInput = NULL,
+                                            CBufferFloat *SecondGradient = NULL,
+                                            int LastLayer = -1,
+                                            bool load_weights = true
+                                           );
+   bool                    backPropGradient(CNet *secondNet,
+                                            int secondLayer = -1,
+                                            int LastLayer = -1,
+                                            bool load_weights = true
+                                           );
+   //--- Method to get results of feed forward process.@param[out] resultVals Array of result values
+   void                    getResults(CBufferFloat *&resultVals);
+   //--- Method to get results of feed forward process.@param[out] resultVals Array of result values
+   void                    getResults(vector<float> &resultVals);
+   //--- Method to get results of feed forward process.@param[out] resultVals Array of result values
+   void                    getResults(float &resultVals[]);
+   //--- Method to check quality of study. @return Average error
+   float                   getRecentAverageError()  { return(recentAverageError); }
+   bool                    Save(string file_name,
+                                float error,
+                                float undefine,
+                                float forecast,
+                                datetime time,
+                                bool common = true
+                               );
    //---< Save method. @param[in] file_name File name to save @param[in] error Average error @param[in] undefine Undefined percent @param[in] Foecast percent @param[in] time Last study time @param[in] common Common flag
    virtual bool            Save(const int file_handle);
-   bool                    Load(string file_name, float &error, float &undefine, float &forecast, datetime &time, bool common = true);
+   //--- Versioned DPCC policy checkpoint containing model weights only.
+   bool                    SaveDPCCPolicyParametersOnly(const int file_handle);
+   bool                    LoadDPCCPolicyParametersOnly(const int file_handle);
+   bool                    SaveDPCCPolicyTrainingStateOnly(const int file_handle);
+   bool                    LoadDPCCPolicyTrainingStateOnly(const int file_handle);
+   bool                    DPCCPolicyTrainingStateFingerprint(ulong &fingerprint);
+   bool                    Load(string file_name,
+                                float &error,
+                                float &undefine,
+                                float &forecast,
+                                datetime &time,
+                                bool common = true
+                               );
+   bool              InferenceRuntimeLoadActive(const COpenCLMy *receiver) const { return(m_inference_load_active && bOwnOpenCL && pendingOpenCL == NULL && receiver == opencl); }
+   bool              SaveInferenceRuntimeSidecar(const int handle);
+   bool              LoadInferenceRuntimeSnapshot(const string file_name,
+                                                  const int sidecar_handle,
+                                                  const bool common = true
+                                                 );
    //---< Load method. @param[in] file_name File name to save @param[out] error Average error @param[out] undefine Undefined percent @param[out] Foecast percent @param[out] time Last study time @param[in] common Common flag
    virtual bool            Load(const int file_handle);
    //---
-   static float            recentAverageSmoothingFactor;             ///< Smoothing factor of average error
-   virtual int             Type(void)   const   {  return defNet;   }///< Identificator of class.@return Type of class
-   virtual bool            TrainMode(bool flag);                     ///< Set Training Mode Flag
-   virtual bool            SetWeightsUpdate(const bool flag) { bWeightsUpdate = flag; return(true); } ///< Enable or freeze trainable-parameter writes while retaining backpropagation.
-   virtual bool            WeightsUpdateEnabled(void) const { return(bWeightsUpdate); } ///< Return the trainable-parameter write permission.
-   virtual bool            GetLayerOutput(uint layer, CBufferFloat *&result); ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
-   virtual bool            GetLayerOutputDevice(uint layer, CBufferFloat *&result); ///< Return a non-owning existing OpenCL output buffer; the layer/net retains its lifetime.
-   virtual CNeuronBaseOCL  *Layer(int layer); ///< Return the first neuron of a layer without copying its device buffers.
-   virtual bool            FeedForwardLayer(CNeuronBaseOCL *source_layer); ///< Feed forward from a device-resident layer.
-   virtual bool            GetLayerOutput(uint layer, vector<float> &result); ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
-   bool                    BindRAGMemory(const uint layer, CNeuronRAGMemory *memory); ///< Bind a compatible library-owned RAG token snapshot to a VLADriver RAG-MPI layer.
-   bool                    UnbindRAGMemory(const uint layer); ///< Detach a RAG snapshot before its COW buffers are replaced.
+   //--- Smoothing factor of average error
+   static float            recentAverageSmoothingFactor;
+   //--- Identificator of class.@return Type of class
+   virtual int             Type(void)   const   {  return(defNet);   }
+   //--- Set Training Mode Flag
+   virtual bool            TrainMode(bool flag);
+   //--- Enable or freeze trainable-parameter writes while retaining backpropagation.
+   virtual bool            SetWeightsUpdate(const bool flag) { bWeightsUpdate = flag; return(true); }
+   //--- Return the trainable-parameter write permission.
+   virtual bool            WeightsUpdateEnabled(void) const { return(bWeightsUpdate); }
+   //--- Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
+   virtual bool            GetLayerOutput(uint layer, CBufferFloat *&result);
+   //--- Return a non-owning existing OpenCL output buffer; the layer/net retains its lifetime.
+   virtual bool            GetLayerOutputDevice(uint layer, CBufferFloat *&result);
+   //--- Return the first neuron of a layer without copying its device buffers.
+   virtual CNeuronBaseOCL  *Layer(int layer);
+   //--- Feed forward from a device-resident layer.
+   virtual bool            FeedForwardLayer(CNeuronBaseOCL *source_layer);
+   //--- Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
+   virtual bool            GetLayerOutput(uint layer, vector<float> &result);
+   //--- Bind a compatible library-owned RAG token snapshot to a VLADriver RAG-MPI layer.
+   bool                    BindRAGMemory(const uint layer, CNeuronRAGMemory *memory);
+   //--- Detach a RAG snapshot before its COW buffers are replaced.
+   bool                    UnbindRAGMemory(const uint layer);
    //---
    virtual void            SetOpenCL(COpenCLMy *obj);
    virtual bool            SupportsOpenCLChecked(void) const;
    virtual bool            SetOpenCLChecked(COpenCLMy *obj);
    virtual bool            IsOpenCLTransferReady(void) const { return(pendingOpenCL == NULL); }
-   virtual COpenCLMy*      GetOpenCL(void)   {  return opencl; }
+   virtual COpenCLMy*      GetOpenCL(void)   {  return(opencl); }
    //---
    virtual bool            WeightsUpdate(CNet *net, float tau);
    //--- Diagnostic-only fingerprint of trainable parameters and optimizer state.
@@ -392,88 +666,122 @@ public:
    virtual bool            SetResult(float &result[]);
    virtual bool            Clear(void);
   };
-//+------------------------------------------------------------------+
 //---\class CNeuronLSTM
 //--- Class of recurrent LSTM unit
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8385#para5">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronLSTM    :  public CNeuronProof
   {
 protected:
-   CLayer            *ForgetGate;                                    ///< Object of forget gate
-   CLayer            *InputGate;                                     ///< Object of input gate
-   CLayer            *OutputGate;                                    ///< Object of output gate
-   CLayer            *NewContent;                                    ///< Object of new content
-   CArrayFloat       *Memory;                                        ///< Memory array
-   CArrayFloat       *PrevMemory;                                    ///< Ravious iteration memory array
-   CArrayFloat       *Input;                                         ///< Input data
-   CArrayFloat       *InputGradient;                                 ///< Gradient on previous layer
+   //--- Object of forget gate
+   CLayer            *ForgetGate;
+   //--- Object of input gate
+   CLayer            *InputGate;
+   //--- Object of output gate
+   CLayer            *OutputGate;
+   //--- Object of new content
+   CLayer            *NewContent;
+   //--- Memory array
+   CArrayFloat       *Memory;
+   //--- Ravious iteration memory array
+   CArrayFloat       *PrevMemory;
+   //--- Input data
+   CArrayFloat       *Input;
+   //--- Gradient on previous layer
+   CArrayFloat       *InputGradient;
    //---
-   virtual bool      feedForward(CLayer *prevLayer);                    ///< Feed Forward method. Detailed description on <A HREF="https://www.mql5.com/ru/articles/8385#para52">the link.</A>@param prevLayer Pointer to previos layer.
-   virtual bool      calcHiddenGradients(CLayer *&nextLayer);           ///< Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
-   virtual bool      updateInputWeights(CLayer *&prevLayer);            ///< Method for updating weights.@param prevLayer Pointer to previos layer.
-   virtual bool      updateInputWeights(CLayer *gate, CArrayFloat *input_data); ///< Method for updating gates' weights.@param gate Pointer to gate. @param input_data Pointer to tensor with input data.
+   //--- Feed Forward method. Detailed description on <A HREF="https://www.mql5.com/ru/articles/8385#para52">the link.</A>@param prevLayer Pointer to previos layer.
+   virtual bool      feedForward(CLayer *prevLayer);
+   //--- Method to transfer gradient to previous layer. @param nextLayer Pointer to next layer.
+   virtual bool      calcHiddenGradients(CLayer *&nextLayer);
+   //--- Method for updating weights.@param prevLayer Pointer to previos layer.
+   virtual bool      updateInputWeights(CLayer *&prevLayer);
+   //--- Method for updating gates' weights.@param gate Pointer to gate. @param input_data Pointer to tensor with input data.
+   virtual bool      updateInputWeights(CLayer *gate, CArrayFloat *input_data);
    virtual bool      InitLayer(CLayer *layer, int numUnits, int numOutputs, ENUM_OPTIMIZATION optimization_type);
    //---< Method of gate initialization @param[in] layer Pointer to gate @param[in] numUnits Number of units in gate @param[in] numOutputs Number of outputs @param[in] optimization_type Type of optimization (#ENUM_OPTIMIZATION)
-   virtual CArrayFloat *CalculateGate(CLayer *gate, CArrayFloat *sequence); ///< Method of calculation gate iteration @param[in] gate Pointer to gate @param[in] sequence Input data @return Array of output data
+   //--- Method of calculation gate iteration @param[in] gate Pointer to gate @param[in] sequence Input data @return Array of output data
+   virtual CArrayFloat *CalculateGate(CLayer *gate, CArrayFloat *sequence);
 
 public:
    /** Constructor */
                      CNeuronLSTM(void);
    /** Destructor */~CNeuronLSTM(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, int window, int step, int units_count, ENUM_OPTIMIZATION optimization_type);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          int window,
+                          int step,
+                          int units_count,
+                          ENUM_OPTIMIZATION optimization_type
+                         );
    //---< Unit initialization method. Detailed description on <A HREF="https://www.mql5.com/ru/articles/8385#para51">the link.</A>
    //---
-   virtual CLayer    *getOutputLayer(void)  { return OutputLayer;  }    ///< Method for getting a pointer to the resulting neural layer. Not used in fully connected neural networks.@return Pointer to layer.
+   //--- Method for getting a pointer to the resulting neural layer. Not used in fully connected neural networks.@return Pointer to layer.
+   virtual CLayer    *getOutputLayer(void)  { return(OutputLayer);  }
    virtual bool      calcInputGradients(CLayer *prevLayer) ;
    virtual bool      calcInputGradients(CNeuronBase *prevNeuron, uint index) ;
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
-   virtual int       Type(void)   const   {  return defNeuronLSTM;   }///< Identificator of class.@return Type of class
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronLSTM);   }
   };
-//+------------------------------------------------------------------+
 //---\class CBufferFloat
 //--- Class of OpenCL buffer data. Used for transfer data from CPU to GPU and back.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para44">the link.</A>
-//+------------------------------------------------------------------+
 class CBufferFloat     :  public CArrayFloat
   {
 protected:
-   COpenCLMy         *OpenCL;                ///< Object for working with OpenCL
-   int               m_myIndex;              ///< Index of buffer
+   //--- Object for working with OpenCL
+   COpenCLMy         *OpenCL;
+   //--- Index of buffer
+   int               m_myIndex;
 public:
+   bool              LoadInferenceFinite(const int handle, COpenCLMy *receiver);
    /** Constructor */
                      CBufferFloat(void);
    /** Destructor */~CBufferFloat(void);
    //---
-   virtual bool      BufferInit(uint count, float value);  ///< Method for buffer initialization @param[in] count Number of items @param[in] value Initialization value
-   virtual bool      BufferInitLike(CBufferFloat* master);  ///< Method for buffer initialization @param[in] count Number of items @param[in] value Initialization value
-   virtual bool      BufferCreate(COpenCL *opencl);       ///< Method for creating new buffer @param[in] opencl Pointer to #COpenCLMy object
-   virtual bool      BufferFree(void);                      ///< Method for deleting buffer from GPU
-   virtual bool      BufferRead(void);                      ///< Method for reading buffer data from GPU
-   virtual bool      BufferWrite(void);                     ///< Method for writing buffer data to GPU
-   virtual bool      BufferSet(int index) {  if(!OpenCL || (m_myIndex >= 0 && !OpenCL.BufferFree(m_myIndex))) ReturnFalse; m_myIndex = index; return true; } ///< Change buffer index number @param index New index
+   //--- Method for buffer initialization @param[in] count Number of items @param[in] value Initialization value
+   virtual bool      BufferInit(uint count, float value);
+   //--- Method for buffer initialization @param[in] count Number of items @param[in] value Initialization value
+   virtual bool      BufferInitLike(CBufferFloat* master);
+   //--- Method for creating new buffer @param[in] opencl Pointer to #COpenCLMy object
+   virtual bool      BufferCreate(COpenCL *opencl);
+   //--- Method for deleting buffer from GPU
+   virtual bool      BufferFree(void);
+   //--- Method for reading buffer data from GPU
+   virtual bool      BufferRead(void);
+   //--- Method for writing buffer data to GPU
+   virtual bool      BufferWrite(void);
+   //--- Change buffer index number @param index New index
+   virtual bool      BufferSet(int index) {  if(!OpenCL || (m_myIndex >= 0 && !OpenCL.BufferFree(m_myIndex))) ReturnFalse; m_myIndex = index; return(true); }
    template<typename T>
-   int               GetData(vector<T> &values);             ///< Read data from buffer to vector @param[out] values Vector to read data
+   //--- Read data from buffer to vector @param[out] values Vector to read data
+   int               GetData(vector<T> &values);
    template<typename T>
-   int               GetData(T &values[]);             ///< Read data from buffer to array @param[out] values Array to read data
+   //--- Read data from buffer to array @param[out] values Array to read data
+   int               GetData(T &values[]);
    template<typename T>
-   int               GetData(matrix<T> &values);             ///< Read data from buffer to vector @param[out] values Vector to read data
-   virtual int       GetData(CArrayFloat *values);         ///< Read data from buffer to array @param[out] values Array to read data
-   virtual int       GetIndex(void) const {  return m_myIndex; }  ///< Get buffer index @return Index
-   virtual float     Maximum(void) {  return m_data[Argmax()];}
-   virtual float     Minimum(void) {  return m_data[Argmin()];}
-   virtual int       Argmax(void) {  return ArrayMaximum(m_data, 0, m_data_total);}
-   virtual int       Argmin(void) {  return ArrayMinimum(m_data, 0, m_data_total);}
+   //--- Read data from buffer to vector @param[out] values Vector to read data
+   int               GetData(matrix<T> &values);
+   //--- Read data from buffer to array @param[out] values Array to read data
+   virtual int       GetData(CArrayFloat *values);
+   //--- Get buffer index @return Index
+   virtual int       GetIndex(void) const {  return(m_myIndex); }
+   virtual float     Maximum(void) {  return(m_data[Argmax()]);}
+   virtual float     Minimum(void) {  return(m_data[Argmin()]);}
+   virtual int       Argmax(void) {  return(ArrayMaximum(m_data, 0, m_data_total));}
+   virtual int       Argmin(void) {  return(ArrayMinimum(m_data, 0, m_data_total));}
    //---
    template<typename T>
    bool              AssignArray(const T &src[]);
    virtual bool      AssignArray(const matrix<float> &src);
    virtual bool      AssignArray(const vector<float> &src);
    virtual bool      AssignArray(const CArrayFloat *obj);
-   virtual bool      AssignArray(const CBufferFloat *obj)  { return AssignArray((CArrayFloat*)obj); }
-   virtual bool      AddArray(const CBufferFloat *src)  { return CArrayFloat::AddArray((CArrayFloat*)src); }
+   virtual bool      AssignArray(const CBufferFloat *obj)  { return(AssignArray((CArrayFloat*)obj)); }
+   virtual bool      AddArray(const CBufferFloat *src)  { return(CArrayFloat::AddArray((CArrayFloat*)src)); }
    virtual bool      AddArray(const vector<float> &src);
    template<typename T>
    bool              AddArray(const T &src[]);
@@ -486,14 +794,16 @@ public:
    bool              Fill(const vector<T> &obj);
    virtual bool      Random(const float min_value, const float  max_value);
    //---
-   virtual int       Type(void)                                    const { return defBufferDouble;      }///< Identificator of class.@return Type of class
-   virtual void      BufferToCSV(const string file_name);   ///< Save buffer data to CSV file @param[in] file_name File name to write data
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)                                    const { return(defBufferDouble);      }
+   //--- Save buffer data to CSV file @param[in] file_name File name to write data
+   virtual void      BufferToCSV(const string file_name);
    //--- methods for working with files
    virtual bool      Save(const int file_handle);
    virtual bool      Load(const int file_handle);
    //---
-   virtual COpenCL   *GetOpenCL(void) const { return OpenCL; }
-   bool              operator=(const CBufferFloat *obj) {return AssignArray(obj);}
+   virtual COpenCL   *GetOpenCL(void) const { return(OpenCL); }
+   bool              operator=(const CBufferFloat *obj) {return(AssignArray(obj));}
    float             operator[](const int index)  const
      {
       if(index < 0)
@@ -501,76 +811,226 @@ public:
       return(At(index));
      }
   };
-//+------------------------------------------------------------------+
 //---\ingroup neuron_base
 //---\class CNeuronBaseOCL
 //---\brief The base class of neuron for GPU calculation.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para45">the link.</A>
 //+------------------------------------------------------------------+
+//| Owned evaluation snapshots; parameter buffers are never copied.  |
+//+------------------------------------------------------------------+
+class SLayerReadState
+  {
+private:
+   COpenCLMy         *m_context;
+   CBufferFloat      *m_reference[], *m_snapshot[];
+   CNeuronBaseOCL    *m_link[];
+   long              m_value[], m_index[];
+   int               m_kind[], m_cursor;
+   ulong             m_owner, m_state;
+   int               Add(const int kind);
+public:
+                     SLayerReadState(void);
+                    ~SLayerReadState(void);
+   void              Clear(void);
+   bool              Begin(COpenCLMy *context, const ulong owner, const ulong state);
+   void              Rewind(void) { m_cursor = 0; }
+   bool              Complete(void) const { return(m_cursor == ArraySize(m_kind)); }
+   COpenCLMy         *Context(void) const { return(m_context); }
+   ulong             Owner(void) const { return(m_owner); }
+   ulong             State(void) const { return(m_state); }
+   bool              PutBuffer(CBufferFloat *buffer);
+   bool              GetBuffer(CBufferFloat *&buffer);
+   CBufferFloat      *Saved(CBufferFloat *buffer) const;
+   bool              PutInt(const long value);
+   bool              GetInt(long &value);
+   bool              PutLink(CNeuronBaseOCL *node);
+   bool              GetLink(CNeuronBaseOCL *&node);
+  };
+//+------------------------------------------------------------------+
+//| Scratch rows share model weights and own all temporary tensors.  |
+//+------------------------------------------------------------------+
+class SLayerRowsWorkspace
+  {
+private:
+   COpenCLMy         *m_context;
+   CBufferFloat      *m_buffers[];
+   uint              m_cursor, m_rows;
+   ulong             m_owner, m_state;
+public:
+                     SLayerRowsWorkspace(void);
+                    ~SLayerRowsWorkspace(void);
+   void              Clear(void);
+   bool              Begin(COpenCLMy *context, const uint rows, const ulong owner, const ulong state);
+   CBufferFloat      *Take(const uint count);
+   COpenCLMy         *Context(void) const { return(m_context); }
+   uint              Rows(void) const { return(m_rows); }
+  };
+//+------------------------------------------------------------------+
+//| Declaration CNeuronBaseOCL                                       |
+//+------------------------------------------------------------------+
 class CNeuronBaseOCL    :  public CObject
   {
 protected:
-   bool               bTrain;             ///< Training Mode Flag
-   COpenCLMy         *OpenCL;             ///< Object for working with OpenCL
-   CBufferFloat      *Output;             ///< Buffer of Output tensor
-   CBufferFloat      *PrevOutput;         ///< Buffer of previous iteration Output tensor
-   CBufferFloat      *Weights;            ///< Buffer of weights matrix
-   CBufferFloat      *DeltaWeights;       ///< Buffer of last delta weights matrix (#SGD)
-   CBufferFloat      *Gradient;           ///< Buffer of gradient tensor
-   CBufferFloat      *FirstMomentum;      ///< Buffer of first momentum matrix (#ADAM)
-   CBufferFloat      *SecondMomentum;     ///< Buffer of second momentum matrix (#ADAM)
+   //--- Training Mode Flag
+   bool               bTrain;
+   //--- Object for working with OpenCL
+   COpenCLMy         *OpenCL;
+   //--- Buffer of Output tensor
+   CBufferFloat      *Output;
+   //--- Buffer of previous iteration Output tensor
+   CBufferFloat      *PrevOutput;
+   //--- Buffer of weights matrix
+   CBufferFloat      *Weights;
+   //--- Buffer of last delta weights matrix (#SGD)
+   CBufferFloat      *DeltaWeights;
+   //--- Buffer of gradient tensor
+   CBufferFloat      *Gradient;
+   //--- Buffer of first momentum matrix (#ADAM)
+   CBufferFloat      *FirstMomentum;
+   //--- Buffer of second momentum matrix (#ADAM)
+   CBufferFloat      *SecondMomentum;
    vector<float>      prev_output;
    //---
    //---const float      lr;
-   float             alpha;               ///< Multiplier to momentum in #SGD optimization
-   uint              iBatch;              ///< Batch size used in LS optimization
-   uint              t;                   ///< Count of iterations
+   //--- Multiplier to momentum in #SGD optimization
+   float             alpha;
+   //--- Batch size used in LS optimization
+   uint              iBatch;
+   //--- Count of iterations
+   uint              t;
    //---
-   int               m_myIndex;           ///< Index of neuron in layer
-   ENUM_ACTIVATION   activation;          ///< Activation type (#ENUM_ACTIVATION)
-   ENUM_OPTIMIZATION optimization;        ///< Optimization method (#ENUM_OPTIMIZATION)
+   //--- Index of neuron in layer
+   int               m_myIndex;
+   //--- Activation type (#ENUM_ACTIVATION)
+   ENUM_ACTIVATION   activation;
+   //--- Optimization method (#ENUM_OPTIMIZATION)
+   ENUM_OPTIMIZATION optimization;
    //---
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    bool               feedForwardChecked(CNeuronBaseOCL *NeuronOCL, CBufferFloat *numeric_flags);
    bool               ReduceNumericFlags(CBufferFloat *numeric_flags,
                                          CBufferFloat *numeric_ones,
                                          CBufferFloat *numeric_scalar,
                                          uint count, bool &rejected);
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) { return feedForward(NeuronOCL); }               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
-   virtual bool      feedForwardSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return feedForward(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL)); }
+   bool               SaveDPCCBaseParametersOnly(const int file_handle);
+   bool               LoadDPCCBaseParametersOnly(const int file_handle, const bool apply);
+   bool               SaveDPCCPolicyTrainingBaseOnly(const int file_handle);
+   bool               LoadDPCCPolicyTrainingBaseOnly(const int file_handle, const bool apply);
+   bool               AppendDPCCPolicyTrainingBaseFingerprint(ulong &fingerprint);
+   bool               SaveDPCCParameterBufferOnly(const int file_handle, CBufferFloat *buffer);
+   bool               LoadDPCCParameterBufferOnly(const int file_handle, CBufferFloat *buffer, const bool apply);
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) { return(feedForward(NeuronOCL)); }
+   virtual bool      feedForwardSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return(feedForward(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL))); }
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second)  {  return updateInputWeights(NeuronOCL); }        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-   virtual bool      updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return updateInputWeights(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL)); }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);        ///< Method to transfer gradients to previous layer @param[in] NeuronOCL Pointer to previous layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) { return calcInputGradients(NeuronOCL); }
-   virtual bool      calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return calcInputGradients(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL), (SecondNeuron ? SecondNeuron.getGradient() : NULL), (SecondNeuron ? (ENUM_ACTIVATION)SecondNeuron.Activation() : None)); }
-   virtual bool      calcHiddenGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) { ReturnFalse; }
-   virtual bool      calcHiddenGradients(CNeuronBaseOCL *NeuronOCL);          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second)  {  return(updateInputWeights(NeuronOCL)); }
+   virtual bool      updateInputWeightsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return(updateInputWeights(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL))); }
+   //--- Method to transfer gradients to previous layer @param[in] NeuronOCL Pointer to previous layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) { return(calcInputGradients(NeuronOCL)); }
+   virtual bool      calcInputGradientsSecond(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *SecondNeuron) { return(calcInputGradients(NeuronOCL, (SecondNeuron ? SecondNeuron.getOutput() : NULL), (SecondNeuron ? SecondNeuron.getGradient() : NULL), (SecondNeuron ? (ENUM_ACTIVATION)SecondNeuron.Activation() : None))); }
+   virtual bool      calcHiddenGradients(CNeuronBaseOCL *NeuronOCL,
+                                         CBufferFloat *SecondInput,
+                                         CBufferFloat *SecondGradient,
+                                         ENUM_ACTIVATION SecondActivation = None
+                                        ) { ReturnFalse; }
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcHiddenGradients(CNeuronBaseOCL *NeuronOCL);
    virtual float     GenerateWeight(void);
    virtual bool      WeightsUpdateAdam(CNeuronBaseOCL *source, float tau);
-   virtual bool      SumAndNormalize(CBufferFloat *tensor1, CBufferFloat *tensor2, CBufferFloat *out, int dimension, bool normilize = true, int shift_in1 = 0, int shift_in2 = 0, int shift_out = 0, float multiplyer = 0.5f);
+   virtual bool      SumAndNormalize(CBufferFloat *tensor1,
+                                     CBufferFloat *tensor2,
+                                     CBufferFloat *out,
+                                     int dimension,
+                                     bool normilize = true,
+                                     int shift_in1 = 0,
+                                     int shift_in2 = 0,
+                                     int shift_out = 0,
+                                     float multiplyer = 0.5f
+                                    );
    bool               SumAndNormalize(CBufferFloat *tensor1, CBufferFloat *tensor2,
                                       CBufferFloat *out, int dimension, bool normilize,
                                       int shift_in1, int shift_in2, int shift_out,
                                       float multiplyer, CBufferFloat *numeric_flags);
    virtual bool      Normalize(CBufferFloat *tensor, int dimension);
-   virtual bool      Different(CBufferFloat *tensor1, CBufferFloat *tensor2, CBufferFloat *out, int dimension, int shift_in1 = 0, int shift_in2 = 0, int shift_out = 0, float multiplyer = 1.0f);
-   virtual bool      DifferentGrad(CBufferFloat *tensor1, CBufferFloat *tensor2, CBufferFloat *out, int dimension, int shift_in1 = 0, int shift_in2 = 0, int shift_out = 0, float multiplyer = 1.0f);
+   virtual bool      Different(CBufferFloat *tensor1,
+                               CBufferFloat *tensor2,
+                               CBufferFloat *out,
+                               int dimension,
+                               int shift_in1 = 0,
+                               int shift_in2 = 0,
+                               int shift_out = 0,
+                               float multiplyer = 1.0f
+                              );
+   virtual bool      DifferentGrad(CBufferFloat *tensor1,
+                                   CBufferFloat *tensor2,
+                                   CBufferFloat *out,
+                                   int dimension,
+                                   int shift_in1 = 0,
+                                   int shift_in2 = 0,
+                                   int shift_out = 0,
+                                   float multiplyer = 1.0f
+                                  );
    //---
-   virtual bool      IdentSum(CBufferFloat *tensor, CBufferFloat *out, int dimension, int shift_in = 0, int shift_out = 0, float multiplyer = 1.0f);
-   virtual bool      IdentDifferent(CBufferFloat *tensor, CBufferFloat *out, int dimension, int shift_in = 0, int shift_out = 0, float multiplyer = 1.0f);
-   virtual bool      IdentDifferentGrad(CBufferFloat *tensor, CBufferFloat *out, int dimension, int shift_in = 0, int shift_out = 0, float multiplyer = 1.0f);
+   virtual bool      IdentSum(CBufferFloat *tensor,
+                              CBufferFloat *out,
+                              int dimension,
+                              int shift_in = 0,
+                              int shift_out = 0,
+                              float multiplyer = 1.0f
+                             );
+   virtual bool      IdentDifferent(CBufferFloat *tensor,
+                                    CBufferFloat *out,
+                                    int dimension,
+                                    int shift_in = 0,
+                                    int shift_out = 0,
+                                    float multiplyer = 1.0f
+                                   );
+   virtual bool      IdentDifferentGrad(CBufferFloat *tensor,
+                                        CBufferFloat *out,
+                                        int dimension,
+                                        int shift_in = 0,
+                                        int shift_out = 0,
+                                        float multiplyer = 1.0f
+                                       );
    //---
    //--- SumVec shifts are raw float base offsets; rows=0 uses every available row.
-   virtual bool      SumVecMatrix(CBufferFloat *vector_in, CBufferFloat *matrix_in, CBufferFloat *out, uint dimension, uint variables, uint shift_in1 = 0, uint shift_in2 = 0, uint shift_out = 0, float multiplyer = 1.0f, uint rows = 0);
+   virtual bool      SumVecMatrix(CBufferFloat *vector_in,
+                                  CBufferFloat *matrix_in,
+                                  CBufferFloat *out,
+                                  uint dimension,
+                                  uint variables,
+                                  uint shift_in1 = 0,
+                                  uint shift_in2 = 0,
+                                  uint shift_out = 0,
+                                  float multiplyer = 1.0f,
+                                  uint rows = 0
+                                 );
    bool               SumVecMatrix(CBufferFloat *vector_in, CBufferFloat *matrix_in,
                                    CBufferFloat *out, uint dimension, uint variables,
                                    uint shift_in1, uint shift_in2, uint shift_out,
                                    float multiplyer, uint rows,
                                    CBufferFloat *numeric_flags);
-   virtual bool      SumVecMatrixGrad(CBufferFloat *vector_in, CBufferFloat *matrix_in, CBufferFloat *out, uint dimension, uint variables, uint shift_in1 = 0, uint shift_in2 = 0, uint shift_out = 0, float multiplyer = 1.0f, uint rows = 0);
+   virtual bool      SumVecMatrixGrad(CBufferFloat *vector_in,
+                                      CBufferFloat *matrix_in,
+                                      CBufferFloat *out,
+                                      uint dimension,
+                                      uint variables,
+                                      uint shift_in1 = 0,
+                                      uint shift_in2 = 0,
+                                      uint shift_out = 0,
+                                      float multiplyer = 1.0f,
+                                      uint rows = 0
+                                     );
    virtual bool      MatMul(const CBufferFloat *matr1, const CBufferFloat *matr2,
                             CBufferFloat *result, const int rows1, const int cols1,
                             const int cols2, const int variables = 1,
@@ -589,129 +1049,414 @@ protected:
                                 const bool mult_var_second = true, const uint offset_matr1 = 0,
                                 const uint offset_matr1_gr = 0, const uint offset_matr2 = 0,
                                 const uint offset_matr2_gr = 0, const uint offset_result_gr = 0);
-   virtual bool      CalcDistance(const CBufferFloat *data, CBufferFloat *distance, uint dimension, uint samples, uint groups = 1, bool normalize = true);
+   virtual bool      CalcDistance(const CBufferFloat *data,
+                                  CBufferFloat *distance,
+                                  uint dimension,
+                                  uint samples,
+                                  uint groups = 1,
+                                  bool normalize = true
+                                 );
    bool               CalcDistance(const CBufferFloat *data, CBufferFloat *distance,
                                    uint dimension, uint samples, uint groups,
                                    bool normalize, CBufferFloat *numeric_flags);
-   virtual bool      DiagMatMul(const CBufferFloat *diag, const CBufferFloat *matr, CBufferFloat *result, const int rows, const int cols, const int variables = 1, const int activation = None);
-   virtual bool      DiagMatMulGrad(const CBufferFloat *diag, CBufferFloat *diag_gr, const CBufferFloat *matr, CBufferFloat *matr_gr, const CBufferFloat *result_gr, const int rows, const int cols, const int variables = 1);
-   virtual bool      SparseMatMul(const CBufferFloat *sparse_indexs, const CBufferFloat *sparse_data, const CBufferFloat *full, CBufferFloat *result, const int sparse_rows, const int sparse_cols, const int full_rows, const int full_cols);
-   virtual bool      SparseMatMulGrad(const CBufferFloat *sparse_indexs, const CBufferFloat *sparse_data, CBufferFloat *sparse_grad, const CBufferFloat *full, CBufferFloat *full_gr, const CBufferFloat *grad, const int sparse_rows, const int sparse_cols, const int full_rows, const int full_cols);
-   virtual bool      SparseConcatenate(const CBufferFloat *sparse_indexs, const CBufferFloat *sparse_data, const CBufferFloat *full, CBufferFloat *result, const int sparse_rows, const int sparse_cols, const int full_rows, const int full_cols);
-   virtual bool      SparseConcatenateGrad(const CBufferFloat *sparse_indexs, const CBufferFloat *sparse_data, CBufferFloat *sparse_grad, const CBufferFloat *full, CBufferFloat *full_gr, const CBufferFloat *grad, const int sparse_rows, const int sparse_cols, const int full_rows, const int full_cols);
-   virtual bool      ScalarToVector(CBufferFloat *scalar, CBufferFloat *vector_in, CBufferFloat *vector_out, int dimension);
-   virtual bool      ScalarToVectorGrad(CBufferFloat *scalar, CBufferFloat *scalar_gr, CBufferFloat *vector_in, CBufferFloat *vector_in_gr, CBufferFloat *vector_out_gr, int dimension);
+   virtual bool      DiagMatMul(const CBufferFloat *diag,
+                                const CBufferFloat *matr,
+                                CBufferFloat *result,
+                                const int rows,
+                                const int cols,
+                                const int variables = 1,
+                                const int activation = None
+                               );
+   virtual bool      DiagMatMulGrad(const CBufferFloat *diag,
+                                    CBufferFloat *diag_gr,
+                                    const CBufferFloat *matr,
+                                    CBufferFloat *matr_gr,
+                                    const CBufferFloat *result_gr,
+                                    const int rows,
+                                    const int cols,
+                                    const int variables = 1
+                                   );
+   virtual bool      SparseMatMul(const CBufferFloat *sparse_indexs,
+                                  const CBufferFloat *sparse_data,
+                                  const CBufferFloat *full,
+                                  CBufferFloat *result,
+                                  const int sparse_rows,
+                                  const int sparse_cols,
+                                  const int full_rows,
+                                  const int full_cols
+                                 );
+   virtual bool      SparseMatMulGrad(const CBufferFloat *sparse_indexs,
+                                      const CBufferFloat *sparse_data,
+                                      CBufferFloat *sparse_grad,
+                                      const CBufferFloat *full,
+                                      CBufferFloat *full_gr,
+                                      const CBufferFloat *grad,
+                                      const int sparse_rows,
+                                      const int sparse_cols,
+                                      const int full_rows,
+                                      const int full_cols
+                                     );
+   virtual bool      SparseConcatenate(const CBufferFloat *sparse_indexs,
+                                       const CBufferFloat *sparse_data,
+                                       const CBufferFloat *full,
+                                       CBufferFloat *result,
+                                       const int sparse_rows,
+                                       const int sparse_cols,
+                                       const int full_rows,
+                                       const int full_cols
+                                      );
+   virtual bool      SparseConcatenateGrad(const CBufferFloat *sparse_indexs,
+                                           const CBufferFloat *sparse_data,
+                                           CBufferFloat *sparse_grad,
+                                           const CBufferFloat *full,
+                                           CBufferFloat *full_gr,
+                                           const CBufferFloat *grad,
+                                           const int sparse_rows,
+                                           const int sparse_cols,
+                                           const int full_rows,
+                                           const int full_cols
+                                          );
+   virtual bool      ScalarToVector(CBufferFloat *scalar,
+                                    CBufferFloat *vector_in,
+                                    CBufferFloat *vector_out,
+                                    int dimension
+                                   );
+   virtual bool      ScalarToVectorGrad(CBufferFloat *scalar,
+                                        CBufferFloat *scalar_gr,
+                                        CBufferFloat *vector_in,
+                                        CBufferFloat *vector_in_gr,
+                                        CBufferFloat *vector_out_gr,
+                                        int dimension
+                                       );
    //---< \brief Method sum and normilize 2 tensors by calling 2 kernels ::SumMatrix() and ::Normalize().
    virtual bool      LoadInsideLayer(int file_handle, CNeuronBaseOCL *neuron);
    virtual bool      Activation(CBufferFloat *inputs, CBufferFloat *outputs, int activat);
    virtual bool      DeActivation(CBufferFloat *inputs, CBufferFloat *inputs_gr, CBufferFloat *output_gr, int activat);
-   virtual bool      NLLGrad(const CBufferFloat *log_b, CBufferFloat *grad_in, const CBufferFloat *grad_out, CBufferFloat *grad_log_b);
-   virtual bool      SparseSoftmaxHausdorff(const CBufferFloat *plan, const CBufferFloat *decis, CBufferFloat *output, CBufferFloat *top_index, const int dimension, const int top_k);
-   virtual bool      SparseSoftmaxHausdorffGrad(const CBufferFloat *plan, CBufferFloat *grad_plan, const CBufferFloat *decis, CBufferFloat *grad_decis, const CBufferFloat *grad_out, const CBufferFloat *top_index, const int dimension, const int top_k);
+   virtual bool      NLLGrad(const CBufferFloat *log_b,
+                             CBufferFloat *grad_in,
+                             const CBufferFloat *grad_out,
+                             CBufferFloat *grad_log_b
+                            );
+   virtual bool      SparseSoftmaxHausdorff(const CBufferFloat *plan,
+                                            const CBufferFloat *decis,
+                                            CBufferFloat *output,
+                                            CBufferFloat *top_index,
+                                            const int dimension,
+                                            const int top_k
+                                           );
+   virtual bool      SparseSoftmaxHausdorffGrad(const CBufferFloat *plan,
+                                                CBufferFloat *grad_plan,
+                                                const CBufferFloat *decis,
+                                                CBufferFloat *grad_decis,
+                                                const CBufferFloat *grad_out,
+                                                const CBufferFloat *top_index,
+                                                const int dimension,
+                                                const int top_k
+                                               );
    //---
-   virtual bool      Concat(CBufferFloat *input1, CBufferFloat *input2, CBufferFloat *output, int window1, int window2, int count);
-   virtual bool      Concat(CBufferFloat *input1, CBufferFloat *input2, CBufferFloat *input3, CBufferFloat *output, int window1, int window2, int window3, int count);
-   virtual bool      Concat(CBufferFloat *input1, CBufferFloat *input2, CBufferFloat *input3, CBufferFloat *input4, CBufferFloat *output, int window1, int window2, int window3, int window4, int count);
-   virtual bool      Concat(int input1, int input2, int input3, int input4, int output, int window1, int window2, int window3, int window4, int count);
+   virtual bool      Concat(CBufferFloat *input1,
+                            CBufferFloat *input2,
+                            CBufferFloat *output,
+                            int window1,
+                            int window2,
+                            int count
+                           );
+   virtual bool      Concat(CBufferFloat *input1,
+                            CBufferFloat *input2,
+                            CBufferFloat *input3,
+                            CBufferFloat *output,
+                            int window1,
+                            int window2,
+                            int window3,
+                            int count
+                           );
+   virtual bool      Concat(CBufferFloat *input1,
+                            CBufferFloat *input2,
+                            CBufferFloat *input3,
+                            CBufferFloat *input4,
+                            CBufferFloat *output,
+                            int window1,
+                            int window2,
+                            int window3,
+                            int window4,
+                            int count
+                           );
+   virtual bool      Concat(int input1,
+                            int input2,
+                            int input3,
+                            int input4,
+                            int output,
+                            int window1,
+                            int window2,
+                            int window3,
+                            int window4,
+                            int count
+                           );
+   static bool       BufferAliases(CBufferFloat *candidate, CBufferFloat *owned);
    virtual bool      CopyBufferRaw(CBufferFloat *source, CBufferFloat *destination,
                                    const uint total);
-   virtual bool      DeConcat(CBufferFloat *input1, CBufferFloat *input2, CBufferFloat *output, int window1, int window2, int count);
-   virtual bool      DeConcat(CBufferFloat *input1, CBufferFloat *input2, CBufferFloat *input3, CBufferFloat *output, int window1, int window2, int window3, int count);
-   virtual bool      DeConcat(CBufferFloat *input1, CBufferFloat *input2, CBufferFloat *input3, CBufferFloat *input4, CBufferFloat *output, int window1, int window2, int window3, int window4, int count);
-   virtual bool      ConcatVecMatrix(CBufferFloat *vector_in, CBufferFloat *matrix_in, CBufferFloat *out, uint dimension_v, uint  rows, uint cols, uint variables, bool multvarsecond);
-   virtual bool      ConcatVecMatrixGrad(CBufferFloat *vector_in, CBufferFloat *matrix_in, CBufferFloat *out, uint dimension_v, uint rows, uint  cols, uint variables, bool multvarsecond);
+   virtual bool      DeConcat(CBufferFloat *input1,
+                              CBufferFloat *input2,
+                              CBufferFloat *output,
+                              int window1,
+                              int window2,
+                              int count
+                             );
+   virtual bool      DeConcat(CBufferFloat *input1,
+                              CBufferFloat *input2,
+                              CBufferFloat *input3,
+                              CBufferFloat *output,
+                              int window1,
+                              int window2,
+                              int window3,
+                              int count
+                             );
+   virtual bool      DeConcat(CBufferFloat *input1,
+                              CBufferFloat *input2,
+                              CBufferFloat *input3,
+                              CBufferFloat *input4,
+                              CBufferFloat *output,
+                              int window1,
+                              int window2,
+                              int window3,
+                              int window4,
+                              int count
+                             );
+   virtual bool      ConcatVecMatrix(CBufferFloat *vector_in,
+                                     CBufferFloat *matrix_in,
+                                     CBufferFloat *out,
+                                     uint dimension_v,
+                                     uint  rows,
+                                     uint cols,
+                                     uint variables,
+                                     bool multvarsecond
+                                    );
+   virtual bool      ConcatVecMatrixGrad(CBufferFloat *vector_in,
+                                         CBufferFloat *matrix_in,
+                                         CBufferFloat *out,
+                                         uint dimension_v,
+                                         uint rows,
+                                         uint  cols,
+                                         uint variables,
+                                         bool multvarsecond
+                                        );
    //---
    virtual bool      ElementMult(const CBufferFloat *input1, const CBufferFloat *input2, CBufferFloat *output);
-   virtual bool      ElementMultGrad(const CBufferFloat *input1, CBufferFloat *input1_gr, const CBufferFloat *input2, CBufferFloat *input2_gr, const CBufferFloat *output, const int activation1, const int activation2);
-   virtual bool      GateElementMult(const CBufferFloat *input1, const CBufferFloat *input2, const CBufferFloat *gate, CBufferFloat *output);
+   virtual bool      ElementMultGrad(const CBufferFloat *input1,
+                                     CBufferFloat *input1_gr,
+                                     const CBufferFloat *input2,
+                                     CBufferFloat *input2_gr,
+                                     const CBufferFloat *output,
+                                     const int activation1,
+                                     const int activation2
+                                    );
+   virtual bool      GateElementMult(const CBufferFloat *input1,
+                                     const CBufferFloat *input2,
+                                     const CBufferFloat *gate,
+                                     CBufferFloat *output
+                                    );
    bool               GateElementMult(const CBufferFloat *input1,
                                       const CBufferFloat *input2,
                                       const CBufferFloat *gate,
                                       CBufferFloat *output,
                                       CBufferFloat *numeric_flags);
-   virtual bool      GateElementMultGrad(const CBufferFloat *input1, CBufferFloat *input1_gr, const CBufferFloat *input2, CBufferFloat *input2_gr, const CBufferFloat *gate, CBufferFloat *gate_gr, const CBufferFloat *output, const int activation1, const int activation2, const int activation_gate);
-   int               RND(int total)   { xor128; return (int)((float)(total - 1) / UINT_MAX * rnd_w);  } ///< Generates a random neuron position to turn off
+   virtual bool      GateElementMultGrad(const CBufferFloat *input1,
+                                         CBufferFloat *input1_gr,
+                                         const CBufferFloat *input2,
+                                         CBufferFloat *input2_gr,
+                                         const CBufferFloat *gate,
+                                         CBufferFloat *gate_gr,
+                                         const CBufferFloat *output,
+                                         const int activation1,
+                                         const int activation2,
+                                         const int activation_gate
+                                        );
+   //--- Generates a random neuron position to turn off
+   int               RND(int total)   { xor128; return(int)((float)(total - 1) / UINT_MAX * rnd_w);  }
    //---
    virtual bool      DiversityLoss(CNeuronBaseOCL *neuron, const int units, const int dimension, const bool add = false);
    //---
    virtual bool      SwapBuffers(CBufferFloat *&buffer1, CBufferFloat *&buffer2, bool check_size = true);
    //---
-   virtual bool      DilatedCorrelation(CNeuronBaseOCL* feature, CNeuronBaseOCL* correlations, uint shifts_index, uint dimension, uint units);
-   virtual bool      DilatedCorrelationGrad(CNeuronBaseOCL* feature, CNeuronBaseOCL* correlations, uint shifts_index, uint dimension, uint units);
-   virtual bool      DilatedDifference(CNeuronBaseOCL* feature, CNeuronBaseOCL* difference, uint shifts_index, uint dimension, uint units);
-   virtual bool      DilatedDifferenceGrad(CNeuronBaseOCL* feature, CNeuronBaseOCL* difference, uint shifts_index, uint dimension, uint units);
-   virtual bool      PerturbedMatrix(CNeuronBaseOCL* inputs, CNeuronBaseOCL* perturb, CNeuronBaseOCL* outputs, float perturb_mult, uint dimension, uint units);
-   virtual bool      PerturbedMatrixGrad(CNeuronBaseOCL* inputs, CNeuronBaseOCL* perturb, CNeuronBaseOCL* outputs, float perturb_mult, uint dimension, uint units);
-   virtual bool      LinearUpsample(CNeuronBaseOCL* data, CNeuronBaseOCL* upsample, uint upsampl_mult, uint units, uint variables);
-   virtual bool      LinearUpsampleGrad(CNeuronBaseOCL* data, CNeuronBaseOCL* upsample, uint upsampl_mult, uint units, uint variables);
+   virtual bool      DilatedCorrelation(CNeuronBaseOCL* feature,
+                                        CNeuronBaseOCL* correlations,
+                                        uint shifts_index,
+                                        uint dimension,
+                                        uint units
+                                       );
+   virtual bool      DilatedCorrelationGrad(CNeuronBaseOCL* feature,
+                                            CNeuronBaseOCL* correlations,
+                                            uint shifts_index,
+                                            uint dimension,
+                                            uint units
+                                           );
+   virtual bool      DilatedDifference(CNeuronBaseOCL* feature,
+                                       CNeuronBaseOCL* difference,
+                                       uint shifts_index,
+                                       uint dimension,
+                                       uint units
+                                      );
+   virtual bool      DilatedDifferenceGrad(CNeuronBaseOCL* feature,
+                                           CNeuronBaseOCL* difference,
+                                           uint shifts_index,
+                                           uint dimension,
+                                           uint units
+                                          );
+   virtual bool      PerturbedMatrix(CNeuronBaseOCL* inputs,
+                                     CNeuronBaseOCL* perturb,
+                                     CNeuronBaseOCL* outputs,
+                                     float perturb_mult,
+                                     uint dimension,
+                                     uint units
+                                    );
+   virtual bool      PerturbedMatrixGrad(CNeuronBaseOCL* inputs,
+                                         CNeuronBaseOCL* perturb,
+                                         CNeuronBaseOCL* outputs,
+                                         float perturb_mult,
+                                         uint dimension,
+                                         uint units
+                                        );
+   virtual bool      LinearUpsample(CNeuronBaseOCL* data,
+                                    CNeuronBaseOCL* upsample,
+                                    uint upsampl_mult,
+                                    uint units,
+                                    uint variables
+                                   );
+   virtual bool      LinearUpsampleGrad(CNeuronBaseOCL* data,
+                                        CNeuronBaseOCL* upsample,
+                                        uint upsampl_mult,
+                                        uint units,
+                                        uint variables
+                                       );
    //---
    virtual int       CreateShifts(const uint max_displacement, int &count);
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   bool              ForwardRowsReadOnly(CBufferFloat *source, const uint rows, CBufferFloat *edge_weights,
+                            const uint input_width, SLayerRowsWorkspace &work, CBufferFloat *output,
+                            CBufferFloat *flags);
+
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
+   COpenCLMy         *GetOpenCL(void) const { return(OpenCL); }
    /** Constructor */
                      CNeuronBaseOCL(void);
    /** Destructor */~CNeuronBaseOCL(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object. #param[in] numNeurons Number of neurons in layer @param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
-   virtual void      SetActivationFunction(ENUM_ACTIVATION value) {  activation = value; }      ///< Set the type of activation function (#ENUM_ACTIVATION)
+   //--- Set the type of activation function (#ENUM_ACTIVATION)
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) {  activation = value; }
    //---
-   virtual int       getOutputIndex(void)    const {  return Output.GetIndex();        }  ///< Get index of output buffer @return Index
-   virtual int       getPrevOutIndex(void)   const {  return PrevOutput.GetIndex();    }  ///< Get index of previous iteration output buffer @return Index
-   virtual int       getGradientIndex(void)  const {  return Gradient.GetIndex();      }  ///< Get index of gradient buffer @return Index
+   //--- Get index of output buffer @return Index
+   virtual int       getOutputIndex(void)    const {  return(Output.GetIndex());        }
+   //--- Get index of previous iteration output buffer @return Index
+   virtual int       getPrevOutIndex(void)   const {  return(PrevOutput.GetIndex());    }
+   //--- Get index of gradient buffer @return Index
+   virtual int       getGradientIndex(void)  const {  return(Gradient.GetIndex());      }
    virtual bool      SetGradient(CBufferFloat *buffer, bool delete_prev = true);
    virtual bool      SetOutput(CBufferFloat *buffer, bool delete_prev = true);
-   virtual bool      SetGradientIndex(int index)   {  return Gradient.BufferSet(index);   }  ///< Method for change index of gradient buffer.@param[in] New index of buffer
+   //--- Method for change index of gradient buffer.@param[in] New index of buffer
+   virtual bool      SetGradientIndex(int index)   {  return(Gradient.BufferSet(index));   }
    //--- Gets WeightsIndex.
    virtual int       getWeightsIndex(void)         const
      {
       if(!Weights)
-         return INVALID_HANDLE;
-      return Weights.GetIndex();
-     }  ///< Get index of weights matrix buffer @return Index
-   virtual int       getDeltaWeightsIndex(void)    const {  return DeltaWeights.GetIndex();  }  ///< Get index of delta weights matrix buffer (SGD)@return Index
-   virtual int       getFirstMomentumIndex(void)   const {  return FirstMomentum.GetIndex(); }  ///< Get index of first momentum matrix buffer (Adam)@return Index
-   virtual int       getSecondMomentumIndex(void)  const {  return SecondMomentum.GetIndex();}  ///< Get index of Second momentum matrix buffer (Adam)@return Index
-   virtual int       getWeightsSAMIndex(void)      const {  return -1;                     }
+         return(INVALID_HANDLE);
+      return(Weights.GetIndex());
+     //--- Get index of weights matrix buffer @return Index
+     }
+   //--- Get index of delta weights matrix buffer (SGD)@return Index
+   virtual int       getDeltaWeightsIndex(void)    const {  return(DeltaWeights.GetIndex());  }
+   //--- Get index of first momentum matrix buffer (Adam)@return Index
+   virtual int       getFirstMomentumIndex(void)   const {  return(FirstMomentum.GetIndex()); }
+   //--- Get index of Second momentum matrix buffer (Adam)@return Index
+   virtual int       getSecondMomentumIndex(void)  const {  return(SecondMomentum.GetIndex());}
+   virtual int       getWeightsSAMIndex(void)      const {  return(-1);                     }
    //---
-   virtual int       getOutputVal(float &values[]) {  return Output.GetData(values);      }  ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getOutputVal(CArrayFloat *values)   {  return Output.GetData(values);  }  ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getOutputVal(vector<float> &values)   {  return Output.GetData(values);  }  ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getPrevVal(float &values[])   {  return PrevOutput.GetData(values);  }  ///< Get values of previous iteration output buffer @param[out] values Array of data @return number of items
-   virtual int       getGradient(float &values[])  {  return Gradient.GetData(values);    }  ///< Get values of gradient buffer @param[out] values Array of data @return number of items
-   virtual int       getGradient(vector<float> &values)  {  return Gradient.GetData(values);    }  ///< Get values of gradient buffer @param[out] values Array of data @return number of items
-   virtual bool      calcAlphaGradients(CNeuronBaseOCL *NeuronOCL)    { return true; }
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(float &values[]) {  return(Output.GetData(values));      }
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(CArrayFloat *values)   {  return(Output.GetData(values));  }
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(vector<float> &values)   {  return(Output.GetData(values));  }
+   //--- Get values of previous iteration output buffer @param[out] values Array of data @return number of items
+   virtual int       getPrevVal(float &values[])   {  return(PrevOutput.GetData(values));  }
+   //--- Get values of gradient buffer @param[out] values Array of data @return number of items
+   virtual int       getGradient(float &values[])  {  return(Gradient.GetData(values));    }
+   //--- Get values of gradient buffer @param[out] values Array of data @return number of items
+   virtual int       getGradient(vector<float> &values)  {  return(Gradient.GetData(values));    }
+   virtual bool      calcAlphaGradients(CNeuronBaseOCL *NeuronOCL)    { return(true); }
    virtual bool      GetAlphaLogProbs(vector<float> &log_probs)       { ReturnFalse; }
    virtual bool      ReCalcLogProbs(void)                             { ReturnFalse; }
-   virtual CBufferFloat   *getOutput(void)      const    {  return Output;       }                 ///< Get pointer of output buffer @return Pointer to object
-   virtual CBufferFloat   *getGradient(void)    const    {  return Gradient;     }                 ///< Get pointer of gradient buffer @return Pointer to object
-   virtual CBufferFloat   *getPrevOutput(void)  const    {  return PrevOutput;   }                 ///< Get pointer of gradient buffer @return Pointer to object
-   virtual int       getWeights(float &values[])   {  return Weights.GetData(values);     }  ///< Get values of weights matrix buffer @param[out] values Array of data @return number of items
-   virtual CBufferFloat   *getWeights(void)        {  return Weights;     }                 ///< Get pointer of gradient buffer @return Pointer to object
-   virtual int       Neurons(void) const           {  return Output.Total();              }  ///< Get number of neurons in layer @return Number of neurons
-   virtual int       Activation(void) const        {  return (int)activation;             }  ///< Get type of activation function @return Type (#ENUM_ACTIVATION)
-   virtual int       getConnections(void)          {  return (CheckPointer(Weights) != POINTER_INVALID ? Weights.Total() / (Output.Total() + 1) : 0);   } ///< Get number of connections 1 neuron to next layer @return Number of connections
-   virtual ENUM_OPTIMIZATION Optimization(void)    {  return optimization; }
+   //--- Get pointer of output buffer @return Pointer to object
+   virtual CBufferFloat   *getOutput(void)      const    {  return(Output);       }
+   //--- Get pointer of gradient buffer @return Pointer to object
+   virtual CBufferFloat   *getGradient(void)    const    {  return(Gradient);     }
+   //--- Get pointer of gradient buffer @return Pointer to object
+   virtual CBufferFloat   *getPrevOutput(void)  const    {  return(PrevOutput);   }
+   //--- Get values of weights matrix buffer @param[out] values Array of data @return number of items
+   virtual int       getWeights(float &values[])   {  return(Weights.GetData(values));     }
+   //--- Get pointer of gradient buffer @return Pointer to object
+   virtual CBufferFloat   *getWeights(void)        {  return(Weights);     }
+   //--- Get number of neurons in layer @return Number of neurons
+   virtual int       Neurons(void) const           {  return(Output.Total());              }
+   //--- Get type of activation function @return Type (#ENUM_ACTIVATION)
+   virtual int       Activation(void) const        {  return(int)activation;             }
+   //--- Get number of connections 1 neuron to next layer @return Number of connections
+   virtual int       getConnections(void)          {  return(CheckPointer(Weights) != POINTER_INVALID ? Weights.Total() / (Output.Total() + 1) : 0);   }
+   virtual ENUM_OPTIMIZATION Optimization(void)    {  return(optimization); }
    //---
-   virtual bool      FeedForward(CObject *SourceObject, CBufferFloat *SecondInput = NULL);                    ///< Dispatch method for defining the subroutine for feed forward process. @param SourceObject Pointer to the previous layer.
+   //--- Dispatch method for defining the subroutine for feed forward process. @param SourceObject Pointer to the previous layer.
+   virtual bool      FeedForward(CObject *SourceObject, CBufferFloat *SecondInput = NULL);
    virtual bool      FeedForwardSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron);
-   virtual bool      UpdateInputWeights(CObject *SourceObject, CBufferFloat *SecondInput = NULL);             ///< Dispatch method for defining the subroutine for updating weights.@param SourceObject Pointer to previos layer.
+   //--- Dispatch method for defining the subroutine for updating weights.@param SourceObject Pointer to previos layer.
+   virtual bool      UpdateInputWeights(CObject *SourceObject, CBufferFloat *SecondInput = NULL);
    virtual bool      UpdateInputWeightsSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron);
-   virtual bool      UpdateInputState(CObject *SourceObject, CBufferFloat *SecondInput = NULL) { return(true); } ///< Update durable non-weight state while network parameter writes are frozen.
-   virtual bool      UpdateInputStateSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron) { return(true); } ///< Update durable non-weight state for a two-input layer while network parameter writes are frozen.
+   //--- Update durable non-weight state while network parameter writes are frozen.
+   virtual bool      UpdateInputState(CObject *SourceObject, CBufferFloat *SecondInput = NULL) { return(true); }
+   //--- Update durable non-weight state for a two-input layer while network parameter writes are frozen.
+   virtual bool      UpdateInputStateSecond(CObject *SourceObject, CNeuronBaseOCL *SecondNeuron) { return(true); }
    //---\ingroup neuron_base_gr
    //---@{
-   virtual bool      CalcHiddenGradients(CObject *TargetObject, CBufferFloat *SecondInput = NULL, CBufferFloat *SecondGradient = NULL, ENUM_ACTIVATION SecondActivation = None);        ///< Dispatch method for defining the subroutine for transferring the gradient to the previous layer. @param TargetObject Pointer to the next layer.
+   //--- Dispatch method for defining the subroutine for transferring the gradient to the previous layer. @param TargetObject Pointer to the next layer.
+   virtual bool      CalcHiddenGradients(CObject *TargetObject,
+                                         CBufferFloat *SecondInput = NULL,
+                                         CBufferFloat *SecondGradient = NULL,
+                                         ENUM_ACTIVATION SecondActivation = None
+                                        );
    virtual bool      CalcHiddenGradientsSecond(CObject *TargetObject, CNeuronBaseOCL *SecondNeuron);
-   virtual bool      calcOutputGradients(CBufferFloat *Target, float &error);               ///< Method of output gradients calculation by calling kernel ::CalcOutputGradient().@param Target Traget value
+   //--- Method of output gradients calculation by calling kernel ::CalcOutputGradient().@param Target Traget value
+   virtual bool      calcOutputGradients(CBufferFloat *Target, float &error);
    virtual bool      calcAlignmentGradient(const CNeuronBaseOCL *neuron, const bool add = false);
    //---@}
    //---
-   virtual bool      Save(const int file_handle) override;///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(const int file_handle) override;///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(const int file_handle) override;
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(const int file_handle) override;
+   virtual bool      SaveParametersOnly(const int file_handle);
+   virtual bool      LoadParametersOnly(const int file_handle, const bool apply);
+   virtual bool      SaveDPCCPolicyTrainingStateOnly(const int file_handle);
+   virtual bool      LoadDPCCPolicyTrainingStateOnly(const int file_handle, const bool apply);
+   virtual bool      AppendDPCCPolicyTrainingFingerprint(ulong &fingerprint);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronBaseOCL;                  }///< Identificator of class.@return Type of class
-   virtual void      TrainMode(bool flag)                         {  bTrain = flag;                              } ///< Set Training Mode Flag
-   virtual bool      TrainMode(void)                              {  return bTrain;                            }///< Get Training Mode Flag
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronBaseOCL);                  }
+   //--- Set Training Mode Flag
+   virtual void      TrainMode(bool flag)                         {  bTrain = flag;                              }
+   //--- Get Training Mode Flag
+   virtual bool      TrainMode(void)                              {  return(bTrain);                            }
+   uint              NativeOptimizerStep(void) const;
+   //--- Read-only identity inventory; derived owners extend their actual storage.
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate);
+   virtual bool      CanStartForward(void) const { return(true); }
    virtual CLayerDescription* GetLayerInfo(void);
    virtual bool      numOutputs(const uint outputs, ENUM_OPTIMIZATION optimization_type);
    virtual void      SetOpenCL(COpenCLMy *obj);
@@ -721,7 +1466,7 @@ public:
    //--- context before allocation, but SetOpenCL() is for already shaped
    //--- buffers and must not be used on a constructor-empty object.
    virtual void      AttachOpenCL(COpenCLMy *obj) { OpenCL = obj; }
-   virtual CObject*  AsObject(void) {  return GetPointer(this);   }
+   virtual CObject*  AsObject(void) {  return(GetPointer(this));   }
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau);
    //--- Append direct trainable buffers and nested trainable layers only.
@@ -732,89 +1477,743 @@ public:
          const uint skip = 0,
          const uint stride = 0);
    //---
-   virtual bool      Clear(void) { return !(!Output || !Output.Fill(0) || !Gradient || !Gradient.Fill(0)); }
+   virtual bool      Clear(void) { return(!(!Output || !Output.Fill(0) || !Gradient || !Gradient.Fill(0))); }
    //---
-   virtual bool      SwapOutputs(void) { return SwapBuffers(Output, PrevOutput, true); }
+   virtual bool      SwapOutputs(void) { return(SwapBuffers(Output, PrevOutput, true)); }
   };
-//+------------------------------------------------------------------+
 //---\class CNeuronProofOCL
 //--- Class of pooling layer GPU calculation
+//+------------------------------------------------------------------+
+//| DPCC device-resident financial scenario evaluation               |
+//+------------------------------------------------------------------+
+class CNeuronScenarioRolloutOCL : public CNeuronBaseOCL
+  {
+protected:
+   SDPCCShape        m_shape;
+   SDPCCLayout       m_layout;
+   SDPCCConfig       m_config;
+   uint              m_phase;
+   ENUM_DPCC_STATUS  m_status;
+   bool              m_configured;
+   bool              m_fixed;
+   bool              m_public_valid;
+   CBufferFloat      *m_states;
+   CBufferFloat      *m_validity;
+   CBufferFloat      *m_violations;
+   CBufferFloat      *m_diagnostics;
+   CBufferFloat      *m_return_scratch;
+   CBufferFloat      *m_state_scratch;
+   CBufferFloat      *m_violation_scratch;
+   CBufferFloat      *m_validity_scratch;
+   CBufferFloat      *m_diagnostic_scratch;
+   CBufferFloat      *m_system;
+   CBufferFloat      *m_aggregate;
+   CBufferFloat      *m_slice_active;
+   CBufferFloat      *m_batch_validity;
+   CBufferFloat      *m_batch_diagnostics;
+   CBufferFloat      *m_open_context;
+   CBufferFloat      *m_open_state;
+   CBufferFloat      *m_open_risk;
+   ulong              m_open_generation;
+   uint               m_open_step;
+   uint               m_open_horizon;
+   bool               m_open_pending;
+   bool               m_open_actionable;
+   bool               m_open_observed;
+   bool              Fail(const ENUM_DPCC_STATUS status, const bool fatal = false);
+   bool              EnsureBuffer(CBufferFloat *&buffer, const uint count, const float value = 0);
+   bool              BuildLayout(const SDPCCShape &shape, SDPCCLayout &layout) const;
+   bool              ReadDescriptor(CLayerDescription *desc, SDPCCShape &shape) const;
+   bool              SameShape(const SDPCCShape &first, const SDPCCShape &second) const;
+   bool              ValidateConfig(const SDPCCConfig &config) const;
+   bool              ValidateBuffer(CBufferFloat *buffer, const ulong count, const bool exact = true) const;
+   bool              SharesDevice(CBufferFloat *first, CBufferFloat *second) const;
+   bool              ValidateInputAliases(CBufferFloat *plans, CBufferFloat *active, CBufferFloat *context) const;
+   bool              ValidateAliases(CBufferFloat *plans, CBufferFloat *active, CBufferFloat *context,
+                                     CBufferFloat *returns_out, CBufferFloat *states_out,
+                                     CBufferFloat *violations_out) const;
+   bool              PrepareOpenInternal(CBufferFloat *rollout_context, uint episode_step,
+                                         uint episode_horizon, bool initialize, CBufferFloat *state_in,
+                                         CBufferFloat *prepared_state_out, CBufferFloat *prep_rewards_out,
+                                         CBufferFloat *status_out, CBufferFloat *diagnostics_out,
+                                         ulong &token, bool observed_open);
+   bool              CommitPreparedActionInternal(CBufferFloat *plans, uint plan_offset,
+         CBufferFloat *factual_context, ulong token,
+         CBufferFloat *close_state_out,
+         CBufferFloat *suffix_rewards_out,
+         CBufferFloat *status_out,
+         CBufferFloat *diagnostics_out,
+         bool observed_commit, bool apply_action = true);
+   bool              CommitPreparedNoAction(ulong token, CBufferFloat *close_state_out,
+         CBufferFloat *suffix_rewards_out, CBufferFloat *status_out,
+         CBufferFloat *diagnostics_out);
+   bool              ValidateContext(CBufferFloat *context) const;
+   bool              PrepareScratch(const uint slots);
+   bool              RolloutPlans(CBufferFloat *plans, const uint plan_offset, const uint slots,
+                                  CBufferFloat *active, const uint active_offset, CBufferFloat *context,
+                                  CBufferFloat *returns_out, CBufferFloat *states_out,
+                                  CBufferFloat *violations_out, CBufferFloat *diagnostics_out,
+                                  CBufferFloat *continuation = NULL, uint episode_start = 0,
+                                  uint episode_horizon = 0, float training_floor = 0.0f,
+                                  CBufferFloat *step_rewards = NULL, CBufferFloat *executed_mask = NULL);
+   bool              ReduceValidity(CBufferFloat *active, const uint active_offset, const uint slots,
+                                    CBufferFloat *violations_out, CBufferFloat *validity_out);
+   ulong             ConfigSignature(const SDPCCConfig &config) const;
+   virtual bool      feedForward(CNeuronBaseOCL *source) override;
+   virtual bool      feedForward(CNeuronBaseOCL *source, CBufferFloat *context) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source, CBufferFloat *second,
+                                        CBufferFloat *second_gradient,
+                                        ENUM_ACTIVATION second_activation = None) override;
+   virtual bool      calcHiddenGradients(CNeuronBaseOCL *source) override;
+   virtual bool      calcHiddenGradients(CNeuronBaseOCL *source, CBufferFloat *second,
+                                         CBufferFloat *second_gradient,
+                                         ENUM_ACTIVATION second_activation = None) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source, CBufferFloat *second) override;
+public:
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
+                     CNeuronScenarioRolloutOCL(void);
+                    ~CNeuronScenarioRolloutOCL(void);
+   bool              Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, CLayerDescription *desc);
+   bool              Configure(const SDPCCConfig &config);
+   bool              MatchesProjectionContract(const SDPCCShape &shape, const SDPCCConfig &config,
+         COpenCLMy *owner) const;
+   ENUM_DPCC_STATUS  LastStatus(void) const { return(m_status); }
+   CBufferFloat      *GetDiagnostics(void) { return(m_public_valid ? m_diagnostics : NULL); }
+   ulong             ContractSignature(void) const;
+   CBufferFloat      *GetStates(void) { return(m_public_valid ? m_states : NULL); }
+   CBufferFloat      *GetValidity(void) { return(m_public_valid ? m_validity : NULL); }
+   CBufferFloat      *GetViolations(void) { return(m_public_valid ? m_violations : NULL); }
+   bool              EvaluatePlanBatch(CBufferFloat *plans, uint plan_offset, uint slot_capacity,
+                                       CBufferFloat *slot_active, CBufferFloat *rollout_context,
+                                       CBufferFloat *returns_out, CBufferFloat *states_out,
+                                       CBufferFloat *violations_out);
+   bool              EvaluatePlanSlice(CBufferFloat *plans, uint plan_offset, CBufferFloat *rollout_context,
+                                       CBufferFloat *returns_out, CBufferFloat *states_out,
+                                       CBufferFloat *violations_out);
+   //--- One exact 33-float continuation per slot/scenario; diagnostics -1 mark unexecuted bars.
+   bool              EvaluateContinuedPlanBatch(CBufferFloat *plans, uint plan_offset, uint slot_capacity,
+         CBufferFloat *slot_active, CBufferFloat *rollout_context,
+         CBufferFloat *continuation, uint episode_start,
+         uint episode_horizon, float training_floor,
+         CBufferFloat *returns_out, CBufferFloat *states_out,
+         CBufferFloat *violations_out, CBufferFloat *diagnostics_out,
+         CBufferFloat *step_rewards, CBufferFloat *executed_mask);
+   //--- Continuation buffers use K*DPCC_CONTINUATION_FLOATS values; account fields stay in native order.
+   bool              EvaluateOneBar(CBufferFloat *plans, uint plan_offset, CBufferFloat *rollout_context,
+                                    uint episode_step, uint episode_horizon, bool initialize,
+                                    CBufferFloat *state_in, CBufferFloat *state_out,
+                                    CBufferFloat *rewards_out, CBufferFloat *status_out,
+                                    CBufferFloat *diagnostics_out);
+   bool              EvaluateOneBarWithoutAction(CBufferFloat *rollout_context, uint episode_step,
+         uint episode_horizon, CBufferFloat *state_in,
+         CBufferFloat *state_out, CBufferFloat *rewards_out,
+         CBufferFloat *status_out, CBufferFloat *diagnostics_out);
+   bool              PrepareOpen(CBufferFloat *rollout_context, uint episode_step,
+                                 uint episode_horizon, bool initialize, CBufferFloat *state_in,
+                                 CBufferFloat *prepared_state_out, CBufferFloat *prep_rewards_out,
+                                 CBufferFloat *status_out, CBufferFloat *diagnostics_out,
+                                 ulong &token);
+   bool              PrepareObservedOpen(CBufferFloat *rollout_context, uint episode_step,
+                                         uint episode_horizon, bool initialize, CBufferFloat *state_in,
+                                         CBufferFloat *prepared_state_out, CBufferFloat *prep_rewards_out,
+                                         CBufferFloat *status_out, CBufferFloat *diagnostics_out,
+                                         ulong &token);
+   bool              CommitPreparedAction(CBufferFloat *plans, uint plan_offset, ulong token,
+                                          CBufferFloat *close_state_out, CBufferFloat *suffix_rewards_out,
+                                          CBufferFloat *status_out, CBufferFloat *diagnostics_out);
+   bool              CommitObservedAction(CBufferFloat *plans, uint plan_offset,
+                                          CBufferFloat *factual_context, ulong token,
+                                          CBufferFloat *close_state_out,
+                                          CBufferFloat *suffix_rewards_out,
+                                          CBufferFloat *status_out,
+                                          CBufferFloat *diagnostics_out);
+   virtual int       Type(void) const override { return(defNeuronScenarioRolloutOCL); }
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   virtual bool      Clear(void) override;
+   virtual void      TrainMode(bool flag) override { bTrain = false; }
+   virtual bool      TrainMode(void) override { return(false); }
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      numOutputs(const uint outputs, ENUM_OPTIMIZATION optimization_type) override;
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
+   virtual CLayerDescription *GetLayerInfo(void) override;
+   virtual CBufferFloat *getOutput(void) const override { return(m_public_valid ? Output : NULL); }
+   virtual int       getOutputIndex(void) const override { return(m_public_valid && CheckPointer(Output) != POINTER_INVALID ? Output.GetIndex() : INVALID_HANDLE); }
+   virtual int       getOutputVal(float &values[]) override;
+   virtual int       getOutputVal(CArrayFloat *values) override;
+   virtual int       getOutputVal(vector<float> &values) override;
+  };
+//+------------------------------------------------------------------+
+//| DPCC exclusively owned projection workspace slots                |
+//+------------------------------------------------------------------+
+enum ENUM_DPCC_PROJECTION_WORKSPACE
+  {
+   DPCC_PW_ORIGINAL = 0,
+   DPCC_PW_CURRENT,
+   DPCC_PW_RESULT,
+   DPCC_PW_BASE_ACTIVE,
+   DPCC_PW_FINAL_ACTIVE,
+   DPCC_PW_BASE_RETURN,
+   DPCC_PW_BASE_STATE,
+   DPCC_PW_BASE_VIOLATION,
+   DPCC_PW_BASE_SUMMARY,
+   DPCC_PW_PROPOSAL,
+   DPCC_PW_PROPOSAL_ACTIVE,
+   DPCC_PW_PROPOSAL_RETURN,
+   DPCC_PW_PROPOSAL_STATE,
+   DPCC_PW_PROPOSAL_VIOLATION,
+   DPCC_PW_PROPOSAL_SUMMARY,
+   DPCC_PW_ORDER,
+   DPCC_PW_CONTROL,
+   DPCC_PW_AGGREGATE,
+   DPCC_PW_SCALES,
+   DPCC_PW_COST,
+   DPCC_PW_STATUS,
+   DPCC_PW_DIAGNOSTICS,
+   DPCC_PW_COST_TEMP,
+   DPCC_PW_STATUS_TEMP,
+   DPCC_PW_DIAGNOSTICS_TEMP,
+   DPCC_PW_COUNT
+  };
+//+------------------------------------------------------------------+
+//| DPCC bounded device-resident causal local plan projection        |
+//+------------------------------------------------------------------+
+class CNeuronPlanProjectionOCL : public CNeuronBaseOCL
+  {
+protected:
+   SDPCCShape        m_shape;
+   SDPCCLayout       m_layout;
+   SDPCCConfig       m_config;
+   CBufferFloat      *m_work[DPCC_PW_COUNT];
+   CNeuronScenarioRolloutOCL *m_rollout;
+   uint              m_phase;
+   ENUM_DPCC_STATUS  m_status;
+   bool              m_configured;
+   bool              m_fixed;
+   bool              m_public_valid;
+   bool              Fail(const ENUM_DPCC_STATUS status, const bool fatal = false);
+   bool              EnsureBuffer(CBufferFloat *&buffer, const uint count, const float value = 0);
+   bool              ReadDescriptor(CLayerDescription *desc, SDPCCShape &shape) const;
+   bool              ValidateConfig(const SDPCCConfig &config) const;
+   bool              ValidateBuffer(CBufferFloat *buffer, const ulong count, const bool exact = true) const;
+   bool              SharesDevice(CBufferFloat *first, CBufferFloat *second) const;
+   bool              WorkspaceSizes(ulong &counts[]) const;
+   bool              EnsureWorkspace(void);
+   bool              ValidateWorkspace(CBufferFloat *plans = NULL, CBufferFloat *context = NULL) const;
+   bool              WriteScales(void);
+   bool              ReleaseOwned(void);
+   bool              BindBuffers(const int kernel, CBufferFloat *&buffers[]);
+   bool              BindIntegers(const int kernel, const uint start, const uint &values[]);
+   bool              ExecuteRows(const int kernel, const uint rows);
+   bool              ReadCommon(const uint mode, uint &verdict);
+   bool              Summarize(const bool proposals, CBufferFloat *plans, CBufferFloat *active);
+   bool              ValidatePlans(CBufferFloat *plans, CBufferFloat *context);
+   bool              BuildRepairIndexOrder(CBufferFloat *context, const uint stage);
+   bool              BuildLocalProposals(CBufferFloat *context);
+   bool              EvaluateProposals(CBufferFloat *context);
+   bool              SelectImprovement(void);
+   bool              VerifyProjection(CBufferFloat *context);
+   ulong             ConfigSignature(const SDPCCConfig &config) const;
+   virtual bool      feedForward(CNeuronBaseOCL *source) override;
+   virtual bool      feedForward(CNeuronBaseOCL *source, CBufferFloat *context) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source, CBufferFloat *second,
+                                        CBufferFloat *second_gradient,
+                                        ENUM_ACTIVATION second_activation = None) override;
+   virtual bool      calcHiddenGradients(CNeuronBaseOCL *source) override;
+   virtual bool      calcHiddenGradients(CNeuronBaseOCL *source, CBufferFloat *second,
+                                         CBufferFloat *second_gradient,
+                                         ENUM_ACTIVATION second_activation = None) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source, CBufferFloat *second) override;
+   virtual bool      WeightsUpdateAdam(CNeuronBaseOCL *source, float tau) override;
+public:
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
+                     CNeuronPlanProjectionOCL(void);
+                    ~CNeuronPlanProjectionOCL(void);
+   bool              Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, CLayerDescription *desc);
+   bool              Configure(const SDPCCConfig &config);
+   bool              BindRollout(CNeuronScenarioRolloutOCL *rollout);
+   void              UnbindRollout(void);
+   ENUM_DPCC_STATUS  LastStatus(void) const { return(m_status); }
+   ulong             ContractSignature(void) const;
+   CBufferFloat      *GetOriginalPlans(void) { return(m_public_valid ? m_work[DPCC_PW_ORIGINAL] : NULL); }
+   CBufferFloat      *GetCorrectionCost(void) { return(m_public_valid ? m_work[DPCC_PW_COST] : NULL); }
+   CBufferFloat      *GetCandidateStatus(void) { return(m_public_valid ? m_work[DPCC_PW_STATUS] : NULL); }
+   CBufferFloat      *GetDiagnostics(void) { return(m_public_valid ? m_work[DPCC_PW_DIAGNOSTICS] : NULL); }
+   virtual int       Type(void) const override { return(defNeuronPlanProjectionOCL); }
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   virtual bool      Clear(void) override;
+   virtual void      TrainMode(bool flag) override { bTrain = false; }
+   virtual bool      TrainMode(void) override { return(false); }
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      numOutputs(const uint outputs, ENUM_OPTIMIZATION optimization_type) override;
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
+   virtual CLayerDescription *GetLayerInfo(void) override;
+   virtual bool      FeedForward(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      FeedForwardSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      UpdateInputWeights(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputWeightsSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      UpdateInputState(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputStateSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      CalcHiddenGradients(CObject *source, CBufferFloat *second = NULL,
+                                         CBufferFloat *second_gradient = NULL,
+                                         ENUM_ACTIVATION second_activation = None) override;
+   virtual bool      CalcHiddenGradientsSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      calcOutputGradients(CBufferFloat *target, float &error) override;
+   virtual bool      calcAlignmentGradient(const CNeuronBaseOCL *source, const bool add = false) override;
+   virtual bool      calcAlphaGradients(CNeuronBaseOCL *source) override;
+   virtual bool      SetOutput(CBufferFloat *buffer, bool delete_prev = true) override;
+   virtual bool      SetGradient(CBufferFloat *buffer, bool delete_prev = true) override;
+   virtual bool      SetGradientIndex(int index) override;
+   virtual bool      SwapOutputs(void) override;
+   virtual CBufferFloat *getOutput(void) const override { return(m_public_valid ? Output : NULL); }
+   virtual int       getOutputIndex(void) const override;
+   virtual int       getOutputVal(float &values[]) override;
+   virtual int       getOutputVal(CArrayFloat *values) override;
+   virtual int       getOutputVal(vector<float> &values) override;
+   virtual CBufferFloat *getPrevOutput(void) const override { return(NULL); }
+   virtual int       getPrevOutIndex(void) const override { return(INVALID_HANDLE); }
+   virtual int       getPrevVal(float &values[]) override;
+   virtual CBufferFloat *getGradient(void) const override { return(NULL); }
+   virtual int       getGradientIndex(void) const override { return(INVALID_HANDLE); }
+   virtual int       getGradient(float &values[]) override;
+   virtual int       getGradient(vector<float> &values) override;
+  };
+//+------------------------------------------------------------------+
+//| Declaration CNeuronPlanProjectionTraceOCL                        |
+//+------------------------------------------------------------------+
+class CNeuronPlanProjectionTraceOCL : public CNeuronPlanProjectionOCL
+  {
+protected:
+   CBufferFloat      *m_trace[DPCC_TW_COUNT];
+   uint              m_trace_slots[];
+   uint              m_trace_capacity;
+   uint              m_trace_frames;
+   uint              m_trace_next;
+   uint              m_trace_slot;
+   ulong             m_trace_decision;
+   bool              m_trace_live;
+   bool              m_trace_failed;
+   bool              m_trace_constructing;
+   bool              m_trace_executing;
+   bool              m_trace_record;
+   bool              TraceFail(const ENUM_DPCC_STATUS status);
+   bool              TraceSizes(ulong &counts[]) const;
+   bool              EnsureTrace(void);
+   bool              ValidateTrace(CBufferFloat *first = NULL, CBufferFloat *second = NULL) const;
+   bool              FreeTraceBuffers(void);
+   bool              TraceStage(const uint stage, CBufferFloat *context);
+   bool              CheckTrace(void);
+   virtual bool      feedForward(CNeuronBaseOCL *source) override;
+   virtual bool      feedForward(CNeuronBaseOCL *source, CBufferFloat *context) override;
+public:
+                     CNeuronPlanProjectionTraceOCL(void);
+                    ~CNeuronPlanProjectionTraceOCL(void);
+   bool              Init(uint numOutputs, uint index, COpenCLMy *open_cl, CLayerDescription *desc);
+   bool              InitTrace(uint index, COpenCLMy *open_cl, CLayerDescription *desc,
+                               const uint max_frames);
+   bool              Configure(const SDPCCConfig &config);
+   bool              BindRollout(CNeuronScenarioRolloutOCL *rollout);
+   void              UnbindRollout(void);
+   bool              BeginTrace(const ulong decision_id, const uint frames);
+   bool              ForwardFrame(const uint slot, CNeuronBaseOCL *plans,
+                                  CBufferFloat *context, const bool record_gradient);
+   bool              BackwardFrame(const uint slot, CBufferFloat *gradient_out,
+                                   CBufferFloat *gradient_in);
+   bool              ReleaseTrace(void);
+   uint              TraceCapacity(void) const { return(m_trace_capacity); }
+   virtual int       Type(void) const override { return(defNeuronPlanProjectionTraceOCL); }
+   virtual bool      Clear(void) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
+  };
+//+------------------------------------------------------------------+
+//| Declaration CNeuronProofOCL                                      |
 //+------------------------------------------------------------------+
 class CNeuronProofOCL : public CNeuronBaseOCL
   {
 protected:
-   uint               iWindow;                                             ///< Input window size
-   uint               iStep;                                               ///< Size of step
-
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< Feed Forward method.@param NeuronOCL Pointer to previos layer.
+   //--- Input window size
+   uint               iWindow;
+   //--- Size of step
+   uint               iStep;
+   //--- Feed Forward method.@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);        ///< Method to transfer gradients to previous layer @param[in] NeuronOCL Pointer to previous layer.
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return true;};        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method to transfer gradients to previous layer @param[in] NeuronOCL Pointer to previous layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return(true);};
 
 public:
    /** Constructor */
                      CNeuronProofOCL(void) : iWindow(2), iStep(1) {};
    /** Destructor */~CNeuronProofOCL(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, int window, int step, int units_count, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          int window,
+                          int step,
+                          int units_count,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object.@param[in] window Size of input window @param[in] step Step size.@param[in] units_countNumber of neurons.@param[in] optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
-   virtual int       Type(void)   const   {  return defNeuronProofOCL;   }///< Identificator of class.@return Type of class
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronProofOCL);   }
    virtual CLayerDescription* GetLayerInfo(void);
-   virtual uint      GetWindow(void) const { return iWindow;   }
+   virtual uint      GetWindow(void) const { return(iWindow);   }
+   uint              GetInputStride(void) const { return(iStep); }
   };
-//+------------------------------------------------------------------+
 //---\class CNeuronConvOCL
 //--- Class of convolution layer GPU calculation
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para41">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronConvOCL    :  public CNeuronProofOCL
   {
 protected:
-   uint              iWindowOut;                                           ///< Size of out window
-   uint              iVariables;                                           ///< Size of out window
+   //--- Size of out window
+   uint              iWindowOut;
+   //--- Size of out window
+   uint              iVariables;
    //---
-   CBufferFloat      *WeightsConv;                                         ///< Matrix of weights to previous layer
-   CBufferFloat      *DeltaWeightsConv;                                    ///< Matrix of delta weights to previous layer (#SGD)
-   CBufferFloat      *FirstMomentumConv;                                   ///< Matrix of first momentum to previous layer (#ADAM)
-   CBufferFloat      *SecondMomentumConv;                                  ///< Matrix of second momentum to previous layer (#ADAM)
+   //--- Matrix of weights to previous layer
+   CBufferFloat      *WeightsConv;
+   //--- Matrix of delta weights to previous layer (#SGD)
+   CBufferFloat      *DeltaWeightsConv;
+   //--- Matrix of first momentum to previous layer (#ADAM)
+   CBufferFloat      *FirstMomentumConv;
+   //--- Matrix of second momentum to previous layer (#ADAM)
+   CBufferFloat      *SecondMomentumConv;
    //---
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;      ///< Feed Forward method.@param NeuronOCL Pointer to previos layer.
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;  ///< Method for updating weights.@param NeuronOCL Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;  ///< Method to transfer gradients to previous layer @param[in] NeuronOCL Pointer to previous layer.
+   //--- Feed Forward method.@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
+   //--- Method for updating weights.@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   //--- Method to transfer gradients to previous layer @param[in] NeuronOCL Pointer to previous layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
+   bool              ForwardRowsReadOnly(CBufferFloat *source, const uint rows, const SLayerReadState &state,
+                                         SLayerRowsWorkspace &work, CBufferFloat *output, CBufferFloat *flags);
+
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
    /** Constructor */
                      CNeuronConvOCL(void) :   iWindowOut(1), iVariables(1) {  activation = SoftPlus;   }
    /** Destructor */~CNeuronConvOCL(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint step, uint window_out, uint units_count, ENUM_OPTIMIZATION optimization_type, uint batch);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint step, uint window_out, uint units_count, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint step,
+                          uint window_out,
+                          uint units_count,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint step,
+                          uint window_out,
+                          uint units_count,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object.@param[in] window Size of input window @param[in] step Step size.@param[in] window_out Size of output window @param[in] units_countNumber of neurons.@param[in] optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual CBufferFloat* GetWeightsConv(void)   {  return WeightsConv;  }
+   virtual CBufferFloat* GetWeightsConv(void)   {  return(WeightsConv);  }
+   virtual CBufferFloat *GetWeightsConvReadOnly(void) const { return(WeightsConv); }
+   CBufferFloat      *GetFirstMomentumConv(void) const { return(FirstMomentumConv); }
+   CBufferFloat      *GetSecondMomentumConv(void) const { return(SecondMomentumConv); }
    //--- Direct non-owning device-buffer input path.
    bool              FeedForwardBuffer(CBufferFloat *source);
    bool              UpdateInputWeightsBuffer(CBufferFloat *source);
    //---
-   virtual int       Type(void) override const  {  return defNeuronConvOCL;   }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void) override const  {  return(defNeuronConvOCL);   }
    //--- methods for working with files
-   virtual bool      Save(int const file_handle) override;///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle) override;///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle) override;
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle) override;
+   virtual bool      SaveParametersOnly(const int file_handle) override;
+   virtual bool      LoadParametersOnly(const int file_handle, const bool apply) override;
+   virtual bool      SaveDPCCPolicyTrainingStateOnly(const int file_handle) override;
+   virtual bool      LoadDPCCPolicyTrainingStateOnly(const int file_handle, const bool apply) override;
+   virtual bool      AppendDPCCPolicyTrainingFingerprint(ulong &fingerprint) override;
    //---
    virtual CLayerDescription* GetLayerInfo(void) override;
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
-   virtual uint      GetFilters(void) const { return iWindowOut; }
-   virtual uint      GetVariables(void) const { return iVariables; }
-   virtual uint      GetUnits(void) const { return Output.Total() / (iWindowOut * iVariables); }
+   virtual uint      GetFilters(void) const { return(iWindowOut); }
+   virtual uint      GetVariables(void) const { return(iVariables); }
+   virtual uint      GetUnits(void) const { return(Output.Total() / (iWindowOut * iVariables)); }
+  };
+//+------------------------------------------------------------------+
+//| DPCC Actor output with discounted Oracle and Action6 SRM loss.   |
+//+------------------------------------------------------------------+
+class CNeuronDPCCActorOCL : public CNeuronConvOCL
+  {
+protected:
+   bool              Difference(CBufferFloat *left, CBufferFloat *right, CBufferFloat *output,
+                                const uint count, string &reason);
+   bool              Gate(CBufferFloat *input1, CBufferFloat *input2, CBufferFloat *gate,
+                          CBufferFloat *output, const uint count, string &reason);
+   bool              ValidateTrainingOwners(void) const;
+   bool              SaveActorState(const int handle, const bool training);
+   bool              LoadActorState(const int handle, const bool training, const bool apply);
+
+public:
+   virtual int       Type(void) const override { return(defNeuronDPCCActorOCL); }
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SaveParametersOnly(const int handle) override
+     {               return(SaveActorState(handle, false)); }
+   virtual bool      LoadParametersOnly(const int handle, const bool apply) override
+     {               return(LoadActorState(handle, false, apply)); }
+   virtual bool      SaveDPCCPolicyTrainingStateOnly(const int handle) override
+     {               return(SaveActorState(handle, true)); }
+   virtual bool      LoadDPCCPolicyTrainingStateOnly(const int handle, const bool apply) override
+     {               return(LoadActorState(handle, true, apply)); }
+   virtual bool      AppendDPCCPolicyTrainingFingerprint(ulong &fingerprint) override;
+   bool              PrepareOracleGradient(const uint horizon, const uint actions,
+                                           const float &teacher_plan[], const float &valid_steps[],
+                                           const float gamma, string &reason);
+   bool              PrepareActionGradient(CBufferFloat *query_gradient, const uint account_width,
+                                           const uint actions, string &reason);
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronConvSAMOCL class.                            |
+//+------------------------------------------------------------------+
+struct SDPCCDecoderComposition
+  {
+   uint              embedding;
+   string            architecture;
+   string            activation_profile;
+   string            backward_profile;
+   string            optimizer_profile;
+   string            graph_digest;
+  };
+//+------------------------------------------------------------------+
+//| Shared scenario decoder with owned native affine children        |
+//+------------------------------------------------------------------+
+class CNeuronScenarioForecast;
+class CNeuronScenarioForecastPriceOCL;
+//+------------------------------------------------------------------+
+//| Declaration CNeuronScenarioDecoderOCL                            |
+//+------------------------------------------------------------------+
+class CNeuronScenarioDecoderOCL : public CNeuronBaseOCL
+  {
+protected:
+   bool              m_price_mode;
+   uint              m_price_phase;
+   bool              m_price_anchor_bound;
+   double            m_price_anchor;
+   double            m_price_scale;
+   ulong             m_price_decision;
+   string            m_price_error;
+   bool              PriceSource(CNeuronBaseOCL *source) const;
+   bool              DecodePricePath(void);
+   bool              ReversePricePath(void);
+   bool              SavePrice(const int file_handle);
+   bool              LoadPrice(const int file_handle);
+   SDPCCShape        m_shape;
+   SDPCCDecoderComposition m_composition;
+   SDPCCShape        m_admitted_shape;
+   SDPCCConfig       m_admitted_config;
+   SDPCCDecoderComposition m_admitted_composition;
+   bool              m_shape_admitted;
+   bool              m_config_admitted;
+   bool              DescribeAdmission(CLayerDescription *desc, SDPCCShape &shape) const;
+   bool              ValidComposition(const SDPCCConfig &config, const SDPCCDecoderComposition &composition) const;
+   bool              MatchesAdmission(const SDPCCConfig &config, const SDPCCDecoderComposition &composition) const;
+   void              AdmitConfiguration(const SDPCCConfig &config, const SDPCCDecoderComposition &composition);
+   bool              InitOwned(uint outputs, uint index, COpenCLMy *open_cl,
+                               CLayerDescription *description, const bool admit);
+   bool              ConfigureOwned(const SDPCCConfig &config,
+                                    const SDPCCDecoderComposition &composition, const bool admit);
+   CNeuronConvOCL    *m_first;
+   CNeuronConvOCL    *m_last;
+   CBufferFloat      *m_work[8];
+   CBufferFloat      *m_loss_work[4];
+   CNeuronBaseOCL    *m_source;
+   CBufferFloat      *m_source_output;
+   int               m_source_index;
+   uint              m_tokens;
+   uint              m_width;
+   uint              m_hidden;
+   uint              m_phase;
+   uint              m_update_count;
+   ulong             m_generation;
+   bool              m_configured;
+   bool              m_public_valid;
+   bool              m_failed;
+   ENUM_DPCC_STATUS  m_status;
+   bool              Fail(const ENUM_DPCC_STATUS status, const bool fatal = false);
+   bool              Allocate(const uint hidden);
+   bool              ValidBuffer(CBufferFloat *buffer, const uint total) const;
+   bool              ValidateOwned(void) const;
+   bool              SameSource(CNeuronBaseOCL *source) const;
+   bool              ExternalSource(CNeuronBaseOCL *source) const;
+   bool              CheckSourceSnapshot(CNeuronBaseOCL *source);
+   bool              DispatchRhoLoss(CBufferFloat *target_normalized, CBufferFloat *rho,
+                                     const float rho_sum_tolerance, const bool prepare_gradient, double &loss,
+                                     const float lambda_price = 0, const float huber_delta = 0);
+   bool              CheckForecastLossSnapshot(CNeuronScenarioForecast *provider);
+   bool              ValidForecastLossTarget(CNeuronScenarioForecast *provider,
+         CBufferFloat *target, const uint total) const;
+   bool              Reduce(const uint count);
+   bool              Pack(CBufferFloat *source, CBufferFloat *destination, const uint inverse);
+   bool              Activate(CBufferFloat *source, CBufferFloat *destination, const int function);
+   bool              AffinePreflight(CNeuronConvOCL *child, CBufferFloat *source,
+                                     const uint input_width, const uint output_width);
+   bool              AffineGradient(CNeuronConvOCL *child, CBufferFloat *upstream,
+                                    CBufferFloat *destination, const uint input_width,
+                                    const uint output_width);
+   bool              AdamPreflight(CNeuronConvOCL *child, CBufferFloat *source,
+                                   const uint input_width, const uint output_width);
+   bool              CheckParameters(CNeuronConvOCL *child);
+   bool              CompleteFrozen(CNeuronBaseOCL *source);
+   void              HashComposition(ulong &hash) const;
+   virtual bool      feedForward(CNeuronBaseOCL *source) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source) override;
+   virtual bool      feedForward(CNeuronBaseOCL *source, CBufferFloat *second) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source, CBufferFloat *second,
+                                        CBufferFloat *second_gradient, ENUM_ACTIVATION function = None) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source, CBufferFloat *second) override;
+public:
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
+                     CNeuronScenarioDecoderOCL(void);
+                    ~CNeuronScenarioDecoderOCL(void);
+   virtual int       Type(void) const override { return(defNeuronScenarioDecoderOCL); }
+   bool              Init(uint outputs, uint index, COpenCLMy *open_cl, CLayerDescription *description);
+   virtual bool      Init(uint outputs, uint index, COpenCLMy *open_cl, uint neurons,
+                          ENUM_OPTIMIZATION method, uint batch) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH, true)); }
+   virtual void      AttachOpenCL(COpenCLMy *context) override;
+   bool              Configure(const SDPCCConfig &config, const SDPCCDecoderComposition &composition);
+   uint              ABI(void) const { return(m_price_mode ? defScenarioDecoderPriceABI : 2); }
+   bool              SetPricePhase(const uint phase);
+   uint              PricePhase(void) const { return(m_price_phase); }
+   bool              BindPriceAnchor(const double anchor, const double scale, const ulong decision_id);
+   bool              BuildNativeScenarios(CBufferFloat *destination, const uint plan_horizon,
+                                          const double tick_size);
+   bool              PreparePriceLoss(CNeuronScenarioForecastPriceOCL *provider,
+                                      CBufferFloat *target_normalized, const float lambda_price,
+                                      const float huber_delta, const float rho_sum_tolerance,
+                                      const bool prepare_gradient, double &loss);
+   string            LastPriceError(void) const { return(m_price_error); }
+   bool              GetPriceAnchor(double &anchor, double &scale, ulong &decision_id) const;
+   virtual bool      CanStartForward(void) const override
+     {
+      return(m_configured && !m_failed && m_phase == 0 && ValidateOwned() &&
+             (!m_price_mode || (m_price_anchor_bound && !m_public_valid)));
+     }
+   ENUM_DPCC_STATUS  LastStatus(void) const { return(m_status); }
+   uint              Scenarios(void) const { return(m_shape.K); }
+   uint              Horizon(void) const { return(m_shape.H); }
+   uint              DecoderEmbedding(void) const { return(m_hidden); }
+   bool              BuildNativeBankRhoLoss(CBufferFloat *target_native, CBufferFloat *price_norm,
+         CBufferFloat *responsibilities, const float rho_sum_tolerance,
+         const bool prepare_gradient, double &loss);
+   bool              BuildBankRhoLoss(CBufferFloat *target_normalized, CBufferFloat *responsibilities,
+                                      const float rho_sum_tolerance, const bool prepare_gradient, double &loss);
+   bool              BuildForecastNativeRhoLoss(CNeuronScenarioForecast *provider,
+         CBufferFloat *target_native, CBufferFloat *price_norm,
+         CBufferFloat *full_latent, CBufferFloat *delta_latent,
+         const float rho_sum_tolerance,
+         const bool prepare_gradient, double &loss);
+   bool              BuildForecastRhoLoss(CNeuronScenarioForecast *provider,
+                                          CBufferFloat *target_normalized,
+                                          CBufferFloat *full_latent, CBufferFloat *delta_latent,
+                                          const float rho_sum_tolerance,
+                                          const bool prepare_gradient, double &loss);
+   bool              CancelGeneration(void);
+   uint              UpdateCount(void) const { return(m_update_count); }
+   uint              GenerationPhase(void) const { return(m_phase); }
+   CBufferFloat      *GetNormalizedScenarios(void) { return(m_public_valid && !m_failed ? Output : NULL); }
+   CBufferFloat      *GetDiagnostics(void);
+   virtual CBufferFloat *getOutput(void) const override { return(m_public_valid && !m_failed ? Output : NULL); }
+   virtual CBufferFloat *getPrevOutput(void) const override { return(NULL); }
+   virtual CBufferFloat *getGradient(void) const override
+     {               return(m_public_valid && !m_failed ? Gradient : NULL); }
+   virtual int       getGradientIndex(void) const override
+     {               return(m_public_valid && !m_failed ? Gradient.GetIndex() : INVALID_HANDLE); }
+   virtual int       getPrevOutIndex(void) const override { return(INVALID_HANDLE); }
+   virtual int       getOutputVal(float &values[]) override
+     {               return(m_public_valid && !m_failed ? Output.GetData(values) : 0); }
+   virtual int       getOutputVal(CArrayFloat *values) override
+     {               return(m_public_valid && !m_failed ? Output.GetData(values) : 0); }
+   virtual int       getOutputVal(vector<float> &values) override
+     {               return(m_public_valid && !m_failed ? Output.GetData(values) : 0); }
+   virtual int       getPrevVal(float &values[]) override { return(0); }
+   virtual int       getGradient(float &values[]) override
+     {               return(m_public_valid && !m_failed ? Gradient.GetData(values) : 0); }
+   virtual int       getGradient(vector<float> &values) override
+     {               return(m_public_valid && !m_failed ? Gradient.GetData(values) : 0); }
+   virtual bool      SetOutput(CBufferFloat *buffer, bool delete_previous = true) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual bool      SetGradient(CBufferFloat *buffer, bool delete_previous = true) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual bool      SetGradientIndex(int index) override { return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) override;
+   virtual bool      calcOutputGradients(CBufferFloat *target, float &error) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual int       getOutputIndex(void) const override
+     {               return(m_public_valid && !m_failed ? Output.GetIndex() : INVALID_HANDLE); }
+   virtual bool      UpdateInputState(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputStateSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      FeedForward(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      FeedForwardSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      UpdateInputWeights(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputWeightsSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   virtual CLayerDescription *GetLayerInfo(void) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      TrainMode(void) override { return(bTrain); }
+   virtual bool      Clear(void) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *target) override;
+   virtual void      SetOpenCL(COpenCLMy *target) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
+   ulong             WeightSignature(void);
+   ulong             ContractSignature(void) const;
+   ulong             TrainableStateFingerprint(void);
+   ulong             SnapshotFingerprint(void);
+public:
+   bool              CanImportPreparedParameters(CNeuronScenarioDecoderOCL *donor);
+  };
+//+------------------------------------------------------------------+
+//| Convolution with sharpness aware optimizer                       |
 //+------------------------------------------------------------------+
 class CNeuronConvSAMOCL    :  public CNeuronConvOCL
   {
@@ -836,13 +2235,34 @@ public:
                      CNeuronConvSAMOCL(void) {  activation = GELU;   }
                     ~CNeuronConvSAMOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint step, uint window_out, uint units_count, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch) override;
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint step, uint window_out, uint units_count, uint variables, float rho, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint step,
+                          uint window_out,
+                          uint units_count,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         ) override;
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint step,
+                          uint window_out,
+                          uint units_count,
+                          uint variables,
+                          float rho,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    virtual bool      InitPS(CNeuronConvSAMOCL *master);
    //---
-   virtual int       Type(void)   const         {  return defNeuronConvSAMOCL;   }
-   virtual int       Activation(void)  const    {  return (fRho == 0 ? (int)None : (int)activation);   }
-   virtual int       getWeightsSAMIndex(void) const override {  return cWeightsSAM.GetIndex();   }
+   virtual int       Type(void)   const         {  return(defNeuronConvSAMOCL);   }
+   virtual int       Activation(void)  const    {  return(fRho == 0 ? (int)None : (int)activation);   }
+   virtual int       getWeightsSAMIndex(void) const override {  return(cWeightsSAM.GetIndex());   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -850,94 +2270,144 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
   };
-//+------------------------------------------------------------------+
 //---\class CNeuronAttentionOCL
 //--- Class of Self-Attention layer GPU calculation
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para42">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronAttentionOCL : public CNeuronBaseOCL
   {
 protected:
-   CNeuronConvOCL    *Querys;             ///< Convolution layer for Querys
-   CNeuronConvOCL    *Values;             ///< Convolution layer for Values
-   CBufferFloat      *Scores;             ///< Buffer for Scores matrix
-   CNeuronBaseOCL    *AttentionOut;       ///< Layer of Self-Attention Out
-   CNeuronConvOCL    *FF1;                ///< Convolution layer for first layer of Feed Forward block
-   CNeuronConvOCL    *FF2;                ///< Convolution layer for second layer of Feed Forward block
+   //--- Convolution layer for Querys
+   CNeuronConvOCL    *Querys;
+   //--- Convolution layer for Values
+   CNeuronConvOCL    *Values;
+   //--- Buffer for Scores matrix
+   CBufferFloat      *Scores;
+   //--- Layer of Self-Attention Out
+   CNeuronBaseOCL    *AttentionOut;
+   //--- Convolution layer for first layer of Feed Forward block
+   CNeuronConvOCL    *FF1;
+   //--- Convolution layer for second layer of Feed Forward block
+   CNeuronConvOCL    *FF2;
    //---
-   uint              iWindow;             ///< Window size
-   uint              iUnits;              ///< Number of units
+   //--- Window size
+   uint              iWindow;
+   //--- Number of units
+   uint              iUnits;
    //---
-   virtual bool      feedForward(CNeuronBaseOCL *prevLayer);                  ///< Feed Forward method.@param prevLayer Pointer to previos layer.
-   virtual bool      updateInputWeights(CNeuronBaseOCL *prevLayer);           ///< Method for updating weights.@param prevLayer Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);  ///< Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   //--- Feed Forward method.@param prevLayer Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *prevLayer);
+   //--- Method for updating weights.@param prevLayer Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *prevLayer);
+   //--- Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
 
 public:
    /** Constructor */
                      CNeuronAttentionOCL(void) : iWindow(1), iUnits(0) {};
    /** Destructor */~CNeuronAttentionOCL(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint units_count, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint units_count,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object.@param[in] window Size of in/out window and step.@param[in] units_countNumber of neurons.@param[in] optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual int       Type(void)   const   {  return defNeuronAttentionOCL;   }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronAttentionOCL);   }
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    virtual CLayerDescription* GetLayerInfo(void);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
-//+------------------------------------------------------------------+
 //---\ingroup neuron_base
 //---\class CNeuronMHAttentionOCL
 //---\brief Class of Multi-Head Self-Attention layer GPU calculation
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8909#para52">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronMHAttentionOCL   :  public CNeuronAttentionOCL
   {
 protected:
-   CNeuronConvOCL    *Querys2;            ///< Convolution layer for Querys Head 2
-   CNeuronConvOCL    *Querys3;            ///< Convolution layer for Querys Head 3
-   CNeuronConvOCL    *Querys4;            ///< Convolution layer for Querys Head 4
-   CNeuronConvOCL    *Keys2;              ///< Convolution layer for Keys Head 2
-   CNeuronConvOCL    *Keys3;              ///< Convolution layer for Keys Head 3
-   CNeuronConvOCL    *Keys4;              ///< Convolution layer for Keys Head 4
-   CNeuronConvOCL    *Values2;            ///< Convolution layer for Values Head 2
-   CNeuronConvOCL    *Values3;            ///< Convolution layer for Values Head 3
-   CNeuronConvOCL    *Values4;            ///< Convolution layer for Values Head 4
-   CBufferFloat      *Scores2;            ///< Buffer for Scores matrix Head 2
-   CBufferFloat      *Scores3;            ///< Buffer for Scores matrix Head 3
-   CBufferFloat      *Scores4;            ///< Buffer for Scores matrix Head 4
-   CNeuronBaseOCL    *AttentionOut2;      ///< Layer of Self-Attention Out
-   CNeuronBaseOCL    *AttentionOut3;      ///< Layer of Self-Attention Out
-   CNeuronBaseOCL    *AttentionOut4;      ///< Layer of Self-Attention Out
-   CNeuronBaseOCL    *AttentionConcatenate;///< Layer of Concatenate Self-Attention Out
-   CNeuronConvOCL    *Weights0;           ///< Convolution layer for Weights0
+   //--- Convolution layer for Querys Head 2
+   CNeuronConvOCL    *Querys2;
+   //--- Convolution layer for Querys Head 3
+   CNeuronConvOCL    *Querys3;
+   //--- Convolution layer for Querys Head 4
+   CNeuronConvOCL    *Querys4;
+   //--- Convolution layer for Keys Head 2
+   CNeuronConvOCL    *Keys2;
+   //--- Convolution layer for Keys Head 3
+   CNeuronConvOCL    *Keys3;
+   //--- Convolution layer for Keys Head 4
+   CNeuronConvOCL    *Keys4;
+   //--- Convolution layer for Values Head 2
+   CNeuronConvOCL    *Values2;
+   //--- Convolution layer for Values Head 3
+   CNeuronConvOCL    *Values3;
+   //--- Convolution layer for Values Head 4
+   CNeuronConvOCL    *Values4;
+   //--- Buffer for Scores matrix Head 2
+   CBufferFloat      *Scores2;
+   //--- Buffer for Scores matrix Head 3
+   CBufferFloat      *Scores3;
+   //--- Buffer for Scores matrix Head 4
+   CBufferFloat      *Scores4;
+   //--- Layer of Self-Attention Out
+   CNeuronBaseOCL    *AttentionOut2;
+   //--- Layer of Self-Attention Out
+   CNeuronBaseOCL    *AttentionOut3;
+   //--- Layer of Self-Attention Out
+   CNeuronBaseOCL    *AttentionOut4;
+   //--- Layer of Concatenate Self-Attention Out
+   CNeuronBaseOCL    *AttentionConcatenate;
+   //--- Convolution layer for Weights0
+   CNeuronConvOCL    *Weights0;
    //---
-   virtual bool      feedForward(CNeuronBaseOCL *prevLayer);                  ///< Feed Forward method.@param prevLayer Pointer to previos layer.
-   virtual bool      updateInputWeights(CNeuronBaseOCL *prevLayer);            ///< Method for updating weights.@param prevLayer Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);  ///< Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   //--- Feed Forward method.@param prevLayer Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *prevLayer);
+   //--- Method for updating weights.@param prevLayer Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *prevLayer);
+   //--- Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
    //--- Method to transfer gradients inside Head Self-Attention
-   virtual bool      calcHeadGradient(CNeuronConvOCL *query, CNeuronConvOCL *value, CBufferFloat *score, CNeuronBaseOCL *attention, CNeuronBaseOCL *prevLayer);
+   virtual bool      calcHeadGradient(CNeuronConvOCL *query,
+                                      CNeuronConvOCL *value,
+                                      CBufferFloat *score,
+                                      CNeuronBaseOCL *attention,
+                                      CNeuronBaseOCL *prevLayer
+                                     );
 
 public:
    /** Constructor */
                      CNeuronMHAttentionOCL(void) {};
    /** Destructor */~CNeuronMHAttentionOCL(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint units_count, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint units_count,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object.@param[in] window Size of in/out window and step.@param[in] units_countNumber of neurons.@param[in] optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual int       Type(void)   const   {  return defNeuronMHAttentionOCL;   }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronMHAttentionOCL);   }
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);   ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);   ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    virtual CLayerDescription* GetLayerInfo(void);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
-//+------------------------------------------------------------------+
 //---\class CCollection
 //---\brief Class of objects collection.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/9025#para41">the link.</A>
-//+------------------------------------------------------------------+
 class CCollection    :  public CArrayObj
   {
 public:
@@ -977,70 +2447,131 @@ public:
            }
         }
       //---
-      return result;
+      return(result);
      }
    //---
   };
-//+------------------------------------------------------------------+
 //---\ingroup neuron_base
 //---\class CNeuronMLMHAttentionOCL
 //---\brief Class of Multilayer multi-headed attention neuron.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/9025#para41">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronMLMHAttentionOCL       :  public CNeuronBaseOCL
   {
 protected:
-   uint              iLayers;                                     ///< Number of inner layers
-   uint              iHeads;                                      ///< Number of heads
-   uint              iWindow;                                     ///< Input window size
-   uint              iUnits;                                      ///< Number of units
-   uint              iWindowKey;                                  ///< Size of Key/Query window
+   //--- Number of inner layers
+   uint              iLayers;
+   //--- Number of heads
+   uint              iHeads;
+   //--- Input window size
+   uint              iWindow;
+   //--- Number of units
+   uint              iUnits;
+   //--- Size of Key/Query window
+   uint              iWindowKey;
    //---
-   CCollection       *QKV_Tensors;                                ///< The collection of tensors of Queries, Keys and Values
-   CCollection       *QKV_Weights;                                ///< The collection of Matrix of weights to previous layer
-   CCollection       *S_Tensors;                                  ///< The collection of Scores tensors
-   CCollection       *AO_Tensors;                                 ///< The collection of Attention Out tensors
-   CCollection       *FF_Tensors;                                 ///< The collection of tensors of Feed Forward output
-   CCollection       *FF_Weights;                                 ///< The collection of Matrix of Feed Forward weights
+   //--- The collection of tensors of Queries, Keys and Values
+   CCollection       *QKV_Tensors;
+   //--- The collection of Matrix of weights to previous layer
+   CCollection       *QKV_Weights;
+   //--- The collection of Scores tensors
+   CCollection       *S_Tensors;
+   //--- The collection of Attention Out tensors
+   CCollection       *AO_Tensors;
+   //--- The collection of tensors of Feed Forward output
+   CCollection       *FF_Tensors;
+   //--- The collection of Matrix of Feed Forward weights
+   CCollection       *FF_Weights;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
-   virtual bool      ConvolutionForward(CBufferFloat *weights, CBufferFloat *inputs, CBufferFloat *outputs, uint window, uint window_out, ENUM_ACTIVATION activ, uint step = 0, uint variables = 1);
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
+   virtual bool      ConvolutionForward(CBufferFloat *weights,
+                                        CBufferFloat *inputs,
+                                        CBufferFloat *outputs,
+                                        uint window,
+                                        uint window_out,
+                                        ENUM_ACTIVATION activ,
+                                        uint step = 0,
+                                        uint variables = 1
+                                       );
    //---< \brief Convolution Feed Forward method of calling kernel ::FeedForwardConv().
    virtual bool      AttentionScore(CBufferFloat *qkv, CBufferFloat *scores, bool mask = false);
    //---< \brief Multi-heads attention scores method of calling kernel ::MHAttentionScore().
    virtual bool      AttentionOut(CBufferFloat *qkv, CBufferFloat *scores, CBufferFloat *out);
    //---< \brief Multi-heads attention out method of calling kernel ::MHAttentionOut().
    //---\ingroup neuron_base_opt
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);  ///< Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-   virtual bool      ConvolutuionUpdateWeights(CBufferFloat *weights, CBufferFloat *gradient, CBufferFloat *inputs, CBufferFloat *momentum1, CBufferFloat *momentum2, uint window, uint window_out, uint step = 0, uint heads = 0, uint variables = 1);
-   virtual bool      ConvolutuionUpdateWeights(CBufferFloat *weights, CBufferFloat *source, CBufferFloat *momentum1, CBufferFloat *momentum2, float tau);
+   //--- Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
+   virtual bool      ConvolutuionUpdateWeights(CBufferFloat *weights,
+                                               CBufferFloat *gradient,
+                                               CBufferFloat *inputs,
+                                               CBufferFloat *momentum1,
+                                               CBufferFloat *momentum2,
+                                               uint window,
+                                               uint window_out,
+                                               uint step = 0,
+                                               uint heads = 0,
+                                               uint variables = 1
+                                              );
+   virtual bool      ConvolutuionUpdateWeights(CBufferFloat *weights,
+                                               CBufferFloat *source,
+                                               CBufferFloat *momentum1,
+                                               CBufferFloat *momentum2,
+                                               float tau
+                                              );
    //---< Method for updating weights in convolution layer.\details Calling one of kernels ::UpdateWeightsConvMomentum() or ::UpdateWeightsConvAdam() in depends of optimization type (#ENUM_OPTIMIZATION).
-   virtual bool      ConvolutionInputGradients(CBufferFloat *weights, CBufferFloat *gradient, CBufferFloat *inputs, CBufferFloat *inp_gradient, uint window, uint window_out, uint activ, uint shift_out = 0, uint step = 0, uint variables = 1);
+   virtual bool      ConvolutionInputGradients(CBufferFloat *weights,
+                                               CBufferFloat *gradient,
+                                               CBufferFloat *inputs,
+                                               CBufferFloat *inp_gradient,
+                                               uint window,
+                                               uint window_out,
+                                               uint activ,
+                                               uint shift_out = 0,
+                                               uint step = 0,
+                                               uint variables = 1
+                                              );
    //---< Method of passing gradients through a convolutional layer.
-   virtual bool      AttentionInsideGradients(CBufferFloat *qkv, CBufferFloat *qkv_g, CBufferFloat *scores, CBufferFloat *gradient);
+   virtual bool      AttentionInsideGradients(CBufferFloat *qkv,
+                                              CBufferFloat *qkv_g,
+                                              CBufferFloat *scores,
+                                              CBufferFloat *gradient
+                                             );
    //---< Method of passing gradients through attention layer.
 public:
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
    /** Constructor */
                      CNeuronMLMHAttentionOCL(void);
    /** Destructor */~CNeuronMLMHAttentionOCL(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, uint layers, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint units_count,
+                          uint layers,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object.@param[in] window Size of in/out window and step.@param[in] units_countNumber of neurons.@param[in] optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual int       Type(void)   const   {  return defNeuronMLMHAttentionOCL;   }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronMLMHAttentionOCL);   }
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    virtual CLayerDescription* GetLayerInfo(void);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
-//+------------------------------------------------------------------+
 //---\ingroup neuron_base
 //---\class CNeuronDropoutOCL
 //---\brief The Dropout neuron for GPU calculation.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/9112#para2">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronDropoutOCL    :  public   CNeuronBaseOCL
   {
 protected:
@@ -1050,92 +2581,151 @@ protected:
    CBufferFloat      *DropOutMultiplier;
    float             dInitValue;
    //---
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method.@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method.@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
    //---
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) {return true;}        ///< Blank method for updating weights.@param NeuronOCL Pointer to previos layer.
+   //--- Blank method for updating weights.@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) {return(true);}
    //---
 
 public:
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
    /** Constructor */
                      CNeuronDropoutOCL(void);
    /** Destructor */
                     ~CNeuronDropoutOCL(void);
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, float out_prob, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          float out_prob,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object. #param[in] numNeurons Number of neurons in layer #param[in] out_prob Probability of neurons shutdown @param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual int       getOutputIndex(void) const override  {  return (bTrain ? Output.GetIndex() : PrevLayer.getOutputIndex());             }  ///< Get index of output buffer @return Index
-   virtual int       getGradientIndex(void) const override {  return (bTrain ? Gradient.GetIndex() : PrevLayer.getGradientIndex());          }  ///< Get index of gradient buffer @return Index
+   //--- Get index of output buffer @return Index
+   virtual int       getOutputIndex(void) const override  {  return(bTrain ? Output.GetIndex() : PrevLayer.getOutputIndex());             }
+   //--- Get index of gradient buffer @return Index
+   virtual int       getGradientIndex(void) const override {  return(bTrain ? Gradient.GetIndex() : PrevLayer.getGradientIndex());          }
    //---
-   virtual int       getOutputVal(float &values[]) override {  return (bTrain ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }  ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getOutputVal(vector<float> &values) override {  return (bTrain ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }  ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getOutputVal(CArrayFloat *values) override {  return (bTrain ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }  ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getGradient(float &values[]) override {  return (bTrain ? Gradient.GetData(values) : PrevLayer.getGradient(values));    }  ///< Get values of gradient buffer @param[out] values Array of data @return number of items
-   virtual int       getGradient(vector<float> &values) override {  return (bTrain ? Gradient.GetData(values) : PrevLayer.getGradient(values));    }  ///< Get values of gradient buffer @param[out] values Array of data @return number of items
-   virtual CBufferFloat   *getOutput(void) const override {  return (bTrain ? Output : PrevLayer.getOutput());      }                 ///< Get pointer of output buffer @return Pointer to object
-   virtual CBufferFloat   *getGradient(void) const override {  return (bTrain ? Gradient : PrevLayer.getGradient());  }                 ///< Get pointer of gradient buffer @return Pointer to object
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(float &values[]) override {  return(bTrain ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(vector<float> &values) override {  return(bTrain ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(CArrayFloat *values) override {  return(bTrain ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }
+   //--- Get values of gradient buffer @param[out] values Array of data @return number of items
+   virtual int       getGradient(float &values[]) override {  return(bTrain ? Gradient.GetData(values) : PrevLayer.getGradient(values));    }
+   //--- Get values of gradient buffer @param[out] values Array of data @return number of items
+   virtual int       getGradient(vector<float> &values) override {  return(bTrain ? Gradient.GetData(values) : PrevLayer.getGradient(values));    }
+   //--- Get pointer of output buffer @return Pointer to object
+   virtual CBufferFloat   *getOutput(void) const override {  return(bTrain ? Output : PrevLayer.getOutput());      }
+   //--- Get pointer of gradient buffer @return Pointer to object
+   virtual CBufferFloat   *getGradient(void) const override {  return(bTrain ? Gradient : PrevLayer.getGradient());  }
    //---
-   virtual bool      Save(int const file_handle) override ;///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle) override ;///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle) override ;
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle) override ;
    //---
-   virtual int       Type(void)        const                      {  return defNeuronDropoutOCL;                }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronDropoutOCL);                }
    virtual CLayerDescription* GetLayerInfo(void) override;
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
   };
-//+------------------------------------------------------------------+
 //---\class CNeuronBatchNormOCL
 //---\brief The class of Batch Normalization neuron for GPU calculation.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/9207#para4">the link.</A>
-//+------------------------------------------------------------------+
 class CNeuronBatchNormOCL  :  public CNeuronBaseOCL
   {
 protected:
-   CNeuronBaseOCL    *PrevLayer;       ///< Pointer to the object of the previous layer
-   int               iBatchSize;       ///< Batch size
-   int               iBatchCount;      ///< Batch count
-   CBufferFloat      *BatchOptions;    ///< Container of method parameters
+   //--- Pointer to the object of the previous layer
+   CNeuronBaseOCL    *PrevLayer;
+   //--- Batch size
+   int               iBatchSize;
+   //--- Batch count
+   int               iBatchCount;
+   //--- Container of method parameters
+   CBufferFloat      *BatchOptions;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;               ///< \brief Feed Forward method of calling kernel ::BatchFeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::BatchFeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;        ///< Method for updating weights.\details Calling one of kernels ::UpdateBatchOptionsMomentum() or ::UpdateBatchOptionsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateBatchOptionsMomentum() or ::UpdateBatchOptionsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradientBatch(). @param NeuronOCL Pointer to next layer.
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradientBatch(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   bool              ForwardRowsReadOnly(CBufferFloat *source, const uint rows, const SLayerReadState &state,
+                                         SLayerRowsWorkspace &work, CBufferFloat *output, CBufferFloat *flags);
+
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
    /** Constructor */
                      CNeuronBatchNormOCL(void);
    /** Destructor */~CNeuronBatchNormOCL(void);
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, uint batchSize, ENUM_OPTIMIZATION optimization_type);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch) override;
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          uint batchSize,
+                          ENUM_OPTIMIZATION optimization_type
+                         );
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         ) override;
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object. #param[in] numNeurons Number of neurons in layer @param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual int       getOutputIndex(void)          {  return (iBatchSize > 1 || !PrevLayer ? Output.GetIndex() : PrevLayer.getOutputIndex());             } ///< Get index of output buffer @return Index
-   virtual int       getGradientIndex(void)        {  return (iBatchSize >  1 || !PrevLayer ? Gradient.GetIndex() : PrevLayer.getGradientIndex());          } ///< Get index of gradient buffer @return Index
+   //--- Get index of output buffer @return Index
+   virtual int       getOutputIndex(void)          {  return(iBatchSize > 1 || !PrevLayer ? Output.GetIndex() : PrevLayer.getOutputIndex());             }
+   //--- Get index of gradient buffer @return Index
+   virtual int       getGradientIndex(void)        {  return(iBatchSize >  1 || !PrevLayer ? Gradient.GetIndex() : PrevLayer.getGradientIndex());          }
    //---
-   virtual int       getOutputVal(float &values[])   {  return (iBatchSize > 1 || !PrevLayer ? Output.GetData(values) : PrevLayer.getOutputVal(values)); } ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getOutputVal(CArrayFloat *values)   {  return (iBatchSize > 1 || !PrevLayer ? Output.GetData(values) : PrevLayer.getOutputVal(values)); } ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getOutputVal(vector<float> &values)   {  return (iBatchSize > 1 || !PrevLayer ? Output.GetData(values) : PrevLayer.getOutputVal(values)); } ///< Get values of output buffer @param[out] values Array of data @return number of items
-   virtual int       getGradient(float &values[])    {  return (iBatchSize > 1 || !PrevLayer ? Gradient.GetData(values) : PrevLayer.getGradient(values));    } ///< Get values of gradient buffer @param[out] values Array of data @return number of items
-   virtual CBufferFloat   *getOutput(void)           {  return (iBatchSize > 1 || !PrevLayer ? Output : PrevLayer.getOutput());      }               ///< Get pointer of output buffer @return Pointer to object
-   virtual CBufferFloat   *getGradient(void)         {  return (iBatchSize > 1 || !PrevLayer ? Gradient : PrevLayer.getGradient());  }               ///< Get pointer of gradient buffer @return Pointer to object
-   virtual CBufferFloat   *getBatchOptions(void)         {  return (iBatchSize > 1 ? BatchOptions : NULL);  }               ///< Get pointer of Batch Options buffer @return Pointer to object
-   int               GetBatchCount(void) const { return iBatchCount; }
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(float &values[])   {  return(iBatchSize > 1 || !PrevLayer ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(CArrayFloat *values)   {  return(iBatchSize > 1 || !PrevLayer ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }
+   //--- Get values of output buffer @param[out] values Array of data @return number of items
+   virtual int       getOutputVal(vector<float> &values)   {  return(iBatchSize > 1 || !PrevLayer ? Output.GetData(values) : PrevLayer.getOutputVal(values)); }
+   //--- Get values of gradient buffer @param[out] values Array of data @return number of items
+   virtual int       getGradient(float &values[])    {  return(iBatchSize > 1 || !PrevLayer ? Gradient.GetData(values) : PrevLayer.getGradient(values));    }
+   //--- Get pointer of output buffer @return Pointer to object
+   virtual CBufferFloat   *getOutput(void)           {  return(iBatchSize > 1 || !PrevLayer ? Output : PrevLayer.getOutput());      }
+   //--- Get pointer of gradient buffer @return Pointer to object
+   virtual CBufferFloat   *getGradient(void)         {  return(iBatchSize > 1 || !PrevLayer ? Gradient : PrevLayer.getGradient());  }
+   //--- Get pointer of Batch Options buffer @return Pointer to object
+   virtual CBufferFloat   *getBatchOptions(void)         {  return(iBatchSize > 1 ? BatchOptions : NULL);  }
+   int               GetBatchCount(void) const { return(iBatchCount); }
    bool              SetBatchCount(const int count)
      {
       if(count < 1)
-         return false;
+         return(false);
       iBatchCount = count;
-      return true;
+      return(true);
      }
    //---
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronBatchNormOCL;    }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronBatchNormOCL);    }
    virtual CLayerDescription* GetLayerInfo(void);
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual bool      SupportsOpenCLChecked(void) const override;
@@ -1143,7 +2733,7 @@ public:
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
-   virtual CBufferFloat   *getWeights(void) override { return BatchOptions; }
+   virtual CBufferFloat   *getWeights(void) override { return(BatchOptions); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronLSTMOCL class.                               |
@@ -1152,8 +2742,10 @@ class CNeuronLSTMOCL : public CNeuronBaseOCL
   {
 protected:
    CBufferFloat      m_cWeightsLSTM;
-   CBufferFloat      m_cFirstMomentumLSTM;      ///< Buffer of first momentum matrix (#ADAM) or last delta weights matrix (#SGD)
-   CBufferFloat      m_cSecondMomentumLSTM;     ///< Buffer of second momentum matrix (#ADAM)
+   //--- Buffer of first momentum matrix (#ADAM) or last delta weights matrix (#SGD)
+   CBufferFloat      m_cFirstMomentumLSTM;
+   //--- Buffer of second momentum matrix (#ADAM)
+   CBufferFloat      m_cSecondMomentumLSTM;
 
    int               m_iMemory;
    int               m_iConcatenated;
@@ -1163,28 +2755,47 @@ protected:
    int               m_iInputs;
    int               m_iVariables;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;               ///< \brief Feed Forward method.@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method.@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;        ///< Method for updating weights.
+   //--- Method for updating weights.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
    //---
 
 public:
                      CNeuronLSTMOCL(void);
                     ~CNeuronLSTMOCL(void);
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch) override;
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         ) override;
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    virtual bool      SetInputs(int count);
    //---@}
    //---
-   virtual bool      Save(int const file_handle) override;///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle) override;///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle) override;
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void) override       const                      {  return defNeuronLSTMOCL;                  }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void) override       const                      {  return(defNeuronLSTMOCL);                  }
    virtual bool      Clear(void);
-   virtual CBufferFloat *getLSTMWeights(void) { return GetPointer(m_cWeightsLSTM);}
+   virtual CBufferFloat *getLSTMWeights(void) { return(GetPointer(m_cWeightsLSTM));}
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
@@ -1203,10 +2814,13 @@ class CNeuronSoftMaxOCL    :  public CNeuronBaseOCL
 protected:
    uint              iHeads;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
    //---
 
 public:
@@ -1215,17 +2829,21 @@ public:
    //---
    //---\ingroup neuron_base_gr
    //---@{
-   virtual bool      calcOutputGradients(CBufferFloat *Target, float &error) override;               ///< Method of output gradients calculation by calling kernel ::CalcOutputGradient().@param Target Traget value
+   //--- Method of output gradients calculation by calling kernel ::CalcOutputGradient().@param Target Traget value
+   virtual bool      calcOutputGradients(CBufferFloat *Target, float &error) override;
    virtual void      SetHeads(int heads)  { iHeads = heads; }
    //---@}
    //---
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
    virtual CLayerDescription* GetLayerInfo(void) override;
-   virtual int       Type(void) override        const                      {  return defNeuronSoftMaxOCL;                  }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void) override        const                      {  return(defNeuronSoftMaxOCL);                  }
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
-   virtual uint      Heads(void) const {  return iHeads; }
+   virtual uint      Heads(void) const {  return(iHeads); }
    virtual bool      SupportsOpenCLChecked(void) const override;
   };
 //+------------------------------------------------------------------+
@@ -1245,25 +2863,50 @@ protected:
    CNeuronBaseOCL    cQuantile1;
    CNeuronBaseOCL    cQuantile2;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
-//---
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
+   //---
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   bool              ForwardRowsReadOnly(CNeuronBaseOCL *input_owner, CBufferFloat *source, const uint rows,
+                            const SLayerReadState &state, SLayerRowsWorkspace &work,
+                            CBufferFloat *quantiles, CBufferFloat *fractions, CBufferFloat *flags);
+
                      CNeuronFQF();
                     ~CNeuronFQF();
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint actions, uint quantiles, uint numInputs, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint actions,
+                          uint quantiles,
+                          uint numInputs,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object. #param[in] numNeurons Number of neurons in layer @param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual bool      Save(int const file_handle) override;///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle) override;///< Load method @param[in] file_handle handle of file @return logical result of operation
-//---
-   virtual int       Type(void) override        const                      {  return defNeuronFQF; }///< Identificator of class.@return Type of class
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle) override;
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle) override;
+   //---
+   virtual bool      SaveParametersOnly(const int file_handle) override;
+   virtual bool      LoadParametersOnly(const int file_handle, const bool apply) override;
+   virtual bool      SaveDPCCPolicyTrainingStateOnly(const int file_handle) override;
+   virtual bool      LoadDPCCPolicyTrainingStateOnly(const int file_handle, const bool apply) override;
+   virtual bool      AppendDPCCPolicyTrainingFingerprint(ulong &fingerprint) override;
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void) override        const                      {  return(defNeuronFQF); }
    virtual CLayerDescription* GetLayerInfo(void) override;
-   virtual CObject*  AsObject(void) {  return GetPointer(this);   }
+   virtual CObject*  AsObject(void) {  return(GetPointer(this));   }
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual void      SetActivationFunction(ENUM_ACTIVATION function)    {  CNeuronBaseOCL::SetActivationFunction(function); }
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
@@ -1319,60 +2962,118 @@ protected:
    //---< input gradient while the fraction branch of the specialized
    //---< backward is computed on the GPU.
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;               ///< \brief Resets the prepared-gradient state and runs the FQF feed-forward pass.@param NeuronOCL Pointer to previos layer.
+   //--- \brief Resets the prepared-gradient state and runs the FQF feed-forward pass.@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //---\ingroup neuron_base_opt
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;        ///< Method to transfer gradient to previous layer: runs the specialized AC-SRM tail when a prepared distribution gradient is pending, otherwise the standard FQF backward. @param NeuronOCL Pointer to next layer.
+   //--- Method to transfer gradient to previous layer: runs the specialized AC-SRM tail when a prepared distribution gradient is pending, otherwise the standard FQF backward. @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
    bool              propagateACSRMGradients(CNeuronBaseOCL *NeuronOCL);
-//---< Runs the specialized AC-SRM backward sequence inside the class: the
-//---< quantile branch (cQuantile2 -> cQuantile1 -> cQuantile0), the value-path
-//---< input gradient, the cosine/soft-max probability branch and finally the
-//---< fraction-branch input gradient ::FQF_FractionGradient summed into
-//---< NeuronOCL.Gradient. @param NeuronOCL Pointer to next layer.
-//---
+   //---< Runs the specialized AC-SRM backward sequence inside the class: the
+   //---< quantile branch (cQuantile2 -> cQuantile1 -> cQuantile0), the value-path
+   //---< input gradient, the cosine/soft-max probability branch and finally the
+   //---< fraction-branch input gradient ::FQF_FractionGradient summed into
+   //---< NeuronOCL.Gradient. @param NeuronOCL Pointer to next layer.
+   //---
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   bool              SRMRowsReadOnly(CBufferFloat *quantiles, CBufferFloat *fractions, const uint rows,
+                        const int risk_type, const float risk_parameter, const float mean_weight,
+                        SLayerRowsWorkspace &work, CBufferFloat *scores, CBufferFloat *flags);
+
                      CNeuronACSRM(void);
                     ~CNeuronACSRM(void);
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint actions, uint quantiles, uint numInputs, ENUM_OPTIMIZATION optimization_type, uint batch) override;
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint actions,
+                          uint quantiles,
+                          uint numInputs,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         ) override;
    //---< Method of initialization class (inherits the FQF backbone, adds no parameters).@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object. #param[in] numNeurons Number of neurons in layer @param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual bool      calcDistributionTargetGradients(CNeuronBaseOCL *NeuronOCL, float target, float probability_weight = 1.0f, float value_weight = 1.0f);
-//---< Computes distributional target gradients via ::FQF_DistributionTargetGradient into cQuantile2.Gradient/cSoftMax.Gradient and marks them prepared for the specialized FQF tail (Actions == 1. @param NeuronOCL Pointer to next layer. @param target Observed scalar reward. @param probability_weight Probability branch weight. @param value_weight Value branch weight.
+   virtual bool      calcDistributionTargetGradients(CNeuronBaseOCL *NeuronOCL,
+                                                     float target,
+                                                     float probability_weight = 1.0f,
+                                                     float value_weight = 1.0f
+                                                    );
+   //---< Computes distributional target gradients via ::FQF_DistributionTargetGradient into cQuantile2.Gradient/cSoftMax.Gradient and marks them prepared for the specialized FQF tail (Actions == 1. @param NeuronOCL Pointer to next layer. @param target Observed scalar reward. @param probability_weight Probability branch weight. @param value_weight Value branch weight.
    virtual bool      Sample(CBufferFloat *result, CBufferFloat *random, const uint tasks = 1);
-//---< Samples one scalar realization per independent distribution via ::FQF_Sample. @param result Output buffer with one sampled centroid per task. @param random Input buffer with one uniform u_t in [0,1] per task. @param tasks Number of independent distributions (rows of the [T,N] buffers).
-   virtual bool      SRMForward(CBufferFloat *result, const uint tasks = 1, const int risk_type = defSRM_MEAN, const float risk_parameter = 0.1f, const float mean_weight = 0.0f);
-//---< Converts each FQF distribution into a scalar Spectral Risk Measure via ::FQF_SRMForward. @param result Output buffer with one scalar risk score per task. @param tasks Number of independent distributions (rows of the [T,N] buffers). @param risk_type Risk measure type (defSRM_MEAN, defSRM_CVAR, defSRM_MEAN_CVAR, defSRM_EXPONENTIAL, defSRM_DUAL_POWER). @param risk_parameter Measure parameter: alpha in (0,1] for CVaR/Mean-CVaR, lambda >= 0 for Exponential, nu >= 1 for Dual Power. @param mean_weight Omega in [0,1] between mean and CVaR for Mean-CVaR.
-   virtual bool      SRMGradient(CBufferFloat *result_gradient, const uint tasks = 1, const int risk_type = defSRM_MEAN, const float risk_parameter = 0.1f, const float mean_weight = 0.0f);
-   bool              MonotoneRearrange(CBufferFloat *ordered_quantiles, CBufferFloat *ordered_probabilities, CBufferFloat *order, CBufferFloat *diagnostics, const uint tasks = 1);
-//---< Runs ::FQF_MonotoneRearrange on the current cQuantile2/cSoftMax outputs: weighted discrete monotone rearrangement (N must be 2^k, bitonic v1) building Z*, P*, the permutation I and per-task diagnostics; the raw FQF buffers are never reordered. @param ordered_quantiles Sorted centroid support output [tasks*N]. @param ordered_probabilities Sorted probability mass output [tasks*N]. @param order Permutation I output [tasks*N]. @param diagnostics Diagnostics output [tasks*defFQF_DIAGNOSTIC_FLOATS]. @param tasks Number of independent distributions.
-   bool              RearrangeGradient(CBufferFloat *ordered_quantiles_gradient, CBufferFloat *ordered_probabilities_gradient, CBufferFloat *order, CBufferFloat *quantiles_gradient, CBufferFloat *probabilities_gradient, const uint tasks = 1);
-//---< Runs ::FQF_RearrangeGradient: scatters the sorted-pair gradients back to the original FQF indexing, g_Z[I_j] = g_{Z*},j and g_P[I_j] = g_{P*},j. @param ordered_quantiles_gradient Sorted value-gradient input [tasks*N]. @param ordered_probabilities_gradient Sorted probability-gradient input [tasks*N]. @param order Permutation I input [tasks*N]. @param quantiles_gradient cQuantile2.Gradient output [tasks*N]. @param probabilities_gradient cSoftMax.Gradient output [tasks*N]. @param tasks Number of independent distributions.
-   bool              ValidateDistributionForSRM(const uint tasks, const int risk_type, const float risk_parameter, const float mean_weight, const bool spectral_break_diagnostics);
-//---< Probability/numerical contract checked BEFORE any SRM launch: NaN/Inf quantile, NaN/Inf or negative probability, |sum(p)-1| < defFQF_PROBABILITY_TOLERANCE, total mass, valid inverse permutation inputs and Phi(tau_high) >= Phi(tau_low) - defFQF_SPECTRAL_EPS monotonicity for the requested measure. Returns false (and records counters) when the distribution is NOT valid for an SRM Actor update; a protective zero is never treated as a valid break-even outcome. @param tasks Number of independent distributions. @param risk_type Risk measure type. @param risk_parameter Measure parameter. @param mean_weight Mean-CVaR omega. @param spectral_break_diagnostics Collect |tau - alpha| < defFQF_KINK_EPS kink hits (diagnostic only).
-   bool              GetDistributionDiagnostics(int &invalid_quantile, int &invalid_probability, int &invalid_mass, int &spectral_break) const;
-//---< Read-only diagnostic access to the last ::ValidateDistributionForSRM counters.
-   bool              LastSRMInvalid(void) const { return m_last_srm_invalid; }
-//---< True only when the latest SRMForward/SRMGradient refusal was caused by
-//---< the SRM distribution/numerical contract. Callers may skip the Actor SRM
-//---< contribution without misclassifying an OpenCL/runtime failure.
-   bool              GetRearrangeBuffers(CBufferFloat *&ordered_quantiles, CBufferFloat *&ordered_probabilities, CBufferFloat *&order, CBufferFloat *&diagnostics);
-//---< Read-only diagnostic access to the transient rearrangement buffers (used by the smoke harness).
-   bool              GetOrderedGradientBuffers(CBufferFloat *&ordered_quantiles_gr, CBufferFloat *&ordered_probabilities_gr);
-//---< Read-only diagnostic access to the transient ordered gradient buffers (used by the smoke harness).
-//---< Back-propagates the upstream risk-score gradient through the FQF SRM via ::FQF_SRMGradient into cQuantile2.Gradient/cSoftMax.Gradient and marks them prepared. @param result_gradient Input buffer with one upstream gradient g_t per task. @param tasks Number of independent distributions (rows of the [T,N] buffers). @param risk_type Risk measure type (defSRM_MEAN, defSRM_CVAR, defSRM_MEAN_CVAR, defSRM_EXPONENTIAL, defSRM_DUAL_POWER). @param risk_parameter Measure parameter: alpha in (0,1] for CVaR/Mean-CVaR, lambda >= 0 for Exponential, nu >= 1 for Dual Power. @param mean_weight Omega in [0,1] between mean and CVaR for Mean-CVaR.
+   //---< Samples one scalar realization per independent distribution via ::FQF_Sample. @param result Output buffer with one sampled centroid per task. @param random Input buffer with one uniform u_t in [0,1] per task. @param tasks Number of independent distributions (rows of the [T,N] buffers).
+   virtual bool      SRMForward(CBufferFloat *result,
+                                const uint tasks = 1,
+                                const int risk_type = defSRM_MEAN,
+                                const float risk_parameter = 0.1f,
+                                const float mean_weight = 0.0f
+                               );
+   //---< Converts each FQF distribution into a scalar Spectral Risk Measure via ::FQF_SRMForward. @param result Output buffer with one scalar risk score per task. @param tasks Number of independent distributions (rows of the [T,N] buffers). @param risk_type Risk measure type (defSRM_MEAN, defSRM_CVAR, defSRM_MEAN_CVAR, defSRM_EXPONENTIAL, defSRM_DUAL_POWER). @param risk_parameter Measure parameter: alpha in (0,1] for CVaR/Mean-CVaR, lambda >= 0 for Exponential, nu >= 1 for Dual Power. @param mean_weight Omega in [0,1] between mean and CVaR for Mean-CVaR.
+   virtual bool      SRMGradient(CBufferFloat *result_gradient,
+                                 const uint tasks = 1,
+                                 const int risk_type = defSRM_MEAN,
+                                 const float risk_parameter = 0.1f,
+                                 const float mean_weight = 0.0f
+                                );
+   bool              MonotoneRearrange(CBufferFloat *ordered_quantiles,
+                                       CBufferFloat *ordered_probabilities,
+                                       CBufferFloat *order,
+                                       CBufferFloat *diagnostics,
+                                       const uint tasks = 1
+                                      );
+   //---< Runs ::FQF_MonotoneRearrange on the current cQuantile2/cSoftMax outputs: weighted discrete monotone rearrangement (N must be 2^k, bitonic v1) building Z*, P*, the permutation I and per-task diagnostics; the raw FQF buffers are never reordered. @param ordered_quantiles Sorted centroid support output [tasks*N]. @param ordered_probabilities Sorted probability mass output [tasks*N]. @param order Permutation I output [tasks*N]. @param diagnostics Diagnostics output [tasks*defFQF_DIAGNOSTIC_FLOATS]. @param tasks Number of independent distributions.
+   bool              RearrangeGradient(CBufferFloat *ordered_quantiles_gradient,
+                                       CBufferFloat *ordered_probabilities_gradient,
+                                       CBufferFloat *order,
+                                       CBufferFloat *quantiles_gradient,
+                                       CBufferFloat *probabilities_gradient,
+                                       const uint tasks = 1
+                                      );
+   //---< Runs ::FQF_RearrangeGradient: scatters the sorted-pair gradients back to the original FQF indexing, g_Z[I_j] = g_{Z*},j and g_P[I_j] = g_{P*},j. @param ordered_quantiles_gradient Sorted value-gradient input [tasks*N]. @param ordered_probabilities_gradient Sorted probability-gradient input [tasks*N]. @param order Permutation I input [tasks*N]. @param quantiles_gradient cQuantile2.Gradient output [tasks*N]. @param probabilities_gradient cSoftMax.Gradient output [tasks*N]. @param tasks Number of independent distributions.
+   bool              ValidateDistributionForSRM(const uint tasks,
+                                                const int risk_type,
+                                                const float risk_parameter,
+                                                const float mean_weight,
+                                                const bool spectral_break_diagnostics
+                                               );
+   //---< Probability/numerical contract checked BEFORE any SRM launch: NaN/Inf quantile, NaN/Inf or negative probability, |sum(p)-1| < defFQF_PROBABILITY_TOLERANCE, total mass, valid inverse permutation inputs and Phi(tau_high) >= Phi(tau_low) - defFQF_SPECTRAL_EPS monotonicity for the requested measure. Returns false (and records counters) when the distribution is NOT valid for an SRM Actor update; a protective zero is never treated as a valid break-even outcome. @param tasks Number of independent distributions. @param risk_type Risk measure type. @param risk_parameter Measure parameter. @param mean_weight Mean-CVaR omega. @param spectral_break_diagnostics Collect |tau - alpha| < defFQF_KINK_EPS kink hits (diagnostic only).
+   bool              GetDistributionDiagnostics(int &invalid_quantile,
+                                                int &invalid_probability,
+                                                int &invalid_mass,
+                                                int &spectral_break
+                                               ) const;
+   //---< Read-only diagnostic access to the last ::ValidateDistributionForSRM counters.
+   bool              LastSRMInvalid(void) const { return(m_last_srm_invalid); }
+   //---< True only when the latest SRMForward/SRMGradient refusal was caused by
+   //---< the SRM distribution/numerical contract. Callers may skip the Actor SRM
+   //---< contribution without misclassifying an OpenCL/runtime failure.
+   bool              GetRearrangeBuffers(CBufferFloat *&ordered_quantiles,
+                                         CBufferFloat *&ordered_probabilities,
+                                         CBufferFloat *&order,
+                                         CBufferFloat *&diagnostics
+                                        );
+   //---< Read-only diagnostic access to the transient rearrangement buffers (used by the smoke harness).
+   bool              GetOrderedGradientBuffers(CBufferFloat *&ordered_quantiles_gr,
+                                               CBufferFloat *&ordered_probabilities_gr
+                                              );
+   //---< Read-only diagnostic access to the transient ordered gradient buffers (used by the smoke harness).
+   //---< Back-propagates the upstream risk-score gradient through the FQF SRM via ::FQF_SRMGradient into cQuantile2.Gradient/cSoftMax.Gradient and marks them prepared. @param result_gradient Input buffer with one upstream gradient g_t per task. @param tasks Number of independent distributions (rows of the [T,N] buffers). @param risk_type Risk measure type (defSRM_MEAN, defSRM_CVAR, defSRM_MEAN_CVAR, defSRM_EXPONENTIAL, defSRM_DUAL_POWER). @param risk_parameter Measure parameter: alpha in (0,1] for CVaR/Mean-CVaR, lambda >= 0 for Exponential, nu >= 1 for Dual Power. @param mean_weight Omega in [0,1] between mean and CVaR for Mean-CVaR.
    bool              GetDistributionBuffers(CBufferFloat *&quantiles, CBufferFloat *&probabilities);
-//---< Read-only diagnostic access to the current FQF centroids and probabilities (cQuantile2/cSoftMax outputs).
+   //---< Read-only diagnostic access to the current FQF centroids and probabilities (cQuantile2/cSoftMax outputs).
    bool              GetDistributionGradientBuffers(CBufferFloat *&quantiles_gr, CBufferFloat *&probabilities_gr);
    bool              GetHeadWeightNorm(double &weight_norm);
-//---< Read-only diagnostic: L2 norm of the FQF head trainable weight tensors (cFraction/cCosine/cCosineEmbeding/cQuantile0/cQuantile1/cQuantile2).
-//---< Read-only diagnostic access to the prepared FQF value/probability gradient buffers (cQuantile2/cSoftMax gradients).
-//---
-   virtual int       Type(void) override        const                      {  return defNeuronACSRM; }///< Identificator of class.@return Type of class
+   //---< Read-only diagnostic: L2 norm of the FQF head trainable weight tensors (cFraction/cCosine/cCosineEmbeding/cQuantile0/cQuantile1/cQuantile2).
+   //---< Read-only diagnostic access to the prepared FQF value/probability gradient buffers (cQuantile2/cSoftMax gradients).
+   //---
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void) override        const                      {  return(defNeuronACSRM); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
-   virtual bool      Load(int const file_handle) override;///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle) override;
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMLMHSparseAttention class.                   |
@@ -1392,11 +3093,14 @@ public:
                     ~CNeuronMLMHSparseAttention(void) {};
    //---
    void              Sparse(float value)  { m_dSparse = value;}
-   float             Sparse(void)         { return m_dSparse; }
-   virtual int       Type(void)   const   {  return defNeuronMLMHSparseAttentionOCL;   }///< Identificator of class.@return Type of class
+   float             Sparse(void)         { return(m_dSparse); }
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronMLMHSparseAttentionOCL);   }
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMultiModel class.                            |
@@ -1407,24 +3111,36 @@ protected:
    int               iModels;
    int               iUpdateModel;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
 
 public:
                      CNeuronMultiModel(void) {};
                     ~CNeuronMultiModel(void) {};
-   virtual bool      Init(uint numInputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, int models);
+   virtual bool      Init(uint numInputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          int models
+                         );
    //---
    //---\ingroup neuron_base_gr
    //---@{
-   virtual bool      calcHiddenGradients(CNeuronBaseOCL *NeuronOCL);          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcHiddenGradients(CNeuronBaseOCL *NeuronOCL);
    //---@}
    //---
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronMultiModels;                  }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronMultiModels);                  }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronConcatenate class.                           |
@@ -1433,29 +3149,52 @@ class CNeuronConcatenate   :  public CNeuronBaseOCL
   {
 protected:
    int               i_SecondInputs;
-   CBufferFloat      *ConcWeights;            ///< Buffer of weights matrix
-   CBufferFloat      *ConcDeltaWeights;       ///< Buffer of last delta weights matrix (#SGD)
-   CBufferFloat      *ConcFirstMomentum;      ///< Buffer of first momentum matrix (#ADAM)
-   CBufferFloat      *ConcSecondMomentum;     ///< Buffer of second momentum matrix (#ADAM)
+   //--- Buffer of weights matrix
+   CBufferFloat      *ConcWeights;
+   //--- Buffer of last delta weights matrix (#SGD)
+   CBufferFloat      *ConcDeltaWeights;
+   //--- Buffer of first momentum matrix (#ADAM)
+   CBufferFloat      *ConcFirstMomentum;
+   //--- Buffer of second momentum matrix (#ADAM)
+   CBufferFloat      *ConcSecondMomentum;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;        ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
 
 public:
                      CNeuronConcatenate(void);
    /** Destructor */~CNeuronConcatenate(void);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, uint inputs1, uint inputs2, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          uint inputs1,
+                          uint inputs2,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    //--- methods for working with files
-   virtual bool      Save(int const file_handle) override;///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle) override;///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle) override;
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void) override       const                      {  return defNeuronConcatenate; }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void) override       const                      {  return(defNeuronConcatenate); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual CBufferFloat   *getConcatWeights(void)        {  return ConcWeights;     }                 ///< Get pointer of gradient buffer @return Pointer to object
+   //--- Get pointer of gradient buffer @return Pointer to object
+   virtual CBufferFloat   *getConcatWeights(void)        {  return(ConcWeights);     }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSoftActorCritic class.                       |
@@ -1467,29 +3206,47 @@ protected:
    CBufferFloat         cLogProbs;
    CBufferFloat         cRandomize;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
 
 public:
                      CNeuronSoftActorCritic(void) {};
                     ~CNeuronSoftActorCritic(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint actions, uint quantiles, uint numInputs, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint actions,
+                          uint quantiles,
+                          uint numInputs,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object. #param[in] numNeurons Number of neurons in layer @param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    virtual bool      calcAlphaGradients(CNeuronBaseOCL *NeuronOCL);
-   virtual bool      GetAlphaLogProbs(vector<float> &log_probs)       { return (cLogProbs.GetData(log_probs) > 0); }
+   virtual bool      GetAlphaLogProbs(vector<float> &log_probs)       { return(cLogProbs.GetData(log_probs) > 0); }
    virtual bool      CalcLogProbs(CBufferFloat *buffer);
    virtual bool      ReCalcLogProbs(void);
    //---
-   virtual bool      Save(int const file_handle) override;///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle) override;///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle) override;
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void) override        const                      {  return defNeuronSoftActorCritic; }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void) override        const                      {  return(defNeuronSoftActorCritic); }
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
-   virtual void      getCheckData(vector<float> &output, vector<float> &grad, vector<float> &quantiles, vector<float> &probability, vector<float> &alphas);
+   virtual void      getCheckData(vector<float> &output,
+                                  vector<float> &grad,
+                                  vector<float> &quantiles,
+                                  vector<float> &probability,
+                                  vector<float> &alphas
+                                 );
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
@@ -1508,27 +3265,39 @@ protected:
    CBufferFloat      FirstMomentumEmbed;
    CBufferFloat      SecondMomentumEmbed;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    //---\ingroup neuron_base_gr
    //---@{
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
    //---
    //---@}
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
 public:
                      CNeuronEmbeddingOCL(void);
                     ~CNeuronEmbeddingOCL(void);
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint stack_size, uint window_out, uint &windows[]);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint stack_size,
+                          uint window_out,
+                          uint &windows[]
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object. #param[in] numNeurons Number of neurons in layer @param optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //+++
    //---
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronEmbeddingOCL;                  }///< Identificator of class.@return Type of class
-   virtual CLayerDescription* GetLayerInfo(void)   { return CNeuronBaseOCL::GetLayerInfo(); }
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronEmbeddingOCL);                  }
+   virtual CLayerDescription* GetLayerInfo(void)   { return(CNeuronBaseOCL::GetLayerInfo()); }
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual bool      Clear(void);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
@@ -1541,21 +3310,34 @@ class CNeuronPositionEncoder  :  public CNeuronBaseOCL
 protected:
    CBufferFloat      PositionEncoder;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)         { return true; }        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL)         { return true; }          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)         { return(true); }
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL)         { return(true); }
 
 public:
                      CNeuronPositionEncoder(void) {};
                     ~CNeuronPositionEncoder(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint count, uint window, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint count,
+                          uint window,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronPEOCL;                  }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronPEOCL);                  }
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
@@ -1567,25 +3349,38 @@ protected:
    uint               iWindow;
    uint               iCount;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)  override       { return true; }        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL)  override;          ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)  override       { return(true); }
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL)  override;
 
 public:
                      CNeuronTransposeOCL(void) {};
                     ~CNeuronTransposeOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint count, uint window, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint count,
+                          uint window,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronTransposeOCL; }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronTransposeOCL); }
    virtual bool      SupportsOpenCLChecked(void) const override;
    //---
-   virtual uint      GetWindow(void) const { return iWindow; }
-   virtual uint      GetCount(void) const { return iCount; }
+   virtual uint      GetWindow(void) const { return(iWindow); }
+   virtual uint      GetCount(void) const { return(iCount); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMH2AttentionOCL class.                       |
@@ -1593,10 +3388,14 @@ public:
 class CNeuronMH2AttentionOCL       :  public CNeuronBaseOCL
   {
 protected:
-   uint              iHeads;                                      ///< Number of heads
-   uint              iWindow;                                     ///< Input window size
-   uint              iUnits;                                      ///< Number of units
-   uint              iWindowKey;                                  ///< Size of Key/Query window
+   //--- Number of heads
+   uint              iHeads;
+   //--- Input window size
+   uint              iWindow;
+   //--- Number of units
+   uint              iUnits;
+   //--- Size of Key/Query window
+   uint              iWindowKey;
    //---
    CNeuronConvOCL    Q_Embedding;
    CNeuronConvOCL    KV_Embedding;
@@ -1623,7 +3422,7 @@ public:
                           uint units_count, ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronMH2AttentionOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronMH2AttentionOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -1658,7 +3457,7 @@ public:
                           uint batch);
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
    //---
-   virtual int       Type(void)   const   {  return defNeuronCGConvOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronCGConvOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -1694,7 +3493,7 @@ public:
                           uint batch);
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
    //---
-   virtual int       Type(void)   const   {  return defNeuronMFTOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronMFTOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -1737,7 +3536,7 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronXCiTOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronXCiTOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -1786,7 +3585,7 @@ public:
                           uint batch);
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
    //---
-   virtual int       Type(void)   const   {  return defNeuronDOTOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronDOTOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -1821,7 +3620,7 @@ public:
                           uint batch);
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
    //---
-   virtual int       Type(void)   const   {  return defNeuronFAQOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronFAQOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -1842,7 +3641,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context);
    virtual bool      attentionOut(void);
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None);
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       );
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer, CNeuronBaseOCL *Context);
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CNeuronBaseOCL *Context);
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context);
@@ -1858,10 +3661,19 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronCrossAttenOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronCrossAttenOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
+   virtual bool      SaveDPCCPolicyTrainingStateOnly(const int file_handle) override;
+   virtual bool      LoadDPCCPolicyTrainingStateOnly(const int file_handle, const bool apply) override;
+   virtual bool      AppendDPCCPolicyTrainingFingerprint(ulong &fingerprint) override;
+   bool              GetDPCCPolicyGeometry(uint &query_window,
+                                           uint &attention_dimension,
+                                           uint &heads,
+                                           uint &query_units,
+                                           uint &context_window,
+                                           uint &context_units) const;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
@@ -1872,10 +3684,14 @@ public:
 class CNeuronGTE : public CNeuronBaseOCL
   {
 protected:
-   uint              iHeads;                                      ///< Number of heads
-   uint              iWindow;                                     ///< Input window size
-   uint              iUnits;                                      ///< Number of units
-   uint              iWindowKey;                                  ///< Size of Key/Query window
+   //--- Number of heads
+   uint              iHeads;
+   //--- Input window size
+   uint              iWindow;
+   //--- Number of units
+   uint              iUnits;
+   //--- Size of Key/Query window
+   uint              iWindowKey;
    //---
    CNeuronConvOCL    cQKV;
    CNeuronSoftMaxOCL cSoftMax;
@@ -1903,13 +3719,14 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronGTE;   }
+   virtual int       Type(void)   const   {  return(defNeuronGTE);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
    virtual void      SetOpenCL(COpenCLMy *obj);
-   virtual void      TrainMode(bool flag);                ///< Set Training Mode Flag
+   //--- Set Training Mode Flag
+   virtual void      TrainMode(bool flag);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
@@ -1937,13 +3754,14 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defResidualConv;   }
+   virtual int       Type(void)   const   {  return(defResidualConv);   }
    //--- methods for working with files
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
-   virtual void      TrainMode(bool flag) override;                ///< Set Training Mode Flag
+   //--- Set Training Mode Flag
+   virtual void      TrainMode(bool flag) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
@@ -1971,13 +3789,14 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defCCMREncoder;   }
+   virtual int       Type(void)   const   {  return(defCCMREncoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
    virtual void      SetOpenCL(COpenCLMy *obj);
-   virtual void      TrainMode(bool flag);                ///< Set Training Mode Flag
+   //--- Set Training Mode Flag
+   virtual void      TrainMode(bool flag);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
 //+------------------------------------------------------------------+
@@ -2007,7 +3826,7 @@ public:
                           uint batch);
    //---
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer, CNeuronBaseOCL *Motion);
-   virtual int       Type(void)   const   {  return defNeuronCrossXCiTOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronCrossXCiTOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -2044,12 +3863,13 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronCCMROCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronCCMROCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    virtual void      SetOpenCL(COpenCLMy *obj);
-   virtual void      TrainMode(bool flag);                ///< Set Training Mode Flag
+   //--- Set Training Mode Flag
+   virtual void      TrainMode(bool flag);
    virtual bool      Clear(void);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
@@ -2093,7 +3913,7 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronNODEOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronNODEOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -2138,7 +3958,7 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronConformerOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronConformerOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -2155,23 +3975,122 @@ protected:
    int               iBatchNormLayer;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   {  return true;   }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return(!m_owned_mode || OwnedOutputValid()); }
    //---
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
 
 public:
-                     CNeuronRevINDenormOCL(void)   :  iBatchNormLayer(-1) {};
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
                     ~CNeuronRevINDenormOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, int NormLayer, CNeuronBatchNormOCL *normLayer);
-   virtual int       GetNormLayer(void)   {  return iBatchNormLayer; }
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          int NormLayer,
+                          CNeuronBatchNormOCL *normLayer
+                         );
+   virtual int       GetNormLayer(void)   {  return(iBatchNormLayer); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronRevInDenormOCL;    }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronRevInDenormOCL);    }
    //---
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override  {  return true;   }
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override  {  return(true);   }
+protected:
+   CBufferFloat      *m_owned_buffers[4];
+   uint              m_owned_neurons;
+   bool              m_owned_mode;
+   bool              m_owned_ready;
+   bool              m_owned_pending;
+   bool              m_owned_public;
+   bool              OwnedIdentity(void) const;
+   uint              OwnedNeuronLimit(void) const
+     {
+      const ulong count_limit = ulong(INT_MAX) / 9;
+      const ulong byte_limit = ulong(UINT_MAX) / (9 * sizeof(float));
+      return(uint(count_limit < byte_limit ? count_limit : byte_limit));
+     }
+   bool              OwnedShape(void) const;
+   bool              OwnedBound(COpenCLMy *context) const;
+   bool              BeginOwned(void);
+   void              InvalidateOwned(void);
+
+public:
+                     CNeuronRevINDenormOCL(void);
+   bool              InitOwned(uint myIndex, COpenCLMy *context, uint neurons);
+   bool              SaveOwned(const int file_handle);
+   bool              LoadOwned(const int file_handle, COpenCLMy *context, uint neurons);
+   bool              OwnedReady(void) const;
+   bool              OwnedOutputValid(void) const;
+   bool              OwnedTransferPending(void) const { return(m_owned_pending); }
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *context) override;
+   virtual void      SetOpenCL(COpenCLMy *context) override;
+   virtual void      AttachOpenCL(COpenCLMy *context) override;
+   virtual bool      Clear(void) override;
+   virtual bool      FeedForward(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      FeedForwardSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      CanStartForward(void) const override
+     {               return(!m_owned_mode || OwnedReady()); }
+   virtual bool      Init(uint outputs, uint index, COpenCLMy *context, uint neurons,
+                          uint batch, ENUM_OPTIMIZATION method) override;
+   virtual bool      Init(uint outputs, uint index, COpenCLMy *context, uint neurons,
+                          ENUM_OPTIMIZATION method, uint batch) override;
+   virtual bool      SetOutput(CBufferFloat *buffer, bool delete_prev = true) override;
+   virtual bool      SetGradient(CBufferFloat *buffer, bool delete_prev = true) override;
+   virtual bool      numOutputs(const uint outputs, ENUM_OPTIMIZATION method) override;
+   virtual int       getOutputIndex(void) const override
+     {               return(m_owned_mode && !OwnedOutputValid() ? INVALID_HANDLE : Output.GetIndex()); }
+   virtual int       getOutputIndex(void) override
+     {
+      return(m_owned_mode ? (OwnedOutputValid() ? Output.GetIndex() : INVALID_HANDLE) :
+             CNeuronBatchNormOCL::getOutputIndex());
+     }
+   virtual int       getPrevOutIndex(void) const override
+     {               return(m_owned_mode && !OwnedOutputValid() ? INVALID_HANDLE : PrevOutput.GetIndex()); }
+   virtual int       getGradientIndex(void) const override
+     {               return(m_owned_mode && !OwnedReady() ? INVALID_HANDLE : Gradient.GetIndex()); }
+   virtual int       getGradientIndex(void) override
+     {
+      return(m_owned_mode ? (OwnedReady() ? Gradient.GetIndex() : INVALID_HANDLE) :
+             CNeuronBatchNormOCL::getGradientIndex());
+     }
+   virtual CBufferFloat *getOutput(void) const override
+     {               return(m_owned_mode && !OwnedOutputValid() ? NULL : Output); }
+   virtual CBufferFloat *getOutput(void) override
+     {
+      return(m_owned_mode ? (OwnedOutputValid() ? Output : NULL) :
+             CNeuronBatchNormOCL::getOutput());
+     }
+   virtual CBufferFloat *getPrevOutput(void) const override
+     {               return(m_owned_mode && !OwnedOutputValid() ? NULL : PrevOutput); }
+   virtual CBufferFloat *getGradient(void) const override
+     {               return(m_owned_mode && !OwnedReady() ? NULL : Gradient); }
+   virtual CBufferFloat *getGradient(void) override
+     {
+      return(m_owned_mode ? (OwnedReady() ? Gradient : NULL) :
+             CNeuronBatchNormOCL::getGradient());
+     }
+   virtual CBufferFloat *getBatchOptions(void) override
+     {
+      return(m_owned_mode ? (OwnedReady() ? BatchOptions : NULL) :
+             CNeuronBatchNormOCL::getBatchOptions());
+     }
+   virtual int       getOutputVal(float &values[]) override
+     {               return(m_owned_mode && !OwnedOutputValid() ? 0 : CNeuronBatchNormOCL::getOutputVal(values)); }
+   virtual int       getOutputVal(CArrayFloat *values) override
+     {               return(m_owned_mode && !OwnedOutputValid() ? 0 : CNeuronBatchNormOCL::getOutputVal(values)); }
+   virtual int       getOutputVal(vector<float> &values) override
+     {               return(m_owned_mode && !OwnedOutputValid() ? 0 : CNeuronBatchNormOCL::getOutputVal(values)); }
+   virtual int       getPrevVal(float &values[]) override
+     {               return(m_owned_mode && !OwnedOutputValid() ? 0 : CNeuronBaseOCL::getPrevVal(values)); }
+   virtual int       getGradient(float &values[]) override
+     {               return(m_owned_mode && !OwnedReady() ? 0 : CNeuronBatchNormOCL::getGradient(values)); }
+   virtual int       getGradient(vector<float> &values) override
+     {               return(m_owned_mode && !OwnedReady() ? 0 : CNeuronBaseOCL::getGradient(values)); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronClientOCL class.                             |
@@ -2200,7 +4119,7 @@ public:
                           uint at_layers, uint count, uint &mlp[],
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronClientOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronClientOCL);   }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -2219,33 +4138,50 @@ protected:
    CNeuronBaseOCL    cInputs;
    CNeuronBaseOCL    cPositionEncoder;
    //---\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   //--- \brief Feed Forward method of calling kernel ::FeedForward().@param NeuronOCL Pointer to previos layer.
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);        ///< Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
+   //--- Method to transfer gradient to previous layer by calling kernel ::CalcHiddenGradient(). @param NeuronOCL Pointer to next layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   bool              ForwardRowsReadOnly(CBufferFloat *source, const uint rows, const SLayerReadState &state,
+                                         SLayerRowsWorkspace &work, CBufferFloat *output, CBufferFloat *flags);
+
                      CNeuronLearnabledPE(void) {};
                     ~CNeuronLearnabledPE(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual bool      Save(int const file_handle);///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronLearnabledPE;    }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronLearnabledPE);    }
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    //---
-   virtual CBufferFloat* GetPE(void)   const { return cPositionEncoder.getOutput(); }
+   virtual CBufferFloat* GetPE(void)   const { return(cPositionEncoder.getOutput()); }
    //--- Implements AddPEGradient.
    virtual bool      AddPEGradient(CBufferFloat *grad)
      {
       if(!grad ||
          !SumAndNormalize(cPositionEncoder.getGradient(), grad, cPositionEncoder.getGradient(), 1, false, 0, 0, 0, 1))
          ReturnFalse;
-      return true;
+      return(true);
      }
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
@@ -2265,19 +4201,392 @@ protected:
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
    //---
 public:
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
                      CNeuronUShapeAttention(void) { activation = None; }
                     ~CNeuronUShapeAttention(void) { DeleteObj(cNeck); }
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, uint layers, uint inside_block, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint units_count,
+                          uint layers,
+                          uint inside_block,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---< Method of initialization class.@param[in] numOutputs Number of connections to next layer.@param[in] myIndex Index of neuron in layer.@param[in] open_cl Pointer to #COpenCLMy object.@param[in] window Size of in/out window and step.@param[in] units_countNumber of neurons.@param[in] optimization_type Optimization type (#ENUM_OPTIMIZATION)@return Boolen result of operations.
    //---
-   virtual int       Type(void)   const   {  return defNeuronUShapeAttention;   }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronUShapeAttention);   }
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
+  };
+//+------------------------------------------------------------------+
+//| Exact denoiser composition with an explicit parallel contract    |
+//+------------------------------------------------------------------+
+struct SDPCCDenoiserArchitecture
+  {
+   string            architecture;
+   uint              embedding;
+   uint              heads;
+   uint              key_dimension;
+   uint              depth;
+   bool              padding_mask;
+   string            graph_id;
+   string            normalization;
+   string            feedforward_activation;
+   bool              temporal_mask;
+   string            attention_backward;
+   string            graph_sha256;
+   string            backward_profile;
+  };
+
+struct SDPCCParallelExecution
+  {
+   uint              version;
+   string            program;
+   uint              training_plan_batch;
+   uint              deployment_plan_batch;
+   uint              proposal_slots;
+   uint              logical_heads;
+   uint              key_dimension;
+   bool              shared_projection_weights;
+   string            self_attention_fold;
+   string            cross_attention_fold;
+   string            activation_lifetime;
+   uint              binary_layer_version;
+   string            legacy_slice_use;
+  };
+struct SDPCCDenoiserComposition
+  {
+   SDPCCDenoiserArchitecture graph;
+   SDPCCParallelExecution parallel;
+   string            optimizer_profile;
+  };
+//+------------------------------------------------------------------+
+//| DPCC frame affine with an explicit native Adam clock advance     |
+//+------------------------------------------------------------------+
+class CNeuronDPCCFrameAffineOCL : public CNeuronConvOCL
+  {
+public:
+   bool              AdvanceFrameOptimizerStep(const uint expected_step)
+     {
+      if(t != expected_step || expected_step == 0 || expected_step >= INT_MAX)
+         return(false);
+      t++;
+      return(true);
+     }
+  };
+//+------------------------------------------------------------------+
+//| Exact conditioned UShape graph with 22 native affine owners      |
+//+------------------------------------------------------------------+
+bool DPCCDispatchConditionV1(COpenCLMy *context, CBufferFloat *source, CBufferFloat *account13,
+                             CBufferFloat *condition, CBufferFloat *flags,
+                             const SDPCCConfig &config);
+bool DPCCWriteConditionStepV1(COpenCLMy *context, const uint j, const uint J,
+                              CBufferFloat *condition, const uint tokens);
+class CNeuronPlanDenoiserOCL : public CNeuronUShapeAttention
+  {
+protected:
+   bool              m_frame_mode;
+   bool              m_frame_bound;
+   bool              m_frame_live;
+   bool              m_frame_failed;
+   bool              m_frame_cache_valid;
+   bool              m_frame_training;
+   bool              m_frame_gradients_ready;
+   bool              m_frame_updated;
+   bool              m_frame_update_started;
+   uint              m_frame_horizon, m_frame_rows, m_frame_width, m_frame_heads;
+   uint              m_frame_max_frames, m_frame_count, m_frame_active_rows, m_frame_next, m_frame_current;
+   uint              m_frame_k, m_frame_v, m_frame_market_horizon, m_frame_dimension;
+   uint              m_frame_condition_count, m_frame_capacity;
+   uint              m_frame_backward_next, m_frame_backward_count, m_frame_update_count;
+   uint              m_frame_input[21], m_frame_output[21], m_frame_affine_rows[21];
+   uint              m_frame_tape_size[43], m_frame_common_size[24];
+   uint              m_frame_slots[];
+   bool              m_frame_last_kernel_valid;
+   uint              m_frame_last_kernel;
+   ulong             m_frame_last_kernel_submit_us;
+   string            m_frame_last_kernel_name;
+   ulong             m_frame_decision, m_frame_market_id, m_frame_market_weights;
+   ulong             m_frame_cache_decision, m_frame_cache_market, m_frame_cache_weights;
+   COpenCLMy         *m_frame_cache_context;
+   float             m_frame_profile[218];
+   float             m_frame_probability_tolerance;
+   CNeuronDPCCFrameAffineOCL *m_frame_affine[21];
+   CBufferFloat      *m_frame_common[24];
+   CBufferFloat      *m_frame_tapes[];
+   CBufferFloat      *m_frame_backward[43];
+   CBufferFloat      *m_frame_accumulated[21];
+   CBufferFloat      *m_frame_work[5];
+   uint              m_frame_work_size;
+   bool              ValidFramePrefix(CBufferFloat *buffer, const uint count) const;
+   bool              FrameFail(const ENUM_DPCC_STATUS status, const bool fatal = false);
+   bool              FrameAllocate(void);
+   bool              FrameOwned(void) const;
+   CBufferFloat      *FrameTape(const uint slot, const uint item) const;
+   bool              FrameExecute(const uint kernel, const uint &offset[], const uint &global[]);
+   bool              FrameReduce(const uint count, uint &status);
+   bool              FrameReduce(const uint count);
+   bool              FrameActivate(CBufferFloat *source, CBufferFloat *destination, const int function);
+   bool              FrameCheck(CBufferFloat *source);
+   bool              FrameCopy(CBufferFloat *source, CBufferFloat *destination, const uint count);
+   bool              FrameSum(CBufferFloat *first, CBufferFloat *second, CBufferFloat *destination);
+   bool              FrameBroadcast(CBufferFloat *vector_buffer, CBufferFloat *matrix_buffer,
+                                    CBufferFloat *destination, const uint width, const uint rows);
+   bool              FrameAffine(const uint block, CBufferFloat *source);
+   bool              FrameAttention(CBufferFloat *query, CBufferFloat *key_value, CBufferFloat *lse,
+                                    CBufferFloat *output, const uint queries, const uint keys,
+                                    const uint groups);
+   bool              FrameSelf(const uint block, const uint source_item, const uint first,
+                               const uint length, const uint packed, const uint residual);
+   bool              FrameSelfLayout(const uint mode, const uint length, CBufferFloat *source0,
+                                     CBufferFloat *source1, CBufferFloat *source2,
+                                     CBufferFloat *destination0, CBufferFloat *destination1);
+   bool              FramePair(CBufferFloat *source, CBufferFloat *destination, const uint direction);
+   bool              FrameCondition(CBufferFloat *condition);
+   bool              FrameSameCondition(CBufferFloat *condition);
+   bool              FrameSetOpenCL(COpenCLMy *context);
+   bool              FrameForward(uint slot, uint j, CBufferFloat *plan,
+                                  CBufferFloat *condition, CBufferFloat *epsilon_out);
+   bool              FrameBackward(uint slot, CBufferFloat *epsilon_gradient,
+                                   CBufferFloat *plan_gradient, CBufferFloat *condition_gradient);
+   bool              FrameAffineBackward(const uint block, uint slot, CBufferFloat *upstream,
+                                         CBufferFloat *input_gradient);
+   bool              FrameActivationBackward(CBufferFloat *preactivation, CBufferFloat *upstream,
+         CBufferFloat *input_gradient, const uint count,
+         const int function);
+   bool              FrameSelfBackward(const uint block, const uint source_item, const uint first,
+                                       const uint length, const uint packed, const uint residual,
+                                       CBufferFloat *upstream, CBufferFloat *destination);
+   bool              FrameAttentionBackward(CBufferFloat *query, CBufferFloat *key_value,
+         CBufferFloat *lse, CBufferFloat *output,
+         CBufferFloat *output_gradient, CBufferFloat *query_gradient,
+         CBufferFloat *key_value_gradient, const uint queries,
+         const uint keys, const uint groups);
+   bool              FrameAdd(CBufferFloat *first, CBufferFloat *second, CBufferFloat *destination,
+                              const uint count);
+   bool              FrameBroadcastGradient(CBufferFloat *source, CBufferFloat *destination,
+         const uint rows, const uint width);
+   CBufferFloat      *FrameAffineInput(const uint block, const uint slot) const;
+   bool              FrameAccumulateAffine(const uint block, CBufferFloat *upstream, CBufferFloat *source);
+   bool              ReadFrameTrainingState(const int file_handle, const bool apply);
+   SDPCCConfig       m_config;
+   SDPCCDenoiserComposition m_composition;
+   SDPCCShape        m_admitted_shape;
+   SDPCCConfig       m_admitted_config;
+   SDPCCDenoiserComposition m_admitted_composition;
+   bool              m_shape_admitted;
+   bool              m_contract_admitted;
+   bool              m_transfer_pending;
+   COpenCLMy         *m_transfer_target;
+   CNeuronConvOCL    *m_affine[22];
+   CBufferFloat      *m_tape[84];
+   uint              m_size[84];
+   uint              m_input[22];
+   uint              m_output[22];
+   uint              m_rows[22];
+   uint              m_input_slot[22];
+   uint              m_activation[22];
+   uint              m_r;
+   uint              m_f;
+   uint              m_capacity;
+   uint              m_phase;
+   uint              m_update_count;
+   ulong             m_generation;
+   ulong             m_weight_generation;
+   ulong             m_next_decision;
+   ulong             m_next_context;
+   ulong             m_next_owner;
+   ulong             m_cache_decision;
+   ulong             m_cache_context;
+   ulong             m_cache_owner;
+   ulong             m_cache_weights;
+   bool              m_identity_admitted;
+   bool              m_cache_valid;
+   bool              m_configured;
+   bool              m_public_valid;
+   bool              m_failed;
+   ENUM_DPCC_STATUS  m_status;
+   CNeuronBaseOCL    *m_source;
+   CBufferFloat      *m_source_output;
+   CBufferFloat      *m_second;
+   CNeuronBaseOCL    *m_second_owner;
+   int               m_source_index;
+   int               m_second_index;
+   string            m_device;
+   uint              m_market_launches;
+   uint              m_cache_hits;
+   bool              Fail(const ENUM_DPCC_STATUS status, const bool fatal = false);
+   bool              Geometry(void);
+   bool              Allocate(const bool children);
+   bool              ValidBuffer(CBufferFloat *buffer, const uint total) const;
+   bool              ValidateOwned(void) const;
+   bool              ExternalBuffer(CBufferFloat *buffer) const;
+   bool              SourceValid(CNeuronBaseOCL *source, CBufferFloat *second) const;
+   bool              SameSource(CNeuronBaseOCL *source, CBufferFloat *second) const;
+   bool              ResourceAdmission(COpenCLMy *context, string &device) const;
+   bool              Reduce(const uint count, uint &status);
+   bool              Reduce(const uint count);
+   bool              Copy(CBufferFloat *source, CBufferFloat *destination);
+   bool              Check(CBufferFloat *source);
+   bool              Activate(CBufferFloat *source, CBufferFloat *destination, const int function);
+   bool              Compare(CBufferFloat *source, CBufferFloat *snapshot, const uint count, bool &same);
+   bool              CheckSnapshot(void);
+   bool              Sum(CBufferFloat *first, CBufferFloat *second, CBufferFloat *destination);
+   bool              Broadcast(CBufferFloat *vector_buffer, CBufferFloat *matrix_buffer,
+                               CBufferFloat *destination, const uint width, const uint rows);
+   bool              BroadcastGradient(CBufferFloat *source, CBufferFloat *destination,
+                                       const uint rows, const uint width);
+   bool              AffineForward(const uint index, CBufferFloat *source);
+   bool              AffineGradient(const uint index, CBufferFloat *upstream, CBufferFloat *destination);
+   bool              AdamPreflight(const uint index);
+   bool              CheckParameters(const uint index);
+   bool              SelfLayout(const uint mode, const uint n, CBufferFloat *source0,
+                                CBufferFloat *source1, CBufferFloat *source2,
+                                CBufferFloat *destination0, CBufferFloat *destination1);
+   bool              CrossLayout(const uint mode, CBufferFloat *source0, CBufferFloat *source1,
+                                 CBufferFloat *destination0, CBufferFloat *destination1);
+   bool              PairMap(CBufferFloat *source, CBufferFloat *destination, const uint mode);
+   bool              Attention(const uint block, const bool backward);
+   bool              SelfForward(const uint block, const uint first, const uint source_slot,
+                                 const uint destination_slot, const uint n);
+   bool              SelfGradient(const uint block, const uint first, CBufferFloat *upstream,
+                                  CBufferFloat *destination, const uint n);
+   bool              FeedForwardResidual(const uint first, const uint source_slot,
+                                         const uint activation_slot, const uint destination_slot);
+   bool              FeedForwardGradient(const uint first, CBufferFloat *upstream,
+                                         CBufferFloat *destination, const uint scratch0, const uint scratch1);
+   bool              Complete(CNeuronBaseOCL *source, CBufferFloat *second);
+   void              InvalidateCache(void);
+   void              HashComposition(ulong &hash) const;
+   bool              CompositionValid(const SDPCCDenoiserComposition &composition) const;
+   bool              CompositionSame(const SDPCCDenoiserComposition &first,
+                                     const SDPCCDenoiserComposition &second) const;
+   virtual bool      feedForward(CNeuronBaseOCL *source) override;
+   virtual bool      feedForward(CNeuronBaseOCL *source, CBufferFloat *second) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source, CBufferFloat *second,
+                                        CBufferFloat *second_gradient,
+                                        ENUM_ACTIVATION function = None) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source, CBufferFloat *second) override;
+public:
+   bool              InitFrameShape(uint horizon, uint rows, uint channels, uint width,
+                                    uint heads, uint max_frames);
+   bool              InitFrameCondition(const uint scenarios, const uint variables, const uint market_horizon,
+                                        const uint latent_dimension, const float &scale[], const float &bias[],
+                                        const float probability_tolerance);
+   bool              BindFrameCondition(const uint scenarios, const uint variables, const uint market_horizon,
+                                        const uint latent_dimension, const float &scale[], const float &bias[],
+                                        const ulong market_state_id, const ulong market_weights_id,
+                                        const float probability_tolerance);
+   bool              BeginUnroll(ulong decision_id, uint frames, uint rows, bool need_backward);
+   bool              ForwardFrame(uint slot, uint j, CBufferFloat *plan,
+                                  CBufferFloat *condition, CBufferFloat *epsilon_out);
+   bool              ZeroAccumulatedGradients(void);
+   bool              BackwardFrame(uint slot, CBufferFloat *epsilon_gradient,
+                                   CBufferFloat *plan_gradient, CBufferFloat *condition_gradient);
+   bool              ApplyAccumulatedGradients(void);
+   bool              ReleaseUnroll(void);
+   bool              AbortUnroll(void);
+   bool              SaveFrameTrainingState(const int file_handle);
+   bool              LoadFrameTrainingState(const int file_handle);
+   bool              AppendFrameTrainingFingerprint(ulong &fingerprint);
+   bool              UpdateFrameWeightsFrom(CNeuronPlanDenoiserOCL *source, float tau);
+   bool              FrameUnusable(void) const { return(m_frame_mode && m_failed); }
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
+                     CNeuronPlanDenoiserOCL(void);
+                    ~CNeuronPlanDenoiserOCL(void);
+   virtual int       Type(void) const override { return(defNeuronPlanDenoiserOCL); }
+   bool              Init(uint outputs, uint index, COpenCLMy *context, CLayerDescription *description);
+   virtual bool      Init(uint outputs, uint index, COpenCLMy *context, uint neurons,
+                          ENUM_OPTIMIZATION method, uint batch) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual bool      Init(uint outputs, uint index, COpenCLMy *context, uint window, uint key,
+                          uint heads, uint units, uint layers, uint inside,
+                          ENUM_OPTIMIZATION method, uint batch) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   bool              Configure(const SDPCCConfig &config, const SDPCCDenoiserComposition &model,
+                               const SDPCCDenoiserComposition &training);
+   bool              SetContextIdentity(const ulong decision, const ulong context, const ulong owner);
+   bool              PrepareTrainingExample(CBufferFloat *raw_actions, CBufferFloat *epsilon,
+                               CBufferFloat *context_without_noise, CBufferFloat *account13,
+                               const uint j, const double alpha_bar,
+                               CBufferFloat *noisy_plan, CBufferFloat *condition);
+   bool              BuildEpsilonMSELoss(CBufferFloat *epsilon, const bool prepare_gradient, double &loss);
+   bool              CancelGeneration(void);
+   virtual bool      CanStartForward(void) const override
+     {               return(m_configured && !m_failed && m_phase == 0 && ValidateOwned()); }
+   ENUM_DPCC_STATUS  LastStatus(void) const { return(m_status); }
+   uint              Horizon(void) const { return(m_config.shape.H); }
+   uint              PlanBatch(void) const { return(m_config.shape.PlanBatch); }
+   uint              UpdateCount(void) const { return(m_update_count); }
+   uint              GenerationPhase(void) const { return(m_phase); }
+   CBufferFloat      *GetDiagnostics(void);
+   virtual CBufferFloat *getOutput(void) const override
+     {               return(m_public_valid && !m_failed ? Output : NULL); }
+   virtual CBufferFloat *getGradient(void) const override
+     {               return(m_public_valid && !m_failed ? Gradient : NULL); }
+   virtual CBufferFloat *getPrevOutput(void) const override { return(NULL); }
+   virtual int       getOutputIndex(void) const override
+     {               return(m_public_valid && !m_failed ? Output.GetIndex() : INVALID_HANDLE); }
+   virtual int       getGradientIndex(void) const override
+     {               return(m_public_valid && !m_failed ? Gradient.GetIndex() : INVALID_HANDLE); }
+   virtual int       getPrevOutIndex(void) const override { return(INVALID_HANDLE); }
+   virtual int       getOutputVal(float &values[]) override
+     {               return(m_public_valid && !m_failed ? Output.GetData(values) : 0); }
+   virtual int       getOutputVal(CArrayFloat *values) override
+     {               return(m_public_valid && !m_failed ? Output.GetData(values) : 0); }
+   virtual int       getOutputVal(vector<float> &values) override
+     {               return(m_public_valid && !m_failed ? Output.GetData(values) : 0); }
+   virtual int       getGradient(float &values[]) override
+     {               return(m_public_valid && !m_failed ? Gradient.GetData(values) : 0); }
+   virtual int       getGradient(vector<float> &values) override
+     {               return(m_public_valid && !m_failed ? Gradient.GetData(values) : 0); }
+   virtual int       getPrevVal(float &values[]) override { return(0); }
+   virtual bool      SetOutput(CBufferFloat *buffer, bool delete_previous = true) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual bool      SetGradient(CBufferFloat *buffer, bool delete_previous = true) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual bool      SetGradientIndex(int index) override { return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual bool      calcOutputGradients(CBufferFloat *target, float &error) override
+     {               return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) override;
+   virtual void      AttachOpenCL(COpenCLMy *context) override;
+   virtual bool      FeedForward(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      FeedForwardSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      UpdateInputWeights(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputWeightsSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      UpdateInputState(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputStateSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   virtual CLayerDescription *GetLayerInfo(void) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      TrainMode(void) override { return(bTrain); }
+   virtual bool      Clear(void) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *context) override;
+   virtual void      SetOpenCL(COpenCLMy *context) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
+   ulong             WeightSignature(void);
+   ulong             ContractSignature(void) const;
+   ulong             TrainableStateFingerprint(void);
+   ulong             SnapshotFingerprint(void);
+public:
+   bool              CanImportPreparedParameters(CNeuronPlanDenoiserOCL *donor);
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronPatching class.                              |
@@ -2303,12 +4612,22 @@ public:
                      CNeuronPatching(void) {};
                     ~CNeuronPatching(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window_in, uint step, uint window_out, uint count, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window_in,
+                          uint step,
+                          uint window_out,
+                          uint count,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronPatchingOCL; }
+   virtual int       Type(void)        const                      {  return(defNeuronPatchingOCL); }
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
   };
@@ -2335,18 +4654,32 @@ protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput);
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput);
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None);
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       );
 
 public:
                      CNeuronTiDEOCL(void) {};
                     ~CNeuronTiDEOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint history, uint forecast, uint variables, uint features, uint &encoder_decoder[], ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint history,
+                          uint forecast,
+                          uint variables,
+                          uint features,
+                          uint &encoder_decoder[],
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronTiDEOCL; }
+   virtual int       Type(void)        const                      {  return(defNeuronTiDEOCL); }
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
@@ -2357,14 +4690,25 @@ public:
 class CNeuronLegendreWavelets :  public CNeuronConvOCL
   {
 protected:
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return true; }        ///< Method for updating weights.@param NeuronOCL Pointer to previos layer.
+   //--- Method for updating weights.@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return(true); }
 
 public:
                      CNeuronLegendreWavelets(void) {};
                     ~CNeuronLegendreWavelets(void) {};
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint step, uint units_count, uint filters, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint step,
+                          uint units_count,
+                          uint filters,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronLegendreWavelets;   }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronLegendreWavelets);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronFEDW class.                                  |
@@ -2393,12 +4737,20 @@ public:
                      CNeuronFEDW(void) {};
                     ~CNeuronFEDW(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint count, uint filters,  ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint count,
+                          uint filters,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronFEDW; }
+   virtual int       Type(void)        const                      {  return(defNeuronFEDW); }
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
@@ -2432,9 +4784,22 @@ protected:
    CNeuronBaseOCL    cIFFTIm;
    CBufferFloat      cClear;
    //---
-   virtual bool      FFT(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *out_re, CBufferFloat *out_im, bool reverse = false);
-   virtual bool      ComplexLayerOut(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *out_re, CBufferFloat *out_im);
-   virtual bool      ComplexLayerGradient(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *out_re, CBufferFloat *out_im);
+   virtual bool      FFT(CBufferFloat *inp_re,
+                         CBufferFloat *inp_im,
+                         CBufferFloat *out_re,
+                         CBufferFloat *out_im,
+                         bool reverse = false
+                        );
+   virtual bool      ComplexLayerOut(CBufferFloat *inp_re,
+                                     CBufferFloat *inp_im,
+                                     CBufferFloat *out_re,
+                                     CBufferFloat *out_im
+                                    );
+   virtual bool      ComplexLayerGradient(CBufferFloat *inp_re,
+                                          CBufferFloat *inp_im,
+                                          CBufferFloat *out_re,
+                                          CBufferFloat *out_im
+                                         );
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
@@ -2444,12 +4809,21 @@ public:
                      CNeuronFITSOCL(void) {};
                     ~CNeuronFITSOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_out, uint count, float dropout, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_out,
+                          uint count,
+                          float dropout,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronFITSOCL; }
+   virtual int       Type(void)        const                      {  return(defNeuronFITSOCL); }
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual void      TrainMode(bool flag);
    //---
@@ -2477,26 +4851,44 @@ protected:
    CBufferFloat      cGradientFreIm;
    CBufferFloat      cTranspose;
    //---
-   virtual bool      FFT(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *out_re, CBufferFloat *out_im, bool reverse = false);
+   virtual bool      FFT(CBufferFloat *inp_re,
+                         CBufferFloat *inp_im,
+                         CBufferFloat *out_re,
+                         CBufferFloat *out_im,
+                         bool reverse = false
+                        );
    virtual bool      Transpose(CBufferFloat *inputs, CBufferFloat *outputs, uint rows, uint cols);
    virtual bool      FreqMSA(CBufferFloat *target, CBufferFloat *forecast, CBufferFloat *gradient);
-   virtual bool      CumulativeGradient(CBufferFloat *gradient1, CBufferFloat *gradient2, CBufferFloat *cummulative, float alpha);
+   virtual bool      CumulativeGradient(CBufferFloat *gradient1,
+                                        CBufferFloat *gradient2,
+                                        CBufferFloat *cummulative,
+                                        float alpha
+                                       );
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   {  return true;   }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   {  return(true);   }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
 
 public:
                      CNeuronFreDFOCL(void)   {};
                     ~CNeuronFreDFOCL(void)   {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint count, float alpha, bool need_transpose = true, ENUM_OPTIMIZATION optimization_type = ADAM, uint batch = 1);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint count,
+                          float alpha,
+                          bool need_transpose = true,
+                          ENUM_OPTIMIZATION optimization_type = ADAM,
+                          uint batch = 1
+                         );
    virtual bool      calcOutputGradients(CArrayFloat *Target, float &error);
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
-   virtual int       Type(void)        const                      {  return defNeuronFreDFOCL; }
+   virtual int       Type(void)        const                      {  return(defNeuronFreDFOCL); }
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
 //+------------------------------------------------------------------+
@@ -2505,20 +4897,67 @@ public:
 class CNeuronComplexMLMHAttention :  public CNeuronMLMHAttentionOCL
   {
 protected:
-   virtual bool      ConvolutionForward(CBufferFloat *weights, CBufferFloat *inputs, CBufferFloat *outputs, uint window, uint window_out, ENUM_ACTIVATION activ, uint step = 0);
+   virtual bool      ConvolutionForward(CBufferFloat *weights,
+                                        CBufferFloat *inputs,
+                                        CBufferFloat *outputs,
+                                        uint window,
+                                        uint window_out,
+                                        ENUM_ACTIVATION activ,
+                                        uint step = 0
+                                       );
    virtual bool      AttentionScore(CBufferFloat *qkv, CBufferFloat *scores, bool mask = false);
    virtual bool      AttentionOut(CBufferFloat *qkv, CBufferFloat *scores, CBufferFloat *out);
-   virtual bool      ConvolutuionUpdateWeights(CBufferFloat *weights, CBufferFloat *gradient, CBufferFloat *inputs, CBufferFloat *momentum1, CBufferFloat *momentum2, uint window, uint window_out, uint step = 0);
-   virtual bool      ConvolutionInputGradients(CBufferFloat *weights, CBufferFloat *gradient, CBufferFloat *inputs, CBufferFloat *inp_gradient, uint window, uint window_out, uint activ, uint shift_out = 0, uint step = 0);
-   virtual bool      AttentionInsideGradients(CBufferFloat *qkv, CBufferFloat *qkv_g, CBufferFloat *scores, CBufferFloat *gradient);
-   virtual bool      SumAndNormalize(CBufferFloat *tensor1, CBufferFloat *tensor2, CBufferFloat *out, int dimension, bool normilize = true, int shift_in1 = 0, int shift_in2 = 0, int shift_out = 0, float multiplyer = 0.5f);
+   virtual bool      ConvolutuionUpdateWeights(CBufferFloat *weights,
+                                               CBufferFloat *gradient,
+                                               CBufferFloat *inputs,
+                                               CBufferFloat *momentum1,
+                                               CBufferFloat *momentum2,
+                                               uint window,
+                                               uint window_out,
+                                               uint step = 0
+                                              );
+   virtual bool      ConvolutionInputGradients(CBufferFloat *weights,
+                                               CBufferFloat *gradient,
+                                               CBufferFloat *inputs,
+                                               CBufferFloat *inp_gradient,
+                                               uint window,
+                                               uint window_out,
+                                               uint activ,
+                                               uint shift_out = 0,
+                                               uint step = 0
+                                              );
+   virtual bool      AttentionInsideGradients(CBufferFloat *qkv,
+                                              CBufferFloat *qkv_g,
+                                              CBufferFloat *scores,
+                                              CBufferFloat *gradient
+                                             );
+   virtual bool      SumAndNormalize(CBufferFloat *tensor1,
+                                     CBufferFloat *tensor2,
+                                     CBufferFloat *out,
+                                     int dimension,
+                                     bool normilize = true,
+                                     int shift_in1 = 0,
+                                     int shift_in2 = 0,
+                                     int shift_out = 0,
+                                     float multiplyer = 0.5f
+                                    );
 
 public:
                      CNeuronComplexMLMHAttention(void) {};
                     ~CNeuronComplexMLMHAttention(void) {};
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, uint layers, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint units_count,
+                          uint layers,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronComplexMLMHAttentionOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronComplexMLMHAttentionOCL);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronATFNetOCL class.                             |
@@ -2560,7 +4999,12 @@ protected:
    CBufferFloat      cForecastGrad;
    CBufferFloat      cZero;
    //---
-   virtual bool      FFT(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *out_re, CBufferFloat *out_im, bool reverse = false);
+   virtual bool      FFT(CBufferFloat *inp_re,
+                         CBufferFloat *inp_im,
+                         CBufferFloat *out_re,
+                         CBufferFloat *out_im,
+                         bool reverse = false
+                        );
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
@@ -2578,9 +5022,20 @@ public:
                      CNeuronATFNetOCL(void) {};
                     ~CNeuronATFNetOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint history, uint forecast, uint variables, uint heads, uint layers, uint &patch[], ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint history,
+                          uint forecast,
+                          uint variables,
+                          uint heads,
+                          uint layers,
+                          uint &patch[],
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronATFNetOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronATFNetOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -2612,9 +5067,16 @@ public:
                      CNeuronS3(void)   {};
                     ~CNeuronS3(void)   {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronS3;   }
+   virtual int       Type(void)   const   {  return(defNeuronS3);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -2628,28 +5090,54 @@ public:
 class CNeuronMLMHAttentionMLKV :  public CNeuronMLMHAttentionOCL
   {
 protected:
-   uint              iLayersToOneKV;                             ///< Number of inner layers
-   uint              iHeadsKV;                                   ///< Number of heads
-   CCollection       KV_Tensors;                                 ///< The collection of tensors of Keys and Values
-   CCollection       KV_Weights;                                 ///< The collection of Matrix of weights to previous layer
+   //--- Number of inner layers
+   uint              iLayersToOneKV;
+   //--- Number of heads
+   uint              iHeadsKV;
+   //--- The collection of tensors of Keys and Values
+   CCollection       KV_Tensors;
+   //--- The collection of Matrix of weights to previous layer
+   CCollection       KV_Weights;
    CBufferFloat      Temp;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    virtual bool      AttentionOut(CBufferFloat *q, CBufferFloat *kv, CBufferFloat *scores, CBufferFloat *out);
-   virtual bool      AttentionInsideGradients(CBufferFloat *q, CBufferFloat *q_g, CBufferFloat *kv, CBufferFloat *kv_g, CBufferFloat *scores, CBufferFloat *gradient);
+   virtual bool      AttentionInsideGradients(CBufferFloat *q,
+                                              CBufferFloat *q_g,
+                                              CBufferFloat *kv,
+                                              CBufferFloat *kv_g,
+                                              CBufferFloat *scores,
+                                              CBufferFloat *gradient
+                                             );
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);  ///< Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
 
 public:
                      CNeuronMLMHAttentionMLKV(void) {};
                     ~CNeuronMLMHAttentionMLKV(void) {};
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint heads_kv, uint units_count, uint layers, uint layers_to_one_kv, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint heads_kv,
+                          uint units_count,
+                          uint layers,
+                          uint layers_to_one_kv,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronMLMHAttentionMLKV;   }
+   virtual int       Type(void)   const   {  return(defNeuronMLMHAttentionMLKV);   }
    //---
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
@@ -2671,7 +5159,8 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput,
                                         CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
 
 public:
@@ -2682,12 +5171,14 @@ public:
                           uint window_kv, uint heads_kv, uint units_count, uint units_count_kv,
                           uint layers, uint layers_to_one_kv, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronMLCrossAttentionMLKV;   }
+   virtual int       Type(void)   const   {  return(defNeuronMLCrossAttentionMLKV);   }
    //---
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
-   virtual uint      GetSecondBufferSize(void)  {  return (iWindowKV * iUnitsKV); }
+   virtual uint      GetSecondBufferSize(void)  {  return(iWindowKV * iUnitsKV); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronCSCMOCL class.                               |
@@ -2715,9 +5206,18 @@ protected:
 public:
                      CNeuronCSCMOCL(void) {};
                     ~CNeuronCSCMOCL(void) {};
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint &windows[], uint variables, uint inputs_count, bool need_transpose, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint &windows[],
+                          uint variables,
+                          uint inputs_count,
+                          bool need_transpose,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronCSCMOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronCSCMOCL);   }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -2748,21 +5248,42 @@ protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    virtual bool      AttentionOut(CBufferFloat *q, CBufferFloat *kv, int scores, CBufferFloat *out, int window);
-   virtual bool      AttentionInsideGradients(CBufferFloat *q, CBufferFloat *q_g, CBufferFloat *kv, CBufferFloat *kv_g, int scores, CBufferFloat *gradient);
+   virtual bool      AttentionInsideGradients(CBufferFloat *q,
+                                              CBufferFloat *q_g,
+                                              CBufferFloat *kv,
+                                              CBufferFloat *kv_g,
+                                              int scores,
+                                              CBufferFloat *gradient
+                                             );
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);  ///< Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   //--- Method to transfer gradients to previous layer @param[in] prevLayer Pointer to previous layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL);
    virtual void      ArraySetOpenCL(CArrayObj *array, COpenCLMy *obj);
 
 public:
                      CNeuronSPyrAttentionOCL(void) {};
                     ~CNeuronSPyrAttentionOCL(void) {};
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window_in, uint window_key, uint heads, uint heads_kv, uint units_count, uint pam_layers, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window_in,
+                          uint window_key,
+                          uint heads,
+                          uint heads_kv,
+                          uint units_count,
+                          uint pam_layers,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronSPyrAttentionMLKV;   }
+   virtual int       Type(void)   const   {  return(defNeuronSPyrAttentionMLKV);   }
    //---
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
@@ -2780,15 +5301,23 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    //---
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)  { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)  { return(true); }
 
 public:
                      CNeuronPLROCL(void)  : bTranspose(false) {};
                     ~CNeuronPLROCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window_in, uint units_count, bool transpose, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window_in,
+                          uint units_count,
+                          bool transpose,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronPLROCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronPLROCL);   }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -2819,12 +5348,21 @@ protected:
 public:
                      CNeuronTPMEncoder(void) {};
                     ~CNeuronTPMEncoder(void) {};
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint variables, uint lenth, uint hidden_size, bool ts_in_row, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint variables,
+                          uint lenth,
+                          uint hidden_size,
+                          bool ts_in_row,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void) override       const                      {  return defNeuronTPMEncoder; }
+   virtual int       Type(void) override       const                      {  return(defNeuronTPMEncoder); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
@@ -2852,12 +5390,21 @@ protected:
 public:
                      CNeuronTPM(void) {};
                     ~CNeuronTPM(void) {};
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint variables, uint lenth, uint hidden_size, bool ts_in_row, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint variables,
+                          uint lenth,
+                          uint hidden_size,
+                          bool ts_in_row,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void) override       const                      {  return defNeuronTPM; }
+   virtual int       Type(void) override       const                      {  return(defNeuronTPM); }
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
@@ -2877,7 +5424,7 @@ public:
                      CNeuronSTNNEncoder(void)  {};
                     ~CNeuronSTNNEncoder(void)  {};
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSTNNEncoder;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSTNNEncoder);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSTNNDecoder class.                           |
@@ -2890,19 +5437,39 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
    virtual bool      AttentionOut(CBufferFloat *q, CBufferFloat *kv, CBufferFloat *scores, CBufferFloat *out) override;
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
 
 public:
                      CNeuronSTNNDecoder(void) {};
                     ~CNeuronSTNNDecoder(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint window_kv, uint heads_kv, uint units_count, uint units_count_kv, uint layers, uint layers_to_one_kv, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint window_kv,
+                          uint heads_kv,
+                          uint units_count,
+                          uint units_count_kv,
+                          uint layers,
+                          uint layers_to_one_kv,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronSTNNDecoder;   }
+   virtual int       Type(void)   const   {  return(defNeuronSTNNDecoder);   }
    //---
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
@@ -2926,12 +5493,23 @@ public:
                      CNeuronSparseTSF(void) {};
                     ~CNeuronSparseTSF(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint sequence, uint variables, uint period, uint forecast, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint sequence,
+                          uint variables,
+                          uint period,
+                          uint forecast,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronSparseTSF;   }
+   virtual int       Type(void)   const   {  return(defNeuronSparseTSF);   }
    //---
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
@@ -2982,7 +5560,12 @@ protected:
    CNeuronRevINDenormOCL cRevIn;
    CNeuronConvOCL    cSum;
    //--- Complex functions
-   virtual bool      FFT(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *out_re, CBufferFloat *out_im, bool reverse = false);
+   virtual bool      FFT(CBufferFloat *inp_re,
+                         CBufferFloat *inp_im,
+                         CBufferFloat *out_re,
+                         CBufferFloat *out_im,
+                         bool reverse = false
+                        );
    virtual bool      ComplexNormalize(void);
    virtual bool      ComplexUnNormalize(void);
    virtual bool      ComplexNormalizeGradient(void);
@@ -3003,9 +5586,19 @@ public:
                      CNeuronTEMPOOCL(void)   {};
                     ~CNeuronTEMPOOCL(void)   {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint sequence, uint variables, uint forecast, uint heads, uint layers, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint sequence,
+                          uint variables,
+                          uint forecast,
+                          uint heads,
+                          uint layers,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronTEMPOOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronTEMPOOCL);   }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -3021,19 +5614,33 @@ public:
 class CNeuronMVMHAttentionMLKV :  public CNeuronMLMHAttentionOCL
   {
 protected:
-   uint              iLayersToOneKV;                              ///< Number of inner layers
-   uint              iHeadsKV;                                    ///< Number of heads
-   uint              iVariables;                                  ///< Number of variables
-   CCollection       KV_Tensors;                                  ///< The collection of tensors of Keys and Values
-   CCollection       K_Tensors;                                   ///< The collection of tensors of Keys
-   CCollection       K_Weights;                                   ///< The collection of Matrix of weights to previous layer
-   CCollection       V_Tensors;                                   ///< The collection of tensors of Values
-   CCollection       V_Weights;                                   ///< The collection of Matrix of weights to previous layer
+   //--- Number of inner layers
+   uint              iLayersToOneKV;
+   //--- Number of heads
+   uint              iHeadsKV;
+   //--- Number of variables
+   uint              iVariables;
+   //--- The collection of tensors of Keys and Values
+   CCollection       KV_Tensors;
+   //--- The collection of tensors of Keys
+   CCollection       K_Tensors;
+   //--- The collection of Matrix of weights to previous layer
+   CCollection       K_Weights;
+   //--- The collection of tensors of Values
+   CCollection       V_Tensors;
+   //--- The collection of Matrix of weights to previous layer
+   CCollection       V_Weights;
    CBufferFloat      Temp;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      AttentionOut(CBufferFloat *q, CBufferFloat *kv, CBufferFloat *scores, CBufferFloat *out);
-   virtual bool      AttentionInsideGradients(CBufferFloat *q, CBufferFloat *q_g, CBufferFloat *kv, CBufferFloat *kv_g, CBufferFloat *scores, CBufferFloat *gradient);
+   virtual bool      AttentionInsideGradients(CBufferFloat *q,
+                                              CBufferFloat *q_g,
+                                              CBufferFloat *kv,
+                                              CBufferFloat *kv_g,
+                                              CBufferFloat *scores,
+                                              CBufferFloat *gradient
+                                             );
    //---
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
@@ -3042,12 +5649,27 @@ public:
                      CNeuronMVMHAttentionMLKV(void) {};
                     ~CNeuronMVMHAttentionMLKV(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint heads_kv, uint units_count, uint layers, uint layers_to_one_kv, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint heads_kv,
+                          uint units_count,
+                          uint layers,
+                          uint layers_to_one_kv,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronMVMHAttentionMLKV;   }
+   virtual int       Type(void)   const   {  return(defNeuronMVMHAttentionMLKV);   }
    //---
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
   };
@@ -3063,10 +5685,21 @@ protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context);
    virtual bool      AttentionOut(CBufferFloat *q, CBufferFloat *kv, CBufferFloat *scores, CBufferFloat *out);
-   virtual bool      AttentionInsideGradients(CBufferFloat *q, CBufferFloat *q_g, CBufferFloat *kv, CBufferFloat *kv_g, CBufferFloat *scores, CBufferFloat *gradient);
+   virtual bool      AttentionInsideGradients(CBufferFloat *q,
+                                              CBufferFloat *q_g,
+                                              CBufferFloat *kv,
+                                              CBufferFloat *kv_g,
+                                              CBufferFloat *scores,
+                                              CBufferFloat *gradient
+                                             );
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None);
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context);        ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       );
+   //--- Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context);
 
 public:
                      CNeuronMVCrossAttentionMLKV(void) {};
@@ -3078,10 +5711,12 @@ public:
                           uint layers, uint layers_to_one_kv, uint variables_q, uint variables_kv,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronMVCrossMHAttentionMLKV;   }
+   virtual int       Type(void)   const   {  return(defNeuronMVCrossMHAttentionMLKV);   }
    //---
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
    virtual CBufferFloat* getWeights(void);
   };
@@ -3109,9 +5744,22 @@ public:
                      CNeuronInjectTST(void) {};
                     ~CNeuronInjectTST(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint heads_kv, uint units_count, uint layers, uint layers_to_one_kv, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint heads_kv,
+                          uint units_count,
+                          uint layers,
+                          uint layers_to_one_kv,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronInjectTST; }
+   virtual int       Type(void)   const   {  return(defNeuronInjectTST); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -3144,9 +5792,17 @@ public:
                      CNeuronSSMOCL(void)  {};
                     ~CNeuronSSMOCL(void)  {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint units_count, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint units_count,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronSSMOCL; }
+   virtual int       Type(void)   const   {  return(defNeuronSSMOCL); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -3180,9 +5836,17 @@ public:
                      CNeuronMambaOCL(void) {};
                     ~CNeuronMambaOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint units_count, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint units_count,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronMambaOCL; }
+   virtual int       Type(void)   const   {  return(defNeuronMambaOCL); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -3213,9 +5877,17 @@ public:
                      CNeuronMambaBlockOCL(void) {};
                     ~CNeuronMambaBlockOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint units_count, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint units_count,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void) override  const   {  return defNeuronMambaBlockOCL; }
+   virtual int       Type(void) override  const   {  return(defNeuronMambaBlockOCL); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3261,9 +5933,19 @@ public:
                      CNeuronTrajLLMOCL(void) {};
                     ~CNeuronTrajLLMOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, uint forecast, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint units_count,
+                          uint forecast,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronTrajLLMOCL; }
+   virtual int       Type(void)   const   {  return(defNeuronTrajLLMOCL); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -3304,12 +5986,16 @@ protected:
    virtual bool      PrepareGrad(CBufferFloat* history_gr, CBufferFloat* future_gr);
    virtual bool      BTS(void);
    //---
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { return feedForward(NeuronOCL, NULL); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { return(feedForward(NeuronOCL, NULL)); }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { return calcInputGradients(NeuronOCL, NULL, NULL, None); }
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return updateInputWeights(NeuronOCL, NULL); }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { return(calcInputGradients(NeuronOCL, NULL, NULL, None)); }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(updateInputWeights(NeuronOCL, NULL)); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second) override;
    //---
 
@@ -3317,9 +6003,20 @@ public:
                      CNeuronUniTraj(void) {};
                     ~CNeuronUniTraj(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, uint forecast, float dropout, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint units_count,
+                          uint forecast,
+                          float dropout,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronUniTrajOCL; }
+   virtual int       Type(void)   const   {  return(defNeuronUniTrajOCL); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -3342,9 +6039,22 @@ public:
                      CNeuronHiVTAAEncoder(void) {};
                     ~CNeuronHiVTAAEncoder(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint heads_kv, uint units_count, uint layers, uint layers_to_one_kv, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint heads_kv,
+                          uint units_count,
+                          uint layers,
+                          uint layers_to_one_kv,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronHiVTAAEncoder;   }
+   virtual int       Type(void)   const   {  return(defNeuronHiVTAAEncoder);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronTransposeRCDOCL class.                       |
@@ -3359,11 +6069,20 @@ public:
                      CNeuronTransposeRCDOCL(void) {};
                     ~CNeuronTransposeRCDOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint count, uint window, uint dimension, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint count,
+                          uint window,
+                          uint dimension,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)        const                      {  return defNeuronTransposeRCDOCL; }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronTransposeRCDOCL); }
    virtual bool      SupportsOpenCLChecked(void) const override;
-   virtual uint      GetDimension(void) const { return Neurons() / (iCount * iWindow); }
+   virtual uint      GetDimension(void) const { return(Neurons() / (iCount * iWindow)); }
 
   };
 //+------------------------------------------------------------------+
@@ -3389,9 +6108,11 @@ protected:
    CNeuronMVCrossAttentionMLKV cALEncoder;
    CNeuronMLMHAttentionMLKV cGlobalEncoder;
    CNeuronTransposeOCL cTransposeADT;
-   CNeuronConvOCL    cDecoder[3]; // Agent* Traj * Forecast
+   //--- Agent* Traj * Forecast
+   CNeuronConvOCL    cDecoder[3];
    CNeuronConvOCL    cProbProj;
-   CNeuronSoftMaxOCL cProbability; // Agent* Traj
+   //--- Agent* Traj
+   CNeuronSoftMaxOCL cProbability;
    CNeuronBaseOCL    cForecast;
    CNeuronTransposeOCL cTransposeTA;
    //---
@@ -3406,9 +6127,20 @@ public:
                      CNeuronHiVTOCL(void) {};
                     ~CNeuronHiVTOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, uint forecast, uint num_traj, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint units_count,
+                          uint forecast,
+                          uint num_traj,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronHiVTOCL; }
+   virtual int       Type(void)   const   {  return(defNeuronHiVTOCL); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -3449,7 +6181,7 @@ public:
                           uint window, uint units_count, uint output, bool use_tnets,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronPointNetOCL; }
+   virtual int       Type(void) override   const   {  return(defNeuronPointNetOCL); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3488,7 +6220,7 @@ public:
                           uint window, uint units_count, uint window_out, float radius,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronPointNet2LocalOCL; }
+   virtual int       Type(void) override   const   {  return(defNeuronPointNet2LocalOCL); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3519,7 +6251,7 @@ public:
                           uint window, uint units_count, uint output, bool use_tnets,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override   const   {  return defNeuronPointNet2OCL; }
+   virtual int       Type(void) override   const   {  return(defNeuronPointNet2OCL); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3556,7 +6288,7 @@ public:
                           uint window, uint units_count, uint output, bool use_tnets,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override   const   {  return defNeuronPointFormer; }
+   virtual int       Type(void) override   const   {  return(defNeuronPointFormer); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3574,10 +6306,14 @@ protected:
    CNeuronBaseOCL    cSceneSpecificKnowledge;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override { return feedForward(NeuronOCL); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override { return(feedForward(NeuronOCL)); }
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override { return calcInputGradients(NeuronOCL); }
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override { return updateInputWeights(NeuronOCL); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override { return(calcInputGradients(NeuronOCL)); }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override { return(updateInputWeights(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
 
@@ -3585,9 +6321,22 @@ public:
                      CNeuronSceneSpecific(void) {};
                     ~CNeuronSceneSpecific(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint heads_kv, uint units_count, uint units_count_kv, uint layers, uint layers_to_one_kv, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint heads_kv,
+                          uint units_count,
+                          uint units_count_kv,
+                          uint layers,
+                          uint layers_to_one_kv,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void) override  const   {  return defNeuronSceneSpecific;   }
+   virtual int       Type(void) override  const   {  return(defNeuronSceneSpecific);   }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3613,9 +6362,21 @@ public:
                      CNeuronMLMHSceneConditionAttention(void) {};
                     ~CNeuronMLMHSceneConditionAttention(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint heads_kv, uint units_count, uint layers, uint layers_to_one_kv, ENUM_OPTIMIZATION optimization_type, uint batch) override;
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint heads_kv,
+                          uint units_count,
+                          uint layers,
+                          uint layers_to_one_kv,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         ) override;
    //---
-   virtual int       Type(void) override  const   {  return defNeuronMLMHSceneConditionAttention;   }
+   virtual int       Type(void) override  const   {  return(defNeuronMLMHSceneConditionAttention);   }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3652,7 +6413,7 @@ public:
                           uint window, uint units_count, uint output, bool use_tnets,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override   const   {  return defNeuronHyperDet; }
+   virtual int       Type(void) override   const   {  return(defNeuronHyperDet); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3702,7 +6463,7 @@ public:
                           uint center_points, uint center_window,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronSEFormer; }
+   virtual int       Type(void) override   const   {  return(defNeuronSEFormer); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3776,7 +6537,7 @@ public:
                           uint layers, uint layers_to_sp,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronSPFormer; }
+   virtual int       Type(void) override   const   {  return(defNeuronSPFormer); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3854,7 +6615,7 @@ public:
                           uint layers, uint layers_to_sp,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMAFT; }
+   virtual int       Type(void) override   const   {  return(defNeuronMAFT); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3880,7 +6641,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    //---
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
@@ -3894,7 +6659,7 @@ public:
                           uint ref_size, uint layers, uint layers_to_sp,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronGRES; }
+   virtual int       Type(void) override   const   {  return(defNeuronGRES); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -3931,10 +6696,13 @@ public:
                           uint window_kv, uint heads_kv, uint units_count_kv,
                           uint layers, uint inside_block, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronGEGWA;   }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronGEGWA);   }
    //--- methods for working with files
-   virtual bool      Save(int const file_handle);  ///< Save method @param[in] file_handle handle of file @return logical result of operation
-   virtual bool      Load(int const file_handle);  ///< Load method @param[in] file_handle handle of file @return logical result of operation
+   //--- Save method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Save(int const file_handle);
+   //--- Load method @param[in] file_handle handle of file @return logical result of operation
+   virtual bool      Load(int const file_handle);
    //---
    //---virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
@@ -3952,10 +6720,14 @@ protected:
    CNeuronBaseOCL    cPrimitives;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override { return feedForward(NeuronOCL); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override { return(feedForward(NeuronOCL)); }
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override { return calcInputGradients(NeuronOCL); }
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override { return updateInputWeights(NeuronOCL); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override { return(calcInputGradients(NeuronOCL)); }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override { return(updateInputWeights(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
 
@@ -3963,9 +6735,22 @@ public:
                      CNeuronLPC(void) {};
                     ~CNeuronLPC(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint heads_kv, uint units_count, uint units_count_kv, uint layers, uint layers_to_one_kv, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint heads_kv,
+                          uint units_count,
+                          uint units_count_kv,
+                          uint layers,
+                          uint layers_to_one_kv,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void) override  const   {  return defNeuronLPC;   }
+   virtual int       Type(void) override  const   {  return(defNeuronLPC);   }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4023,7 +6808,7 @@ public:
                           uint cont_window, uint cont_units, uint cont_heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronOCM; }
+   virtual int       Type(void) override   const   {  return(defNeuronOCM); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4035,8 +6820,8 @@ public:
    virtual bool      calcInputGradients(CNeuronBaseOCL *Primitives, CNeuronBaseOCL *Context);
    virtual bool      updateInputWeights(CNeuronBaseOCL *Primitives, CNeuronBaseOCL *Context);
    //---
-   virtual uint      GetPrimitiveWindow(void)   const { return iPrimWindow; }
-   virtual uint      GetContextWindow(void)     const { return iContWindow; }
+   virtual uint      GetPrimitiveWindow(void)   const { return(iPrimWindow); }
+   virtual uint      GetContextWindow(void)     const { return(iContWindow); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronRefMask class.                               |
@@ -4055,7 +6840,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    //---
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
@@ -4069,7 +6858,7 @@ public:
                           uint primitive_units, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronRefMask; }
+   virtual int       Type(void) override   const   {  return(defNeuronRefMask); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4118,7 +6907,7 @@ public:
                           uint units_count, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronRelativeSelfAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronRelativeSelfAttention); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4126,8 +6915,8 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   virtual uint      GetWindow(void) const { return iWindow; }
-   virtual uint      GetUnits(void) const { return iUnits; }
+   virtual uint      GetWindow(void) const { return(iWindow); }
+   virtual uint      GetUnits(void) const { return(iUnits); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronRMAT class.                                  |
@@ -4150,7 +6939,7 @@ public:
                           uint units_count, uint heads, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronRMAT; }
+   virtual int       Type(void) override   const   {  return(defNeuronRMAT); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4163,13 +6952,13 @@ public:
    virtual uint      GetWindow(void) const
      {
       CNeuronRelativeSelfAttention* neuron = cLayers[0];
-      return (!neuron ? 0 : neuron.GetWindow());
+      return(!neuron ? 0 : neuron.GetWindow());
      }
    //--- Gets Units.
    virtual uint      GetUnits(void) const
      {
       CNeuronRelativeSelfAttention* neuron = cLayers[0];
-      return (!neuron ? 0 : neuron.GetUnits());
+      return(!neuron ? 0 : neuron.GetUnits());
      }
    //--- Implements TrainMode.
    virtual void      TrainMode(bool flag) override
@@ -4192,7 +6981,7 @@ public:
          !last.SetGradient(buffer, delete_prev) ||
          !CNeuronBaseOCL::SetGradient(last.getGradient(), delete_prev))
          ReturnFalse;
-      return true;
+      return(true);
      }
    //--- Sets Output.
    virtual bool      SetOutput(CBufferFloat *buffer, bool delete_prev = true)
@@ -4202,7 +6991,7 @@ public:
          !last.SetOutput(buffer, delete_prev) ||
          !CNeuronBaseOCL::SetOutput(last.getOutput(), delete_prev))
          ReturnFalse;
-      return true;
+      return(true);
      }
   };
 //+------------------------------------------------------------------+
@@ -4228,7 +7017,7 @@ public:
                           uint window, uint units_count, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMHAttentionPooling; }
+   virtual int       Type(void) override   const   {  return(defNeuronMHAttentionPooling); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4257,7 +7046,7 @@ public:
                           uint dimension, uint window, uint step, uint units_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMotifs; }
+   virtual int       Type(void) override   const   {  return(defNeuronMotifs); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4293,7 +7082,7 @@ public:
                           uint window, uint window_key, uint units_count, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMultiScaleAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronMultiScaleAttention); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4314,9 +7103,10 @@ public:
                           uint window, uint window_key,
                           uint units_count, uint heads, uint layers,
                           uint motif_window, uint motif_step,
-                          ENUM_OPTIMIZATION optimization_type, uint batch); //Molformer
+                          //--- Molformer
+                          ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMolformer; }
+   virtual int       Type(void) override   const   {  return(defNeuronMolformer); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronRelativeCrossAttention class.                |
@@ -4331,7 +7121,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
@@ -4345,7 +7139,7 @@ public:
                           uint window_kv, uint units_kv,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronRelativeCrossAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronRelativeCrossAttention); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4353,7 +7147,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   virtual uint      GetUnitsKV(void) const { return iUnitsKV; }
+   virtual uint      GetUnitsKV(void) const { return(iUnitsKV); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMotifEncoder class.                          |
@@ -4369,7 +7163,7 @@ public:
                           uint units_count, uint heads, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMotifEncoder; }
+   virtual int       Type(void) override   const   {  return(defNeuronMotifEncoder); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronPropertyAwareAttention class.                |
@@ -4392,7 +7186,7 @@ public:
                           uint units_count, uint heads, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronPropertyAwareAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronPropertyAwareAttention); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronAMCT class.                                  |
@@ -4421,7 +7215,7 @@ public:
                           uint units_count, uint heads, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronAMCT; }
+   virtual int       Type(void) override   const   {  return(defNeuronAMCT); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4449,7 +7243,7 @@ protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
 
 public:
                      CNeuronNAFS(void) {};
@@ -4459,7 +7253,7 @@ public:
                           uint window, uint step, uint units_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronNAFS; }
+   virtual int       Type(void) override   const   {  return(defNeuronNAFS); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4481,7 +7275,8 @@ public:
                      CNeuronBatchNormWithNoise(void) {};
                     ~CNeuronBatchNormWithNoise(void) {};
    //---
-   virtual int       Type(void)        const                      {  return defNeuronBatchNormWithNoise;    }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)        const                      {  return(defNeuronBatchNormWithNoise);    }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronDiffusion class.                             |
@@ -4501,16 +7296,28 @@ public:
                      CNeuronDiffusion(void) {};
                     ~CNeuronDiffusion(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, uint layers, uint inside_block, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_key,
+                          uint heads,
+                          uint units_count,
+                          uint layers,
+                          uint inside_block,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronDiffusion;   }
+   virtual int       Type(void)   const   {  return(defNeuronDiffusion);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
    //---virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
-   virtual void      TrainMode(bool flag)                         {  bTrain = flag; cAddNoise.TrainMode(bTrain); } ///< Set Training Mode Flag
+   //--- Set Training Mode Flag
+   virtual void      TrainMode(bool flag)                         {  bTrain = flag; cAddNoise.TrainMode(bTrain); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronHyperProjection class.                       |
@@ -4523,7 +7330,7 @@ protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return(true); }
 
 public:
                      CNeuronHyperProjection(void) : iWindow(-1), iUnits(-1) {};
@@ -4533,7 +7340,7 @@ public:
                           uint window, uint units_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronHyperProjection;   }
+   virtual int       Type(void)   const   {  return(defNeuronHyperProjection);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -4555,8 +7362,16 @@ protected:
    int               iDistances;
    int               iNormes;
    //---
-   virtual bool      LogMap(CNeuronBaseOCL *featers, CNeuronBaseOCL *centroids, CNeuronBaseOCL *curvatures, CNeuronBaseOCL *outputs);
-   virtual bool      LogMapGrad(CNeuronBaseOCL *featers, CNeuronBaseOCL *centroids, CNeuronBaseOCL *curvatures, CNeuronBaseOCL *outputs);
+   virtual bool      LogMap(CNeuronBaseOCL *featers,
+                            CNeuronBaseOCL *centroids,
+                            CNeuronBaseOCL *curvatures,
+                            CNeuronBaseOCL *outputs
+                           );
+   virtual bool      LogMapGrad(CNeuronBaseOCL *featers,
+                                CNeuronBaseOCL *centroids,
+                                CNeuronBaseOCL *curvatures,
+                                CNeuronBaseOCL *outputs
+                               );
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer);
@@ -4566,9 +7381,17 @@ public:
                      CNeuronHyperboloids(void) : iWindows(0), iUnits(0), iCentroids(0), iProducts(-1), iDistances(-1), iNormes(-1) {};
                     ~CNeuronHyperboloids(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint units_count, uint centroids, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint units_count,
+                          uint centroids,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const   {  return defNeuronHyperboloids;   }
+   virtual int       Type(void)   const   {  return(defNeuronHyperboloids);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -4591,19 +7414,19 @@ public:
                           uint heads, uint layers, uint centroids,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronHypDiff; }
+   virtual int       Type(void) override   const   {  return(defNeuronHypDiff); }
    //---
    //--- Gets Window.
    virtual uint      GetWindow(void) const override
      {
       CNeuronRMAT* neuron = cLayers[1];
-      return (!neuron ? 0 : neuron.GetWindow() - 1);
+      return(!neuron ? 0 : neuron.GetWindow() - 1);
      }
    //--- Gets Units.
    virtual uint      GetUnits(void) const override
      {
       CNeuronRMAT* neuron = cLayers[1];
-      return (!neuron ? 0 : neuron.GetUnits());
+      return(!neuron ? 0 : neuron.GetUnits());
      }
   };
 //+------------------------------------------------------------------+
@@ -4624,15 +7447,28 @@ public:
                      CNeuronBaseSAMOCL(void) {};
                     ~CNeuronBaseSAMOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch);
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, float rho, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          float rho,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(int const file_handle)   override;
    virtual bool      Load(int const file_handle)   override;
    //---
-   virtual int       Type(void)        const override          {  return defNeuronBaseSAMOCL;      }
-   virtual int       Activation(void)  const override          {  return (fRho == 0 ? (int)None : (int)activation);   }
-   virtual int       getWeightsSAMIndex(void) const override   {  return cWeightsSAM.GetIndex();   }
+   virtual int       Type(void)        const override          {  return(defNeuronBaseSAMOCL);      }
+   virtual int       Activation(void)  const override          {  return(fRho == 0 ? (int)None : (int)activation);   }
+   virtual int       getWeightsSAMIndex(void) const override   {  return(cWeightsSAM.GetIndex());   }
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
   };
@@ -4653,10 +7489,20 @@ public:
                      CNeuronPSBlock(void) {};
                     ~CNeuronPSBlock(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_out, uint units_count, uint variables, float rho, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint window_out,
+                          uint units_count,
+                          uint variables,
+                          float rho,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    virtual bool      InitPS(CNeuronPSBlock *master);
    //---
-   virtual int       Type(void)   const override   {  return defNeuronPSBlock;   }
+   virtual int       Type(void)   const override   {  return(defNeuronPSBlock);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4687,7 +7533,7 @@ public:
                           uint window, uint units_count, uint segments, float rho,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const         {  return defNeuronPSformer;   }
+   virtual int       Type(void)   const         {  return(defNeuronPSformer);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -4707,7 +7553,7 @@ public:
                           uint heads, uint layers, uint forecast,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMarketObserver; }
+   virtual int       Type(void) override   const   {  return(defNeuronMarketObserver); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronRLAgent class.                               |
@@ -4723,7 +7569,7 @@ public:
                           uint layers, uint n_actions,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   override {  return defNeuronRLAgent;   }
+   virtual int       Type(void)   const   override {  return(defNeuronRLAgent);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronControlAgent class.                          |
@@ -4734,7 +7580,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
@@ -4747,7 +7597,7 @@ public:
                           uint window_kv, uint units_kv, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronControlAgent; }
+   virtual int       Type(void) override   const   {  return(defNeuronControlAgent); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMASA class.                                  |
@@ -4762,7 +7612,11 @@ protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
@@ -4779,7 +7633,7 @@ public:
                           int NormLayer, CNeuronBatchNormOCL *normLayer,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMASA; }
+   virtual int       Type(void) override   const   {  return(defNeuronMASA); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4788,7 +7642,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override;
    //---
-   virtual int       GetNormLayer(void)   {  return cRevIN.GetNormLayer(); }
+   virtual int       GetNormLayer(void)   {  return(cRevIN.GetNormLayer()); }
    virtual bool      SetNormLayer(int NormLayer, CNeuronBatchNormOCL *normLayer);
   };
 //+------------------------------------------------------------------+
@@ -4813,7 +7667,7 @@ public:
                           vector<float> &min_distance,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronPLRMultiAgentsOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronPLRMultiAgentsOCL);   }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -4841,7 +7695,7 @@ public:
                           uint units_count, uint layers, uint layers_to_one_kv,
                           uint variables, ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void)   const override   {  return defNeuronCrossSectionalAnalysis;   }
+   virtual int       Type(void)   const override   {  return(defNeuronCrossSectionalAnalysis);   }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4864,17 +7718,25 @@ public:
                      CNeuronTransposeVRCOCL(void) {};
                     ~CNeuronTransposeVRCOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint variables, uint count, uint window, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint variables,
+                          uint count,
+                          uint window,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)  const override    {  return defNeuronTransposeVRCOCL; }
+   virtual int       Type(void)  const override    {  return(defNeuronTransposeVRCOCL); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   virtual uint      GetWindow(void) override const { return cTransposeRCD.GetWindow(); }
-   virtual uint      GetCount(void) override const { return cTransposeRCD.GetCount(); }
-   virtual uint      GetVariables(void) const { return iWindow; }
+   virtual uint      GetWindow(void) override const { return(cTransposeRCD.GetWindow()); }
+   virtual uint      GetCount(void) override const { return(cTransposeRCD.GetCount()); }
+   virtual uint      GetVariables(void) const { return(iWindow); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronTemporalAnalysis class.                      |
@@ -4897,7 +7759,7 @@ public:
                           uint units_count, uint layers, uint layers_to_one_kv,
                           uint variables, ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void)   const override   {  return defNeuronTemporalAnalysis;   }
+   virtual int       Type(void)   const override   {  return(defNeuronTemporalAnalysis);   }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4921,7 +7783,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)  override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
@@ -4933,7 +7799,7 @@ public:
                           uint agents,  uint projection,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const override   {  return defNeuronPortfolioGenerator;   }
+   virtual int       Type(void)   const override   {  return(defNeuronPortfolioGenerator);   }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4955,11 +7821,15 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)  override
-     { return        feedForward(NeuronOCL); }
+     { return(feedForward(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
    //--- Calculates InputGradients.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
-     { return        calcInputGradients(NeuronOCL); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override
+     { return(calcInputGradients(NeuronOCL)); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
@@ -4972,7 +7842,7 @@ public:
                           uint layers, vector<float> &min_distance, uint projection,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const override   {  return defNeuronMASAAT;   }
+   virtual int       Type(void)   const override   {  return(defNeuronMASAAT);   }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -4995,9 +7865,20 @@ public:
                      CNeuronMHConvOCL(void)  :  iHeads(1)   {};
                     ~CNeuronMHConvOCL(void)  {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint step, uint window_out, uint units_count, uint variables, uint heads, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint step,
+                          uint window_out,
+                          uint units_count,
+                          uint variables,
+                          uint heads,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
-   virtual int       Type(void)   const override   {  return defNeuronMHConvOCL;   }
+   virtual int       Type(void)   const override   {  return(defNeuronMHConvOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5023,7 +7904,7 @@ public:
                           uint units_count, uint variables, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const override   {  return defNeuronMHFeedForward;   }
+   virtual int       Type(void)   const override   {  return(defNeuronMHFeedForward);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5038,7 +7919,7 @@ public:
          !last.SetGradient(buffer, delete_prev) ||
          !CNeuronBaseOCL::SetGradient(last.getGradient(), delete_prev))
          ReturnFalse;
-      return true;
+      return(true);
      }
    //--- Sets Output.
    virtual bool      SetOutput(CBufferFloat *buffer, bool delete_prev = true)
@@ -5048,7 +7929,7 @@ public:
          !last.SetOutput(buffer, delete_prev) ||
          !CNeuronBaseOCL::SetOutput(last.getOutput(), delete_prev))
          ReturnFalse;
-      return true;
+      return(true);
      }
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
@@ -5065,7 +7946,7 @@ public:
                           uint window, uint window_key, uint units_count,
                           uint heads, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
-   virtual int       Type(void) override   const   {  return defNeuronDMHAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronDMHAttention); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronCrossDMHAttention class.                     |
@@ -5077,7 +7958,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
@@ -5091,7 +7976,7 @@ public:
                           uint heads, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronCrossDMHAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronCrossDMHAttention); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronLegendreWaveletsHL class.                    |
@@ -5099,18 +7984,30 @@ public:
 class CNeuronLegendreWaveletsHL :  public CNeuronConvOCL
   {
 protected:
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return true; }        ///< Method for updating weights.@param NeuronOCL Pointer to previos layer.
+   //--- Method for updating weights.@param NeuronOCL Pointer to previos layer.
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)   { return(true); }
 
 public:
                      CNeuronLegendreWaveletsHL(void) {};
                     ~CNeuronLegendreWaveletsHL(void) {};
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint step, uint units_count, uint filters, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch) override;
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint window,
+                          uint step,
+                          uint units_count,
+                          uint filters,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         ) override;
    //---
-   virtual int       Type(void)   const   {  return defNeuronLegendreWaveletsHL;   }///< Identificator of class.@return Type of class
+   //--- Identificator of class.@return Type of class
+   virtual int       Type(void)   const   {  return(defNeuronLegendreWaveletsHL);   }
    //---
-   virtual uint      GetFilters(void)  const {return (iWindowOut / 2); }
-   virtual uint      GetVariables(void)  const {return (iVariables); }
-   virtual uint      GetUnits(void)  const {return (Neurons() / (iVariables * iWindowOut)); }
+   virtual uint      GetFilters(void)  const {return(iWindowOut / 2); }
+   virtual uint      GetVariables(void)  const {return(iVariables); }
+   virtual uint      GetUnits(void)  const {return(Neurons() / (iVariables * iWindowOut)); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronDecouplingFlow class.                        |
@@ -5131,7 +8028,7 @@ public:
                           uint filters, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void)   const   {  return defNeuronDecouplingFlow;   }
+   virtual int       Type(void)   const   {  return(defNeuronDecouplingFlow);   }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5152,7 +8049,7 @@ public:
                           uint units_count, uint variables, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronDilatedCasualConv; }
+   virtual int       Type(void) override   const   {  return(defNeuronDilatedCasualConv); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMultitaskStockformer class.                  |
@@ -5186,7 +8083,7 @@ public:
                           uint heads, uint layers, uint neurons_out, uint filters,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMultitaskStockformer; }
+   virtual int       Type(void) override   const   {  return(defNeuronMultitaskStockformer); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5204,15 +8101,19 @@ protected:
    CNeuronMambaOCL   cMamba;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override  { return feedForward(NeuronOCL); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override  { return(feedForward(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
    //--- Calculates InputGradients.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
-     { return        calcInputGradients(NeuronOCL); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override
+     { return(calcInputGradients(NeuronOCL)); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
-     { return        updateInputWeights(NeuronOCL); }
+     { return(updateInputWeights(NeuronOCL)); }
 
 public:
                      CNeuronMemory(void) {};
@@ -5223,7 +8124,7 @@ public:
                           uint units_count, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMemory; }
+   virtual int       Type(void) override   const   {  return(defNeuronMemory); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5248,7 +8149,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override   { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override   { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
@@ -5261,7 +8166,7 @@ public:
                           uint account_descr, uint nactions,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronFinMem; }
+   virtual int       Type(void) override   const   {  return(defNeuronFinMem); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5294,7 +8199,7 @@ public:
                           uint units_count, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override   const   {  return defNeuronLowLevelReflection; }
+   virtual int       Type(void) override   const   {  return(defNeuronLowLevelReflection); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5333,7 +8238,7 @@ public:
                           uint desc_account, uint actions_state,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override   const   {  return defNeuronHighLevelReflection; }
+   virtual int       Type(void) override   const   {  return(defNeuronHighLevelReflection); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5351,7 +8256,7 @@ class CNeuronMoreLessEqual :  public CNeuronBaseOCL
 protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override {return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override {return(true); }
 
 public:
                      CNeuronMoreLessEqual(void) {};
@@ -5374,7 +8279,11 @@ protected:
    CNeuronRelativeCrossAttention cMarketToTools;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
 public:
@@ -5386,7 +8295,7 @@ public:
                           uint account_descr, uint nactions, uint segments,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronFinAgent; }
+   virtual int       Type(void) override   const   {  return(defNeuronFinAgent); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5421,7 +8330,7 @@ public:
                           uint heads, uint stack_size,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMemoryDistil; }
+   virtual int       Type(void) override   const   {  return(defNeuronMemoryDistil); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5443,15 +8352,19 @@ protected:
    CNeuronRelativeCrossAttention cStateToRole;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override  { return feedForward(NeuronOCL); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override  { return(feedForward(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
    //--- Calculates InputGradients.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
-     { return        calcInputGradients(NeuronOCL); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override
+     { return(calcInputGradients(NeuronOCL)); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
-     { return        updateInputWeights(NeuronOCL); }
+     { return(updateInputWeights(NeuronOCL)); }
 
 public:
                      CNeuronFinConAgent(void) {};
@@ -5462,7 +8375,7 @@ public:
                           uint heads, uint stack_size, uint action_space,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronFinConAgent; }
+   virtual int       Type(void) override   const   {  return(defNeuronFinConAgent); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5488,7 +8401,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override {ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override  {ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
@@ -5501,7 +8418,7 @@ public:
                           uint stack_size, uint account_descr, uint action_space,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronFinConManager; }
+   virtual int       Type(void) override   const   {  return(defNeuronFinConManager); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5537,7 +8454,7 @@ public:
                           uint heads, uint layers, uint agents, uint stack_size,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMacroHFTHyperAgent; }
+   virtual int       Type(void) override   const   {  return(defNeuronMacroHFTHyperAgent); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5571,7 +8488,7 @@ public:
                           uint heads, uint layers, uint stack_size, uint nactions,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMacroHFT; }
+   virtual int       Type(void) override   const   {  return(defNeuronMacroHFT); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5595,7 +8512,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
 
@@ -5608,7 +8529,7 @@ public:
                           uint stack_size, uint nactions, uint account_decr,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMacroHFTvsRiskManager; }
+   virtual int       Type(void) override   const   {  return(defNeuronMacroHFTvsRiskManager); }
    //---
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
@@ -5631,7 +8552,7 @@ public:
                      CNeuronMultiScaleRelativeSelfAttention(void) {};
                     ~CNeuronMultiScaleRelativeSelfAttention(void) {};
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMultiScaleRelativeSelfAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronMultiScaleRelativeSelfAttention); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMultiScaleRelativeCrossAttention class.      |
@@ -5645,7 +8566,7 @@ public:
                      CNeuronMultiScaleRelativeCrossAttention(void) {};
                     ~CNeuronMultiScaleRelativeCrossAttention(void) {};
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMultiScaleRelativeCrossAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronMultiScaleRelativeCrossAttention); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronRecursiveAttention class.                    |
@@ -5660,15 +8581,15 @@ protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
-   override  { return feedForward(NeuronOCL); }
+   override  { return(feedForward(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput,
                                         CBufferFloat *SecondGradient,
                                         ENUM_ACTIVATION SecondActivation = None)
-   override  { return calcInputGradients(NeuronOCL); }
+   override  { return(calcInputGradients(NeuronOCL)); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput)
-   override  { return updateInputWeights(NeuronOCL); }
+   override  { return(updateInputWeights(NeuronOCL)); }
 
 public:
                      CNeuronRecursiveAttention(void) {};
@@ -5679,7 +8600,7 @@ public:
                           uint heads, uint history_size,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronRecursiveAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronRecursiveAttention); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5719,7 +8640,7 @@ public:
                           uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronLinerAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronLinerAttention); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5754,7 +8675,7 @@ public:
                           uint heads, uint stack_size, uint action_space,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronHidformerTSAgent; }
+   virtual int       Type(void) override   const   {  return(defNeuronHidformerTSAgent); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5792,7 +8713,7 @@ public:
                           uint heads, uint stack_size, uint action_space,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronHidformerFreqAgent; }
+   virtual int       Type(void) override   const   {  return(defNeuronHidformerFreqAgent); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5827,7 +8748,7 @@ public:
                           uint heads, uint layers, uint stack_size, uint nactions,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronHidformer; }
+   virtual int       Type(void) override   const   {  return(defNeuronHidformer); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5854,7 +8775,6 @@ protected:
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
-
 public:
                      CNeuronResNeXtBottleneck(void) {};
                     ~CNeuronResNeXtBottleneck(void) {};
@@ -5864,7 +8784,7 @@ public:
                           uint step, uint units_count, uint group_size, uint groups,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronResNeXtBottleneck;   }
+   virtual int       Type(void)   override const   {  return(defNeuronResNeXtBottleneck);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5895,7 +8815,7 @@ public:
                           uint units_in, uint units_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronResNeXtResidual;   }
+   virtual int       Type(void)   override const   {  return(defNeuronResNeXtResidual);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5926,7 +8846,7 @@ public:
                           uint step, uint units_count, uint group_size, uint groups,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronResNeXtBlock;   }
+   virtual int       Type(void)   override const   {  return(defNeuronResNeXtBlock);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -5967,7 +8887,7 @@ public:
                           uint window_in, uint window_out, uint units_in, uint units_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuron2DSSMOCL; }
+   virtual int       Type(void)   const   {  return(defNeuron2DSSMOCL); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -6000,7 +8920,7 @@ public:
                           uint window_in, uint window_out, uint units_in, uint units_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override  const   {  return defNeuronChimera; }
+   virtual int       Type(void) override  const   {  return(defNeuronChimera); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6034,7 +8954,7 @@ public:
                           uint window, uint units_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMoT; }
+   virtual int       Type(void) override   const   {  return(defNeuronMoT); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6064,7 +8984,7 @@ public:
                           uint window_in, uint window_out, uint units_in, uint units_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override  const   {  return defNeuronChimeraPlus; }
+   virtual int       Type(void) override  const   {  return(defNeuronChimeraPlus); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6095,7 +9015,7 @@ public:
                           uint heads, uint layers, uint stack_size, uint nactions,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronHypridDecoder; }
+   virtual int       Type(void) override   const   {  return(defNeuronHypridDecoder); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6142,7 +9062,7 @@ public:
                           uint window, uint window_key, uint units_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronAttraos; }
+   virtual int       Type(void) override   const   {  return(defNeuronAttraos); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6176,7 +9096,7 @@ public:
                           uint window, uint units_count, uint gates, uint top_k,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronTopKGates; }
+   virtual int       Type(void) override   const   {  return(defNeuronTopKGates); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6184,8 +9104,8 @@ public:
    //---virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   virtual uint      GetGates(void) const { return cProjection.GetFilters() / 2; }
-   virtual uint      GetUnits(void) const { return cProjection.GetUnits(); }
+   virtual uint      GetGates(void) const { return(cProjection.GetFilters() / 2); }
+   virtual uint      GetUnits(void) const { return(cProjection.GetUnits()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMoE class.                                   |
@@ -6210,7 +9130,7 @@ public:
                           uint experts, uint top_k,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronMoE; }
+   virtual int       Type(void) override   const   {  return(defNeuronMoE); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6234,12 +9154,17 @@ protected:
    CBufferFloat      cbFFTReal;
    CBufferFloat      cbFFTImag;
    //---
-   virtual bool      FFT(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *out_re, CBufferFloat *out_im, bool reverse = false);
+   virtual bool      FFT(CBufferFloat *inp_re,
+                         CBufferFloat *inp_im,
+                         CBufferFloat *out_re,
+                         CBufferFloat *out_im,
+                         bool reverse = false
+                        );
    virtual bool      Mask(void);
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) { return true; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) { return(true); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) { return(true); }
 
 public:
                      CNeuronChanelMask(void) {};
@@ -6249,7 +9174,7 @@ public:
                           uint window, uint units_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronChanelMask; }
+   virtual int       Type(void) override   const   {  return(defNeuronChanelMask); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6294,7 +9219,7 @@ public:
                           uint units_out, uint experts, uint top_k,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronDUET; }
+   virtual int       Type(void) override   const   {  return(defNeuronDUET); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6319,13 +9244,16 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL);
 
 public:
+   bool              ForwardRowsReadOnly(CBufferFloat *source, const uint rows, const SLayerReadState &state,
+                                         SLayerRowsWorkspace &work, CBufferFloat *output, CBufferFloat *flags);
+
                      CNeuronMultiWindowsConvOCL(void) {  activation = SoftPlus;  iWindow = -1; }
                     ~CNeuronMultiWindowsConvOCL(void);
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint &windows[], uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronMultiWindowsConvOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronMultiWindowsConvOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -6338,10 +9266,10 @@ public:
    virtual int       GetWindow(uint index)
      {
       if(index >= aiWindows.Size())
-         return 0;
-      return aiWindows[index];
+         return(0);
+      return(aiWindows[index]);
      }
-   virtual uint      GetUnits(void) const override { return CNeuronConvOCL::GetUnits() / aiWindows.Size(); }
+   virtual uint      GetUnits(void) const override { return(CNeuronConvOCL::GetUnits() / aiWindows.Size()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronAdaBN class.                                 |
@@ -6356,7 +9284,7 @@ public:
                           uint &bottlenecks[], uint top_k, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronAdaBN; }
+   virtual int       Type(void) override   const   {  return(defNeuronAdaBN); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronComplexConvOCL class.                        |
@@ -6378,7 +9306,7 @@ public:
                           uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void)   const   {  return defNeuronComplexConvOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronComplexConvOCL);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronComplexMVMHMaskAttention class.              |
@@ -6403,7 +9331,16 @@ protected:
    //---
    virtual bool               AttentionOut(void);
    virtual bool               AttentionInsideGradients(void);
-   virtual bool               SumAndNormalize(CBufferFloat *tensor1, CBufferFloat *tensor2, CBufferFloat *out, int dimension, bool normilize = true, int shift_in1 = 0, int shift_in2 = 0, int shift_out = 0, float multiplyer = 0.5f) override;
+   virtual bool               SumAndNormalize(CBufferFloat *tensor1,
+                                              CBufferFloat *tensor2,
+                                              CBufferFloat *out,
+                                              int dimension,
+                                              bool normilize = true,
+                                              int shift_in1 = 0,
+                                              int shift_in2 = 0,
+                                              int shift_out = 0,
+                                              float multiplyer = 0.5f
+                                             ) override;
    //---
    virtual bool               feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool               updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
@@ -6413,9 +9350,19 @@ public:
                      CNeuronComplexMVMHMaskAttention(void) {};
                     ~CNeuronComplexMVMHMaskAttention(void) {};
    //---
-   virtual bool               Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool               Init(uint numOutputs,
+                                   uint myIndex,
+                                   COpenCLMy *open_cl,
+                                   uint window,
+                                   uint window_key,
+                                   uint heads,
+                                   uint units_count,
+                                   uint variables,
+                                   ENUM_OPTIMIZATION optimization_type,
+                                   uint batch
+                                  );
    //---
-   virtual int                Type(void)   const   {  return defNeuronComplexMVMHMaskAttention;   }
+   virtual int                Type(void)   const   {  return(defNeuronComplexMVMHMaskAttention);   }
    //---
    virtual bool               Save(int const file_handle) override;
    virtual bool               Load(int const file_handle) override;
@@ -6454,7 +9401,6 @@ protected:
    virtual bool               updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool               calcInputGradients(CNeuronBaseOCL *prevLayer) override;
 
-
 public:
                      CNeuronCATCH(void) {};
                     ~CNeuronCATCH(void) {};
@@ -6465,7 +9411,7 @@ public:
                                    uint window_key, uint heads,
                                    ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int                Type(void) override const   {  return defNeuronCATCH;   }
+   virtual int                Type(void) override const   {  return(defNeuronCATCH);   }
    //---
    virtual bool               Save(int const file_handle) override;
    virtual bool               Load(int const file_handle) override;
@@ -6497,7 +9443,7 @@ public:
                                    uint window, uint step, uint window_key, uint heads,
                                    ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int                Type(void) override const   {  return defNeuronSkillsEncoder;   }
+   virtual int                Type(void) override const   {  return(defNeuronSkillsEncoder);   }
    //---
    virtual bool               Save(int const file_handle) override;
    virtual bool               Load(int const file_handle) override;
@@ -6541,7 +9487,7 @@ public:
                                    uint window, uint step, uint window_key, uint heads,
                                    ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int                Type(void) override const   {  return defNeuronHiSSDLowLevelControler;   }
+   virtual int                Type(void) override const   {  return(defNeuronHiSSDLowLevelControler);   }
    //---
    virtual bool               Save(int const file_handle) override;
    virtual bool               Load(int const file_handle) override;
@@ -6569,15 +9515,29 @@ public:
                      CNeuronCGLSTMOCL(void) {};
                     ~CNeuronCGLSTMOCL(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch) override;
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint count, uint window, uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         ) override;
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint count,
+                          uint window,
+                          uint variables,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void) override  const    {  return defNeuronCGLSTMOCL; }
+   virtual int       Type(void) override  const    {  return(defNeuronCGLSTMOCL); }
    virtual bool      Clear(void) override;
-   virtual CBufferFloat *getLSTMWeights(void) { return cProjection.GetWeightsConv(); }
+   virtual CBufferFloat *getLSTMWeights(void) { return(cProjection.GetWeightsConv()); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
@@ -6619,9 +9579,18 @@ public:
                      CNeuronMHProbAttention(void) {};
                     ~CNeuronMHProbAttention(void) {};
    //---
-   virtual bool               Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint window, uint window_key, uint heads, uint units_count, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool               Init(uint numOutputs,
+                                   uint myIndex,
+                                   COpenCLMy *open_cl,
+                                   uint window,
+                                   uint window_key,
+                                   uint heads,
+                                   uint units_count,
+                                   ENUM_OPTIMIZATION optimization_type,
+                                   uint batch
+                                  );
    //---
-   virtual int                Type(void)   const   {  return defNeuronMHProbAttention;   }
+   virtual int                Type(void)   const   {  return(defNeuronMHProbAttention);   }
    //---
    virtual bool               Save(int const file_handle) override;
    virtual bool               Load(int const file_handle) override;
@@ -6654,7 +9623,7 @@ public:
                                    uint window, uint units_count, uint &periods[], uint freqs,
                                    ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int                Type(void) override  const   {  return defNeuronTSPositionEncoder;   }
+   virtual int                Type(void) override  const   {  return(defNeuronTSPositionEncoder);   }
    //---
    virtual bool               Save(int const file_handle) override;
    virtual bool               Load(int const file_handle) override;
@@ -6662,9 +9631,9 @@ public:
    virtual bool               WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void               SetOpenCL(COpenCLMy *obj) override;
    //---
-   virtual uint               GetWindow(void) const { return cProjection.GetWindow(); }
-   virtual uint               GetWindowOut(void) const { return cProjection.GetFilters(); }
-   virtual uint               GetUnits(void) const { return cProjection.GetUnits(); }
+   virtual uint               GetWindow(void) const { return(cProjection.GetWindow()); }
+   virtual uint               GetWindowOut(void) const { return(cProjection.GetFilters()); }
+   virtual uint               GetUnits(void) const { return(cProjection.GetUnits()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CMamba4CastEmbeding class.                          |
@@ -6689,7 +9658,7 @@ public:
                                    uint window, uint window_out, uint units_count, uint &periods[],
                                    ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int                Type(void) override  const   {  return defMamba4CastEmbeding;   }
+   virtual int                Type(void) override  const   {  return(defMamba4CastEmbeding);   }
    //---
    virtual bool               Save(int const file_handle) override;
    virtual bool               Load(int const file_handle) override;
@@ -6716,17 +9685,17 @@ public:
                           uint step, uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronMultiWindowsConvWPadOCL;   }
+   virtual int       Type(void)   const   {  return(defNeuronMultiWindowsConvWPadOCL);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
    //---
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
-   virtual uint      GetWindow(void) const { return aiWindows[0]; }
-   virtual uint      GetWindowsSize(void) const { return aiWindows.Size(); }
-   virtual uint      GetWindowOut(void) const { return iWindowOut; }
-   virtual uint      GetUnits(void) const { return Neurons() / (iVariables * GetWindowsSize() * iWindowOut); }
+   virtual uint      GetWindow(void) const { return(aiWindows[0]); }
+   virtual uint      GetWindowsSize(void) const { return(aiWindows.Size()); }
+   virtual uint      GetWindowOut(void) const { return(iWindowOut); }
+   virtual uint      GetUnits(void) const { return(Neurons() / (iVariables * GetWindowsSize() * iWindowOut)); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronConcatDiff class.                            |
@@ -6739,7 +9708,7 @@ protected:
    uint              iStep;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { return(true); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
@@ -6749,7 +9718,7 @@ public:
                           uint units_count, uint step, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override  const   {  return defNeuronConcatDiff;   }
+   virtual int       Type(void) override  const   {  return(defNeuronConcatDiff);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6782,7 +9751,7 @@ public:
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void)  override const {  return defNeuronMantisPatching; }
+   virtual int       Type(void)  override const {  return(defNeuronMantisPatching); }
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
@@ -6812,7 +9781,7 @@ public:
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void)  override const {  return defNeuronMantisAttentionUnit; }
+   virtual int       Type(void)  override const {  return(defNeuronMantisAttentionUnit); }
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
@@ -6848,7 +9817,7 @@ public:
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void)  override const {  return defNeuronTimeFoundPatching; }
+   virtual int       Type(void)  override const {  return(defNeuronTimeFoundPatching); }
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
@@ -6864,15 +9833,19 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
-     { return        feedForward(NeuronOCL); }
+     { return(feedForward(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
    //--- Calculates InputGradients.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
-     { return        calcInputGradients(NeuronOCL); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override
+     { return(calcInputGradients(NeuronOCL)); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
-     { return        updateInputWeights(NeuronOCL); }
+     { return(updateInputWeights(NeuronOCL)); }
 
 public:
                      CNeuronTimeFoundTransformerUnit(void) {};
@@ -6883,7 +9856,7 @@ public:
                           uint layers, uint layers_to_one_kv, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const { return defNeuronTimeFoundTransformerUnit; }
+   virtual int       Type(void) override const { return(defNeuronTimeFoundTransformerUnit); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6910,7 +9883,7 @@ public:
                           uint window, uint step, uint window_out, uint units_count,
                           uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const {   return defNeuronSwiGLUOCL; }
+   virtual int       Type(void) override const {   return(defNeuronSwiGLUOCL); }
    //--- methods for working with files
    virtual bool      Save(int const file_handle)   override;
    virtual bool      Load(int const file_handle)   override;
@@ -6919,10 +9892,10 @@ public:
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual uint      GetWindow(void) const      { return caProjections[0].GetWindow(); }
-   virtual uint      GetWindowOut(void) const   { return caProjections[0].GetFilters();}
-   virtual uint      GetVariables(void) const   { return caProjections[0].GetVariables(); }
-   virtual uint      GetUnits(void) const       { return caProjections[0].GetUnits(); }
+   virtual uint      GetWindow(void) const      { return(caProjections[0].GetWindow()); }
+   virtual uint      GetWindowOut(void) const   { return(caProjections[0].GetFilters());}
+   virtual uint      GetVariables(void) const   { return(caProjections[0].GetVariables()); }
+   virtual uint      GetUnits(void) const       { return(caProjections[0].GetUnits()); }
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
@@ -6949,7 +9922,7 @@ public:
                           uint windows_total, uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronMaskMultiWinConv;   }
+   virtual int       Type(void) override const  {  return(defNeuronMaskMultiWinConv);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -6979,7 +9952,7 @@ public:
                           uint window_out, uint units_count, uint variables, uint experts,
                           uint topK, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const {   return defNeuronTimeMoESparseExperts; }
+   virtual int       Type(void) override const {   return(defNeuronTimeMoESparseExperts); }
    //--- methods for working with files
    virtual bool      Save(int const file_handle)   override;
    virtual bool      Load(int const file_handle)   override;
@@ -6988,9 +9961,9 @@ public:
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      TrainMode(bool flag) override;
-   virtual uint      GetWindow(void) const      { return cSharedIn.GetWindow();     }
-   virtual uint      GetVariables(void) const   { return cSharedIn.GetVariables();  }
-   virtual uint      GetUnits(void) const       { return cSharedIn.GetUnits(); }
+   virtual uint      GetWindow(void) const      { return(cSharedIn.GetWindow());     }
+   virtual uint      GetVariables(void) const   { return(cSharedIn.GetVariables());  }
+   virtual uint      GetUnits(void) const       { return(cSharedIn.GetUnits()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronTimeMoEAttention class.                      |
@@ -7002,15 +9975,19 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
-     { return        feedForward(NeuronOCL); }
+     { return(feedForward(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
    //--- Calculates InputGradients.
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override
-     { return        calcInputGradients(NeuronOCL); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override
+     { return(calcInputGradients(NeuronOCL)); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
-     { return        updateInputWeights(NeuronOCL); }
+     { return(updateInputWeights(NeuronOCL)); }
 
 public:
                      CNeuronTimeMoEAttention(void)  {};
@@ -7023,7 +10000,7 @@ public:
                           uint experts, uint experts_dimension, uint topK,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronTimeMoEAttention; }
+   virtual int       Type(void) override   const   {  return(defNeuronTimeMoEAttention); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronAdaptConv class.                             |
@@ -7033,7 +10010,13 @@ class CNeuronAdaptConv    :  public CNeuronConvOCL
 protected:
    CBufferFloat      bMainFreq;
    //---
-   virtual bool      FFT(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *out_re, CBufferFloat *out_im, uint variables, bool reverse = false);
+   virtual bool      FFT(CBufferFloat *inp_re,
+                         CBufferFloat *inp_im,
+                         CBufferFloat *out_re,
+                         CBufferFloat *out_im,
+                         uint variables,
+                         bool reverse = false
+                        );
    virtual bool      PeriodsFinding(CBufferFloat *inp_re, CBufferFloat *inp_im, CBufferFloat *main_freq, uint variables);
    virtual bool      AdaptiveConvolution(CNeuronBaseOCL *NeuronOCL, CBufferFloat *main_freq);
    //---
@@ -7049,7 +10032,7 @@ public:
                           uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronAdaptConv;   }
+   virtual int       Type(void) override const  {  return(defNeuronAdaptConv);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -7079,7 +10062,7 @@ public:
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
-   virtual int       Type(void) override const {  return defNeuronRoPE; }
+   virtual int       Type(void) override const {  return(defNeuronRoPE); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CParams class.                                      |
@@ -7089,16 +10072,26 @@ class CParams  :  public   CNeuronBaseOCL
 protected:
    CNeuronBaseOCL    cOne;
    //---
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override          { return FeedForward(); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override          { return(FeedForward()); }
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { return UpdateInputWeights(); }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override   { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { return(UpdateInputWeights()); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override   { return(true); }
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
                      CParams(void) {};
                     ~CParams(void) {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, ENUM_OPTIMIZATION optimization_type, uint batch) override;
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         ) override;
    virtual bool      Identity(const int rows, const int cols);
    //---
    virtual bool      FeedForward(void);
@@ -7111,11 +10104,12 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defParams; }
+   virtual int       Type(void) override const  {  return(defParams); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
-   virtual CBufferFloat   *getWeightsParams(void)        {  return cOne.getWeights();  }                 ///< Get pointer of gradient buffer @return Pointer to object
+   //--- Get pointer of gradient buffer @return Pointer to object
+   virtual CBufferFloat   *getWeightsParams(void)        {  return(cOne.getWeights());  }
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
@@ -7136,9 +10130,10 @@ public:
                                         bool &rejected) override;
    virtual bool      Clear(void) override;
   };
-//+--------------------------------------------------------------------+
-//| Bayesian linear posterior layer with grouped sampling (function).  |
-//+--------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Bayesian linear posterior layer with grouped sampling            |
+//| (function).                                                      |
+//+------------------------------------------------------------------+
 class CNeuronBayesianLinearOCL : public CNeuronBaseOCL
   {
 protected:
@@ -7173,6 +10168,7 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
 public:
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
                      CNeuronBayesianLinearOCL(void);
                     ~CNeuronBayesianLinearOCL(void);
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint variables,
@@ -7293,6 +10289,7 @@ protected:
                                            CNeuronTransposeRCDOCL *samples_transpose,
                                            uint capacity, CBufferFloat *distance);
 public:
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
                      CNeuronOMPBOCL(void);
                     ~CNeuronOMPBOCL(void);
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
@@ -7361,12 +10358,18 @@ protected:
    //---
    CNeuronTimeMoEAttention cAuxiliaryNet;
    //--- Kalman Filter
-   CParams              cB;      // Control input matrix B
-   CParams              cF;      // State transition matrix F
-   CParams              cH;      // Observation matrix H
-   CParams              cQ;      // Learnable covariance matrices Q
-   CParams              cR;      // Learnable covariance matrices R
-   CNeuronBaseOCL       cP;      // Covariance matrices P
+   //--- Control input matrix B
+   CParams              cB;
+   //--- State transition matrix F
+   CParams              cF;
+   //--- Observation matrix H
+   CParams              cH;
+   //--- Learnable covariance matrices Q
+   CParams              cQ;
+   //--- Learnable covariance matrices R
+   CParams              cR;
+   //--- Covariance matrices P
+   CNeuronBaseOCL       cP;
    //---
    CNeuronTransposeOCL  cFT;
    CNeuronTransposeOCL  cHT;
@@ -7415,7 +10418,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void)        const                      {  return defNeuronK2VAEEncoder; }
+   virtual int       Type(void)        const                      {  return(defNeuronK2VAEEncoder); }
    virtual void      TrainMode(bool flag) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
@@ -7456,7 +10459,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const {  return defNeuronInterpolationAttention; }
+   virtual int       Type(void) override const {  return(defNeuronInterpolationAttention); }
    virtual void      TrainMode(bool flag) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
@@ -7487,7 +10490,11 @@ protected:
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
 
 public:
                      CNeuronAGCN(void) {activation = None;}
@@ -7500,14 +10507,14 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronAGCN; }
+   virtual int       Type(void) override const  {  return(defNeuronAGCN); }
    virtual void      TrainMode(bool flag) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau);
    //---
-   virtual uint      GetWindow(void) const      { return cWx.GetWindow(); }
-   virtual uint      GetUnits(void) const       { return cWx.GetUnits(); }
+   virtual uint      GetWindow(void) const      { return(cWx.GetWindow()); }
+   virtual uint      GetUnits(void) const       { return(cWx.GetUnits()); }
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
   };
 //+------------------------------------------------------------------+
@@ -7528,7 +10535,11 @@ protected:
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
 
 public:
                      CNeuronGinARCell(void) { activation = None;}
@@ -7541,7 +10552,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronGinARCell; }
+   virtual int       Type(void) override const  {  return(defNeuronGinARCell); }
    virtual void      TrainMode(bool flag) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
@@ -7581,7 +10592,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronGinAR; }
+   virtual int       Type(void) override const  {  return(defNeuronGinAR); }
    virtual void      TrainMode(bool flag) override;
    virtual void      SetOpenCL(COpenCLMy *obj);
    //---
@@ -7601,7 +10612,7 @@ protected:
    CNeuronBaseOCL          cMeanSTDevs;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
@@ -7615,15 +10626,15 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronPeriodNorm; }
+   virtual int       Type(void) override const  {  return(defNeuronPeriodNorm); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    //---
-   CNeuronBaseOCL*   GetMeanSTDevs(void) { return cMeanSTDevs.AsObject(); }
-   virtual uint      GetPeriod(void) const { return iPeriod; }
-   virtual uint      GetVariables(void) const { return iVariables; }
-   virtual uint      GetUnits(void) const { return iCount; }
+   CNeuronBaseOCL*   GetMeanSTDevs(void) { return(cMeanSTDevs.AsObject()); }
+   virtual uint      GetPeriod(void) const { return(iPeriod); }
+   virtual uint      GetVariables(void) const { return(iVariables); }
+   virtual uint      GetUnits(void) const { return(iCount); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronAdaptSpatialNorm class.                      |
@@ -7658,12 +10669,12 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronAdaptSpatialNorm; }
+   virtual int       Type(void) override const  {  return(defNeuronAdaptSpatialNorm); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   CNeuronBaseOCL*   GetMeanSTDevs(void) { return cMeanSTDevs.AsObject(); }
-   virtual uint      GetVariables(void) const { return iVariables; }
-   virtual uint      GetUnits(void) const { return iCount; }
+   CNeuronBaseOCL*   GetMeanSTDevs(void) { return(cMeanSTDevs.AsObject()); }
+   virtual uint      GetVariables(void) const { return(iVariables); }
+   virtual uint      GetUnits(void) const { return(iCount); }
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau);
   };
@@ -7701,7 +10712,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSCNNEncoder; }
+   virtual int       Type(void) override const  {  return(defNeuronSCNNEncoder); }
    virtual void      TrainMode(bool flag) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
@@ -7732,7 +10743,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSCNN; }
+   virtual int       Type(void) override const  {  return(defNeuronSCNN); }
    virtual void      TrainMode(bool flag) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
@@ -7772,14 +10783,14 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronAttentNorm; }
+   virtual int       Type(void) override const  {  return(defNeuronAttentNorm); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   CNeuronBaseOCL*   GetMeans(void) { return cMeans.AsObject(); }
-   CNeuronBaseOCL*   GetSTDevs(void) { return cSTDevs.AsObject(); }
-   virtual uint      GetPeriod(void) const { return iPeriod; }
-   virtual uint      GetVariables(void) const { return iVariables; }
-   virtual uint      GetUnits(void) const { return iCount; }
+   CNeuronBaseOCL*   GetMeans(void) { return(cMeans.AsObject()); }
+   CNeuronBaseOCL*   GetSTDevs(void) { return(cSTDevs.AsObject()); }
+   virtual uint      GetPeriod(void) const { return(iPeriod); }
+   virtual uint      GetVariables(void) const { return(iVariables); }
+   virtual uint      GetUnits(void) const { return(iCount); }
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {  activation = None; }
@@ -7813,13 +10824,13 @@ public:
    //---
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSAttentNorm; }
+   virtual int       Type(void) override const  {  return(defNeuronSAttentNorm); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   CNeuronBaseOCL*   GetMeans(void) { return cMeans.AsObject(); }
-   CNeuronBaseOCL*   GetSTDevs(void) { return cSTDevs.AsObject(); }
-   virtual uint      GetVariables(void) const { return iWindow; }
-   virtual uint      GetUnits(void) const { return iCount; }
+   CNeuronBaseOCL*   GetMeans(void) { return(cMeans.AsObject()); }
+   CNeuronBaseOCL*   GetSTDevs(void) { return(cSTDevs.AsObject()); }
+   virtual uint      GetVariables(void) const { return(iWindow); }
+   virtual uint      GetUnits(void) const { return(iCount); }
    //---
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {  activation = None; }
   };
@@ -7848,12 +10859,12 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronPolynomialRegression; }
+   virtual int       Type(void) override const  {  return(defNeuronPolynomialRegression); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   virtual uint      GetWindowIn(void) const { return cProjection.GetWindow(); }
-   virtual uint      GetWindowOut(void) const { return cResidual.GetFilters(); }
-   virtual uint      GetUnits(void) const { return cProjection.GetUnits(); }
+   virtual uint      GetWindowIn(void) const { return(cProjection.GetWindow()); }
+   virtual uint      GetWindowOut(void) const { return(cResidual.GetFilters()); }
+   virtual uint      GetUnits(void) const { return(cProjection.GetUnits()); }
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { }
@@ -7899,7 +10910,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSSCNNEncoder; }
+   virtual int       Type(void) override const  {  return(defNeuronSSCNNEncoder); }
    virtual void      TrainMode(bool flag) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
@@ -7924,7 +10935,7 @@ public:
                           uint season_period, uint short_period, uint layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSSCNN; }
+   virtual int       Type(void) override const  {  return(defNeuronSSCNN); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CCircleParams class.                                |
@@ -7935,16 +10946,23 @@ protected:
    CLayer            cOnes;
    CNeuronBaseOCL    *cCurrent;
    //---
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override          { return FeedForward(); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override          { return(FeedForward()); }
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { return UpdateInputWeights(); }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override   { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { return(UpdateInputWeights()); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override   { return(true); }
 
 public:
                      CCircleParams(void) : cCurrent(NULL) {};
                     ~CCircleParams(void)  {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint numNeurons, uint period, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint numNeurons,
+                          uint period,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    virtual bool      Identity(const int rows, const int cols);
    virtual bool      Zeros(void);
    //---
@@ -7955,10 +10973,10 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defCircleParams; }
+   virtual int       Type(void) override const  {  return(defCircleParams); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual CBufferFloat   *getWeightsParams(void);
-   virtual int       GetPeriod(void) const { return cOnes.Total(); }
+   virtual int       GetPeriod(void) const { return(cOnes.Total()); }
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
   };
@@ -7985,7 +11003,7 @@ public:
                           uint units_in, uint period, uint timeframe,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronTQMHA;   }
+   virtual int       Type(void)   const   {  return(defNeuronTQMHA);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -8003,21 +11021,28 @@ protected:
    uint              iSteps;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
                      CChebPolinom(void)   {};
                     ~CChebPolinom(void)   {};
    //---
-   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl, uint dimension, uint steps, ENUM_OPTIMIZATION optimization_type, uint batch);
+   virtual bool      Init(uint numOutputs,
+                          uint myIndex,
+                          COpenCLMy *open_cl,
+                          uint dimension,
+                          uint steps,
+                          ENUM_OPTIMIZATION optimization_type,
+                          uint batch
+                         );
    //---
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defChebPolinom; }
-   virtual uint      GetDimension(void) const { return iDimension; }
-   virtual uint      GetSteps(void) const { return iSteps; }
+   virtual int       Type(void) override const  {  return(defChebPolinom); }
+   virtual uint      GetDimension(void) const { return(iDimension); }
+   virtual uint      GetSteps(void) const { return(iSteps); }
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
@@ -8041,12 +11066,12 @@ public:
    //---
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void)        const                      {  return defNeuronHimNetGrapConv; }
+   virtual int       Type(void)        const                      {  return(defNeuronHimNetGrapConv); }
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
-   virtual uint      GetCount(void) override const { return iWindow; }
-   virtual uint      GetWindow(void) override const { return GetDimension(); }
-   virtual uint      GetChebK(void) const { return iCount; }
+   virtual uint      GetCount(void) override const { return(iWindow); }
+   virtual uint      GetWindow(void) override const { return(GetDimension()); }
+   virtual uint      GetChebK(void) const { return(iCount); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronHimNetGCRU class.                            |
@@ -8085,7 +11110,7 @@ public:
                                         CChebPolinom *Support,
                                         CNeuronBaseOCL *Embedding);
    //---
-   virtual int       Type(void)   const   {  return defNeuronHimNetGCRU;   }
+   virtual int       Type(void)   const   {  return(defNeuronHimNetGCRU);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -8094,10 +11119,10 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    //---
-   virtual uint      GetCount(void) const { return cZ_R.GetCount(); }
-   virtual uint      GetWindowIn(void) const { return cZ_R.GetWindow() - GetWindowOut(); }
-   virtual uint      GetWindowOut(void) const { return Neurons() / GetCount(); }
-   virtual uint      GetChebK(void) const { return cZ_R.GetChebK(); }
+   virtual uint      GetCount(void) const { return(cZ_R.GetCount()); }
+   virtual uint      GetWindowIn(void) const { return(cZ_R.GetWindow() - GetWindowOut()); }
+   virtual uint      GetWindowOut(void) const { return(Neurons() / GetCount()); }
+   virtual uint      GetChebK(void) const { return(cZ_R.GetChebK()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronHimNetTempEncoder class.                     |
@@ -8129,7 +11154,7 @@ public:
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL,
                                         CChebPolinom *Support);
    //---
-   virtual int       Type(void)   const   {  return defNeuronHimNetTempEncoder;   }
+   virtual int       Type(void)   const   {  return(defNeuronHimNetTempEncoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8173,7 +11198,7 @@ public:
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL,
                                         CChebPolinom *Support);
    //---
-   virtual int       Type(void)   const   {  return defNeuronHimNetSpatEncoder;   }
+   virtual int       Type(void)   const   {  return(defNeuronHimNetSpatEncoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8219,7 +11244,7 @@ public:
                           uint timeframe1, uint period2, uint timeframe2,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronHimNetEncoder;   }
+   virtual int       Type(void)   const   {  return(defNeuronHimNetEncoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8260,7 +11285,7 @@ public:
                           uint cheb_k, uint layers, uint embed_dim,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronHimNetDecoder;   }
+   virtual int       Type(void)   const   {  return(defNeuronHimNetDecoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8299,14 +11324,14 @@ public:
                           uint m_units, float sparse,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronSNSMHAttention;   }
+   virtual int       Type(void)   const   {  return(defNeuronSNSMHAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
-   virtual CBufferFloat* GetIndexes(void) { return cNeighbors.getOutput(); }
+   virtual CBufferFloat* GetIndexes(void) { return(cNeighbors.getOutput()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronFastGConv class.                             |
@@ -8355,7 +11380,7 @@ public:
    virtual bool      FeedForward(CNeuronBaseOCL *SourceData, CNeuronSNSMHAttention *SparseAttent);
    virtual bool      CalcInputGradients(CNeuronBaseOCL *SourceData, CNeuronSNSMHAttention *SparseAttent);
    //---
-   virtual int       Type(void)   const   {  return defNeuronFastGConv;   }
+   virtual int       Type(void)   const   {  return(defNeuronFastGConv);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -8364,9 +11389,9 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    //---
-   virtual uint      GetCount(void) const { return (uint)cInvDiag.Neurons(); }
-   virtual uint      GetSparseDimension(void) const { return (uint)cNormAttention.Neurons() / GetCount(); }
-   virtual uint      GetWindow(void) const { return (uint)Neurons() / GetCount(); }
+   virtual uint      GetCount(void) const { return(uint)cInvDiag.Neurons(); }
+   virtual uint      GetSparseDimension(void) const { return(uint)cNormAttention.Neurons() / GetCount(); }
+   virtual uint      GetWindow(void) const { return(uint)Neurons() / GetCount(); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSAGDFN class.                                |
@@ -8395,7 +11420,7 @@ public:
                           uint forecast, uint forec_layers,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronSAGDFN;   }
+   virtual int       Type(void)   const   {  return(defNeuronSAGDFN);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -8427,7 +11452,7 @@ public:
                           uint units, uint window, uint embed_dim,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronSpatialEmbedding;   }
+   virtual int       Type(void)   const   {  return(defNeuronSpatialEmbedding);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8472,7 +11497,7 @@ public:
                           uint embed_dim2, uint period2, uint frame2,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronTempEmbedding;   }
+   virtual int       Type(void)   const   {  return(defNeuronTempEmbedding);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8511,7 +11536,7 @@ public:
                           uint heads, uint m_units, float sparse,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronGlobalLocalAttention;   }
+   virtual int       Type(void)   const   {  return(defNeuronGlobalLocalAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8553,7 +11578,7 @@ public:
                           uint heads, uint dimension_k, uint m_units, float sparse,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronExtralonger;   }
+   virtual int       Type(void)   const   {  return(defNeuronExtralonger);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8585,7 +11610,7 @@ public:
                           uint experts, float dropout,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const   {  return defNeuronGraphons;   }
+   virtual int       Type(void) override const   {  return(defNeuronGraphons);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8620,7 +11645,7 @@ public:
                           uint experts, float dropout,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const   {  return defNeuronGraphAttention;   }
+   virtual int       Type(void) override const   {  return(defNeuronGraphAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8652,12 +11677,13 @@ public:
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
-   virtual int       Type(void) override const { return defNeuronSparseSoftMax; }
+   virtual int       Type(void) override const { return(defNeuronSparseSoftMax); }
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
-   virtual CBufferFloat* GetIndexes(void)  { return GetPointer(cIndexes); }
-   virtual uint      DimensionOut(void) const {  return uint(Neurons() / iHeads); }
+   virtual CBufferFloat* GetIndexes(void)  { return(GetPointer(cIndexes)); }
+   virtual uint      DimensionOut(void) const {  return(uint(Neurons() / iHeads)); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSparseGraphAttention class.                  |
@@ -8684,7 +11710,7 @@ public:
                           uint emb_dimension, uint sparse_dimension,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const   {  return defNeuronSparseGraphAttention;   }
+   virtual int       Type(void) override const   {  return(defNeuronSparseGraphAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8716,7 +11742,7 @@ public:
                           uint emb_dimension, uint sparse_dimension,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const   {  return defNeuronGlobLocGraphAtt;   }
+   virtual int       Type(void) override const   {  return(defNeuronGlobLocGraphAtt);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8742,7 +11768,7 @@ public:
                           uint experts, uint m_units, float sparse,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronExtralongerGraph;   }
+   virtual int       Type(void)   const   {  return(defNeuronExtralongerGraph);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSpikeConv class.                             |
@@ -8768,18 +11794,18 @@ public:
                           uint window, uint step, uint window_out, uint units_count,
                           uint variables, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual CBufferFloat* GetWeightsConv(void)   {  return cConv.GetWeightsConv();  }
-   virtual int       Type(void) override const  {  return defNeuronSpikeConv;   }
+   virtual CBufferFloat* GetWeightsConv(void)   {  return(cConv.GetWeightsConv());  }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeConv);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetWindow(void) const { return cConv.GetWindow(); }
-   virtual uint      GetFilters(void) const { return cConv.GetFilters(); }
-   virtual uint      GetVariables(void) const { return cConv.GetVariables(); }
-   virtual uint      GetUnits(void) const { return cConv.GetUnits(); }
+   virtual uint      GetWindow(void) const { return(cConv.GetWindow()); }
+   virtual uint      GetFilters(void) const { return(cConv.GetFilters()); }
+   virtual uint      GetVariables(void) const { return(cConv.GetVariables()); }
+   virtual uint      GetUnits(void) const { return(cConv.GetUnits()); }
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
@@ -8813,7 +11839,7 @@ public:
                           uint variables, uint dimension, uint dimension_k, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronGateLineAttention;   }
+   virtual int       Type(void) override const  {  return(defNeuronGateLineAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8822,7 +11848,7 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetVariables(void) const { return iVariables; }
+   virtual uint      GetVariables(void) const { return(iVariables); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSpikeSparseAttention class.                  |
@@ -8848,7 +11874,7 @@ public:
                           uint emb_dimension, uint sparse_dimension,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const   {  return defNeuronSpikeSparseAttention;   }
+   virtual int       Type(void) override const   {  return(defNeuronSpikeSparseAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8879,7 +11905,7 @@ public:
                           uint experts, float dropout, uint topK,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const   {  return defNeuronMoEConv;   }
+   virtual int       Type(void) override const   {  return(defNeuronMoEConv);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8912,7 +11938,7 @@ public:
                           uint emb_dimension, uint sparse_dimension,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const   {  return defNeuronSpikingBrain;   }
+   virtual int       Type(void) override const   {  return(defNeuronSpikingBrain);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -8941,13 +11967,19 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   bool              ForwardRowsReadOnly(CBufferFloat *source, const uint rows, const SLayerReadState &state,
+                                         SLayerRowsWorkspace &work, CBufferFloat *output, CBufferFloat *flags);
+
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
                      CNeuronSpikeActivation(void) {};
                     ~CNeuronSpikeActivation(void) {};
    //---
    virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           uint neurons, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeActivation;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeActivation);   }
    //--- methods for working with files
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
@@ -8956,8 +11988,8 @@ public:
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   CBufferFloat      *GetRecurrentOutput(void) { return cHV.getOutput(); }
-   CBufferFloat      *GetRecurrentPrevOutput(void) { return cHV.getPrevOutput(); }
+   CBufferFloat      *GetRecurrentOutput(void) { return(cHV.getOutput()); }
+   CBufferFloat      *GetRecurrentPrevOutput(void) { return(cHV.getPrevOutput()); }
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
@@ -8974,7 +12006,6 @@ protected:
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
-
 public:
                      CNeuronSpikeResNeXtBottleneck(void) {};
                     ~CNeuronSpikeResNeXtBottleneck(void) {};
@@ -8984,7 +12015,7 @@ public:
                           uint units_out, uint group_size, uint groups,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikeResNeXtBottleneck;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikeResNeXtBottleneck);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9009,7 +12040,7 @@ public:
                           uint units_in, uint units_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikeResNeXtResidual;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikeResNeXtResidual);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSpikeResNeXtBlock class.                     |
@@ -9035,7 +12066,7 @@ public:
                           uint units_out, uint group_size, uint groups,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikeResNeXtBlock;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikeResNeXtBlock);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9046,8 +12077,8 @@ public:
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
    //---
-   virtual uint      GetChannelsOut(void) const { return caTranspose[1].GetCount(); }
-   virtual uint      GetUnitsOut(void) const { return caTranspose[1].GetWindow(); }
+   virtual uint      GetChannelsOut(void) const { return(caTranspose[1].GetCount()); }
+   virtual uint      GetUnitsOut(void) const { return(caTranspose[1].GetWindow()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSSAM class.                                  |
@@ -9082,7 +12113,7 @@ public:
                           uint units, uint window, uint heads, uint dimension_k,
                           bool mask_future, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSSAM;   }
+   virtual int       Type(void) override const  {  return(defNeuronSSAM);   }
    //--- methods for working with files
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
@@ -9114,7 +12145,7 @@ public:
                           uint heads, uint dimension_k,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSSAMResNeXtBlock;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSSAMResNeXtBlock);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9154,7 +12185,7 @@ public:
                           uint chanels_in, uint chanels_out, uint units_in, uint units_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSTFS;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSTFS);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9190,7 +12221,7 @@ public:
                           uint units, uint chanels_in, uint chanels_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikeConvGRU;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikeConvGRU);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9200,9 +12231,9 @@ public:
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual uint      GetChanelsIn(void) const { return cHt.GetWindow() - cHt.GetFilters(); }
-   virtual uint      GetChanelsOut(void) const { return cHt.GetFilters(); }
-   virtual uint      GetUnits(void) const { return cHt.GetUnits(); }
+   virtual uint      GetChanelsIn(void) const { return(cHt.GetWindow() - cHt.GetFilters()); }
+   virtual uint      GetChanelsOut(void) const { return(cHt.GetFilters()); }
+   virtual uint      GetUnits(void) const { return(cHt.GetUnits()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronAddToStack class.                            |
@@ -9215,7 +12246,7 @@ protected:
    uint              iVariables;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
@@ -9226,7 +12257,7 @@ public:
                           uint stack_size, uint dimension, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronAddToStack;   }
+   virtual int       Type(void)   override const   {  return(defNeuronAddToStack);   }
    virtual bool      SupportsOpenCLChecked(void) const override;
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
@@ -9234,9 +12265,9 @@ public:
    //---
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    //---
-   virtual uint      GetStackSize(void) const { return iStackSize; }
-   virtual uint      GetDimension(void) const { return iDimension; }
-   virtual uint      GetVariables(void) const { return iVariables; }
+   virtual uint      GetStackSize(void) const { return(iStackSize); }
+   virtual uint      GetDimension(void) const { return(iDimension); }
+   virtual uint      GetVariables(void) const { return(iVariables); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronStackCorrelation class.                      |
@@ -9247,7 +12278,7 @@ protected:
    CNeuronAddToStack cStack;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
@@ -9258,7 +12289,7 @@ public:
                           uint stack_size, uint dimension, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronStackCorrelation;   }
+   virtual int       Type(void)   override const   {  return(defNeuronStackCorrelation);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9266,9 +12297,9 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      Clear(void) override;
    //---
-   virtual uint      GetStackSize(void) const { return cStack.GetStackSize(); }
-   virtual uint      GetDimension(void) const { return cStack.GetDimension(); }
-   virtual uint      GetVariables(void) const { return cStack.GetVariables(); }
+   virtual uint      GetStackSize(void) const { return(cStack.GetStackSize()); }
+   virtual uint      GetDimension(void) const { return(cStack.GetDimension()); }
+   virtual uint      GetVariables(void) const { return(cStack.GetVariables()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSTEFlowNetEncoder class.                     |
@@ -9294,9 +12325,9 @@ public:
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
    virtual CNeuronBaseOCL* GetLayer(uint layer);
-   virtual uint      Layers(void)   const { return (cRecurrentLine.Total() + 1) / 3; }
+   virtual uint      Layers(void)   const { return(cRecurrentLine.Total() + 1) / 3; }
    //--
-   virtual int       Type(void)   override const   {  return defNeuronSTEFlowNetEncoder;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSTEFlowNetEncoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9327,7 +12358,7 @@ public:
                           uint chanels, uint units, uint group_size, uint groups,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //--
-   virtual int       Type(void)   override const   {  return defNeuronSTEFlowNetResidualBlock;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSTEFlowNetResidualBlock);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9363,7 +12394,7 @@ public:
                           CNeuronSTEFlowNetEncoder* encoder,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //--
-   virtual int       Type(void)   override const   {  return defNeuronSTEFlowNetDecoder;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSTEFlowNetDecoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9398,7 +12429,7 @@ public:
                           uint groups, uint heads, uint dimension_k, uint stack_size,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //--
-   virtual int       Type(void)   override const   {  return defNeuronSTEFlowNet;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSTEFlowNet);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9434,15 +12465,15 @@ public:
                           uint variables, uint levels,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronMultiScaleStackCorrelation;   }
+   virtual int       Type(void)   override const   {  return(defNeuronMultiScaleStackCorrelation);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
-   virtual uint      GetLevels(void) const { return iLevels; }
-   virtual uint      GetVariables(void) override const { return cStack.GetVariables() / iLevels; }
+   virtual uint      GetLevels(void) const { return(iLevels); }
+   virtual uint      GetVariables(void) override const { return(cStack.GetVariables() / iLevels); }
 
   };
 //+------------------------------------------------------------------+
@@ -9472,7 +12503,7 @@ public:
                           uint units, uint chanels_in, uint chanels_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikeConvGRU2D;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikeConvGRU2D);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9508,7 +12539,7 @@ public:
                           uint groups, uint stack_size, uint levels,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronRAFT;   }
+   virtual int       Type(void)   override const   {  return(defNeuronRAFT);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9539,7 +12570,7 @@ public:
                           uint variables, uint levels,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronMultScalStackCorrelBySegments;   }
+   virtual int       Type(void)   override const   {  return(defNeuronMultScalStackCorrelBySegments);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9549,8 +12580,8 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override;
    virtual bool      Clear(void) override;
    //---
-   virtual uint      GetLevels(void) const { return cCorrelation.GetLevels(); }
-   virtual uint      SetSegmentSize(void) const { return cCorrelation.GetStackSize(); }
+   virtual uint      GetLevels(void) const { return(cCorrelation.GetLevels()); }
+   virtual uint      SetSegmentSize(void) const { return(cCorrelation.GetStackSize()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronTMAMFE class.                                |
@@ -9572,7 +12603,7 @@ public:
                           uint units, uint &windows[], uint window_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronTMAMFE;   }
+   virtual int       Type(void)   override const   {  return(defNeuronTMAMFE);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9604,7 +12635,7 @@ public:
                           uint segments, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronTMAMPA; }
+   virtual int       Type(void) override   const   {  return(defNeuronTMAMPA); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9635,7 +12666,7 @@ public:
                           uint window_key, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronTMA;   }
+   virtual int       Type(void)   override const   {  return(defNeuronTMA);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9677,7 +12708,7 @@ public:
                           uint units, uint &chanels_in[], uint chanels_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikeSTConvGRU;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikeSTConvGRU);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9687,8 +12718,8 @@ public:
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual uint      GetChanels(void) const { return cOt.GetFilters(); }
-   virtual uint      GetUnits(void) const { return cOt.GetUnits(); }
+   virtual uint      GetChanels(void) const { return(cOt.GetFilters()); }
+   virtual uint      GetUnits(void) const { return(cOt.GetUnits()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronFERENet class.                               |
@@ -9710,7 +12741,7 @@ public:
                           uint units, uint &chanels[],
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronFERENet;   }
+   virtual int       Type(void)   override const   {  return(defNeuronFERENet);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9719,8 +12750,8 @@ public:
    virtual bool      Clear(void) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual CNeuronBaseOCL* GetLayer(int index) const { return cFlow[index]; }
-   virtual CNeuronBaseOCL* operator[](const int index) const { return GetLayer(index); }
+   virtual CNeuronBaseOCL* GetLayer(int index) const { return(cFlow[index]); }
+   virtual CNeuronBaseOCL* operator[](const int index) const { return(GetLayer(index)); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronFGDModule class.                             |
@@ -9754,7 +12785,7 @@ public:
                           uint main_dimension, uint flow_dimension, uint dimension_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronFGDModule;   }
+   virtual int       Type(void)   override const   {  return(defNeuronFGDModule);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9762,7 +12793,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual CNeuronConvOCL* GetD(void)  { return cD.AsObject(); }
+   virtual CNeuronConvOCL* GetD(void)  { return(cD.AsObject()); }
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
   };
 //+------------------------------------------------------------------+
@@ -9787,7 +12818,7 @@ public:
                           uint units, uint &chanels[],
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronEVMGRFlowNet;   }
+   virtual int       Type(void)   override const   {  return(defNeuronEVMGRFlowNet);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9813,6 +12844,12 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   bool              ForwardRowsReadOnly(CBufferFloat *source, const uint rows, const SLayerReadState &state,
+                                         SLayerRowsWorkspace &work, CBufferFloat *output, CBufferFloat *flags);
+
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
                      CNeuronSpikeConvBlock(void) {};
                     ~CNeuronSpikeConvBlock(void) {};
    //---
@@ -9820,7 +12857,7 @@ public:
                           uint window, uint step, uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeConvBlock;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeConvBlock);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9831,14 +12868,14 @@ public:
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
-   virtual uint      GetWindow(void) const { return cConv.GetWindow();   }
-   virtual uint      GetFilters(void) const { return cConv.GetFilters(); }
-   virtual uint      GetVariables(void) const { return cConv.GetVariables(); }
-   virtual uint      GetUnits(void) const { return cConv.GetUnits(); }
+   virtual uint      GetWindow(void) const { return(cConv.GetWindow());   }
+   virtual uint      GetFilters(void) const { return(cConv.GetFilters()); }
+   virtual uint      GetVariables(void) const { return(cConv.GetVariables()); }
+   virtual uint      GetUnits(void) const { return(cConv.GetUnits()); }
    CBufferFloat      *GetForwardStateSpikeOutput(void)
-     { return        cActivation.GetRecurrentOutput(); }
+     { return(cActivation.GetRecurrentOutput()); }
    CBufferFloat      *GetForwardStateSpikePrevOutput(void)
-     { return        cActivation.GetRecurrentPrevOutput(); }
+     { return(cActivation.GetRecurrentPrevOutput()); }
    //---
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    virtual void      TrainMode(bool flag) override;
@@ -9857,6 +12894,11 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   bool              ForwardRowsReadOnly(CBufferFloat *source, const uint rows, const SLayerReadState &state,
+                                         SLayerRowsWorkspace &work, CBufferFloat *output, CBufferFloat *flags);
+
                      CNeuronMSRes(void) {};
                     ~CNeuronMSRes(void) {};
    //---
@@ -9864,7 +12906,7 @@ public:
                           uint units, uint window, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronMSRes;   }
+   virtual int       Type(void) override const  {  return(defNeuronMSRes);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9878,10 +12920,10 @@ public:
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
-   virtual uint      GetWindow(void) const { return ((CNeuronSpikeConvBlock*)cFlow[0]).GetWindow();   }
-   virtual uint      GetVariables(void) const { return ((CNeuronSpikeConvBlock*)cFlow[0]).GetVariables(); }
-   virtual uint      GetUnits(void) const { return ((CNeuronSpikeConvBlock*)cFlow[0]).GetUnits(); }
-   virtual CBufferFloat   *getWeights(void) override { return (!!cFlow[-1] ? cFlow[-1].getWeights() : NULL); }
+   virtual uint      GetWindow(void) const { return((CNeuronSpikeConvBlock*)cFlow[0]).GetWindow();   }
+   virtual uint      GetVariables(void) const { return((CNeuronSpikeConvBlock*)cFlow[0]).GetVariables(); }
+   virtual uint      GetUnits(void) const { return((CNeuronSpikeConvBlock*)cFlow[0]).GetUnits(); }
+   virtual CBufferFloat   *getWeights(void) override { return(!!cFlow[-1] ? cFlow[-1].getWeights() : NULL); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSpikeQKAttention class.                      |
@@ -9909,7 +12951,7 @@ public:
                           uint units, uint window, uint heads, uint dimension_k,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeQKAttention;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeQKAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9941,7 +12983,7 @@ public:
                           uint units, uint window, uint heads, uint dimension_k,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSDSA;   }
+   virtual int       Type(void) override const  {  return(defNeuronSDSA);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -9974,7 +13016,7 @@ public:
                           uint &layers[], uint dimension_k,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSDformerUBlock;   }
+   virtual int       Type(void) override const  {  return(defNeuronSDformerUBlock);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10006,7 +13048,7 @@ public:
                           uint &layers[], uint dimension_k,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSDformerFlow;   }
+   virtual int       Type(void) override const  {  return(defNeuronSDformerFlow);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10038,7 +13080,7 @@ public:
                           uint patch_dimension, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikePatchStak;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikePatchStak);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10086,7 +13128,7 @@ public:
                           uint window_in, uint window_out, uint units_in, uint units_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronSpike2DSSMOCL; }
+   virtual int       Type(void)   const   {  return(defNeuronSpike2DSSMOCL); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -10123,7 +13165,7 @@ public:
                           uint window, uint inside_dimension, uint units_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronSpikeMamba2D; }
+   virtual int       Type(void)   const   {  return(defNeuronSpikeMamba2D); }
    //---
    virtual bool      Save(int const file_handle);
    virtual bool      Load(int const file_handle);
@@ -10156,7 +13198,7 @@ public:
                           uint ssm_dimension, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikeSTSSM;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikeSTSSM);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10188,7 +13230,7 @@ public:
                           uint ssm_dimension, uint &variables[],
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronESTMEncoder;   }
+   virtual int       Type(void)   override const   {  return(defNeuronESTMEncoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10221,7 +13263,7 @@ public:
                           uint patch_dimension, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronCreateFlow;   }
+   virtual int       Type(void)   override const   {  return(defNeuronCreateFlow);   }
    //--- methods for working with files
    virtual bool      Load(int const file_handle) override;
    //---
@@ -10229,7 +13271,7 @@ public:
    //---
    virtual bool      Clear(void) override;
    //---
-   virtual CNeuronBaseOCL* GetState(void) { return cState.AsObject(); }
+   virtual CNeuronBaseOCL* GetState(void) { return(cState.AsObject()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronBiDirectCorrelation class.                   |
@@ -10257,7 +13299,7 @@ public:
                           uint dimension, uint units, uint variables, uint window_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronBiDirectCorrelation;   }
+   virtual int       Type(void)   override const   {  return(defNeuronBiDirectCorrelation);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10289,7 +13331,7 @@ public:
                           uint window_key, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override   const   {  return defNeuronSATMA; }
+   virtual int       Type(void) override   const   {  return(defNeuronSATMA); }
    //---
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10324,7 +13366,7 @@ public:
                           uint stack_size, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronBAT;   }
+   virtual int       Type(void)   override const   {  return(defNeuronBAT);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10357,7 +13399,7 @@ public:
                           uint window, uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeSCM;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeSCM);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10365,7 +13407,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetWindow(void) const { return (!cScale[0] ? 0 : ((CNeuronSpikeConvBlock*)cScale[0]).GetWindow());   }
+   virtual uint      GetWindow(void) const { return(!cScale[0] ? 0 : ((CNeuronSpikeConvBlock*)cScale[0]).GetWindow());   }
    //---
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    virtual void      TrainMode(bool flag) override;
@@ -10395,7 +13437,7 @@ public:
                           uint units, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeDepthWiseConv;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeDepthWiseConv);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10432,7 +13474,7 @@ public:
                           uint window, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeFAM;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeFAM);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10440,9 +13482,9 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetWindow(void) const { return cConv.GetWindow();   }
-   virtual uint      GetVariables(void) const { return cConv.GetVariables(); }
-   virtual uint      GetUnits(void) const { return cConv.GetUnits(); }
+   virtual uint      GetWindow(void) const { return(cConv.GetWindow());   }
+   virtual uint      GetVariables(void) const { return(cConv.GetVariables()); }
+   virtual uint      GetUnits(void) const { return(cConv.GetUnits()); }
    //---
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    virtual void      TrainMode(bool flag) override;
@@ -10475,7 +13517,7 @@ public:
                           uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeMDC;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeMDC);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10518,7 +13560,7 @@ public:
                           uint window, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronMDS;   }
+   virtual int       Type(void) override const  {  return(defNeuronMDS);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10538,11 +13580,15 @@ protected:
    CNeuronSpikeMDC         cMDC;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override { return feedForward(NeuronOCL); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override { return(feedForward(NeuronOCL)); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second) override {  return updateInputWeights(NeuronOCL); }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second) override {  return(updateInputWeights(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override { return calcInputGradients(NeuronOCL); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override { return(calcInputGradients(NeuronOCL)); }
 
 public:
                      CNeuronSpikeADM(void) {};
@@ -10552,7 +13598,7 @@ public:
                           uint window, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeADM;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeADM);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10579,7 +13625,7 @@ public:
                           uint stack_size, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronBATvADM;   }
+   virtual int       Type(void)   override const   {  return(defNeuronBATvADM);   }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronCDCSelfCorrector class.                      |
@@ -10604,7 +13650,7 @@ public:
                           uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronCDCSelfCorrector;   }
+   virtual int       Type(void) override const  {  return(defNeuronCDCSelfCorrector);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10641,7 +13687,7 @@ public:
                           uint window_out, uint units_count, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeCDC;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeCDC);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10680,7 +13726,7 @@ public:
                           uint max_displacement,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeEEMFLow;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeEEMFLow);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10713,7 +13759,7 @@ public:
                           uint dimension, uint units, uint scales, uint bottleneck,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronMultiScaleExcitation;   }
+   virtual int       Type(void) override const  {  return(defNeuronMultiScaleExcitation);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10750,7 +13796,7 @@ public:
                           uint dimension, uint units, uint bottleneck, uint &shifts[],
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronMultiScaleDifference;   }
+   virtual int       Type(void) override const  {  return(defNeuronMultiScaleDifference);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10787,7 +13833,7 @@ public:
                           uint bottleneck, uint max_displacement,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronCorrelationEncoder;   }
+   virtual int       Type(void) override const  {  return(defNeuronCorrelationEncoder);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10826,7 +13872,7 @@ public:
                           uint &shifts[], uint max_displacement,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronEDCFlow;   }
+   virtual int       Type(void) override const  {  return(defNeuronEDCFlow);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10860,7 +13906,7 @@ public:
                           uint patch_dimension, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronCreateICEFlow;   }
+   virtual int       Type(void)   override const   {  return(defNeuronCreateICEFlow);   }
    //--- methods for working with files
    virtual bool      Load(int const file_handle) override;
    //---
@@ -10888,7 +13934,7 @@ public:
                           uint units, uint &windows[], uint window_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronSpikeMFE;   }
+   virtual int       Type(void)   override const   {  return(defNeuronSpikeMFE);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10920,7 +13966,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
@@ -10935,7 +13985,7 @@ public:
                           ENUM_OPTIMIZATION optimization_type,
                           uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronSpikeMHCrossAttention;   }
+   virtual int       Type(void)   const   {  return(defNeuronSpikeMHCrossAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10968,7 +14018,7 @@ public:
                           uint units_count, uint depth,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeMixFusion;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeMixFusion);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -10976,7 +14026,7 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetWindow(void) const { return cResidual.GetWindow();   }
+   virtual uint      GetWindow(void) const { return(cResidual.GetWindow());   }
    //---
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
@@ -11019,7 +14069,7 @@ public:
                           uint dimension_out, uint units_out, uint max_displacement,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSTFlow;   }
+   virtual int       Type(void) override const  {  return(defNeuronSTFlow);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11069,7 +14119,7 @@ public:
                           uint patch_dimension, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronPSSE;   }
+   virtual int       Type(void)   override const   {  return(defNeuronPSSE);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11102,7 +14152,7 @@ public:
                           uint units, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeDepthWiseResidual;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeDepthWiseResidual);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11134,7 +14184,7 @@ public:
                           uint units, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeSuperKernelBlock;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeSuperKernelBlock);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11173,7 +14223,7 @@ public:
                           uint chanels, uint units, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeGMA;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeGMA);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11203,7 +14253,6 @@ protected:
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
-
 public:
                      CNeuronETROF(void) {};
                     ~CNeuronETROF(void) {};
@@ -11212,7 +14261,7 @@ public:
                           uint stack_size, uint dimension_in, uint dimension_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronETROF;   }
+   virtual int       Type(void)   override const   {  return(defNeuronETROF);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11246,7 +14295,7 @@ public:
                           uint forecast, uint dimension, uint hidden_dimension,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronPSSEFlow;   }
+   virtual int       Type(void)   override const   {  return(defNeuronPSSEFlow);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11278,7 +14327,7 @@ public:
                           uint patch_dimension, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeUSR;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeUSR);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11312,7 +14361,7 @@ public:
                           uint candidates, uint stack_size,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronInitialFlow;   }
+   virtual int       Type(void) override const  {  return(defNeuronInitialFlow);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11352,7 +14401,7 @@ public:
                           uint units, uint window, uint second_window, uint window_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronSpikeSMR;   }
+   virtual int       Type(void) override const  {  return(defNeuronSpikeSMR);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11362,7 +14411,7 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
-   virtual CBufferFloat* GetHidden() const { return cConvGRU.getOutput(); }
+   virtual CBufferFloat* GetHidden() const { return(cConvGRU.getOutput()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronEVAFlow class.                               |
@@ -11378,16 +14427,16 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override
-     { return        feedForward(NeuronOCL); }
+     { return(feedForward(NeuronOCL)); }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *second) override
-     { return        updateInputWeights(NeuronOCL); }
+     { return(updateInputWeights(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput,
                                         CBufferFloat *SecondGradient,
                                         ENUM_ACTIVATION SecondActivation = None) override
-     { return        calcInputGradients(NeuronOCL); }
+     { return(calcInputGradients(NeuronOCL)); }
 
 public:
                      CNeuronEVAFlow(void) {};
@@ -11398,7 +14447,7 @@ public:
                           uint layers, uint candidates,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronEVAFlow;   }
+   virtual int       Type(void) override const  {  return(defNeuronEVAFlow);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11438,7 +14487,7 @@ public:
                           uint inside_dimension, uint chanels_out,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   override const   {  return defNeuronResFlowHTR;   }
+   virtual int       Type(void)   override const   {  return(defNeuronResFlowHTR);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11478,7 +14527,7 @@ public:
                           uint ltr_layers, uint ltr_candidates,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronResFlow;   }
+   virtual int       Type(void) override const  {  return(defNeuronResFlow);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11519,7 +14568,7 @@ public:
                           uint forecast, uint experts,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronConfGateTailAwareMoE;   }
+   virtual int       Type(void) override const  {  return(defNeuronConfGateTailAwareMoE);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11555,7 +14604,7 @@ public:
                           uint ltr_layers, uint ltr_candidates,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronResFlowLattice;   }
+   virtual int       Type(void) override const  {  return(defNeuronResFlowLattice);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11577,10 +14626,10 @@ protected:
    CParams           cFieldEmbeddings;
    CLayer            cScore;
    //---
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override          { return FeedForward(); }
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override          { return(FeedForward()); }
    //---\ingroup neuron_base_opt
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { return UpdateInputWeights(); }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override   { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override   { return(UpdateInputWeights()); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override   { return(true); }
 
 public:
                      CFieldAwareParams(void) {};
@@ -11597,12 +14646,12 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defFieldAwareParams; }
+   virtual int       Type(void) override const  {  return(defFieldAwareParams); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetFields(void) const { return iFields; }
+   virtual uint      GetFields(void) const { return(iFields); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronFieldAwareConv class.                        |
@@ -11628,14 +14677,14 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronFieldAwareConv; }
+   virtual int       Type(void) override const  {  return(defNeuronFieldAwareConv); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetWindow(void) const { return cParams.Neurons() / Neurons(); }
-   virtual uint      GetFields(void) const { return cParams.GetFields(); }
-   virtual uint      GetFilters(void) const { return Neurons() / GetFields(); }
+   virtual uint      GetWindow(void) const { return(cParams.Neurons() / Neurons()); }
+   virtual uint      GetFields(void) const { return(cParams.GetFields()); }
+   virtual uint      GetFilters(void) const { return(Neurons() / GetFields()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMHFAT class.                                 |
@@ -11669,7 +14718,7 @@ public:
                           uint embed_size, uint candidates, uint topK,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronMHFAT;   }
+   virtual int       Type(void)   const   {  return(defNeuronMHFAT);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11690,7 +14739,11 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
    //---
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
@@ -11705,7 +14758,7 @@ public:
                           uint embed_size, uint candidates, uint topK,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defNeuronMHCrossFAT;   }
+   virtual int       Type(void)   const   {  return(defNeuronMHCrossFAT);   }
    //--- methods for working with files
    virtual bool      Load(int const file_handle) override;
    //---
@@ -11738,13 +14791,13 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronFieldPatternEmbedding; }
+   virtual int       Type(void) override const  {  return(defNeuronFieldPatternEmbedding); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetFields(void) const { return iFields; }
-   virtual CBufferFloat   *getWeights(void) override { return (!!cScore[-2] ? ((CNeuronConvOCL*)cScore[-2]).GetWeightsConv() : NULL); }
+   virtual uint      GetFields(void) const { return(iFields); }
+   virtual CBufferFloat   *getWeights(void) override { return(!!cScore[-2] ? ((CNeuronConvOCL*)cScore[-2]).GetWeightsConv() : NULL); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronAutoToken class.                             |
@@ -11777,7 +14830,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronAutoToken; }
+   virtual int       Type(void) override const  {  return(defNeuronAutoToken); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
@@ -11809,16 +14862,16 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronMultiMixAttention; }
+   virtual int       Type(void) override const  {  return(defNeuronMultiMixAttention); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual uint      GetHeads(void) { return cParams.GetFields(); }
-   virtual uint      GetUnits(void) { return uint(MathSqrt(cParams.Neurons() / GetHeads())); }
-   virtual uint      GetDimension(void) { return Neurons() / GetUnits(); }
+   virtual uint      GetHeads(void) { return(cParams.GetFields()); }
+   virtual uint      GetUnits(void) { return(uint(MathSqrt(cParams.Neurons() / GetHeads()))); }
+   virtual uint      GetDimension(void) { return(Neurons() / GetUnits()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronSparseMoEConv class.                         |
@@ -11844,15 +14897,15 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSparseMoEConv; }
+   virtual int       Type(void) override const  {  return(defNeuronSparseMoEConv); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetWindow(void) const { return cParams.Neurons() / Neurons(); }
-   virtual uint      GetFields(void) const { return cParams.GetFields(); }
-   virtual uint      GetFilters(void) const { return Neurons() / GetFields(); }
-   virtual CBufferFloat   *getWeights(void) override { return cParams.getWeights(); }
+   virtual uint      GetWindow(void) const { return(cParams.Neurons() / Neurons()); }
+   virtual uint      GetFields(void) const { return(cParams.GetFields()); }
+   virtual uint      GetFilters(void) const { return(Neurons() / GetFields()); }
+   virtual CBufferFloat   *getWeights(void) override { return(cParams.getWeights()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMTmixAttBlock class.                         |
@@ -11881,7 +14934,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronMTmixAttBlock; }
+   virtual int       Type(void) override const  {  return(defNeuronMTmixAttBlock); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
@@ -11903,12 +14956,19 @@ protected:
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override;
-   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer, CBufferFloat *SecondInput, CBufferFloat *SecondGradient, ENUM_ACTIVATION SecondActivation = None) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer,
+                                        CBufferFloat *SecondInput,
+                                        CBufferFloat *SecondGradient,
+                                        ENUM_ACTIVATION SecondActivation = None
+                                       ) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override { ReturnFalse; }
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override  { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override  { return(true); }
 
 public:
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+
                      CCrossMHFlashAttention(void) {};
                     ~CCrossMHFlashAttention(void) {};
    //---
@@ -11917,7 +14977,7 @@ public:
                           uint q_units, uint kv_units,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void)   const   {  return defCrossMHFlashAttention;   }
+   virtual int       Type(void)   const   {  return(defCrossMHFlashAttention);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -11953,13 +15013,13 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronMixFeedForward; }
+   virtual int       Type(void) override const  {  return(defNeuronMixFeedForward); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {};
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual CBufferFloat   *getWeights(void) override { return (!!cSceneMoE[-1] ? cSceneMoE[-1].getWeights() : NULL); }
+   virtual CBufferFloat   *getWeights(void) override { return(!!cSceneMoE[-1] ? cSceneMoE[-1].getWeights() : NULL); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronOneTrans class.                              |
@@ -11991,7 +15051,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronOneTrans; }
+   virtual int       Type(void) override const  {  return(defNeuronOneTrans); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12042,7 +15102,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronMHTHCrossAttention; }
+   virtual int       Type(void) override const  {  return(defNeuronMHTHCrossAttention); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12078,7 +15138,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSTCA; }
+   virtual int       Type(void) override const  {  return(defNeuronSTCA); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12108,7 +15168,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronWeightGenerator; }
+   virtual int       Type(void) override const  {  return(defNeuronWeightGenerator); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12155,7 +15215,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronPCGR; }
+   virtual int       Type(void) override const  {  return(defNeuronPCGR); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
@@ -12192,7 +15252,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronADS; }
+   virtual int       Type(void) override const  {  return(defNeuronADS); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12224,12 +15284,12 @@ public:
    virtual bool      Load(const int file_handle) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronPerTokenFFN; }
+   virtual int       Type(void) override const  {  return(defNeuronPerTokenFFN); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    //---
-   virtual uint      GetWindow(void) const override { return cProj.GetWindow(); }
+   virtual uint      GetWindow(void) const override { return(cProj.GetWindow()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronScenariosToken class.                        |
@@ -12255,7 +15315,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronScenariosToken; }
+   virtual int       Type(void) override const  {  return(defNeuronScenariosToken); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12287,7 +15347,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronUnifiedTokenizer; }
+   virtual int       Type(void) override const  {  return(defNeuronUnifiedTokenizer); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12335,7 +15395,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronDomainAwareAttention; }
+   virtual int       Type(void) override const  {  return(defNeuronDomainAwareAttention); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12352,16 +15412,16 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements feedForward.
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override
-     { return        feedForward(NeuronOCL); }
+     { return(feedForward(NeuronOCL)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer, CBufferFloat *SecondInput,
                                         CBufferFloat *SecondGradient,
                                         ENUM_ACTIVATION SecondActivation = None) override
-     { return        calcInputGradients(prevLayer); }
+     { return(calcInputGradients(prevLayer)); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *prevLayer) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    //--- Implements updateInputWeights.
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *Context) override
-     { return        updateInputWeights(NeuronOCL); }
+     { return(updateInputWeights(NeuronOCL)); }
 
 public:
                      CNeuronFeatureSelfIteration(void) {};
@@ -12375,14 +15435,14 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronFeatureSelfIteration; }
+   virtual int       Type(void) override const  {  return(defNeuronFeatureSelfIteration); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      Clear(void) override;
    //---
-   virtual CNeuronAddToStack*   GetStack(void) { return cStack.AsObject(); }
+   virtual CNeuronAddToStack*   GetStack(void) { return(cStack.AsObject()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronDomainFused class.                           |
@@ -12414,7 +15474,7 @@ public:
    virtual bool      Load(const int file_handle) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronDomainFused; }
+   virtual int       Type(void) override const  {  return(defNeuronDomainFused); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
   };
@@ -12447,7 +15507,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronMDL; }
+   virtual int       Type(void) override const  {  return(defNeuronMDL); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12478,7 +15538,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronUnifiedTokenizer; }
+   virtual int       Type(void) override const  {  return(defNeuronUnifiedTokenizer); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12510,7 +15570,7 @@ public:
    virtual bool      Load(const int file_handle) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronPerTokenSwiGLU; }
+   virtual int       Type(void) override const  {  return(defNeuronPerTokenSwiGLU); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
   };
@@ -12544,7 +15604,7 @@ public:
    virtual bool      Load(const int file_handle) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronUniMixer; }
+   virtual int       Type(void) override const  {  return(defNeuronUniMixer); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
   };
@@ -12582,15 +15642,15 @@ public:
    virtual bool      Load(const int file_handle) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSiameseNorm; }
+   virtual int       Type(void) override const  {  return(defNeuronSiameseNorm); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
    //---
-   virtual CNeuronBaseOCL*  GetYOut(void) { return cYOut.AsObject(); }
+   virtual CNeuronBaseOCL*  GetYOut(void) { return(cYOut.AsObject()); }
    //---
-   virtual uint      GetWindow(void) const { return cMixer.GetWindow(); }
-   virtual uint      GetFields(void) const { return cMixer.GetFields(); }
+   virtual uint      GetWindow(void) const { return(cMixer.GetWindow()); }
+   virtual uint      GetFields(void) const { return(cMixer.GetFields()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronUniMixerBlock class.                         |
@@ -12622,7 +15682,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronUniMixerBlock; }
+   virtual int       Type(void) override const  {  return(defNeuronUniMixerBlock); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12655,7 +15715,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronINFNetScenarios; }
+   virtual int       Type(void) override const  {  return(defNeuronINFNetScenarios); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override {  activation = None; }
@@ -12683,7 +15743,7 @@ public:
                           uint window, uint units_count, uint hub_size, uint variables,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronINFNetHUBSequence;   }
+   virtual int       Type(void) override const  {  return(defNeuronINFNetHUBSequence);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -12691,8 +15751,8 @@ public:
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      Clear(void) override;
    //---
-   virtual uint      GetWindow(void) const { return cProjection.GetWindow();   }
-   virtual uint      GetUnits(void) const { return cProjection.GetUnits(); }
+   virtual uint      GetWindow(void) const { return(cProjection.GetWindow());   }
+   virtual uint      GetUnits(void) const { return(cProjection.GetUnits()); }
    //---
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    virtual void      TrainMode(bool flag) override;
@@ -12714,12 +15774,22 @@ protected:
    CLayer                     cScenarios;
    CLayer                     cHUBs;
    //---
-   virtual bool      INFNetBGU(CNeuronBaseOCL* scale_and_shift, CNeuronBaseOCL* sequence_in, CNeuronBaseOCL* sequence_out,
-                               CNeuronBaseOCL* context_in, CNeuronBaseOCL* context_out,
-                               CNeuronBaseOCL* scenarios_in, CNeuronBaseOCL* scenarios_out);
-   virtual bool      INFNetBGUGrad(CNeuronBaseOCL* scale_and_shift, CNeuronBaseOCL* sequence_in, CNeuronBaseOCL* sequence_out,
-                                   CNeuronBaseOCL* context_in, CNeuronBaseOCL* context_out,
-                                   CNeuronBaseOCL* scenarios_in, CNeuronBaseOCL* scenarios_out);
+   virtual bool      INFNetBGU(CNeuronBaseOCL* scale_and_shift,
+                               CNeuronBaseOCL* sequence_in,
+                               CNeuronBaseOCL* sequence_out,
+                               CNeuronBaseOCL* context_in,
+                               CNeuronBaseOCL* context_out,
+                               CNeuronBaseOCL* scenarios_in,
+                               CNeuronBaseOCL* scenarios_out
+                              );
+   virtual bool      INFNetBGUGrad(CNeuronBaseOCL* scale_and_shift,
+                                   CNeuronBaseOCL* sequence_in,
+                                   CNeuronBaseOCL* sequence_out,
+                                   CNeuronBaseOCL* context_in,
+                                   CNeuronBaseOCL* context_out,
+                                   CNeuronBaseOCL* scenarios_in,
+                                   CNeuronBaseOCL* scenarios_out
+                                  );
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
@@ -12737,7 +15807,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronINFNetBlock; }
+   virtual int       Type(void) override const  {  return(defNeuronINFNetBlock); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12768,12 +15838,12 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronSequenceTokenizer; }
+   virtual int       Type(void) override const  {  return(defNeuronSequenceTokenizer); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual CNeuronBatchNormOCL*    GetNorm(void) { return cNorm.AsObject(); }
+   virtual CNeuronBatchNormOCL*    GetNorm(void) { return(cNorm.AsObject()); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronDifferenceTokenizer class.                   |
@@ -12803,7 +15873,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronDifferenceTokenizer; }
+   virtual int       Type(void) override const  {  return(defNeuronDifferenceTokenizer); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    //---
@@ -12836,7 +15906,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronReGENTADBackbone; }
+   virtual int       Type(void) override const  {  return(defNeuronReGENTADBackbone); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
@@ -12869,7 +15939,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronReGENTADHead; }
+   virtual int       Type(void) override const  {  return(defNeuronReGENTADHead); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
@@ -12890,7 +15960,7 @@ protected:
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
-   virtual CNeuronReGENTADBackbone* CreateBackbone(void) { return new CNeuronReGENTADBackbone(); }
+   virtual CNeuronReGENTADBackbone* CreateBackbone(void) { return(new CNeuronReGENTADBackbone()); }
 
 public:
                      CNeuronReGENTAD(void) : cBackbone(NULL) {};
@@ -12904,7 +15974,7 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronReGENTAD; }
+   virtual int       Type(void) override const  {  return(defNeuronReGENTAD); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
    virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { };
@@ -12948,7 +16018,7 @@ public:
                           uint window, uint units, uint heads, uint Dictionary_size,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronDictionaryCrossAtt;   }
+   virtual int       Type(void) override const  {  return(defNeuronDictionaryCrossAtt);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -12956,12 +16026,12 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj)   override;
    //---
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
-   virtual uint      GetWindow(void) const { return cQuerys.GetWindow();   }
+   virtual uint      GetWindow(void) const { return(cQuerys.GetWindow());   }
    //---
    virtual void      TrainMode(bool flag) override;
    virtual bool      Clear(void) override;
    //---
-   virtual CNeuronBaseOCL* GetSimilarity(void)  { return cSimilarity.AsObject(); }
+   virtual CNeuronBaseOCL* GetSimilarity(void)  { return(cSimilarity.AsObject()); }
   };
 //+------------------------------------------------------------------+
 //| Immutable scenario/action centroid memory for RAG inference.     |
@@ -13075,8 +16145,8 @@ protected:
    ulong              iNextPendingId;
 
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { return(true); }
    bool              Configure(CLayerDescription &description);
    bool              InitializeAction(SRAGActionCentroid &action, const uint scenario_id) const;
    bool              InitializeScenario(SRAGScenarioCentroid &scenario, const uint scenario_id) const;
@@ -13156,14 +16226,14 @@ public:
    bool              Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
                           CLayerDescription &description);
    bool              SetOnlineMemorySize(const uint value);
-   uint              OnlineMemorySize(void) const { return iOnlineMemorySize; }
-   uint              ScenarioCount(void) const { return iScenarioCount; }
-   uint              ScenarioCapacity(void) const { return iScenarioCapacity; }
-   uint              ActionCapacity(void) const { return iActionCapacity; }
-   uint              TopK(void) const { return iTopK; }
-   uint              TokenCount(void) const { return iTopK * iActionCapacity; }
-   uint              TokenWidth(void) const { return iTokenWidth; }
-   COpenCLMy         *GetOpenCL(void) const { return OpenCL; }
+   uint              OnlineMemorySize(void) const { return(iOnlineMemorySize); }
+   uint              ScenarioCount(void) const { return(iScenarioCount); }
+   uint              ScenarioCapacity(void) const { return(iScenarioCapacity); }
+   uint              ActionCapacity(void) const { return(iActionCapacity); }
+   uint              TopK(void) const { return(iTopK); }
+   uint              TokenCount(void) const { return(iTopK * iActionCapacity); }
+   uint              TokenWidth(void) const { return(iTokenWidth); }
+   COpenCLMy         *GetOpenCL(void) const { return(OpenCL); }
    //--- Canonical six-component execution descriptor normalisation.  The
    //--- caller supplies every domain scale; this layer never reads terminal,
    //--- account, symbol or trade state.
@@ -13185,15 +16255,16 @@ public:
                                           const float &action[], const SRAGTerminalOutcome &terminal);
    bool              BindInferenceSnapshot(const string path);
    bool              BindNullInference(void);
-   bool              Retrieve(CNet *scenario_model, const uint layer); ///< Retrieve from a model-owned device output without exposing its buffer to an Expert.
+   //--- Retrieve from a model-owned device output without exposing its buffer to an Expert.
+   bool              Retrieve(CNet *scenario_model, const uint layer);
    bool              Retrieve(CBufferFloat *scenario_embedding);
-   CBufferFloat      *Tokens(void) const { return (m_inference == NULL ? NULL : m_inference.tokens); }
-   CBufferFloat      *AbsoluteRelevance(void) const { return (m_inference == NULL ? NULL : m_inference.absoluteRelevance); }
+   CBufferFloat      *Tokens(void) const { return(m_inference == NULL ? NULL : m_inference.tokens); }
+   CBufferFloat      *AbsoluteRelevance(void) const { return(m_inference == NULL ? NULL : m_inference.absoluteRelevance); }
    bool              ReadScenarioEmbedding(CBufferFloat *source, float &destination[],
                                            uint &replaced) const;
    bool              AddCompletedRecord(const float &scenario_embedding[], const float &action[],
                                         const SRAGTerminalOutcome &terminal);
-   uint              PendingRecordCount(void) const { return (uint)ArraySize(pending_records); }
+   uint              PendingRecordCount(void) const { return(uint)ArraySize(pending_records); }
    ulong             OpenPending(const float &scenario_embedding[], const float &action[]);
    bool              ConfirmPendingExecution(const ulong pending_id, const ulong deal, const ulong position);
    bool              CorrectPending(const ulong pending_id, const float &action[]);
@@ -13212,10 +16283,10 @@ public:
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    virtual CLayerDescription* GetLayerInfo(void) override;
-   virtual int       Type(void) const override { return defNeuronRAGMemory; }
+   virtual int       Type(void) const override { return(defNeuronRAGMemory); }
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override { CNeuronBaseOCL::TrainMode(false); }
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override { return true; }
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override { return(true); }
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
@@ -13238,7 +16309,7 @@ public:
                           uint layers, uint embed_size, uint candidates, uint topK,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronGDformerBackbone; }
+   virtual int       Type(void) override const  {  return(defNeuronGDformerBackbone); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronGDformer class.                              |
@@ -13246,13 +16317,13 @@ public:
 class CNeuronGDformer   :  public CNeuronReGENTAD
   {
 protected:
-   virtual CNeuronReGENTADBackbone* CreateBackbone(void) override { return new CNeuronGDformerBackbone(); }
+   virtual CNeuronReGENTADBackbone* CreateBackbone(void) override { return(new CNeuronGDformerBackbone()); }
 
 public:
                      CNeuronGDformer(void) {};
                     ~CNeuronGDformer(void) {};
    //---
-   virtual int       Type(void) override const  {  return defNeuronGDformer; }
+   virtual int       Type(void) override const  {  return(defNeuronGDformer); }
   };
 //+------------------------------------------------------------------+
 //| Declares the CNeuronMomADTTM class.                              |
@@ -13273,8 +16344,8 @@ protected:
    virtual bool      MeanScoresGradient(void);
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override  { return true; }
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override  { return(true); }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL, CBufferFloat *SecondInput) override { return(true); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { ReturnFalse; }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL,
                                         CBufferFloat *SecondInput,
@@ -13292,7 +16363,7 @@ public:
                           uint latent_dim, uint candidates, uint decisions,
                           uint topK, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronMomADTTM; }
+   virtual int       Type(void) override const  {  return(defNeuronMomADTTM); }
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    virtual bool      SupportsOpenCLChecked(void) const override;
@@ -13333,7 +16404,7 @@ public:
                           uint heads, uint key_dimension,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronMomADMPI; }
+   virtual int       Type(void) override const  {  return(defNeuronMomADMPI); }
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    virtual void      SetOpenCL(COpenCLMy *obj) override;
@@ -13391,12 +16462,12 @@ public:
                           uint rag_token_count, uint rag_token_width,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const { return defNeuronVLADriverRAGMPI; }
+   virtual int       Type(void) override const { return(defNeuronVLADriverRAGMPI); }
    bool              SetRAGTokens(CBufferFloat *tokens, CBufferFloat *absolute_relevance,
                                   const uint token_width);
-   CBufferFloat      *GetRAGTokens(void) const { return pRAGTokens; }
-   uint              RAGTokenCount(void) const { return iRAGTokenCount; }
-   uint              RAGTokenWidth(void) const { return iRAGTokenWidth; }
+   CBufferFloat      *GetRAGTokens(void) const { return(pRAGTokens); }
+   uint              RAGTokenCount(void) const { return(iRAGTokenCount); }
+   uint              RAGTokenWidth(void) const { return(iRAGTokenWidth); }
    //---
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
@@ -13419,8 +16490,8 @@ protected:
    float             fQuantSize;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
-   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { return (!!NeuronOCL && NeuronOCL.getGradient().Fill(0)); };
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
+   virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override { return(!!NeuronOCL && NeuronOCL.getGradient().Fill(0)); };
 
 public:
                      CNeuronUncAD_MSD(void) {};
@@ -13430,7 +16501,7 @@ public:
                           uint dimension, uint units, uint variables, uint quantiles,
                           float range, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronUncAD_MSD;   }
+   virtual int       Type(void) override const  {  return(defNeuronUncAD_MSD);   }
    virtual bool      SupportsOpenCLChecked(void) const override;
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
@@ -13462,6 +16533,7 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
                      CNeuronCogDriverData(void) : iWindow(0),
                      iVariables(0),
                      iStateStackSize(0),
@@ -13475,7 +16547,7 @@ public:
                           uint quant_stack_size, uint quantiles, float range,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronCogDriverData;   }
+   virtual int       Type(void) override const  {  return(defNeuronCogDriverData);   }
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
    //--- methods for working with files
@@ -13539,6 +16611,7 @@ protected:
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
                      CNeuronCogDriverRankTCM(void) :  iInputDim(0),
                      iQueryDim(0),
                      iVariables(0),
@@ -13555,9 +16628,9 @@ public:
                           uint input_dim, uint query_dim, uint variables, uint memory_len, uint heads,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronCogDriverRankTCM;   }
-   virtual uint      MemoryCount(void) const { return iMemoryCount; }
-   virtual bool      LastQueryValid(void) const { return bLastQueryValid; }
+   virtual int       Type(void) override const  {  return(defNeuronCogDriverRankTCM);   }
+   virtual uint      MemoryCount(void) const { return(iMemoryCount); }
+   virtual bool      LastQueryValid(void) const { return(bLastQueryValid); }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -13605,7 +16678,11 @@ protected:
    virtual bool      BuildConfidence(void);
    virtual bool      BuildDeltaNorm(void);
    virtual bool      CrossLayerForward(uint layer, CNeuronBaseOCL *plan, CNeuronBaseOCL *context);
-   virtual bool      CrossLayerBackward(uint layer, CNeuronBaseOCL *plan, CNeuronBaseOCL *context, CBufferFloat *out_grad);
+   virtual bool      CrossLayerBackward(uint layer,
+                                        CNeuronBaseOCL *plan,
+                                        CNeuronBaseOCL *context,
+                                        CBufferFloat *out_grad
+                                       );
    virtual bool      CrossLayerUpdateWeights(uint layer, CNeuronBaseOCL *plan, CNeuronBaseOCL *context);
    virtual bool      SelfLayerForward(uint layer, CNeuronBaseOCL *NeuronOCL);
    virtual bool      SelfLayerBackward(uint layer, CNeuronBaseOCL *NeuronOCL, CBufferFloat *out_grad);
@@ -13622,10 +16699,10 @@ public:
                           uint dimension, uint horizon, uint variables, uint forecast_blocks,
                           uint heads, ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronCogDriverForecastHead;   }
-   virtual CBufferFloat *GetExpectedError(void) { return cErrorHead.getOutput(); }
-   virtual CBufferFloat *GetConfidence(void) { return GetPointer(cConfidence); }
-   virtual CBufferFloat *GetPlanDeltaNorm(void) { return GetPointer(cPlanDeltaNorm); }
+   virtual int       Type(void) override const  {  return(defNeuronCogDriverForecastHead);   }
+   virtual CBufferFloat *GetExpectedError(void) { return(cErrorHead.getOutput()); }
+   virtual CBufferFloat *GetConfidence(void) { return(GetPointer(cConfidence)); }
+   virtual CBufferFloat *GetPlanDeltaNorm(void) { return(GetPointer(cPlanDeltaNorm)); }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -13647,7 +16724,7 @@ protected:
    CBufferFloat      cConfidenceGradient;
    //---
    virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL) override;
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return true; }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL) override { return(true); }
    virtual bool      calcInputGradients(CNeuronBaseOCL *NeuronOCL) override;
 
 public:
@@ -13658,14 +16735,14 @@ public:
                           uint dimension, uint horizon,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronCogDriverForecastToken;   }
+   virtual int       Type(void) override const  {  return(defNeuronCogDriverForecastToken);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
    //---
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual void      TrainMode(bool flag) override;
-   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override { return true; }
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override { return(true); }
    virtual bool      Clear(void) override;
   };
 //+------------------------------------------------------------------+
@@ -13691,7 +16768,7 @@ public:
                           uint stack_size, uint quantiles, float range,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronUncAD_MUE;   }
+   virtual int       Type(void) override const  {  return(defNeuronUncAD_MUE);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -13726,7 +16803,7 @@ public:
                           uint candidates, uint topK,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronUncAD_UGP;   }
+   virtual int       Type(void) override const  {  return(defNeuronUncAD_UGP);   }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -13761,7 +16838,7 @@ public:
                           uint key_dimension,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronUncAD_UGPL;  }
+   virtual int       Type(void) override const  {  return(defNeuronUncAD_UGPL);  }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -13828,7 +16905,7 @@ public:
                           uint candidates, uint topK, uint latent_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch);
    //---
-   virtual int       Type(void) override const  {  return defNeuronUncAD;  }
+   virtual int       Type(void) override const  {  return(defNeuronUncAD);  }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -13863,7 +16940,7 @@ public:
                           uint candidates, uint topK, uint latent_count,
                           ENUM_OPTIMIZATION optimization_type, uint batch) override;
    //---
-   virtual int       Type(void) override const  {  return defNeuronMomAD;  }
+   virtual int       Type(void) override const  {  return(defNeuronMomAD);  }
    //--- methods for working with files
    virtual bool      Save(int const file_handle) override;
    virtual bool      Load(int const file_handle) override;
@@ -13895,19 +16972,19 @@ public:
    //---
    bool              Init(uint scenarios, uint dimension, COpenCLMy *open_cl);
    bool              Save(const int file_handle);
-   bool              Load(const int file_handle, COpenCLMy *open_cl);
+   bool              Load(const int file_handle, COpenCLMy *open_cl, const bool strict = false);
    bool              ValidateContract(uint scenarios, uint dimension);
    void              SetOpenCL(COpenCLMy *open_cl);
    bool              SetOpenCLChecked(COpenCLMy *open_cl);
    bool              AppendParameterFingerprint(ulong &fingerprint);
-   uint              Scenarios(void) const { return iScenarios; }
-   uint              Dimension(void) const { return iDimension; }
-   CBufferFloat      *GetPrototypes(void) { return GetPointer(cPrototypes); }
-   CBufferFloat      *GetEMASums(void) { return GetPointer(cEMASums); }
-   CBufferFloat      *GetEMACounts(void) { return GetPointer(cEMACounts); }
-   CBufferFloat      *GetUsage(void) { return GetPointer(cUsage); }
-   CBufferFloat      *GetInactive(void) { return GetPointer(cInactive); }
-   CBufferFloat      *GetInactivityAge(void) { return GetPointer(cInactivityAge); }
+   uint              Scenarios(void) const { return(iScenarios); }
+   uint              Dimension(void) const { return(iDimension); }
+   CBufferFloat      *GetPrototypes(void) { return(GetPointer(cPrototypes)); }
+   CBufferFloat      *GetEMASums(void) { return(GetPointer(cEMASums)); }
+   CBufferFloat      *GetEMACounts(void) { return(GetPointer(cEMACounts)); }
+   CBufferFloat      *GetUsage(void) { return(GetPointer(cUsage)); }
+   CBufferFloat      *GetInactive(void) { return(GetPointer(cInactive)); }
+   CBufferFloat      *GetInactivityAge(void) { return(GetPointer(cInactivityAge)); }
   };
 //+------------------------------------------------------------------+
 //| Shared scenario-major forecast foundation                        |
@@ -13962,6 +17039,7 @@ protected:
    bool              UpdateCodebook(CBufferFloat *delta_target, float decay = 0.99f);
 
 public:
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore);
                      CNeuronScenarioForecast(void) : iVariables(0), iScenarios(0), iTopK(0), iHorizon(0), iDimension(0), iRecoveryAge(256),
                      bLastTargetAccepted(false), bLastControlValid(false), bCodebookUpdate(true),
                      bGradientNormalization(true) {};
@@ -13991,49 +17069,115 @@ public:
    bool              SetGradientNormalization(const bool enabled) { bGradientNormalization = enabled; return(true); }
    bool              GradientNormalization(void) const { return(bGradientNormalization); }
    //---
-   virtual int       Type(void) override const { return defNeuronScenarioForecast; }
+   virtual int       Type(void) override const { return(defNeuronScenarioForecast); }
    virtual bool      Save(const int file_handle) override;
    virtual bool      Load(const int file_handle) override;
    bool              Load(const int file_handle, COpenCLMy *open_cl);
    virtual void      SetOpenCL(COpenCLMy *obj) override;
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
    virtual void      TrainMode(bool flag) override;
    virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
    virtual bool      Clear(void) override;
    //---
-   uint              Variables(void) const { return iVariables; }
-   uint              Scenarios(void) const { return iScenarios; }
-   uint              GetTopK(void) const { return iTopK; }
-   uint              Horizon(void) const { return iHorizon; }
-   uint              Dimension(void) const { return iDimension; }
-   uint              RecoveryAge(void) const { return iRecoveryAge; }
+   uint              Variables(void) const { return(iVariables); }
+   uint              Scenarios(void) const { return(iScenarios); }
+   uint              GetTopK(void) const { return(iTopK); }
+   uint              Horizon(void) const { return(iHorizon); }
+   uint              Dimension(void) const { return(iDimension); }
+   uint              RecoveryAge(void) const { return(iRecoveryAge); }
    //---
-   CBufferFloat      *GetZ(void) { return getOutput(); }
-   CBufferFloat      *GetU(void) { return GetPointer(cConfidence); }
-   CBufferFloat      *GetLogU(void) { return GetPointer(cLogConfidence); }
-   CBufferFloat      *GetPi(void) { return cRouterSoftmax.getOutput(); }
-   CBufferFloat      *GetLogPi(void) { return GetPointer(cLogProbabilities); }
-   CBufferFloat      *GetResponsibilities(void) { return GetPointer(cResponsibilities); }
+   CBufferFloat      *GetZ(void) { return(getOutput()); }
+   CBufferFloat      *GetU(void) { return(GetPointer(cConfidence)); }
+   CBufferFloat      *GetLogU(void) { return(GetPointer(cLogConfidence)); }
+   CBufferFloat      *GetPi(void) { return(cRouterSoftmax.getOutput()); }
+   CBufferFloat      *GetLogPi(void) { return(GetPointer(cLogProbabilities)); }
+   CBufferFloat      *GetResponsibilities(void) { return(GetPointer(cResponsibilities)); }
    //---
-   CScenarioCodebook *GetCodebook(void) { return GetPointer(cCodebook); }
-   CNeuronConvOCL    *GetGenerator(void) { return GetPointer(cGenerator); }
-   CNeuronConvOCL    *GetRouter(void) { return GetPointer(cRouter); }
-   CNeuronConvOCL    *GetConfidenceHead(void) { return GetPointer(cConfidenceHead); }
-   CBufferFloat      *GetConfidence(void) { return GetPointer(cConfidence); }
-   CBufferFloat      *GetTarget(void) { return GetPointer(cTarget); }
-   CNeuronSoftMaxOCL *GetRouterSoftmax(void) { return GetPointer(cRouterSoftmax); }
-   CNeuronSparseSoftMax *GetTopKSelector(void) { return GetPointer(cTopKSelector); }
+   CScenarioCodebook *GetCodebook(void) { return(GetPointer(cCodebook)); }
+   CNeuronConvOCL    *GetGenerator(void) { return(GetPointer(cGenerator)); }
+   CNeuronConvOCL    *GetRouter(void) { return(GetPointer(cRouter)); }
+   CNeuronConvOCL    *GetConfidenceHead(void) { return(GetPointer(cConfidenceHead)); }
+   CBufferFloat      *GetConfidence(void) { return(GetPointer(cConfidence)); }
+   CBufferFloat      *GetTarget(void) { return(GetPointer(cTarget)); }
+   CNeuronSoftMaxOCL *GetRouterSoftmax(void) { return(GetPointer(cRouterSoftmax)); }
+   CNeuronSparseSoftMax *GetTopKSelector(void) { return(GetPointer(cTopKSelector)); }
    //---
    ulong             ContractSignature(void);
    bool              ExportDetached(CBufferFloat *z, CBufferFloat *u, CBufferFloat *log_u,
                                     CBufferFloat *pi, CBufferFloat *log_pi);
    uint              TrainableWeights(void);
-   bool              LastTargetAccepted(void) const { return bLastTargetAccepted; }
-   bool              LastBatchControlValid(void) const { return bLastControlValid; }
+   bool              LastTargetAccepted(void) const { return(bLastTargetAccepted); }
+   bool              LastBatchControlValid(void) const { return(bLastControlValid); }
    uint              ActiveTrajectories(void);
    uint              DenseRouterGradientCount(void);
+  };
+//+------------------------------------------------------------------+
+//| Phase-gated price supervision over the native scenario forecast  |
+//+------------------------------------------------------------------+
+class CNeuronScenarioForecastPriceOCL : public CNeuronScenarioForecast
+  {
+protected:
+   uint              m_pricePhase;
+   uint              m_frameState;
+   ulong             m_generation;
+   ulong             m_supervisionGeneration;
+   bool              m_nativePrepared;
+   bool              m_backwardPrepared;
+   bool              m_priceActive;
+   CBufferFloat      m_priceGradient;
+   CBufferFloat      m_generatorCombined;
+   CBufferFloat      m_priceInputGradient;
+   CBufferFloat      m_deltaTarget;
+   CBufferFloat      m_bridgeScratch;
+   CBufferFloat      m_bridgeControl;
+   bool              InitPriceBridge(void);
+   bool              ValidatePriceBridge(void);
+   bool              DispatchPriceBridge(CNeuronBaseOCL *source, const uint phase);
+   bool              ValidatePriceContract(void) const;
+   virtual bool      feedForward(CNeuronBaseOCL *source) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source) override;
+
+public:
+                     CNeuronScenarioForecastPriceOCL(void);
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint scenarios = 21, uint top_k = 3, uint horizon = 12,
+                          uint latent = 16, ENUM_OPTIMIZATION optimization_type = ADAM,
+                          uint batch = 1, uint variables = 1) override;
+   bool              SetPricePhase(const uint phase);
+   bool              PrepareLatentSupervision(CBufferFloat *full_future, CBufferFloat *delta_future);
+   bool              CancelTrainingFrame(void);
+   bool              PriceSupervisionPrepared(void) const
+     {
+      return(m_frameState == defForecastPriceFrameLive && m_nativePrepared &&
+             m_supervisionGeneration == m_generation && m_generation != 0 &&
+             bLastTargetAccepted && bLastControlValid);
+     }
+   virtual int       Type(void) const override { return(defNeuronScenarioForecastPriceOCL); }
+   uint              ABI(void) const { return(defScenarioForecastPriceABI); }
+   ulong             Generation(void) const { return(m_generation); }
+   uint              PricePhase(void) const { return(m_pricePhase); }
+   virtual CLayerDescription *GetLayerInfo(void) override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   bool              Load(const int file_handle, COpenCLMy *open_cl);
+   virtual void      AttachOpenCL(COpenCLMy *obj) override;
+   virtual void      SetOpenCL(COpenCLMy *obj) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      TrainMode(void) override { return(bTrain); }
+   virtual bool      UpdateInputWeights(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputWeightsSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      UpdateInputState(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputStateSecond(CObject *source, CNeuronBaseOCL *second) override;
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      Clear(void) override;
+   virtual bool      InferenceRuntimeSidecar(const int handle, const bool restore) override;
   };
 //+------------------------------------------------------------------+
 //| Scenario-local Flash cross-attention for ORION Actor/Critic      |
@@ -14085,6 +17229,14 @@ protected:
    bool                       ValidateScenarioOwnedTreeChecked(void) const;
 
 public:
+   virtual bool      ValidPolicyForecast(CNeuronBaseOCL *source) const;
+
+   virtual bool      CaptureEvaluationState(SLayerReadState &state);
+   virtual bool      RestoreEvaluationState(SLayerReadState &state);
+   virtual bool      ForwardRowsReadOnly(CBufferFloat *source, const uint rows, CBufferFloat *z, CBufferFloat *log_u,
+                                    CBufferFloat *pi, const int forecast_type, const SLayerReadState &state,
+                                    SLayerRowsWorkspace &work, CBufferFloat *output, CBufferFloat *flags);
+
                      CNeuronScenarioCrossAttention(void) : iVariables(0), iScenarios(0), iHorizon(0), iDimension(0),
                      iQueries(0), iStackSize(0), iTopK(0), bCritic(false) {}
                     ~CNeuronScenarioCrossAttention(void) {}
@@ -14094,7 +17246,7 @@ public:
                                    bool critic = false, ENUM_OPTIMIZATION optimization_type = ADAM,
                                    uint batch = 1, uint variables = 1, uint stack_size = 1,
                                    uint top_k = 1);
-   virtual int                Type(void) override const { return defNeuronScenarioCrossAttention; }
+   virtual int                Type(void) override const { return(defNeuronScenarioCrossAttention); }
    virtual bool               Save(const int file_handle) override;
    virtual bool               Load(const int file_handle) override;
    bool                       Load(const int file_handle, COpenCLMy *open_cl);
@@ -14105,104 +17257,142 @@ public:
    virtual bool               WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
    virtual bool               AppendParameterFingerprint(ulong &fingerprint) override;
    virtual bool               Clear(void) override;
-   uint                       Variables(void) const { return iVariables; }
-   uint                       Scenarios(void) const { return iScenarios; }
-   uint                       Horizon(void) const { return iHorizon; }
-   uint                       Latent(void) const { return iDimension; }
-   uint                       Queries(void) const { return iQueries; }
-   uint                       HistorySize(void) const { return iStackSize; }
-   uint                       HistoryTopK(void) const { return iTopK; }
-   bool                       IsCritic(void) const { return bCritic; }
-   CNeuronConvOCL            *GetWz(void) { return GetPointer(cWz); }
-   CNeuronConvOCL            *GetWu(void) { return GetPointer(cWu); }
-   CNeuronMultiWindowsConvOCL *GetQueryProjection(void) { return GetPointer(cQueryProjection); }
-   CBufferFloat              *GetAttentionOutput(void) { return cAttention.getOutput(); }
-   CBufferFloat              *GetAttentionTransposeOutput(void) { return cAttentionTranspose.getOutput(); }
-   CBufferFloat              *GetOutputProjection(void) { return cOutputProjection.getOutput(); }
-   CBufferFloat              *GetQueryResidual(void) { return cQueryResidual.getOutput(); }
-   CBufferFloat              *GetMHAOutput(void) { return cMHAOutput.getOutput(); }
-   CBufferFloat              *GetHeadContexts(void) { return (bCritic ? cAttention.getOutput() : cScenarioHistory.getOutput()); }
-   bool                       HasHistory(void) const { return !bCritic; }
-   CNeuronAddToStack         *GetHistoryStack(void) { return (bCritic ? NULL : GetPointer(cHistoryStack)); }
-   uint                       ForwardStateBatchBlocks(void) const { return (uint)cFlow.Total(); }
+   uint                       Variables(void) const { return(iVariables); }
+   uint                       Scenarios(void) const { return(iScenarios); }
+   uint                       Horizon(void) const { return(iHorizon); }
+   uint                       Latent(void) const { return(iDimension); }
+   uint                       Queries(void) const { return(iQueries); }
+   uint                       HistorySize(void) const { return(iStackSize); }
+   uint                       HistoryTopK(void) const { return(iTopK); }
+   bool                       IsCritic(void) const { return(bCritic); }
+   CNeuronConvOCL            *GetWz(void) { return(GetPointer(cWz)); }
+   CNeuronConvOCL            *GetWu(void) { return(GetPointer(cWu)); }
+   CNeuronMultiWindowsConvOCL *GetQueryProjection(void) { return(GetPointer(cQueryProjection)); }
+   CBufferFloat              *GetAttentionOutput(void) { return(cAttention.getOutput()); }
+   CBufferFloat              *GetAttentionTransposeOutput(void) { return(cAttentionTranspose.getOutput()); }
+   CBufferFloat              *GetOutputProjection(void) { return(cOutputProjection.getOutput()); }
+   CBufferFloat              *GetQueryResidual(void) { return(cQueryResidual.getOutput()); }
+   CBufferFloat              *GetMHAOutput(void) { return(cMHAOutput.getOutput()); }
+   CBufferFloat              *GetHeadContexts(void) { return(bCritic ? cAttention.getOutput() : cScenarioHistory.getOutput()); }
+   bool                       HasHistory(void) const { return(!bCritic); }
+   CNeuronAddToStack         *GetHistoryStack(void) { return(bCritic ? NULL : GetPointer(cHistoryStack)); }
+   uint                       ForwardStateBatchBlocks(void) const { return(uint)cFlow.Total(); }
    CBufferFloat              *GetForwardStateBatchOptions(const uint block)
      {
       if(block >= (uint)cFlow.Total())
-         return NULL;
+         return(NULL);
       CNeuronBaseOCL *item = cFlow[(int)block];
       if(!item || item.Type() != defNeuronSpikeConvBlock)
-         return NULL;
-      return ((CNeuronSpikeConvBlock*)item).getBatchOptions();
+         return(NULL);
+      return((CNeuronSpikeConvBlock*)item).getBatchOptions();
      }
    int                        GetForwardStateBatchCount(const uint block)
      {
       if(block >= (uint)cFlow.Total())
-         return -1;
+         return(-1);
       CNeuronBaseOCL *item = cFlow[(int)block];
       if(!item || item.Type() != defNeuronSpikeConvBlock)
-         return -1;
-      return ((CNeuronSpikeConvBlock*)item).GetBatchCount();
+         return(-1);
+      return((CNeuronSpikeConvBlock*)item).GetBatchCount();
      }
    bool                       SetForwardStateBatchCount(const uint block, const int count)
      {
       if(block >= (uint)cFlow.Total())
-         return false;
+         return(false);
       CNeuronBaseOCL *item = cFlow[(int)block];
       if(!item || item.Type() != defNeuronSpikeConvBlock)
-         return false;
-      return ((CNeuronSpikeConvBlock*)item).SetBatchCount(count);
+         return(false);
+      return((CNeuronSpikeConvBlock*)item).SetBatchCount(count);
      }
    CBufferFloat              *GetForwardStateSpikeOutput(const uint block)
      {
       if(block >= (uint)cFlow.Total())
-         return NULL;
+         return(NULL);
       CNeuronBaseOCL *item = cFlow[(int)block];
       if(!item || item.Type() != defNeuronSpikeConvBlock)
-         return NULL;
-      return ((CNeuronSpikeConvBlock*)item).GetForwardStateSpikeOutput();
+         return(NULL);
+      return((CNeuronSpikeConvBlock*)item).GetForwardStateSpikeOutput();
      }
    CBufferFloat              *GetForwardStateSpikePrevOutput(const uint block)
      {
       if(block >= (uint)cFlow.Total())
-         return NULL;
+         return(NULL);
       CNeuronBaseOCL *item = cFlow[(int)block];
       if(!item || item.Type() != defNeuronSpikeConvBlock)
-         return NULL;
-      return ((CNeuronSpikeConvBlock*)item).GetForwardStateSpikePrevOutput();
+         return(NULL);
+      return((CNeuronSpikeConvBlock*)item).GetForwardStateSpikePrevOutput();
      }
    CBufferFloat              *GetForwardStateOutput(const uint block)
      {
       if(block >= (uint)cFlow.Total())
-         return NULL;
+         return(NULL);
       CNeuronBaseOCL *item = cFlow[(int)block];
       if(!item || item.Type() != defNeuronSpikeConvBlock)
-         return NULL;
-      return item.getOutput();
+         return(NULL);
+      return(item.getOutput());
      }
   };
 //+------------------------------------------------------------------+
-//| D2Skill public layer contract.  Implemented after TimeSeries.    |
+//| Native Q cross-attention with a frozen ForecastPrice input       |
+//+------------------------------------------------------------------+
+class CNeuronScenarioCrossAttentionPriceOCL : public CNeuronScenarioCrossAttention
+  {
+protected:
+   virtual bool      feedForwardSecond(CNeuronBaseOCL *source, CNeuronBaseOCL *forecast) override;
+   virtual bool      calcInputGradientsSecond(CNeuronBaseOCL *source, CNeuronBaseOCL *forecast) override;
+   virtual bool      updateInputWeightsSecond(CNeuronBaseOCL *source, CNeuronBaseOCL *forecast) override;
+
+public:
+   virtual bool      Init(uint numOutputs, uint myIndex, COpenCLMy *open_cl,
+                          uint scenarios = 21, uint horizon = 12, uint latent = 16,
+                          bool critic = true, ENUM_OPTIMIZATION optimization_type = ADAM,
+                          uint batch = 1, uint variables = 1, uint stack_size = 1,
+                          uint top_k = 1) override;
+   virtual int       Type(void) const override { return(defNeuronScenarioCrossAttentionPriceOCL); }
+   uint              ABI(void) const { return(defScenarioCrossAttentionPriceABI); }
+   virtual bool      ValidPolicyForecast(CNeuronBaseOCL *source) const override;
+   virtual CLayerDescription *GetLayerInfo(void) override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   bool              Load(const int file_handle, COpenCLMy *open_cl);
+   bool              SaveNative(const int file_handle);
+   bool              LoadNative(const int file_handle, COpenCLMy *open_cl);
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      ForwardRowsReadOnly(CBufferFloat *source, const uint rows, CBufferFloat *z,
+                                         CBufferFloat *log_u, CBufferFloat *pi, const int forecast_type,
+                                         const SLayerReadState &state, SLayerRowsWorkspace &work,
+                                         CBufferFloat *output, CBufferFloat *flags) override;
+  };
+//+------------------------------------------------------------------+
+//| D2Skill public layer contract. Implemented after TimeSeries.     |
 //+------------------------------------------------------------------+
 enum ED2SkillRepresentation
   {
-   D2SkillFullResidual = 0,         //Full residual correction
-   D2SkillDirectionMagnitude = 1    //Direction and magnitude correction
+   //--- Full residual correction
+   D2SkillFullResidual = 0,
+   //--- Direction and magnitude correction
+   D2SkillDirectionMagnitude = 1
   };
 //+------------------------------------------------------------------+
 //| D2Skill execution policy.                                        |
 //+------------------------------------------------------------------+
 enum ENUM_D2SKILL_MODE
   {
-   //--- Bypass D2 residuals for exact base-model parity.                
-   D2_DISABLED = 0,                 //Base model only
-   //--- Retrieve and update skill banks while collecting samples.       
-   D2_COLLECT,                      //Collect skill-bank observations
-   //--- Retrieve skills without updating their persistent state.        
-   D2_EVALUATE,                     //Evaluate without persistent updates
-   //--- Use fixed skills for model inference only.                      
-   D2_INFERENCE,                    //Inference with fixed skills
-   //--- Apply paired terminal utility during online calibration.        
-   D2_ONLINE_CALIBRATION            //Online paired-utility calibration
+//--- Bypass D2 residuals for exact base-model parity.
+   //--- Base model only
+   D2_DISABLED = 0,
+//--- Retrieve and update skill banks while collecting samples.
+   //--- Collect skill-bank observations
+   D2_COLLECT,
+//--- Retrieve skills without updating their persistent state.
+   //--- Evaluate without persistent updates
+   D2_EVALUATE,
+//--- Use fixed skills for model inference only.
+   //--- Inference with fixed skills
+   D2_INFERENCE,
+//--- Apply paired terminal utility during online calibration.
+   //--- Online paired-utility calibration
+   D2_ONLINE_CALIBRATION
   };
 //+------------------------------------------------------------------+
 //| One reusable latent correction.                                  |
@@ -14336,7 +17526,7 @@ protected:
    void              RebindBuffer(CBufferFloat &buffer, COpenCLMy *obj);
    bool              ValidateBuffers(void);
    bool              ValidateBankOwnedCheckedState(const bool allow_missing_transient,
-                                                    const COpenCLMy *target = NULL) const;
+         const COpenCLMy *target = NULL) const;
    bool              InitBuffer(CBufferFloat &buffer, const int total,
                                 const float value = 0.0f);
    bool              RetrievalLaunchLayout(uint &local_size, uint &partial_count) const;
@@ -14429,7 +17619,7 @@ public:
    bool              RefreshDiagnostics(void);
   };
 //+------------------------------------------------------------------+
-//| Top-level D2Skill coordinator.  It owns exactly two banks.       |
+//| Top-level D2Skill coordinator. It owns exactly two banks.        |
 //+------------------------------------------------------------------+
 class CD2Skill : public CNeuronScenarioCrossAttention
   {
@@ -14498,6 +17688,304 @@ public:
    bool              StepUtility(const float delta_j);
    bool              BackwardSecond(CNeuronBaseOCL *source, CNeuronBaseOCL *forecast);
   };
+//--- Reserved public type only. Root adds factory branches after source freeze.
+//--- Work-only declaration: insert after all four DPCC child declarations.
+//--- No additional public primitive type. Workspace enum is an ownership index.
+enum ENUM_DPCC_COMPOSITE_WORK
+  {
+   DPCC_CW_CONTEXT = 0, DPCC_CW_ROLLOUT_CONTEXT, DPCC_CW_CONDITION,
+   DPCC_CW_ACCOUNT13, DPCC_CW_NEXT_PLAN, DPCC_CW_SELECTED,
+   DPCC_CW_RETURNS, DPCC_CW_SCORES, DPCC_CW_STATUS, DPCC_CW_VALIDITY,
+   DPCC_CW_SUPPORT, DPCC_CW_MASS, DPCC_CW_SORTED_SUPPORT,
+   DPCC_CW_SORTED_MASS, DPCC_CW_ORDER, DPCC_CW_SRM_DIAGNOSTICS,
+   DPCC_CW_DIAGNOSTICS, DPCC_CW_FLAGS, DPCC_CW_SCALAR, DPCC_CW_TIME_META, DPCC_CW_COUNT
+  };
+//+------------------------------------------------------------------+
+//| Declaration CNeuronDPCCOCL                                       |
+//+------------------------------------------------------------------+
+class CNeuronDPCCOCL : public CNeuronBaseOCL
+  {
+protected:
+   uint              m_actor_abi;
+   uint              m_actor_market_horizon;
+   uint              m_actor_latent_dimension;
+   CNeuronPlanProjectionTraceOCL *m_actor_projector;
+   float             m_actor_scale[109], m_actor_bias[109];
+   CBufferFloat      *m_action_context, *m_action_condition, *m_action_noise;
+   CBufferFloat      *m_action_current, *m_action_next, *m_action_physical, *m_action_epsilon;
+   CBufferFloat      *m_action_probability_frames, *m_action_projected_frames;
+   CBufferFloat      *m_action_flags, *m_action_scalar, *m_action_status, *m_action_candidate_status, *m_action_returns;
+   CBufferFloat      *m_action_account13, *m_action_q2_scores, *m_action_rank_scores, *m_action_numeric_flags;
+   CNet              *m_policy_market, *m_policy_q1, *m_policy_q2;
+   SLayerReadState    m_policy_q1_state, m_policy_q2_state;
+   SLayerRowsWorkspace m_policy_q1_rows, m_policy_q2_rows;
+   bool               m_policy_networks_bound, m_policy_state_valid;
+   SDPCCLayout        m_action_context_layout;
+   SDPCCDecisionMeta  m_action_meta;
+   ulong              m_action_market_generation;
+   ulong              m_action_market_weights_id;
+   bool               m_action_context_bound, m_action_candidates_valid;
+   bool               m_action_unroll_live, m_action_trace_live, m_action_gradient_bound;
+   bool               m_action_backward_ready, m_action_update_started;
+   uint               m_action_selected;
+   bool              AbortAction6Unroll(void);
+   bool              Action6GradientStep(const uint mode, CBufferFloat *source, CBufferFloat *other,
+                                         CBufferFloat *result, CBufferFloat *epsilon, const uint j = 0,
+                                         const uint other_offset = 0);
+   bool              BackwardAction6(CNeuronBaseOCL *account);
+   bool              AllocateAction6Workspace(void);
+   bool              ValidateAction6Workspace(void) const;
+   bool              ValidatePolicyNetworks(CNet *market, CNet *q1, CNet *q2) const;
+   bool              EvaluateAndPublishAction6(CNeuronScenarioForecastPriceOCL *market);
+   void              ClearPolicyState(void);
+   void              ClearPolicyWorkspace(void);
+   bool              PackAction6Condition(CNeuronBaseOCL *account,
+                                          CNeuronScenarioForecastPriceOCL *market);
+   bool              InitializeAction6Noise(void);
+   bool              ReverseAction6Step(const uint j);
+   bool              ProjectAction6Current(const uint trace_slot);
+   bool              Action6Affine(CBufferFloat *source, CBufferFloat *destination, const uint direction,
+                                   const uint frame_slot = UINT_MAX);
+   bool              MergeAction6ProjectionMask(CBufferFloat *corrected);
+   bool              FinalizeAction6Plans(void);
+   bool              RunAction6Forward(CNeuronBaseOCL *account,
+                                       CNeuronScenarioForecastPriceOCL *market);
+   virtual bool      feedForwardSecond(CNeuronBaseOCL *source,
+                                       CNeuronBaseOCL *second) override;
+   bool              InitAction6(uint index, COpenCLMy *context, CLayerDescription *description);
+   bool              DescribeAction6(CLayerDescription &description) const;
+   bool              ValidateAction6(void) const;
+   bool              Action6Profile(const int file_handle, const bool restore, SDPCCConfig &config,
+                                    double &beta[], double &alpha_bar[], double &sigma[],
+                                    float &scale[], float &bias[]);
+   bool              SaveAction6(const int file_handle);
+   bool              LoadAction6(const int file_handle, const uint envelope, const uint index,
+                                 const uint batch);
+   SDPCCShape        m_shape;
+   SDPCCConfig       m_config;
+   SDPCCLayout       m_c_layout, m_r_layout;
+   SDPCCDecoderComposition m_decoder_composition;
+   SDPCCDenoiserComposition m_denoiser_composition;
+   SDPCCSnapshotMeta m_snapshot;
+   double            m_beta[], m_alpha_bar[], m_sigma[];
+   CNeuronScenarioDecoderOCL *m_decoder;
+   CNeuronPlanDenoiserOCL *m_denoiser;
+   CNeuronScenarioRolloutOCL *m_rollout;
+   CNeuronPlanProjectionOCL *m_projector;
+   CNeuronBatchNormOCL *m_normalizer;
+   CNeuronRevINDenormOCL *m_denorm;
+   CNeuronBaseOCL    *m_decoder_source, *m_plan_source;
+   CBufferFloat      *m_work[DPCC_CW_COUNT];
+   ulong             m_sizes[DPCC_CW_COUNT];
+   uint              m_tokens, m_padK;
+   bool              m_shaped, m_configured, m_imported, m_public_valid, m_failed;
+   bool              m_snapshot_valid, m_busy, m_transfer_pending;
+   bool              m_transferred[8];
+   COpenCLMy         *m_transfer_source, *m_transfer_target;
+   ulong             m_decision_serial;
+   bool              m_bar_identity_valid;
+   string            m_bar_symbol;
+   int               m_bar_timeframe;
+   long              m_bar_time;
+   //--- Historical admission is independent of current graph readiness/failure.
+   ulong             m_admitted_profile;
+   bool              m_admitted, m_loading;
+   ulong             ProfileSignature(const SDPCCConfig &config, const SDPCCDecoderComposition &decoder,
+                          const SDPCCDenoiserComposition &denoiser, const double &beta[],
+                          const double &alpha[], const double &sigma[]) const;
+   ENUM_DPCC_STATUS  m_status;
+   bool              Fail(const ENUM_DPCC_STATUS status, const bool fatal = false);
+   void              Invalidate(void);
+   void              ReleaseOwned(void);
+   bool              Geometry(void);
+   bool              AllocateOwned(void);
+   bool              ValidateOwned(void) const;
+   bool              ValidBuffer(CBufferFloat *buffer, const ulong count, COpenCLMy *owner) const;
+   bool              Describe(CLayerDescription &description, const uint type, const uint count,
+                 const uint depth) const;
+   bool              InitializeChildren(void);
+   bool              ReadNormalizer(CNeuronBatchNormOCL *source, float &prepared[]);
+   bool              WriteNormalizer(const float &prepared[]);
+   bool              ScheduleValid(const double &beta[], const double &alpha_bar[], const double &sigma[]) const;
+   bool              WriteProfile(const int file_handle);
+   bool              ReadProfile(const int file_handle, const uint financial_envelope, SDPCCConfig &config,
+                    SDPCCDecoderComposition &decoder, SDPCCDenoiserComposition &denoiser,
+                    double &beta[], double &alpha_bar[], double &sigma[]);
+   bool              WriteText(const int file_handle, const string value);
+   bool              ReadText(const int file_handle, string &value);
+   bool              DonorDescriptor(CNeuronBaseOCL *donor, const uint type, const bool allow_single);
+   //--- Reuse the protected declarations from composite_wrapper.fragment.mqh.
+   bool              CompositeBuffers(CBufferFloat *&buffers[], const ulong &counts[], const bool flags_last = true);
+   bool              CompositeDispatch(const int kernel, CBufferFloat *&buffers[],
+                          const uint &integers[], const float &reals[], const uint count);
+   bool              CompositeReduce(CBufferFloat *flags, CBufferFloat *scalar, const uint count);
+   bool              SnapshotCompositeContext(CBufferFloat *source, CBufferFloat *snapshot,
+                                 CBufferFloat *flags, CBufferFloat *scalar, const uint count);
+   bool              PrepareCompositeNorm(CBufferFloat *context, CNeuronBaseOCL *decoder,
+                             CNeuronRevINDenormOCL *denorm, CBufferFloat *flags,
+                             CBufferFloat *scalar, const SDPCCLayout &layout, const SDPCCShape &shape);
+   bool              PackCompositeR(CBufferFloat *context, CBufferFloat *native, CBufferFloat *result,
+                       CBufferFloat *flags, CBufferFloat *scalar, const SDPCCLayout &c,
+                       const SDPCCLayout &r, const SDPCCConfig &config);
+   bool              PackCompositeCondition(CBufferFloat *context, CBufferFloat *account13,
+                               CBufferFloat *condition, CBufferFloat *flags, CBufferFloat *scalar,
+                               const SDPCCLayout &layout, const SDPCCConfig &config);
+   bool              SetCompositeStep(const uint j, const uint J, CBufferFloat *condition, const uint tokens);
+   //--- Exact next-block bodies: forward is intentionally not connected to these
+   //--- until all bodies and their source-bound acceptance are integrated.
+   bool              PrepareDecision(CNeuronBaseOCL *source, CBufferFloat *context);
+   bool              InitializeNoise(void);
+   bool              ReverseStep(const uint j);
+   bool              ProjectCurrent(void);
+   bool              MergeProjectionMask(void);
+   bool              FinalRollout(void);
+   bool              PadAndValidateDistributions(void);
+   bool              RankExternalDistributions(void);
+   bool              PublishDecision(void);
+   ulong             m_snapshot_device_hash;
+   bool              m_snapshot_staged;
+
+   bool              ValidateSnapshotMeta(const SDPCCSnapshotMeta &meta) const;
+   bool              ValidateSnapshotTimes(const SDPCCSnapshotMeta &meta) const;
+   bool              BindSnapshotTimes(void);
+   bool              CaptureSnapshotIdentity(void);
+   bool              CopyFinitePrefix(CBufferFloat *source, CBufferFloat *destination, const uint count);
+   bool              UpdateProjectionSummary(const uint stage);
+   bool              CompositeArithmeticLayout(SDPCCLayout &c, SDPCCLayout &r, uint &count);
+   bool              CompositeArithmeticBuffers(CBufferFloat *&buffers[], const ulong &counts[]);
+   bool              InitializeCompositeNoise(CBufferFloat *normalized);
+   bool              CompositeReverseArithmetic(CBufferFloat *normalized, CBufferFloat *epsilon,
+                                   CBufferFloat *proposal, const uint j);
+   bool              CompositeActionAffine(CBufferFloat *source, CBufferFloat *destination, const uint direction);
+   bool              MergeCompositeProjectionMask(CBufferFloat *normalized_corrected);
+
+   virtual bool      OwnsBufferOrDeviceSlot(CBufferFloat *candidate) override;
+   virtual bool      feedForward(CNeuronBaseOCL *source) override;
+   virtual bool      feedForward(CNeuronBaseOCL *source, CBufferFloat *context) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source) override;
+   virtual bool      calcInputGradients(CNeuronBaseOCL *source, CBufferFloat *second,
+                                   CBufferFloat *gradient, ENUM_ACTIVATION function = None) override;
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source) override { return(Fail(DPCC_BACKWARD_UNSUPPORTED)); }
+   virtual bool      updateInputWeights(CNeuronBaseOCL *source, CBufferFloat *second) override
+     {               return(Fail(DPCC_BACKWARD_UNSUPPORTED)); }
+public:
+   //--- Last actual projection's native correction cost; NULL in P0/no publication.
+   CBufferFloat      *GetCorrectionCost(void)
+     {               return(m_public_valid && !m_failed && !m_transfer_pending ? m_projector.GetCorrectionCost() : NULL); }
+   bool              BindDecisionContext(CBufferFloat *context, const SDPCCDecisionMeta &meta);
+   bool              GetCheckedPlans(CBufferFloat *&plans) const;
+   bool              GetCandidateFlags(CBufferFloat *&flags) const;
+   bool              GetOracleCandidateMask(uchar &mask[], uint &horizon) const;
+   //--- Safely releases an Oracle fallback unroll when no projected candidate can carry its gradient.
+   bool              AbortNoFeasibleAction6Unroll(void);
+   //--- Non-owning bindings; the caller keeps all three CNet objects alive until unbind.
+   bool              BindPolicyNetworks(CNet *market, CNet *q1, CNet *q2);
+   bool              UnbindPolicyNetworks(void);
+   bool              GetSelectedCandidate(uint &candidate) const;
+   bool              GetAction6PlanShape(uint &candidates, uint &horizon) const
+     {
+      candidates = 0;
+      horizon = 0;
+      if(m_actor_abi != 3 || !m_public_valid || m_failed || m_busy || m_transfer_pending ||
+         m_status != DPCC_OK || m_shape.M == 0 || m_shape.H == 0)
+         return(false);
+      candidates = m_shape.M;
+      horizon = m_shape.H;
+      return(true);
+     }
+   bool              BindAction6Gradient(const ulong decision_id, const uint candidate, CBufferFloat *gradient6);
+   bool              BindFullPlanGradient(const ulong decision_id, const uint candidate, CBufferFloat *gradient_h6);
+   bool              BindSelectedPolicyGradient(const ulong decision_id, const uint critic_index, const float upstream);
+   bool              CancelGeneration(void);
+                     CNeuronDPCCOCL(void);
+                    ~CNeuronDPCCOCL(void);
+   virtual int       Type(void) const override { return(defNeuronDPCCOCL); }
+   bool              Init(uint outputs, uint index, COpenCLMy *context, CLayerDescription *description);
+   virtual bool      Init(uint outputs, uint index, COpenCLMy *context, uint neurons,
+                     ENUM_OPTIMIZATION method, uint batch) override { return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   bool              Configure(const SDPCCConfig &config);
+   bool              Configure(const SDPCCRuntimeConfig &config);
+   bool              MatchesRuntimeConfig(const SDPCCRuntimeConfig &runtime) const;
+   uint              ActorABI(void) const { return(m_actor_abi); }
+   bool              Configure(const SDPCCConfig &config, const SDPCCDecoderComposition &decoder,
+                  const SDPCCDenoiserComposition &denoiser_model,
+                  const SDPCCDenoiserComposition &denoiser_training,
+                  const double &beta[], const double &alpha_bar[], const double &sigma[]);
+   bool              ImportPreparedComponents(CNeuronScenarioDecoderOCL *decoder,
+                                 CNeuronPlanDenoiserOCL *denoiser, CNeuronBatchNormOCL *normalizer);
+   bool              SetProjectionMode(const ENUM_DPCC_MODE mode);
+   bool              SetSnapshotMeta(const SDPCCSnapshotMeta &meta);
+   ENUM_DPCC_STATUS  LastStatus(void) const { return(m_status); }
+   bool              HasValidDecision(void) const { return(m_public_valid && !m_failed && !m_transfer_pending && m_status == DPCC_OK); }
+   CBufferFloat      *GetSelectedPlan(void) { return(HasValidDecision() ? m_work[DPCC_CW_SELECTED] : NULL); }
+   CBufferFloat      *GetCandidatePlans(void) { return(HasValidDecision() ? m_plan_source.getOutput() : NULL); }
+   CBufferFloat      *GetScenarioReturns(void) { return(HasValidDecision() ? m_work[DPCC_CW_RETURNS] : NULL); }
+   CBufferFloat      *GetScores(void) { return(HasValidDecision() ? m_work[DPCC_CW_SCORES] : NULL); }
+   CBufferFloat      *GetCandidateStatus(void) { return(m_public_valid && !m_failed ? m_work[DPCC_CW_STATUS] : NULL); }
+   CBufferFloat      *GetDiagnostics(void) { return(m_public_valid && !m_failed ? m_work[DPCC_CW_DIAGNOSTICS] : NULL); }
+   virtual CBufferFloat *getOutput(void) const override { return(m_public_valid && !m_failed && !m_transfer_pending ? Output : NULL); }
+   virtual int       getOutputIndex(void) const override { return(getOutput() ? Output.GetIndex() : INVALID_HANDLE); }
+   virtual CBufferFloat *getPrevOutput(void) const override { return(NULL); }
+   virtual CBufferFloat *getGradient(void) const override
+     {               return(m_actor_abi == 3 && m_action_gradient_bound && !m_failed ? Gradient : NULL); }
+   virtual int       getGradientIndex(void) const override
+     {               return(getGradient() ? Gradient.GetIndex() : INVALID_HANDLE); }
+   virtual int       getPrevOutIndex(void) const override { return(INVALID_HANDLE); }
+   virtual int       getOutputVal(float &values[]) override { return(getOutput() ? Output.GetData(values) : 0); }
+   virtual int       getOutputVal(CArrayFloat *values) override { return(getOutput() ? Output.GetData(values) : 0); }
+   virtual int       getOutputVal(vector<float> &values) override { return(getOutput() ? Output.GetData(values) : 0); }
+   virtual bool      SetOutput(CBufferFloat *buffer, bool delete_previous = true) override { return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual bool      SetGradient(CBufferFloat *buffer, bool delete_previous = true) override { return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual bool      SetGradientIndex(int index) override { return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual void      SetActivationFunction(ENUM_ACTIVATION value) override { if(value != None) Fail(DPCC_CONTRACT_MISMATCH); }
+   virtual bool      calcOutputGradients(CBufferFloat *target, float &error) override { return(Fail(DPCC_BACKWARD_UNSUPPORTED)); }
+   virtual bool      UpdateInputWeights(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputWeightsSecond(CObject *source, CNeuronBaseOCL *second) override { return(Fail(DPCC_BACKWARD_UNSUPPORTED)); }
+   virtual bool      UpdateInputState(CObject *source, CBufferFloat *second = NULL) override;
+   virtual bool      UpdateInputStateSecond(CObject *source, CNeuronBaseOCL *second) override { return(Fail(DPCC_BACKWARD_UNSUPPORTED)); }
+   virtual bool      WeightsUpdate(CNeuronBaseOCL *source, float tau) override;
+   virtual bool      numOutputs(const uint outputs, ENUM_OPTIMIZATION method) override { return(Fail(DPCC_CONTRACT_MISMATCH)); }
+   virtual void      TrainMode(bool flag) override;
+   virtual bool      TrainMode(void) override { return(m_actor_abi == 3 && bTrain); }
+   virtual bool      CanStartForward(void) const override
+     {
+      return(!m_failed && !m_busy && !m_transfer_pending && m_configured &&
+             (m_actor_abi == 3 ? !m_action_unroll_live && !m_action_trace_live && ValidateAction6() :
+              m_imported && ValidateOwned()));
+     }
+   virtual bool      Clear(void) override;
+   virtual bool      Save(const int file_handle) override;
+   virtual bool      Load(const int file_handle) override;
+   virtual CLayerDescription *GetLayerInfo(void) override;
+   virtual void      AttachOpenCL(COpenCLMy *context) override;
+   virtual bool      SupportsOpenCLChecked(void) const override;
+   virtual bool      SetOpenCLChecked(COpenCLMy *context) override;
+   virtual void      SetOpenCL(COpenCLMy *context) override { SetOpenCLChecked(context); }
+   virtual bool      AppendParameterFingerprint(ulong &fingerprint) override;
+   ulong             WeightSignature(void);
+   ulong             ContractSignature(void) const;
+   ulong             TrainableStateFingerprint(void);
+   ulong             SnapshotFingerprint(void);
+   bool              ReadNormalizationSnapshot(float &price_norm[]);
+  };
+//+------------------------------------------------------------------+
+//| Native critic evaluation coordinator used by the DPCC top layer. |
+//+------------------------------------------------------------------+
+bool NNQCaptureCritic(CNet *critic, SLayerReadState &state, const ulong owner, const ulong state_id);
+bool NNQCriticGraph(CNet *critic);
+bool NNQRestoreCritic(CNet *critic, SLayerReadState &state);
+bool NNQEvaluateCriticRows(CNet *critic, CBufferFloat *account13, CBufferFloat *plans, const uint horizon,
+                           const uint rows, CBufferFloat *z, CBufferFloat *log_u, CBufferFloat *pi,
+                           const int forecast_type, const int risk_type, const float risk_parameter,
+                           const float mean_weight, const SLayerReadState &state, SLayerRowsWorkspace &work,
+                           CBufferFloat *scores, CBufferFloat *numeric_flags);
+bool NNQRankCriticRows(COpenCLMy *context, CBufferFloat *q1, CBufferFloat *q2, CBufferFloat *candidate_flags,
+                       CBufferFloat *numeric_flags, CBufferFloat *scores, CBufferFloat *selected, const uint rows);
+bool NNQSelectedPolicyGradient(CNet *critic, CNet *market, CBufferFloat *account13, CBufferFloat *action6,
+                               const int risk_type, const float risk_parameter, const float mean_weight,
+                               const float upstream, SLayerReadState &state, SLayerRowsWorkspace &work,
+                               CBufferFloat *action_gradient);
+
 #endif // NEURONET_DECLARATIONS_MQH
 
 #ifndef NEURONET_BUILDING_FACADE

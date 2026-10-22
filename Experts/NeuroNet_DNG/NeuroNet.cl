@@ -27,6 +27,9 @@
 #define D2SKILL_PROTECTED  2
 #define D2SKILL_ACTIVE     3
 #define D2SKILL_INACTIVE   4
+//--- Action6 direct-lot limit shared by rollout validation and projection.
+#define DPCC_ACTION_VOLUME_MAX 1.0f
+#define DPCC_ACTION_PROBABILITY_EPS 1.0e-6f
 //--- Activation Functions
 #define ActFunc_None         -1
 #define ActFunc_TANH          0
@@ -18500,3 +18503,5714 @@ __kernel void FQF_RearrangeGradient(__global float *ordered_quantiles_gradient,
    probabilities_gradient[dst] = ordered_probabilities_gradient[index];
   }
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| DPCC pure account transition and independent scenario rollouts    |
+//+------------------------------------------------------------------+
+#define DPCC_RISK_COUNT       16
+#define DPCC_NATIVE_RISK_CONTINUATION_FLOATS 20
+#define DPCC_NATIVE_PENDING_PHASE_FLOATS 21
+#define DPCC_STATUS_INVALID    3
+#define DPCC_STATUS_NUMERIC    5
+#define DPCC_CALC_FOREX        0
+#define DPCC_CALC_FUTURES      1
+#define DPCC_CALC_CFD          2
+#define DPCC_CALC_CFDINDEX     3
+#define DPCC_CALC_CFDLEVERAGE  4
+#define DPCC_CALC_FOREX_NOLEV  5
+#define DPCC_CALC_STOCKS      32
+#define DPCC_CALC_EXCH_FUT    33
+#define DPCC_CALC_FORTS       34
+#define DPCC_CALC_BONDS       35
+#define DPCC_CALC_MOEX_STOCKS 36
+#define DPCC_CALC_MOEX_BONDS  37
+#define DPCC_CALC_COLLATERAL  64
+
+typedef struct
+  {
+   float account[24];
+   float equity_anchor;
+   float entry_interest;
+   float native_mark;
+   float accrued_interest;
+   float maximum_drawdown;
+   uint  currency_digits;
+   int   source_action;
+   int   exit_kind;
+   int   numeric_status;
+  } DPCCAccountState;
+
+typedef struct
+  {
+   float maximum[DPCC_RISK_COUNT];
+   int   first_h;
+   int   constraint;
+   int   phase;
+   int   source_action;
+  } DPCCRiskState;
+
+#define DPCC_NATIVE_CONTINUATION_FLOATS 33
+#define DPCC_NATIVE_MAX_EXACT_FLOAT_INDEX 16777216U
+
+//+------------------------------------------------------------------+
+//| DPCC scalar domains and native calculation-mode families          |
+//+------------------------------------------------------------------+
+int DPCCInteger(float value, float minimum, float maximum)
+  {
+   return(isfinite(value) && value >= minimum && value <= maximum && value == floor(value));
+  }
+int DPCCBoolean(float value)
+  {
+   return(value == 0.0f || value == 1.0f);
+  }
+int DPCCBondMode(int mode)
+  {
+   return(mode == DPCC_CALC_BONDS || mode == DPCC_CALC_MOEX_BONDS);
+  }
+int DPCCTickMode(int mode)
+  {
+   return(mode == DPCC_CALC_FUTURES || mode == DPCC_CALC_EXCH_FUT || mode == DPCC_CALC_FORTS);
+  }
+int DPCCSupportedMode(int mode)
+  {
+   return((mode >= DPCC_CALC_FOREX && mode <= DPCC_CALC_FOREX_NOLEV) ||
+          (mode >= DPCC_CALC_STOCKS && mode <= DPCC_CALC_MOEX_BONDS) || mode == DPCC_CALC_COLLATERAL);
+  }
+int DPCCOnGrid(float value, float step, float tolerance)
+  {
+   const float units = value / step;
+   const float rounded = rint(units) * step;
+   return(isfinite(units) && isfinite(rounded) && fabs(value - rounded) <= tolerance);
+  }
+int DPCCPriceValid(float price, __global const float *instrument)
+  {
+   if(!isfinite(price))
+      return(0);
+   if(instrument[27] == 1.0f && price < instrument[25])
+      return(0);
+   if(instrument[28] == 1.0f && price > instrument[26])
+      return(0);
+   return(1);
+  }
+//+------------------------------------------------------------------+
+//| Native PNL; each conversion has exactly one currency boundary     |
+//+------------------------------------------------------------------+
+float DPCCProfit(float signed_lots, float entry, float close, float entry_interest, float interest,
+                 float fx_gain, float fx_loss, __global const float *instrument)
+  {
+   const int mode = (int)instrument[11];
+   if(signed_lots == 0.0f || mode == DPCC_CALC_COLLATERAL)
+      return(0.0f);
+
+   float native = signed_lots * (close - entry) * instrument[2];
+   if(DPCCBondMode(mode))
+      native = signed_lots * instrument[2] *
+               ((close - entry) * instrument[22] * instrument[44] + interest - entry_interest);
+   else
+      if(DPCCTickMode(mode))
+        {
+         const float difference = signed_lots * (close - entry);
+         native = difference * (difference >= 0.0f ? instrument[20] : instrument[21]) / instrument[1];
+         if(instrument[43] == 1.0f)
+            return(native);
+        }
+   return(native * (native >= 0.0f ? fx_gain : fx_loss));
+  }
+//+------------------------------------------------------------------+
+//| Initial/maintenance margin, including FORTS discount and Last     |
+//+------------------------------------------------------------------+
+// Nearest money unit only when FP32 factor/input uncertainty cannot cross its
+// half-unit boundary. Refusal prevents silent cent changes, not a feasible
+// result. No legacy calculation calls this function.
+float DPCCMarginRound(float value, uint digits)
+  {
+   if(!isfinite(value) || value < 0.0f || digits > 8U)
+      return(NAN);
+   if(value == 0.0f)
+      return(0.0f);
+   float scale = 1.0f;
+   for(uint i = 0; i < digits; i++) scale *= 10.0f;
+   const float units = value * scale;
+   const float uncertainty = fmax(fabs(units) * (32.0f * FLT_EPSILON), 32.0f * FLT_EPSILON);
+   if(!isfinite(units) || uncertainty >= 0.5f)
+
+      return(NAN);
+   if(fabs((units - floor(units)) - 0.5f) <= uncertainty)
+      return((floor(units) + 1.0f) / scale); //--- Conservatively round ambiguous half-unit margins upward.
+   return(floor(units + 0.5f) / scale);
+  }
+float DPCCMargin(float signed_lots, float average, float market, float native_last, int initial,
+                 float fx_margin, float fx_gain, __global const float *instrument, uint currency_digits)
+  {
+   const float volume = fabs(signed_lots);
+   const int   mode = (int)instrument[11];
+   if(volume == 0.0f || mode == DPCC_CALC_COLLATERAL)
+      return(0.0f);
+
+   const int   is_buy = signed_lots > 0.0f;
+   float rate = initial ? instrument[is_buy ? 17 : 18] : instrument[is_buy ? 41 : 42];
+   if(instrument[30] == 4.0f && !initial && rate == 0.0f)
+      rate = instrument[is_buy ? 17 : 18];
+   if(instrument[30] == 3.0f)
+     {
+      if((mode != DPCC_CALC_FOREX && mode != DPCC_CALC_FOREX_NOLEV) ||
+         instrument[31] != 0.0f || instrument[32] != 0.0f ||
+         instrument[15] != 0.0f || instrument[16] != 0.0f ||
+         instrument[46] != 0.0f || instrument[47] != 0.0f ||
+         fx_margin != 1.0f || !isfinite(market) || market <= 0.0f ||
+         !isnormal(instrument[2]) || instrument[2] <= 0.0f || !isnormal(market) ||
+         !isnormal(volume) || !isfinite(rate) || rate < 0.0f ||
+         (mode == DPCC_CALC_FOREX && (!isfinite(instrument[19]) || instrument[19] <= 0.0f)))
+         return(NAN);
+      const float effective_rate = !initial && rate == 0.0f ? instrument[is_buy ? 17 : 18] : rate;
+      if(!isfinite(effective_rate) || effective_rate < 0.0f ||
+         (effective_rate > 0.0f && !isnormal(effective_rate)))
+         return(NAN);
+      if(effective_rate == 0.0f)
+         return(0.0f);
+      //--- Relative FP32 rounding bounds require every nonzero intermediate normal.
+      //--- Reject subnormals and underflow-to-zero before a later factor can recover.
+      const float contracted = volume * instrument[2];
+      if(!isnormal(contracted) || contracted <= 0.0f)
+         return(NAN);
+      const float leveraged = contracted / (mode == DPCC_CALC_FOREX ? instrument[19] : 1.0f);
+      if(!isnormal(leveraged) || leveraged <= 0.0f)
+         return(NAN);
+      const float rated = leveraged * effective_rate;
+      if(!isnormal(rated) || rated <= 0.0f)
+         return(NAN);
+      const float margin = rated * market;
+      if(!isnormal(margin) || margin <= 0.0f)
+         return(NAN);
+      return(DPCCMarginRound(margin, currency_digits));
+     }
+   float       margin = 0.0f;
+   int         already_account = 0;
+
+   if((!initial && instrument[47] == 1.0f) || (initial && instrument[46] == 1.0f))
+      margin = volume * instrument[initial ? 15 : 16] * rate;
+   else
+      if(!initial && instrument[46] == 1.0f)
+         margin = volume * instrument[15] * rate;
+      else
+         switch(mode)
+           {
+            case DPCC_CALC_FOREX:
+               margin = volume * instrument[2] / instrument[19] * rate;
+               break;
+            case DPCC_CALC_FOREX_NOLEV:
+               margin = volume * instrument[2] * rate;
+               break;
+            case DPCC_CALC_CFD:
+               margin = volume * instrument[2] * market * rate;
+               break;
+            case DPCC_CALC_CFDLEVERAGE:
+               margin = volume * instrument[2] * market / instrument[19] * rate;
+               break;
+            case DPCC_CALC_CFDINDEX:
+               margin = volume * instrument[2] * market * instrument[20] / instrument[1] * rate;
+               already_account = instrument[43] == 1.0f;
+               break;
+            case DPCC_CALC_FUTURES:
+            case DPCC_CALC_EXCH_FUT:
+            case DPCC_CALC_FORTS:
+               margin = volume * (initial || instrument[16] == 0.0f ? instrument[15] : instrument[16]) * rate;
+               break;
+            case DPCC_CALC_STOCKS:
+            case DPCC_CALC_MOEX_STOCKS:
+               margin = volume * instrument[2] * native_last * rate;
+               break;
+            case DPCC_CALC_BONDS:
+            case DPCC_CALC_MOEX_BONDS:
+               margin = volume * instrument[2] * instrument[22] * average * instrument[44];
+               break;
+            default:
+               return(NAN);
+           }
+
+   if(instrument[30] == 4.0f &&
+      ((initial && instrument[46] == 1.0f) || (!initial && (instrument[46] == 1.0f || instrument[47] == 1.0f))) &&
+      (mode == DPCC_CALC_FOREX || mode == DPCC_CALC_CFDLEVERAGE))
+      margin /= instrument[19];
+   if(!already_account)
+      margin *= fx_margin;
+   if(mode == DPCC_CALC_FORTS)
+     {
+      const float favorable = is_buy ? instrument[40] - average : average - instrument[40];
+      if(favorable > 0.0f)
+        {
+         float discount = volume * favorable * instrument[20] / instrument[1];
+         if(instrument[43] == 0.0f)
+            discount *= fx_gain;
+         margin -= discount;
+        }
+     }
+   return(instrument[30] == 4.0f ? DPCCMarginRound(margin, currency_digits) : margin);
+  }
+//+------------------------------------------------------------------+
+//| Select the frozen conversion side for the signed exposure        |
+//+------------------------------------------------------------------+
+float DPCCMarginFX(float signed_lots, __global const float *execution, __global const float *instrument)
+  {
+   return(instrument[30] == 4.0f && signed_lots < 0.0f ? execution[23] : execution[15]);
+  }
+//+------------------------------------------------------------------+
+//| Mark account while retaining the verified initial equity anchor   |
+//+------------------------------------------------------------------+
+void DPCCMark(__private DPCCAccountState *state, float bid, float ask, float native, float interest,
+              float fx_gain, float fx_loss, float fx_margin, __global const float *instrument)
+  {
+   const float q = state->account[2];
+   const float close = q >= 0.0f ? bid : ask;
+   const float profit = DPCCProfit(q, state->account[3], close, state->entry_interest, interest,
+                                   fx_gain, fx_loss, instrument);
+   const float collateral = (int)instrument[11] == DPCC_CALC_COLLATERAL ?
+                            q * instrument[2] * native * instrument[24] * fx_gain : 0.0f;
+   state->account[15] = bid;
+   state->account[16] = ask;
+   state->native_mark = native;
+   state->accrued_interest = interest;
+   state->account[1] = state->equity_anchor + state->account[0] + profit - state->account[6] + collateral;
+   const float margin_market = (instrument[30] == 3.0f || instrument[30] == 4.0f) ? (q >= 0.0f ? ask : bid) : close;
+   state->account[10] = DPCCMargin(q, state->account[3], margin_market, native, 0,
+                                   fx_margin, fx_gain, instrument, state->currency_digits);
+   state->account[12] = state->account[1] - state->account[10] - state->account[11];
+   if(state->account[20] == 0.0f)
+     {
+      state->account[8] = state->account[1];
+      state->account[20] = 1.0f;
+     }
+   state->account[8] = fmax(state->account[8], state->account[1]);
+   state->maximum_drawdown = fmax(state->maximum_drawdown, state->account[8] - state->account[1]);
+   for(int i = 0; i < 24; i++)
+      if(!isfinite(state->account[i]))
+         state->numeric_status = DPCC_STATUS_NUMERIC;
+   if(!isfinite(native) || !isfinite(interest) || state->account[10] < 0.0f ||
+      !isfinite(state->entry_interest) || !isfinite(state->equity_anchor) ||
+      !isfinite(state->maximum_drawdown))
+      state->numeric_status = DPCC_STATUS_NUMERIC;
+  }
+//+------------------------------------------------------------------+
+//| Per-constraint maxima prevent event count from changing risk      |
+//+------------------------------------------------------------------+
+void DPCCRiskInit(__private DPCCRiskState *risk)
+  {
+   for(int i = 0; i < DPCC_RISK_COUNT; i++)
+      risk->maximum[i] = 0.0f;
+   risk->first_h = -1;
+   risk->constraint = -1;
+   risk->phase = -1;
+   risk->source_action = -1;
+  }
+void DPCCRiskAdd(__private DPCCRiskState *risk, int constraint, float amount, float scale,
+                 int h, int phase, int source_action)
+  {
+   if(amount <= 0.0f)
+      return;
+   const float value = amount / scale;
+   risk->maximum[constraint] = fmax(risk->maximum[constraint], value);
+   if(risk->first_h < 0 || h < risk->first_h || (h == risk->first_h && phase < risk->phase))
+     {
+      risk->first_h = h;
+      risk->constraint = constraint;
+      risk->phase = phase;
+      risk->source_action = source_action;
+     }
+  }
+float DPCCRiskMaximum(__private const DPCCRiskState *risk)
+  {
+   float result = 0.0f;
+   for(int i = 0; i < DPCC_RISK_COUNT; i++)
+      result = fmax(result, risk->maximum[i]);
+   return(result);
+  }
+void DPCCRiskMerge(__private DPCCRiskState *destination, __private const DPCCRiskState *source)
+  {
+   for(int i = 0; i < DPCC_RISK_COUNT; i++)
+      destination->maximum[i] = fmax(destination->maximum[i], source->maximum[i]);
+   if(source->first_h >= 0 && (destination->first_h < 0 || source->first_h < destination->first_h ||
+      (source->first_h == destination->first_h && source->phase < destination->phase)))
+     {
+      destination->first_h = source->first_h;
+      destination->constraint = source->constraint;
+      destination->phase = source->phase;
+      destination->source_action = source->source_action;
+     }
+  }
+void DPCCObserve(__private DPCCAccountState *state, __private DPCCRiskState *risk,
+                 __global const float *limits, float volume_scale, int h, int phase)
+  {
+   for(int i = 0; i < 24; i++)
+      if(!isfinite(state->account[i]))
+         state->numeric_status = DPCC_STATUS_NUMERIC;
+   if(!isfinite(state->entry_interest) || !isfinite(state->equity_anchor) ||
+      !isfinite(state->native_mark) || !isfinite(state->accrued_interest) ||
+      !isfinite(state->maximum_drawdown))
+      state->numeric_status = DPCC_STATUS_NUMERIC;
+   const uint  mask = (uint)limits[20];
+   const float cash = limits[21];
+   const float equity = state->account[1];
+   const float total_margin = state->account[10] + state->account[11];
+   const int   source = state->source_action;
+   if(mask & 1U)
+      DPCCRiskAdd(risk, 0, fabs(state->account[2]) - limits[0], volume_scale, h, phase, source);
+   if(mask & 2U)
+      DPCCRiskAdd(risk, 1, limits[1] + limits[11] - state->account[12], cash, h, phase, source);
+   if(mask & 4U)
+     {
+      const float fraction = equity > 0.0f ? total_margin / equity : (total_margin > 0.0f ? 1.0f : 0.0f);
+      DPCCRiskAdd(risk, 2, fraction - limits[2], 1.0f, h, phase, source);
+      if(!isfinite(fraction))
+         state->numeric_status = DPCC_STATUS_NUMERIC;
+     }
+   if(mask & 8U)
+      DPCCRiskAdd(risk, 3, limits[3] - equity, cash, h, phase, source);
+   if(mask & 16U)
+      DPCCRiskAdd(risk, 4, state->account[9] - equity - (limits[4] - limits[12]), cash, h, phase, source);
+   if(mask & 32U)
+      DPCCRiskAdd(risk, 5, state->account[8] - equity - limits[5], cash, h, phase, source);
+   if(mask & 64U)
+      DPCCRiskAdd(risk, 6, state->account[7] - equity - limits[6], cash, h, phase, source);
+   if(equity <= 0.0f)
+      DPCCRiskAdd(risk, 14, fmax(1.0f, -equity / cash), 1.0f, h, phase, source);
+   for(int i = 0; i < DPCC_RISK_COUNT; i++)
+      if(!isfinite(risk->maximum[i]))
+         state->numeric_status = DPCC_STATUS_NUMERIC;
+  }
+//+------------------------------------------------------------------+
+//| Real close and opening legs; no fee for unchanged exposure         |
+//+------------------------------------------------------------------+
+int DPCCTradePermitted(float old_q, float target, int trade_mode)
+  {
+   if(old_q == target)
+      return(1);
+   if(trade_mode == 0)
+      return(0);
+   const int same_side = (old_q > 0.0f && target > 0.0f) || (old_q < 0.0f && target < 0.0f);
+   const int reduction = target == 0.0f || (same_side && fabs(target) <= fabs(old_q));
+   if(trade_mode == 3)
+      return(reduction);
+   if(trade_mode == 1 && target < 0.0f)
+      return(reduction);
+   if(trade_mode == 2 && target > 0.0f)
+      return(reduction);
+   return(1);
+  }
+void DPCCClose(__private DPCCAccountState *state, float volume, __global const float *instrument,
+               __global const float *execution, __global const float *limits)
+  {
+   const float q = state->account[2];
+   if(volume == 0.0f || q == 0.0f)
+      return;
+   const int   buy = q > 0.0f;
+   const float signed_volume = buy ? volume : -volume;
+   const float extra = limits[13] * instrument[0];
+   const float fill = buy ? state->account[15] - execution[6] - extra :
+                           state->account[16] + execution[7] + extra;
+   const float gross = DPCCProfit(signed_volume, state->account[3], fill, state->entry_interest,
+                                  state->accrued_interest, execution[13], execution[14], instrument);
+   const float cost = volume * execution[buy ? 10 : 11] + execution[12];
+   const float old_cost = state->account[6] * volume / fabs(q);
+   state->account[0] += gross - cost - old_cost;
+   state->account[13] += gross;
+   state->account[14] += cost + old_cost;
+   state->account[6] -= old_cost;
+   state->account[2] = buy ? q - volume : q + volume;
+   if(state->account[2] == 0.0f)
+     {
+      state->account[3] = 0.0f;
+      state->account[4] = 0.0f;
+      state->account[5] = 0.0f;
+      state->account[17] = 0.0f;
+      state->account[18] = 0.0f;
+      state->entry_interest = 0.0f;
+     }
+   if(!isfinite(fill) || !isfinite(gross) || !isfinite(cost) || !isfinite(old_cost))
+      state->numeric_status = DPCC_STATUS_NUMERIC;
+   DPCCMark(state, state->account[15], state->account[16], state->native_mark, state->accrued_interest,
+             execution[13], execution[14], DPCCMarginFX(state->account[2], execution, instrument), instrument);
+  }
+void DPCCOpen(__private DPCCAccountState *state, float target, float volume, int h,
+              __global const float *instrument, __global const float *execution,
+              __global const float *limits)
+  {
+   if(volume == 0.0f)
+      return;
+   const int   buy = target > 0.0f;
+   const float extra = limits[13] * instrument[0];
+   const float fill = buy ? state->account[16] + execution[4] + extra :
+                           state->account[15] - execution[5] - extra;
+   const float old_volume = fabs(state->account[2]);
+   const float total_volume = old_volume + volume;
+   state->account[3] = (state->account[3] * old_volume + fill * volume) / total_volume;
+   state->entry_interest = (state->entry_interest * old_volume + state->accrued_interest * volume) / total_volume;
+   const float cost = volume * execution[buy ? 8 : 9] + execution[12];
+   state->account[0] -= cost;
+   state->account[14] += cost;
+   state->account[2] = target;
+   state->source_action = h;
+   if(!isfinite(fill) || !isfinite(cost) || !isfinite(total_volume))
+      state->numeric_status = DPCC_STATUS_NUMERIC;
+   DPCCMark(state, state->account[15], state->account[16], state->native_mark, state->accrued_interest,
+             execution[13], execution[14], DPCCMarginFX(state->account[2], execution, instrument), instrument);
+  }
+//+------------------------------------------------------------------+
+//| Protective exit, including unavailable/disabled real operation     |
+//+------------------------------------------------------------------+
+int DPCCProtectionKind(__private const DPCCAccountState *state)
+  {
+   const float q = state->account[2];
+   if(q == 0.0f)
+      return(0);
+   const float price = q > 0.0f ? state->account[15] : state->account[16];
+   if(state->account[17] == 1.0f && (q > 0.0f ? price <= state->account[4] : price >= state->account[4]))
+      return(1);
+   if(state->account[18] == 1.0f && (q > 0.0f ? price >= state->account[5] : price <= state->account[5]))
+      return(2);
+   return(0);
+  }
+void DPCCProtect(__private DPCCAccountState *state, __private DPCCRiskState *risk, int h, int phase,
+                 __global const float *instrument, __global const float *execution,
+                 __global const float *limits)
+  {
+   const int kind = DPCCProtectionKind(state);
+   if(kind == 0)
+      return;
+   if(!DPCCTradePermitted(state->account[2], 0.0f, (int)instrument[29]) ||
+      (((uint)instrument[34] & 1U) == 0U) || (int)instrument[11] == DPCC_CALC_COLLATERAL)
+     {
+      DPCCRiskAdd(risk, 10, 1.0f, 1.0f, h, phase, state->source_action);
+      return;
+     }
+   state->exit_kind = kind;
+   DPCCClose(state, fabs(state->account[2]), instrument, execution, limits);
+  }
+void DPCCTerminate(__private DPCCAccountState *state, __private DPCCRiskState *risk, int h, int phase,
+                   __global const float *instrument, __global const float *execution,
+                   __global const float *limits, float volume_scale)
+  {
+   if(state->account[1] > 0.0f || state->account[19] == 1.0f)
+      return;
+   if(state->account[2] != 0.0f)
+     {
+      if(DPCCTradePermitted(state->account[2], 0.0f, (int)instrument[29]) &&
+         ((uint)instrument[34] & 1U) != 0U && (int)instrument[11] != DPCC_CALC_COLLATERAL)
+         DPCCClose(state, fabs(state->account[2]), instrument, execution, limits);
+      else
+         DPCCRiskAdd(risk, 10, 1.0f, 1.0f, h, phase, state->source_action);
+     }
+   DPCCObserve(state, risk, limits, volume_scale, h, phase);
+   state->account[19] = 1.0f;
+  }
+//+------------------------------------------------------------------+
+//| Calendar on the current mark; DAY_RESET follows outgoing risk     |
+//+------------------------------------------------------------------+
+void DPCCCalendar(__private DPCCAccountState *state, __private DPCCRiskState *risk,
+                  __global const float *event, __global const float *instrument,
+                  __global const float *execution, __global const float *limits,
+                  float volume_scale, int h, int phase)
+  {
+   if(state->account[19] == 1.0f)
+      return;
+   DPCCObserve(state, risk, limits, volume_scale, h, phase);
+   if(event[1] == 1.0f)
+     {
+      state->account[7] = state->account[1];
+      state->account[22] = 1.0f;
+     }
+   else
+     {
+      const float flow = fabs(state->account[2]) * event[state->account[2] >= 0.0f ? 2 : 3] * event[4];
+      state->account[0] += flow;
+      state->account[13] += flow;
+      if(flow < 0.0f)
+         state->account[14] -= flow;
+      if(!isfinite(flow))
+         state->numeric_status = DPCC_STATUS_NUMERIC;
+      DPCCMark(state, state->account[15], state->account[16], state->native_mark, state->accrued_interest,
+                execution[13], execution[14], DPCCMarginFX(state->account[2], execution, instrument), instrument);
+     }
+   DPCCObserve(state, risk, limits, volume_scale, h, phase);
+   DPCCTerminate(state, risk, h, phase, instrument, execution, limits, volume_scale);
+  }
+//+------------------------------------------------------------------+
+//| One request volume on the broker minimum/step grid                 |
+//+------------------------------------------------------------------+
+float DPCCDealVolume(float requested, float minimum, float maximum, float step)
+  {
+   const float limited = fmin(requested, maximum);
+   const float scale = fmax(fmax(fabs(limited), minimum), step);
+   const float tolerance = fmin(16.0f * FLT_EPSILON * scale, step * 0.0001f);
+   if(requested < minimum && minimum - requested > tolerance)
+      return(0.0f);
+   const float normalized = fmax(limited, minimum);
+   const float raw_steps = (normalized - minimum) / step;
+   const float nearest = round(raw_steps);
+   const float steps = fabs(raw_steps - nearest) <= tolerance / step ? nearest : floor(raw_steps);
+   const float result = minimum + steps * step;
+   if(steps < 0.0f || result - maximum > tolerance)
+      return(0.0f);
+   return(fmin(result, maximum));
+  }
+//+------------------------------------------------------------------+
+//| Nearest direct-lot position target within the sigmoid range        |
+//+------------------------------------------------------------------+
+float DPCCPositionTarget(float desired, float minimum, float step)
+  {
+   const float magnitude = fabs(desired);
+   if(magnitude < minimum)
+      return(0.0f);
+   const float rounded = minimum + round((magnitude - minimum) / step) * step;
+   const float target = DPCCDealVolume(rounded, minimum, 1.0f, step);
+   return(desired > 0.0f ? target : -target);
+  }
+//+------------------------------------------------------------------+
+//| Decode direct lots and close broker-sized legs to the target      |
+//+------------------------------------------------------------------+
+int DPCCAction(__private DPCCAccountState *state, __private DPCCRiskState *risk,
+                __global const float *action, __global const float *instrument,
+                __global const float *execution, __global const float *limits,
+                float volume_scale, float price_scale, int h)
+  {
+   for(int i = 0; i < 6; i++)
+      if(!isfinite(action[i]))
+        {
+         DPCCRiskAdd(risk, 15, 1.0f, 1.0f, h, 1, state->source_action);
+         return(0);
+        }
+   const float desired = action[0] - action[3];
+   const float target = DPCCPositionTarget(desired, instrument[3], instrument[5]);
+   if(!isfinite(desired) || !isfinite(target))
+     {
+      state->numeric_status = DPCC_STATUS_NUMERIC;
+      return(0);
+     }
+   const float old_q = state->account[2];
+   const float old_volume = fabs(old_q);
+   const float new_volume = fabs(target);
+   const int   buy = target > 0.0f;
+   const int   reversal = (old_q > 0.0f && target < 0.0f) || (old_q < 0.0f && target > 0.0f);
+   const float close_requested = reversal ? old_volume : fmax(0.0f, old_volume - new_volume);
+   const float retained_volume = reversal ? 0.0f : fmin(old_volume, new_volume);
+   const float close_tolerance = fmin(16.0f * FLT_EPSILON * fmax(old_volume, instrument[3]),
+                                       instrument[5] * 0.0001f);
+   const float open_requested = reversal ? new_volume : fmax(0.0f, new_volume - old_volume);
+   int         valid = 1;
+
+   if(action[0] < 0.0f || action[0] > DPCC_ACTION_VOLUME_MAX ||
+      action[3] < 0.0f || action[3] > DPCC_ACTION_VOLUME_MAX ||
+      (target != 0.0f && (action[buy ? 1 : 4] < 0.0f || action[buy ? 2 : 5] < 0.0f)))
+     {
+      DPCCRiskAdd(risk, 15, 1.0f, 1.0f, h, 1, state->source_action);
+      valid = 0;
+     }
+   if(!DPCCTradePermitted(old_q, target, (int)instrument[29]) ||
+      ((open_requested > 0.0f || close_requested > 0.0f) && (((uint)instrument[34] & 1U) == 0U)) ||
+      ((int)instrument[11] == DPCC_CALC_COLLATERAL && target != old_q))
+     {
+      DPCCRiskAdd(risk, 10, 1.0f, 1.0f, h, 1, state->source_action);
+      valid = 0;
+     }
+
+   float sl = 0.0f;
+   float tp = 0.0f;
+   float sl_points = 0.0f;
+   float tp_points = 0.0f;
+   int sl_active = 0;
+   int tp_active = 0;
+   if(target != 0.0f)
+     {
+      sl_points = action[buy ? 2 : 5] * instrument[7];
+      tp_points = action[buy ? 1 : 4] * instrument[6];
+      sl_active = sl_points > 0.0f;
+      tp_active = tp_points > 0.0f;
+      const float reference = state->account[buy ? 16 : 15];
+      sl = reference + (buy ? -sl_points : sl_points) * instrument[0];
+      tp = reference + (buy ? tp_points : -tp_points) * instrument[0];
+      if(sl_active)
+         sl = round(sl / instrument[1]) * instrument[1];
+      if(tp_active)
+         tp = round(tp / instrument[1]) * instrument[1];
+      if(!sl_active)
+         sl = 0.0f;
+      if(!tp_active)
+         tp = 0.0f;
+      const float trigger = state->account[buy ? 15 : 16];
+      const float minimum = instrument[8] * instrument[0];
+      if(!isfinite(sl_points) || !isfinite(tp_points) || !isfinite(sl) || !isfinite(tp))
+        {
+         state->numeric_status = DPCC_STATUS_NUMERIC;
+         return(0);
+        }
+      if(sl_active)
+         sl_points = fabs(reference - sl) / instrument[0];
+      if(tp_active)
+         tp_points = fabs(tp - reference) / instrument[0];
+      if((sl_active && (!DPCCOnGrid(sl, instrument[1], limits[15]) ||
+          !DPCCPriceValid(sl, instrument) || (buy ? trigger - sl : sl - trigger) < minimum)) ||
+         (tp_active && (!DPCCOnGrid(tp, instrument[1], limits[15]) ||
+          !DPCCPriceValid(tp, instrument) || (buy ? tp - trigger : trigger - tp) < minimum)))
+        {
+         DPCCRiskAdd(risk, 12, 1.0f, 1.0f, h, 1, state->source_action);
+         valid = 0;
+        }
+      const uint mask = (uint)limits[20];
+      if(mask & 128U)
+        {
+         const float amount = fmax(limits[7] - sl_points, sl_points - limits[8]) * instrument[0];
+         DPCCRiskAdd(risk, 7, amount, price_scale, h, 1, state->source_action);
+        }
+      if(mask & 256U)
+        {
+         const float amount = fmax(limits[9] - tp_points, tp_points - limits[10]) * instrument[0];
+         DPCCRiskAdd(risk, 8, amount, price_scale, h, 1, state->source_action);
+        }
+     }
+   if((int)instrument[11] == DPCC_CALC_COLLATERAL && (sl_active || tp_active))
+     {
+      DPCCRiskAdd(risk, 10, 1.0f, 1.0f, h, 1, state->source_action);
+      valid = 0;
+     }
+   const int change_sl = old_q != target || state->account[4] != sl ||
+                         state->account[17] != (sl_active ? 1.0f : 0.0f);
+   const int change_tp = old_q != target || state->account[5] != tp ||
+                         state->account[18] != (tp_active ? 1.0f : 0.0f);
+   if((change_sl || change_tp) && (int)instrument[29] == 0)
+     {
+      DPCCRiskAdd(risk, 10, 1.0f, 1.0f, h, 1, state->source_action);
+      valid = 0;
+     }
+   if((change_sl && (state->account[17] == 1.0f || sl_active) &&
+       (((uint)instrument[34] & 16U) == 0U)) ||
+      (change_tp && (state->account[18] == 1.0f || tp_active) &&
+       (((uint)instrument[34] & 32U) == 0U)))
+     {
+      DPCCRiskAdd(risk, 10, 1.0f, 1.0f, h, 1, state->source_action);
+      valid = 0;
+     }
+   const float old_trigger = state->account[old_q > 0.0f ? 15 : 16];
+   const float freeze = instrument[9] * instrument[0];
+   if(old_q == target && old_q != 0.0f && freeze > 0.0f &&
+      ((change_sl && state->account[17] == 1.0f && fabs(old_trigger - state->account[4]) <= freeze) ||
+       (change_tp && state->account[18] == 1.0f && fabs(old_trigger - state->account[5]) <= freeze)))
+     {
+      DPCCRiskAdd(risk, 12, 1.0f, 1.0f, h, 1, state->source_action);
+      valid = 0;
+     }
+   if(!valid)
+     {
+      if(state->numeric_status != DPCC_STATUS_NUMERIC)
+         state->numeric_status = DPCC_STATUS_INVALID;
+      return(0);
+     }
+
+   //--- Every completed close leg precedes the opposite opening, within this H1 step.
+   while(retained_volume == 0.0f ? state->account[2] != 0.0f :
+         fabs(state->account[2]) > retained_volume + close_tolerance)
+     {
+      const float before = fabs(state->account[2]);
+      const float remaining = before - retained_volume;
+      float close_volume = DPCCDealVolume(remaining, instrument[3], instrument[4], instrument[5]);
+      //--- Use the exact legal last quantity to avoid an untradeable FP32 residue.
+      if(close_volume > 0.0f && remaining >= instrument[3] - close_tolerance &&
+         remaining <= instrument[4] + close_tolerance &&
+         fabs(close_volume - remaining) <= close_tolerance)
+         close_volume = remaining;
+      if(close_volume <= 0.0f)
+        {
+         if(retained_volume == 0.0f)
+           {
+            DPCCRiskAdd(risk, 9, remaining, volume_scale, h, 1, state->source_action);
+            state->numeric_status = DPCC_STATUS_INVALID;
+            return(0);
+           }
+         break;
+        }
+      DPCCClose(state, close_volume, instrument, execution, limits);
+      DPCCObserve(state, risk, limits, volume_scale, h, 1);
+      if(state->numeric_status == DPCC_STATUS_NUMERIC)
+         return(0);
+      if(fabs(state->account[2]) >= before)
+        {
+         state->numeric_status = DPCC_STATUS_NUMERIC;
+         return(0);
+        }
+     }
+   DPCCObserve(state, risk, limits, volume_scale, h, 1);
+   DPCCTerminate(state, risk, h, 1, instrument, execution, limits, volume_scale);
+   if(state->account[19] == 1.0f)
+      return(0);
+   //--- An opposite opening requires the old exposure to be exactly flat.
+   if(target == 0.0f || (state->account[2] != 0.0f &&
+      ((state->account[2] > 0.0f) != buy)))
+      return(1);
+
+   //--- Existing same-side protection changes precede the attempted opening leg.
+   if(state->account[2] != 0.0f)
+     {
+      state->account[4] = sl;
+      state->account[5] = tp;
+      state->account[17] = sl_active ? 1.0f : 0.0f;
+      state->account[18] = tp_active ? 1.0f : 0.0f;
+     }
+   const float open_volume = DPCCDealVolume(fmax(0.0f, new_volume - fabs(state->account[2])),
+                                            instrument[3], instrument[4], instrument[5]);
+   const float filled_volume = fabs(state->account[2]) + open_volume;
+   const float filled_target = buy ? filled_volume : -filled_volume;
+   if(open_volume > 0.0f)
+     {
+      const float market = buy ? state->account[16] : state->account[15];
+      const float old_initial = DPCCMargin(state->account[2], state->account[3], market,
+                                           state->native_mark, 1, DPCCMarginFX(state->account[2], execution, instrument),
+                                           execution[13], instrument, state->currency_digits);
+      const float entry = market + (buy ? execution[4] + limits[13] * instrument[0] :
+                                        -execution[5] - limits[13] * instrument[0]);
+      const float average = (state->account[3] * fabs(state->account[2]) + entry * open_volume) / filled_volume;
+      const float target_initial = DPCCMargin(filled_target, average, market, state->native_mark, 1,
+                                              DPCCMarginFX(filled_target, execution, instrument),
+                                              execution[13], instrument, state->currency_digits);
+      const float extra_margin = fmax(target_initial - old_initial, 0.0f);
+      const float fees = open_volume * execution[buy ? 8 : 9] + execution[12];
+      if(!isfinite(old_initial) || old_initial < 0.0f || !isfinite(target_initial) ||
+         target_initial < 0.0f || !isfinite(fees))
+        {
+         state->numeric_status = DPCC_STATUS_NUMERIC;
+         return(0);
+        }
+      if(instrument[38] > 0.0f && filled_volume > instrument[38])
+        {
+         DPCCRiskAdd(risk, 9, filled_volume - instrument[38], volume_scale, h, 1, h);
+         return(1);
+        }
+      if(extra_margin + fees > state->account[12])
+        {
+         DPCCRiskAdd(risk, 13, extra_margin + fees - state->account[12], limits[21], h, 1, h);
+         return(1);
+        }
+      DPCCOpen(state, filled_target, open_volume, h, instrument, execution, limits);
+     }
+   if(state->account[2] != 0.0f)
+     {
+      state->account[4] = sl;
+      state->account[5] = tp;
+      state->account[17] = sl_active ? 1.0f : 0.0f;
+      state->account[18] = tp_active ? 1.0f : 0.0f;
+     }
+   DPCCObserve(state, risk, limits, volume_scale, h, 1);
+   DPCCTerminate(state, risk, h, 1, instrument, execution, limits, volume_scale);
+   return(1);
+  }
+//+------------------------------------------------------------------+
+//| Exact protective intersection with a linear Bid/Ask segment       |
+//+------------------------------------------------------------------+
+float DPCCCrossing(__private const DPCCAccountState *state, float end_bid, float end_ask,
+                   __private int *kind)
+  {
+   *kind = 0;
+   const float q = state->account[2];
+   if(q == 0.0f)
+      return(2.0f);
+   const float start = state->account[q > 0.0f ? 15 : 16];
+   const float end = q > 0.0f ? end_bid : end_ask;
+   float first = 2.0f;
+   for(int protection = 0; protection < 2; protection++)
+     {
+      if(state->account[17 + protection] == 0.0f)
+         continue;
+      const float level = state->account[4 + protection];
+      const int reached_start = protection == 0 ? (q > 0.0f ? start <= level : start >= level) :
+                                                  (q > 0.0f ? start >= level : start <= level);
+      const int reached_end = protection == 0 ? (q > 0.0f ? end <= level : end >= level) :
+                                                (q > 0.0f ? end >= level : end <= level);
+      if(!reached_start && !reached_end)
+         continue;
+      const float fraction = reached_start ? 0.0f : (level - start) / (end - start);
+      if(fraction >= 0.0f && fraction <= 1.0f && fraction < first)
+        {
+         first = fraction;
+         *kind = protection + 1;
+        }
+     }
+   return(first);
+  }
+//+------------------------------------------------------------------+
+//| Advance to event/node, inserting protection before calendar ties  |
+//+------------------------------------------------------------------+
+void DPCCLinearAdvance(__private DPCCAccountState *state, __private DPCCRiskState *risk,
+                       float end_bid, float end_spread, float end_native, float end_interest,
+                       float seconds, __global const float *instrument,
+                       __global const float *execution, __global const float *limits,
+                       float volume_scale, int h, int phase)
+  {
+   if(state->account[19] == 1.0f)
+      return;
+   const float end_ask = end_bid + end_spread;
+   const float start_bid = state->account[15];
+   const float start_ask = state->account[16];
+   const float start_native = state->native_mark;
+   const float start_interest = state->accrued_interest;
+   int kind = 0;
+   const float fraction = DPCCCrossing(state, end_bid, end_ask, &kind);
+   if(kind != 0)
+     {
+      DPCCMark(state, start_bid + fraction * (end_bid - start_bid),
+                start_ask + fraction * (end_ask - start_ask),
+                start_native + fraction * (end_native - start_native),
+                start_interest + fraction * (end_interest - start_interest),
+                execution[13], execution[14], DPCCMarginFX(state->account[2], execution, instrument), instrument);
+      state->account[21] += seconds * fraction;
+      DPCCObserve(state, risk, limits, volume_scale, h, phase);
+      if(DPCCTradePermitted(state->account[2], 0.0f, (int)instrument[29]) &&
+         (((uint)instrument[34] & 1U) != 0U) && (int)instrument[11] != DPCC_CALC_COLLATERAL)
+        {
+         state->exit_kind = kind;
+         DPCCClose(state, fabs(state->account[2]), instrument, execution, limits);
+        }
+      else
+         DPCCRiskAdd(risk, 10, 1.0f, 1.0f, h, phase, state->source_action);
+      DPCCObserve(state, risk, limits, volume_scale, h, phase);
+      DPCCTerminate(state, risk, h, phase, instrument, execution, limits, volume_scale);
+      if(state->account[19] == 1.0f)
+         return;
+      state->account[21] += seconds * (1.0f - fraction);
+     }
+   else
+      state->account[21] += seconds;
+   DPCCMark(state, end_bid, end_ask, end_native, end_interest,
+             execution[13], execution[14], DPCCMarginFX(state->account[2], execution, instrument), instrument);
+   DPCCObserve(state, risk, limits, volume_scale, h, phase);
+   DPCCTerminate(state, risk, h, phase, instrument, execution, limits, volume_scale);
+  }
+//+------------------------------------------------------------------+
+//| One complete pure macro transition, shared by every caller        |
+//+------------------------------------------------------------------+
+uint DPCCAccountPrepareOpen(__private DPCCAccountState *state, __private DPCCRiskState *risk,
+                            __global const float *ohlc, __global const float *instrument,
+                            __global const float *execution, __global const float *limits,
+                            __global const float *calendar, uint event_count, float volume_scale,
+                            uint h, __private float *branch_diagnostic, int defer_zero_events)
+  {
+   for(int d = 0; d < 4; d++)
+      branch_diagnostic[d] = 0.0f;
+    branch_diagnostic[0] = -1.0f;
+    if(state->account[19] == 1.0f)
+       return(0);
+   state->exit_kind = 0;
+   state->account[22] = 0.0f;
+   uint cursor = 0;
+   float previous_gap_offset = -execution[19];
+   while(cursor < event_count && calendar[cursor * 6] < 0.0f)
+     {
+      const float offset = calendar[cursor * 6];
+      state->account[21] += offset - previous_gap_offset;
+      previous_gap_offset = offset;
+      DPCCCalendar(state, risk, calendar + cursor * 6, instrument, execution, limits, volume_scale, h, 0);
+      cursor++;
+     }
+    if(state->account[19] == 1.0f)
+       return(cursor);
+   state->account[21] -= previous_gap_offset;
+   const float delta = execution[20];
+   DPCCMark(state, ohlc[0], ohlc[0] + execution[0], ohlc[0] - delta, execution[16],
+             execution[13], execution[14], DPCCMarginFX(state->account[2], execution, instrument), instrument);
+   DPCCObserve(state, risk, limits, volume_scale, h, 0);
+   DPCCProtect(state, risk, h, 0, instrument, execution, limits);
+   DPCCObserve(state, risk, limits, volume_scale, h, 0);
+   DPCCTerminate(state, risk, h, 0, instrument, execution, limits, volume_scale);
+   while(defer_zero_events == 0 && cursor < event_count && calendar[cursor * 6] == 0.0f)
+     {
+      DPCCCalendar(state, risk, calendar + cursor * 6, instrument, execution, limits, volume_scale, h, 0);
+      cursor++;
+     }
+    if(state->account[19] == 1.0f)
+       return(cursor);
+    return(cursor);
+   }
+ //+------------------------------------------------------------------+
+ //| Commits one action after the causal open preparation              |
+ //+------------------------------------------------------------------+
+void DPCCAccountCommitPrepared(__private DPCCAccountState *state, __private DPCCRiskState *risk,
+                               __global const float *action, __global const float *ohlc,
+                               __global const float *instrument, __global const float *execution,
+                               __global const float *limits, __global const float *calendar,
+                               uint event_count, uint cursor, float volume_scale, float price_scale,
+                               uint h, uint horizon, __private float *branch_diagnostic, uint apply_action)
+   {
+    const float delta = execution[20];
+    if(state->account[19] == 1.0f)
+       return;
+    if(apply_action != 0U)
+       DPCCAction(state, risk, action, instrument, execution, limits, volume_scale, price_scale, h);
+   if(state->numeric_status == DPCC_STATUS_NUMERIC || state->account[19] == 1.0f)
+      return;
+
+   DPCCAccountState branches[2];
+   DPCCRiskState    branch_risks[2];
+   for(int branch = 0; branch < 2; branch++)
+     {
+      branches[branch] = *state;
+      branches[branch].maximum_drawdown = 0.0f;
+      branch_risks[branch] = *risk;
+      __private DPCCAccountState *current = &branches[branch];
+      __private DPCCRiskState *current_risk = &branch_risks[branch];
+      uint event_index = cursor;
+      float elapsed = 0.0f;
+      float nodes[4];
+      float spreads[4];
+      nodes[0] = ohlc[0];
+      nodes[1] = ohlc[branch == 0 ? 1 : 2];
+      nodes[2] = ohlc[branch == 0 ? 2 : 1];
+      nodes[3] = ohlc[3];
+      spreads[0] = execution[0];
+      spreads[1] = execution[branch == 0 ? 2 : 3];
+      spreads[2] = execution[branch == 0 ? 3 : 2];
+      spreads[3] = execution[1];
+      for(int segment = 0; segment < 3 && current->account[19] == 0.0f; segment++)
+        {
+         const float start_time = execution[18] * (float)segment / 3.0f;
+         const float end_time = execution[18] * (float)(segment + 1) / 3.0f;
+         while(event_index < event_count && calendar[event_index * 6] <= end_time &&
+               current->account[19] == 0.0f)
+           {
+            const float event_time = calendar[event_index * 6];
+            const float fraction = (event_time - start_time) / (end_time - start_time);
+            const float bid = nodes[segment] + fraction * (nodes[segment + 1] - nodes[segment]);
+            const float spread = spreads[segment] + fraction * (spreads[segment + 1] - spreads[segment]);
+            const float interest = execution[16] + event_time / execution[18] * (execution[17] - execution[16]);
+            DPCCLinearAdvance(current, current_risk, bid, spread, bid - delta, interest,
+                               event_time - elapsed, instrument, execution, limits, volume_scale, h,
+                               event_time == execution[18] ? 3 : 2);
+            elapsed = event_time;
+            DPCCCalendar(current, current_risk, calendar + event_index * 6, instrument,
+                          execution, limits, volume_scale, h, event_time == execution[18] ? 3 : 2);
+            event_index++;
+           }
+         const float interest = execution[16] + end_time / execution[18] * (execution[17] - execution[16]);
+         DPCCLinearAdvance(current, current_risk, nodes[segment + 1], spreads[segment + 1],
+                            nodes[segment + 1] - delta, interest, end_time - elapsed,
+                            instrument, execution, limits, volume_scale, h, segment == 2 ? 3 : 2);
+         elapsed = end_time;
+        }
+      if(h + 1 == horizon && current->account[19] == 0.0f && current->account[2] != 0.0f &&
+         (int)instrument[11] != DPCC_CALC_COLLATERAL)
+        {
+         if(DPCCTradePermitted(current->account[2], 0.0f, (int)instrument[29]) &&
+            (((uint)instrument[34] & 1U) != 0U))
+            DPCCClose(current, fabs(current->account[2]), instrument, execution, limits);
+         else
+            DPCCRiskAdd(current_risk, 10, 1.0f, 1.0f, h, 3, current->source_action);
+         DPCCObserve(current, current_risk, limits, volume_scale, h, 3);
+         DPCCTerminate(current, current_risk, h, 3, instrument, execution, limits, volume_scale);
+        }
+     }
+   const float vmax0 = DPCCRiskMaximum(&branch_risks[0]);
+   const float vmax1 = DPCCRiskMaximum(&branch_risks[1]);
+   int chosen = 0;
+   if(branches[1].account[1] < branches[0].account[1])
+      chosen = 1;
+   if(branches[0].exit_kind == 1 && branches[1].exit_kind == 2)
+      chosen = 0;
+   else
+      if(branches[1].exit_kind == 1 && branches[0].exit_kind == 2)
+         chosen = 1;
+      else
+         if(branches[1].account[1] == branches[0].account[1] &&
+            (vmax1 > vmax0 || (vmax1 == vmax0 &&
+             branches[1].maximum_drawdown > branches[0].maximum_drawdown)))
+            chosen = 1;
+   if(branches[0].numeric_status == DPCC_STATUS_NUMERIC ||
+      branches[1].numeric_status == DPCC_STATUS_NUMERIC)
+      branches[chosen].numeric_status = DPCC_STATUS_NUMERIC;
+   else
+      if(branches[0].numeric_status == DPCC_STATUS_INVALID ||
+         branches[1].numeric_status == DPCC_STATUS_INVALID)
+         branches[chosen].numeric_status = DPCC_STATUS_INVALID;
+   *state = branches[chosen];
+   DPCCRiskMerge(risk, &branch_risks[0]);
+   DPCCRiskMerge(risk, &branch_risks[1]);
+   branch_diagnostic[0] = (float)chosen;
+   branch_diagnostic[1] = vmax0;
+   branch_diagnostic[2] = vmax1;
+    branch_diagnostic[3] = state->maximum_drawdown;
+   }
+ //+------------------------------------------------------------------+
+ //| Full legacy transition preserves prepare then commit call order   |
+ //+------------------------------------------------------------------+
+void DPCCAccountStep(__private DPCCAccountState *state, __private DPCCRiskState *risk,
+                     __global const float *action, __global const float *ohlc,
+                     __global const float *instrument, __global const float *execution,
+                     __global const float *limits, __global const float *calendar,
+                     uint event_count, float volume_scale, float price_scale, uint h, uint horizon,
+                     __private float *branch_diagnostic)
+   {
+    const uint cursor = DPCCAccountPrepareOpen(state, risk, ohlc, instrument, execution, limits,
+                                                calendar, event_count, volume_scale, h,
+                                                branch_diagnostic, 0);
+    DPCCAccountCommitPrepared(state, risk, action, ohlc, instrument, execution, limits, calendar,
+                              event_count, cursor, volume_scale, price_scale, h, horizon,
+                              branch_diagnostic, 1U);
+   }
+//+------------------------------------------------------------------+
+//| Context validation is never bypassed by an inactive plan slot     |
+//+------------------------------------------------------------------+
+int DPCCValidateRolloutContext(__global const float *context, __global const float *account_override,
+                               __global const float *account_profile, uint k, uint K,
+                               uint H, uint E, uint M, uint episode_start_step,
+                               uint off_account, uint off_instrument, uint off_limits,
+                               uint off_execution, uint off_count, uint off_calendar,
+                               uint off_active, uint total, uint expected_basis, uint expected_adapter,
+                               float gamma, float volume_scale, float price_scale,
+                               float max_quote_age, float max_last_age, float money_scale,
+                               uint expected_calculation_contract, uint currency_digits,
+                               int require_volume_grid, int observed_open, uint native_continuation, __private uint *failure_line)
+  {
+   if(K == 0 || K > 64 || H == 0 || E == 0 || M == 0 || expected_basis > 1 ||
+      expected_adapter > 1 || expected_basis != expected_adapter ||
+      native_continuation > 1U ||
+      (observed_open != 0 && observed_open != 1) ||
+      !isfinite(gamma) || gamma <= 0.0f || gamma > 1.0f ||
+      !isfinite(volume_scale) || volume_scale <= 0.0f || !isfinite(price_scale) || price_scale <= 0.0f ||
+      !isfinite(max_quote_age) || max_quote_age < 0.0f || !isfinite(max_last_age) || max_last_age < 0.0f ||
+      !isfinite(money_scale) || money_scale <= 0.0f ||
+      (expected_calculation_contract != 2U && expected_calculation_contract != 3U &&
+       expected_calculation_contract != 4U) ||
+      (expected_calculation_contract == 2U ? currency_digits != 0U : currency_digits > 8U))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   const ulong expected_account = (ulong)K * H * 4;
+   const ulong expected_instrument = expected_account + 24;
+   const ulong expected_limits = expected_instrument + 48;
+   const ulong expected_execution = expected_limits + 24;
+   const ulong expected_count = expected_execution + (ulong)K * H * 24;
+   const ulong expected_calendar = expected_count + H;
+   const ulong expected_active = expected_calendar + (ulong)K * H * E * 6;
+   if(expected_account != off_account || expected_instrument != off_instrument ||
+      expected_limits != off_limits || expected_execution != off_execution || expected_count != off_count ||
+      expected_calendar != off_calendar || expected_active != off_active || expected_active + M != total)
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+
+   __global const float *account = account_override;
+   __global const float *profile_account = account_profile;
+   __global const float *instrument = context + off_instrument;
+   __global const float *limits = context + off_limits;
+   for(int i = 0; i < 24; i++)
+      if(!isfinite(account[i]) || !isfinite(limits[i]))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   for(int i = 0; i < 48; i++)
+      if(!isfinite(instrument[i]))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   for(uint m = 0; m < M; m++)
+      if(!DPCCBoolean(context[off_active + m]))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(!DPCCInteger(limits[20], 0.0f, 511.0f) || limits[21] != money_scale || limits[22] != 2.0f ||
+      limits[23] != 0.0f || instrument[30] != (float)expected_calculation_contract || instrument[39] != 0.0f || account[23] != 0.0f)
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(expected_calculation_contract == 3U &&
+      (((int)instrument[11] != DPCC_CALC_FOREX && (int)instrument[11] != DPCC_CALC_FOREX_NOLEV) ||
+       expected_basis != 0U || expected_adapter != 0U ||
+       instrument[15] != 0.0f || instrument[16] != 0.0f ||
+       instrument[46] != 0.0f || instrument[47] != 0.0f ||
+       instrument[12] != 1.0f || instrument[13] != 1.0f || instrument[14] != profile_account[16]))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   for(int i = 11; i < 19; i++)
+      if(limits[i] < 0.0f)
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(limits[19] < 0.0f || limits[14] >= instrument[5] * 0.5f ||
+      limits[15] >= instrument[1] * 0.5f)
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   const uint mask = (uint)limits[20];
+   if(((mask & 1U) && limits[0] < 0.0f) || ((mask & 4U) && limits[2] < 0.0f) ||
+      ((mask & 16U) && limits[12] > limits[4]) || ((mask & 32U) && limits[5] < 0.0f) ||
+      ((mask & 64U) && limits[6] < 0.0f) ||
+      ((mask & 128U) && (limits[7] < 0.0f || limits[8] < limits[7])) ||
+      ((mask & 256U) && (limits[9] < 0.0f || limits[10] < limits[9])))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(instrument[0] <= 0.0f || instrument[1] <= 0.0f || instrument[2] <= 0.0f ||
+      instrument[3] <= 0.0f || instrument[4] < instrument[3] || instrument[5] <= 0.0f ||
+      instrument[6] < 0.0f || instrument[7] < 0.0f || instrument[8] < 0.0f || instrument[9] < 0.0f ||
+      !DPCCInteger(instrument[10], 0.0f, 16.0f) || !DPCCInteger(instrument[11], 0.0f, 64.0f) ||
+      !DPCCSupportedMode((int)instrument[11]) || instrument[12] <= 0.0f || instrument[13] <= 0.0f ||
+      instrument[14] <= 0.0f || instrument[15] < 0.0f || instrument[16] < 0.0f ||
+      instrument[17] < 0.0f || instrument[18] < 0.0f || instrument[41] < 0.0f || instrument[42] < 0.0f ||
+      !DPCCBoolean(instrument[27]) || !DPCCBoolean(instrument[28]) ||
+      !DPCCInteger(instrument[29], 0.0f, 4.0f) ||
+      instrument[31] != (float)expected_basis || instrument[32] != (float)expected_adapter ||
+      !DPCCInteger(instrument[34], 0.0f, 127.0f) || !DPCCInteger(instrument[35], 0.0f, 2.0f) ||
+      instrument[36] < 0.0f || instrument[36] > max_quote_age || instrument[37] < 0.0f ||
+      instrument[38] < 0.0f || !DPCCBoolean(instrument[43]) ||
+      !DPCCBoolean(instrument[46]) || !DPCCBoolean(instrument[47]) || instrument[45] < 0.0f)
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(instrument[27] == 1.0f && instrument[28] == 1.0f && instrument[25] > instrument[26])
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   const int mode = (int)instrument[11];
+   if((mode == DPCC_CALC_FOREX || mode == DPCC_CALC_CFDLEVERAGE) && instrument[19] <= 0.0f)
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if((DPCCTickMode(mode) || mode == DPCC_CALC_CFDINDEX) &&
+      (instrument[20] <= 0.0f || instrument[21] <= 0.0f))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(DPCCTickMode(mode) && instrument[15] <= 0.0f)
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if((mode == DPCC_CALC_STOCKS || mode == DPCC_CALC_MOEX_STOCKS) && expected_basis != 1)
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(expected_basis == 1 && (instrument[37] > max_last_age || !DPCCPriceValid(instrument[33], instrument)))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(DPCCBondMode(mode))
+     {
+      if(instrument[22] <= 0.0f || instrument[44] <= 0.0f ||
+         (native_continuation == 0U && account[2] != 0.0f))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      // Account24 has no entry interest; only an explicit State33 carries it.
+      if(native_continuation != 0U)
+        {
+         for(int i = 24; i < DPCC_NATIVE_CONTINUATION_FLOATS; i++)
+            if(!isfinite(account[i]))
+               return(DPCC_STATUS_NUMERIC);
+         if(!DPCCInteger(account[29], 0.0f, 8.0f) || (uint)account[29] != currency_digits ||
+            !DPCCInteger(account[30], -1.0f, (float)episode_start_step) ||
+            !DPCCInteger(account[31], 0.0f, 3.0f) || account[32] != 0.0f || account[28] < 0.0f ||
+            !DPCCPriceValid(account[26], instrument) ||
+            (expected_basis == 0U && account[26] != account[15]) ||
+            (account[2] == 0.0f ? (account[3] != 0.0f || account[25] != 0.0f) :
+             (!DPCCPriceValid(account[3], instrument) || account[30] < 0.0f)))
+            {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+        }
+     }
+   if(mode == DPCC_CALC_COLLATERAL && (instrument[24] < 0.0f || instrument[24] > 1.0f ||
+      account[2] < 0.0f || account[17] != 0.0f || account[18] != 0.0f))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if((instrument[46] == 1.0f && instrument[15] <= 0.0f) ||
+      (instrument[47] == 1.0f && instrument[16] <= 0.0f))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if(!DPCCBoolean(account[17]) || !DPCCBoolean(account[18]) || !DPCCBoolean(account[19]) ||
+      !DPCCBoolean(account[20]) || !DPCCBoolean(account[22]) || account[6] < 0.0f ||
+      account[10] < 0.0f || account[11] < 0.0f || account[14] < 0.0f || account[21] < 0.0f ||
+      account[16] < account[15] || !DPCCPriceValid(account[15], instrument) ||
+      !DPCCPriceValid(account[16], instrument) ||
+      (require_volume_grid && !DPCCOnGrid(account[2], instrument[5], limits[14])) ||
+      (account[2] == 0.0f && (account[17] != 0.0f || account[18] != 0.0f)) ||
+      (account[19] == 1.0f && account[2] != 0.0f) ||
+      (account[20] == 1.0f && account[8] < account[1]))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   const float free_margin = account[1] - account[10] - account[11];
+   const float money_tolerance = limits[16] + limits[17] * fmax(fabs(free_margin), fabs(account[12]));
+   if(!isfinite(free_margin) || !isfinite(money_tolerance))
+      return(DPCC_STATUS_NUMERIC);
+   if(fabs(account[12] - free_margin) > money_tolerance)
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+   if((account[17] == 1.0f && !DPCCPriceValid(account[4], instrument)) ||
+      (account[18] == 1.0f && !DPCCPriceValid(account[5], instrument)))
+      {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+
+   float frozen_delta = 0.0f;
+   for(uint h = 0; h < H; h++)
+     {
+      __global const float *ohlc = context + ((size_t)k * H + h) * 4;
+      __global const float *execution = context + off_execution + ((size_t)k * H + h) * 24;
+      __global const float *reference_execution = context + off_execution + (size_t)h * 24;
+      const float count_float = context[off_count + h];
+      if(!DPCCInteger(count_float, 0.0f, (float)E))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      const uint count = (uint)count_float;
+      for(int i = 0; i < 4; i++)
+         if(!DPCCPriceValid(ohlc[i], instrument))
+            {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      if((observed_open != 0 && (ohlc[1] != ohlc[0] || ohlc[2] != ohlc[0] || ohlc[3] != ohlc[0])) ||
+         (observed_open == 0 && (ohlc[1] < ohlc[0] || ohlc[1] < ohlc[3] || ohlc[2] > ohlc[0] ||
+          ohlc[2] > ohlc[3] || ohlc[2] > ohlc[1])))
+
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      for(int i = 0; i < 24; i++)
+         if(!isfinite(execution[i]))
+            {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      for(int i = 0; i < 13; i++)
+         if(execution[i] < 0.0f)
+            {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      if(expected_calculation_contract == 3U &&
+         (execution[13] != 1.0f || execution[14] != 1.0f || execution[15] != 1.0f))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      if(expected_calculation_contract == 4U &&
+         (execution[14] < execution[13] || execution[15] < execution[23] ||
+          execution[13] != reference_execution[13] || execution[14] != reference_execution[14] ||
+          execution[15] != reference_execution[15] || execution[23] != reference_execution[23]))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      if(execution[13] <= 0.0f || execution[14] <= 0.0f || execution[15] <= 0.0f ||
+         execution[18] <= 0.0f || execution[19] < 0.0f ||
+         (episode_start_step == 0 && h == 0 && execution[19] != 0.0f) ||
+         execution[21] != count_float || !DPCCInteger(execution[22], 0.0f, 16777216.0f) ||
+         (expected_calculation_contract == 4U ? execution[23] <= 0.0f : execution[23] != 0.0f) ||
+         execution[18] != reference_execution[18] ||
+         execution[19] != reference_execution[19] || execution[22] != reference_execution[22])
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      if(observed_open != 0 && (execution[1] != execution[0] || execution[2] != execution[0] ||
+         execution[3] != execution[0] || execution[17] != execution[16]))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      if(h == 0)
+         frozen_delta = execution[20];
+      if(execution[20] != frozen_delta || execution[20] != reference_execution[20] ||
+         (expected_adapter == 0 && execution[20] != 0.0f) ||
+         (expected_adapter == 1 && fabs(profile_account[15] - instrument[33] - execution[20]) > limits[15]))
+         {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+      for(int vertex = 0; vertex < 4; vertex++)
+        {
+         const float spread = execution[vertex == 0 ? 0 : (vertex == 3 ? 1 : vertex + 1)];
+         if(!DPCCPriceValid(ohlc[vertex] + spread, instrument) ||
+            !DPCCPriceValid(ohlc[vertex] - execution[20], instrument))
+            {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+        }
+      __global const float *calendar = context + off_calendar + ((size_t)k * H + h) * E * 6;
+      __global const float *reference_calendar = context + off_calendar + (size_t)h * E * 6;
+      float previous_offset = -execution[19];
+      float previous_type = 0.0f;
+      for(uint event = 0; event < E; event++)
+        {
+         __global const float *item = calendar + event * 6;
+         for(int i = 0; i < 6; i++)
+            if(!isfinite(item[i]) || (event >= count && item[i] != 0.0f))
+               {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+         if(event >= count)
+            continue;
+         if(item[0] > execution[18] || item[0] < 0.0f - execution[19] ||
+            ((h > 0 || episode_start_step > 0) && item[0] == -execution[19]) ||
+            (h == 0 && episode_start_step == 0 && item[0] < 0.0f) ||
+            (observed_open != 0 && item[0] >= 0.0f) ||
+            !DPCCInteger(item[1], 1.0f, 3.0f) ||
+            item[4] < 0.0f || item[5] != 0.0f ||
+            (item[1] == 1.0f && (item[2] != 0.0f || item[3] != 0.0f || item[4] != 0.0f)) ||
+            item[0] < previous_offset || (item[0] == previous_offset && item[1] < previous_type) ||
+            item[0] != reference_calendar[event * 6] || item[1] != reference_calendar[event * 6 + 1])
+            {if(failure_line) *failure_line=(uint)__LINE__; return(DPCC_STATUS_INVALID);}
+         previous_offset = item[0];
+         previous_type = item[1];
+        }
+     }
+   return(0);
+  }
+//+------------------------------------------------------------------+
+//| Independent slot/scenario work-item; outputs are caller scratch   |
+//+------------------------------------------------------------------+
+__kernel void DPCCRollout(__global const float *plans,
+                          __global const float *context,
+                          __global const float *slot_active,
+                          __global float *returns,
+                          __global float *states,
+                          __global float *violations,
+                          __global float *system_status,
+                          __global float *branch_diagnostics,
+                          uint plan_offset, uint slot_capacity, uint K, uint H, uint E, uint context_M,
+                          uint off_account, uint off_instrument, uint off_limits,
+                          uint off_execution, uint off_calendar_count, uint off_calendar,
+                          uint off_R_active, uint R_total,
+                          float gamma, float volume_scale, float price_scale,
+                          float max_quote_age_seconds, float max_last_age_seconds,
+                          uint slot_active_offset, uint expected_price_basis, uint expected_quote_adapter,
+                          float money_scale, uint expected_calculation_contract, uint currency_digits,
+                          __global const float *continuations, uint continued, uint episode_start,
+                          uint episode_horizon, float training_floor,
+                          __global float *step_rewards, __global float *executed_mask)
+  {
+   const uint k = (uint)get_global_id(0);
+   const uint slot = (uint)get_global_id(1);
+   if(k >= K || slot >= slot_capacity)
+      return;
+   const size_t pair = (size_t)slot * K + k;
+   const size_t state_offset = pair * ((size_t)H + 1) * 24;
+   const size_t violation_offset = pair * 8;
+   const size_t diagnostic_offset = pair * H * 4;
+   returns[pair] = 0.0f;
+   system_status[pair] = 0.0f;
+   for(size_t i = 0; i < ((size_t)H + 1) * 24; i++)
+      states[state_offset + i] = 0.0f;
+   for(uint h = 0; h < H; h++)
+     {
+      if(continued)
+        {
+         step_rewards[pair * H + h] = 0.0f;
+         executed_mask[pair * H + h] = 0.0f;
+        }
+      branch_diagnostics[diagnostic_offset + h * 4] = -1.0f;
+      for(int i = 1; i < 4; i++)
+         branch_diagnostics[diagnostic_offset + h * 4 + i] = 0.0f;
+     }
+   for(int i = 0; i < 8; i++)
+      violations[violation_offset + i] = 0.0f;
+   violations[violation_offset] = -1.0f;
+   violations[violation_offset + 1] = -1.0f;
+   violations[violation_offset + 6] = -1.0f;
+   violations[violation_offset + 7] = -1.0f;
+   if(continued > 1U || (continued && (episode_horizon == 0U ||
+      episode_horizon > DPCC_NATIVE_MAX_EXACT_FLOAT_INDEX || episode_start >= episode_horizon ||
+      H > episode_horizon - episode_start || !isfinite(training_floor) || training_floor < 0.0f)))
+     {
+      system_status[pair] = (float)DPCC_STATUS_INVALID;
+      violations[violation_offset + 5] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   __global const float *account = continued ? continuations + pair * DPCC_NATIVE_CONTINUATION_FLOATS :
+                                              context + off_account;
+   uint context_failure_line=0; const int checked = DPCCValidateRolloutContext(context, account,
+                        context + off_account, k, K, H, E, context_M, continued ? episode_start : 0,
+                        off_account, off_instrument, off_limits, off_execution, off_calendar_count,
+                        off_calendar, off_R_active, R_total, expected_price_basis, expected_quote_adapter,
+                        gamma, volume_scale, price_scale, max_quote_age_seconds, max_last_age_seconds,
+                        money_scale, expected_calculation_contract, currency_digits, continued ? 0 : 1, 0, continued, &context_failure_line);
+   if(checked != 0)
+     {
+      system_status[pair] = (float)checked;
+      violations[violation_offset + 5] = (float)checked; violations[violation_offset + 6] = (float)context_failure_line;
+      return;
+     }
+   const float active = slot_active[(size_t)slot_active_offset + slot];
+   if(!DPCCBoolean(active))
+     {
+      system_status[pair] = (float)DPCC_STATUS_INVALID;
+      violations[violation_offset + 5] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   __global const float *instrument = context + off_instrument;
+   __global const float *limits = context + off_limits;
+   DPCCAccountState state;
+   for(int i = 0; i < 24; i++)
+     {
+      state.account[i] = account[i];
+      states[state_offset + i] = account[i];
+     }
+   state.entry_interest = 0.0f;
+   state.native_mark = expected_price_basis == 0 ? account[15] : instrument[33];
+   state.accrued_interest = instrument[23];
+   state.maximum_drawdown = 0.0f;
+   state.currency_digits = currency_digits;
+   state.source_action = -1;
+   state.exit_kind = 0;
+   state.numeric_status = 0;
+   const float initial_pnl = continued ? 0.0f : DPCCProfit(account[2], account[3], account[account[2] >= 0.0f ? 15 : 16],
+                                        0.0f, instrument[23], instrument[12], instrument[13], instrument);
+   const float initial_collateral = !continued && (int)instrument[11] == DPCC_CALC_COLLATERAL ?
+                                   account[2] * instrument[2] * state.native_mark * instrument[24] * instrument[12] :
+                                   0.0f;
+   state.equity_anchor = account[1] - account[0] - initial_pnl + account[6] - initial_collateral;
+   if(!isfinite(initial_pnl) || !isfinite(initial_collateral) || !isfinite(state.equity_anchor))
+     {
+      system_status[pair] = (float)DPCC_STATUS_NUMERIC;
+      violations[violation_offset + 5] = (float)DPCC_STATUS_NUMERIC;
+      return;
+     }
+   if(continued)
+     {
+      for(int i = 24; i < DPCC_NATIVE_CONTINUATION_FLOATS; i++)
+         if(!isfinite(account[i]))
+           {
+            system_status[pair] = (float)DPCC_STATUS_NUMERIC;
+            violations[violation_offset + 5] = (float)DPCC_STATUS_NUMERIC;
+            return;
+           }
+      if(!DPCCInteger(account[29],0.0f,8.0f) || (uint)account[29] != currency_digits ||
+         !DPCCInteger(account[30],-1.0f,(float)episode_start) ||
+         !DPCCInteger(account[31],0.0f,3.0f) || !DPCCInteger(account[32],0.0f,0.0f) || account[28] < 0.0f)
+        {
+         system_status[pair] = (float)DPCC_STATUS_INVALID;
+         violations[violation_offset + 5] = (float)DPCC_STATUS_INVALID;
+         return;
+        }
+      state.equity_anchor = account[24];
+      state.entry_interest = account[25];
+      state.native_mark = account[26];
+      state.accrued_interest = account[27];
+      state.maximum_drawdown = account[28];
+      state.currency_digits = (uint)account[29];
+      state.source_action = (int)account[30];
+      state.exit_kind = (int)account[31];
+      state.numeric_status = (int)account[32];
+     }
+   if(active == 0.0f)
+     {
+      for(uint h = 1; h <= H; h++)
+         for(int i = 0; i < 24; i++)
+            states[state_offset + (size_t)h * 24 + i] = account[i];
+      return;
+     }
+
+   DPCCRiskState risk;
+   DPCCRiskInit(&risk);
+   if(state.account[20] == 0.0f)
+     {
+      state.account[8] = state.account[1];
+      state.account[20] = 1.0f;
+     }
+   for(uint h = 0; h < (continued ? 0U : H); h++)
+     {
+      __global const float *action = plans + (size_t)plan_offset + ((size_t)slot * H + h) * 6;
+      int valid_action = 1;
+      for(int i = 0; i < 6; i++)
+         if(!isfinite(action[i]))
+            valid_action = 0;
+      if(valid_action)
+        {
+         const float target = action[0] - action[3];
+         if(!isfinite(target))
+           {
+            system_status[pair] = (float)DPCC_STATUS_NUMERIC;
+            state.numeric_status = DPCC_STATUS_NUMERIC;
+            return;
+           }
+         if(action[0] < 0.0f || action[3] < 0.0f ||
+            (target > 0.0f && (action[1] < 0.0f || action[2] < 0.0f)) ||
+            (target < 0.0f && (action[4] < 0.0f || action[5] < 0.0f)))
+            valid_action = 0;
+        }
+      if(!valid_action)
+        {
+         DPCCRiskAdd(&risk, 15, 1.0f, 1.0f, h, 1, -1);
+         state.numeric_status = DPCC_STATUS_INVALID;
+        }
+     }
+   if(!continued)
+      DPCCObserve(&state, &risk, limits, volume_scale, 0, 0);
+   float result = 0.0f;
+   float discount = 1.0f;
+   for(uint h = 0; h < H; h++)
+     {
+      const float equity_before = state.account[1];
+      __global const float *action = plans + (size_t)plan_offset + ((size_t)slot * H + h) * 6;
+      __global const float *ohlc = context + ((size_t)k * H + h) * 4;
+      __global const float *execution = context + off_execution + ((size_t)k * H + h) * 24;
+      __global const float *calendar = context + off_calendar + ((size_t)k * H + h) * E * 6;
+      float branch[4];
+      if(continued)
+        {
+         int valid_action = 1;
+         for(int i = 0; i < 6; i++)
+            if(!isfinite(action[i])) valid_action = 0;
+         if(valid_action)
+           {
+            const float target = action[0] - action[3];
+            if(!isfinite(target))
+              {
+               state.numeric_status = DPCC_STATUS_NUMERIC;
+               system_status[pair] = (float)DPCC_STATUS_NUMERIC;
+               break;
+              }
+            if(action[0] < 0.0f || action[3] < 0.0f ||
+               (target > 0.0f && (action[1] < 0.0f || action[2] < 0.0f)) ||
+               (target < 0.0f && (action[4] < 0.0f || action[5] < 0.0f))) valid_action = 0;
+           }
+         if(!valid_action) state.numeric_status = DPCC_STATUS_INVALID;
+        }
+      DPCCRiskState step_risk;
+      DPCCRiskInit(&step_risk);
+      DPCCAccountStep(&state, &step_risk, action, ohlc, instrument, execution, limits, calendar,
+                      (uint)context[off_calendar_count + h], volume_scale, price_scale,
+                      continued ? episode_start + h : h, continued ? episode_horizon : H, branch);
+      if(continued)
+        {
+         for(int i = 0; i < 24; i++)
+            if(!isfinite(state.account[i])) state.numeric_status = DPCC_STATUS_NUMERIC;
+         if(!isfinite(state.equity_anchor) || !isfinite(state.entry_interest) ||
+            !isfinite(state.native_mark) || !isfinite(state.accrued_interest) ||
+            !isfinite(state.maximum_drawdown)) state.numeric_status = DPCC_STATUS_NUMERIC;
+        }
+      DPCCRiskMerge(&risk, &step_risk);
+      result += discount * (state.account[1] - equity_before);
+      discount *= gamma;
+      for(int i = 0; i < 24; i++)
+         states[state_offset + ((size_t)h + 1) * 24 + i] = state.account[i];
+      for(int i = 0; i < 4; i++)
+         branch_diagnostics[diagnostic_offset + (size_t)h * 4 + i] = branch[i];
+      if(state.numeric_status == DPCC_STATUS_NUMERIC || !isfinite(result) || !isfinite(discount))
+        {
+         system_status[pair] = (float)DPCC_STATUS_NUMERIC;
+         state.numeric_status = DPCC_STATUS_NUMERIC;
+         result = 0.0f;
+         break;
+        }
+      if(continued && state.numeric_status != 0)
+        {
+         system_status[pair] = (float)state.numeric_status;
+         result = 0.0f;
+         break;
+        }
+      if(continued)
+        {
+         step_rewards[pair * H + h] = state.account[1] - equity_before;
+         executed_mask[pair * H + h] = 1.0f;
+        }
+      if(continued && training_floor > 0.0f &&
+         (state.account[0] < training_floor || state.account[1] < training_floor))
+        {
+         for(uint remaining = h + 2; remaining <= H; remaining++)
+            for(int i = 0; i < 24; i++)
+               states[state_offset + (size_t)remaining * 24 + i] = state.account[i];
+         break;
+        }
+     }
+   float maximum = 0.0f;
+   float sum = 0.0f;
+   for(int i = 0; i < DPCC_RISK_COUNT; i++)
+     {
+      maximum = fmax(maximum, risk.maximum[i]);
+      sum += risk.maximum[i];
+     }
+   if(!isfinite(maximum) || !isfinite(sum))
+     {
+      system_status[pair] = (float)DPCC_STATUS_NUMERIC;
+      state.numeric_status = DPCC_STATUS_NUMERIC;
+     }
+   returns[pair] = result;
+   violations[violation_offset] = (float)risk.first_h;
+   violations[violation_offset + 1] = (float)risk.constraint;
+   violations[violation_offset + 2] = maximum;
+   violations[violation_offset + 3] = sum;
+   violations[violation_offset + 4] = state.account[19];
+   violations[violation_offset + 5] = (float)state.numeric_status;
+   violations[violation_offset + 6] = (float)risk.phase;
+   violations[violation_offset + 7] = (float)risk.source_action;
+  }
+//+------------------------------------------------------------------+
+//| Transient risk continuation between open preparation and action   |
+//+------------------------------------------------------------------+
+void DPCCStoreRiskContinuation(__private const DPCCRiskState *risk,
+                               __global float *destination, size_t offset)
+  {
+   for(int i = 0; i < DPCC_RISK_COUNT; i++)
+      destination[offset + i] = risk->maximum[i];
+   destination[offset + 16] = (float)risk->first_h;
+   destination[offset + 17] = (float)risk->constraint;
+   destination[offset + 18] = (float)risk->phase;
+   destination[offset + 19] = (float)risk->source_action;
+  }
+int DPCCLoadRiskContinuation(__private DPCCRiskState *risk,
+                             __global const float *source, size_t offset)
+  {
+   for(int i = 0; i < DPCC_RISK_COUNT; i++)
+     {
+      if(!isfinite(source[offset + i]) || source[offset + i] < 0.0f)
+         return(DPCC_STATUS_NUMERIC);
+      risk->maximum[i] = source[offset + i];
+     }
+   if(!DPCCInteger(source[offset + 16], -1.0f, (float)DPCC_NATIVE_MAX_EXACT_FLOAT_INDEX) ||
+      !DPCCInteger(source[offset + 17], -1.0f, (float)DPCC_RISK_COUNT) ||
+      !DPCCInteger(source[offset + 18], -1.0f, 3.0f) ||
+      !DPCCInteger(source[offset + 19], -1.0f, (float)DPCC_NATIVE_MAX_EXACT_FLOAT_INDEX))
+      return(DPCC_STATUS_INVALID);
+   risk->first_h = (int)source[offset + 16];
+   risk->constraint = (int)source[offset + 17];
+   risk->phase = (int)source[offset + 18];
+   risk->source_action = (int)source[offset + 19];
+   return(0);
+  }
+//+------------------------------------------------------------------+
+//| One-bar continuation through the same native account transition   |
+//+------------------------------------------------------------------+
+__kernel void DPCCRolloutStep(__global const float *plans,
+                              __global const float *context,
+                              __global const float *state_in,
+                              __global float *state_out,
+                              __global float *rewards,
+                              __global float *status,
+                              __global float *branch_diagnostic,
+                              uint plan_offset, uint K, uint E, uint context_M,
+                              uint off_account, uint off_instrument, uint off_limits,
+                              uint off_execution, uint off_count, uint off_calendar,
+                              uint off_active, uint total,
+                              uint episode_step, uint episode_horizon,
+                              float gamma, float volume_scale, float price_scale,
+                              float max_quote_age, float max_last_age, float money_scale,
+                              uint expected_basis, uint expected_adapter,
+                              uint expected_calculation_contract, uint currency_digits,
+                              uint initialize)
+  {
+   const uint k = (uint)get_global_id(0);
+   if(k >= K)
+      return;
+   const size_t state_offset = (size_t)k * DPCC_NATIVE_CONTINUATION_FLOATS;
+   rewards[k] = 0.0f;
+   status[k] = 0.0f;
+   for(int i = 0; i < 4; i++)
+      branch_diagnostic[(size_t)k * 4 + i] = 0.0f;
+   branch_diagnostic[(size_t)k * 4] = -1.0f;
+   for(int i = 0; i < DPCC_NATIVE_CONTINUATION_FLOATS; i++)
+      state_out[state_offset + i] = 0.0f;
+   if(episode_horizon == 0 || episode_horizon > DPCC_NATIVE_MAX_EXACT_FLOAT_INDEX ||
+      episode_step >= episode_horizon || initialize > 1U ||
+      (initialize == 1U && episode_step != 0U) || (initialize == 0U && episode_step == 0U))
+     {
+      status[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+
+   __global const float *instrument = context + off_instrument;
+   __global const float *limits = context + off_limits;
+   __global const float *account_context = context + off_account;
+   __global const float *account_override = initialize == 1U ? account_context :
+                                            state_in + state_offset;
+   uint context_failure_line=0; const int checked = DPCCValidateRolloutContext(context, account_override, account_context,
+                        k, K, 1, E, context_M, episode_step, off_account, off_instrument, off_limits, off_execution,
+                        off_count, off_calendar, off_active, total, expected_basis,
+                        expected_adapter, gamma, volume_scale, price_scale, max_quote_age,
+                        max_last_age, money_scale, expected_calculation_contract, currency_digits,
+                        initialize == 1U, 0, initialize == 0U, &context_failure_line);
+   if(checked != 0)
+     {
+      status[k] = (float)checked;
+      return;
+     }
+   if(context[off_active] != 1.0f)
+     {
+      status[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+
+   DPCCAccountState state;
+   for(int i = 0; i < 24; i++)
+      state.account[i] = account_override[i];
+   if(initialize == 1U)
+     {
+      state.entry_interest = 0.0f;
+      state.native_mark = expected_basis == 0U ? state.account[15] : instrument[33];
+      state.accrued_interest = instrument[23];
+      state.maximum_drawdown = 0.0f;
+      state.currency_digits = currency_digits;
+      state.source_action = -1;
+      state.exit_kind = 0;
+      state.numeric_status = 0;
+      const float initial_pnl = DPCCProfit(state.account[2], state.account[3],
+                                           state.account[state.account[2] >= 0.0f ? 15 : 16],
+                                           0.0f, instrument[23], instrument[12], instrument[13], instrument);
+      const float initial_collateral = (int)instrument[11] == DPCC_CALC_COLLATERAL ?
+                                       state.account[2] * instrument[2] * state.native_mark *
+                                       instrument[24] * instrument[12] : 0.0f;
+      state.equity_anchor = state.account[1] - state.account[0] - initial_pnl +
+                            state.account[6] - initial_collateral;
+      if(!isfinite(initial_pnl) || !isfinite(initial_collateral) || !isfinite(state.equity_anchor))
+        {
+         status[k] = (float)DPCC_STATUS_NUMERIC;
+         return;
+        }
+     }
+   else
+     {
+      for(int i = 24; i < DPCC_NATIVE_CONTINUATION_FLOATS; i++)
+         if(!isfinite(state_in[state_offset + i]))
+           {
+            status[k] = (float)DPCC_STATUS_NUMERIC;
+            return;
+           }
+      state.equity_anchor = state_in[state_offset + 24];
+      state.entry_interest = state_in[state_offset + 25];
+      state.native_mark = state_in[state_offset + 26];
+      state.accrued_interest = state_in[state_offset + 27];
+      state.maximum_drawdown = state_in[state_offset + 28];
+      if(!DPCCInteger(state_in[state_offset + 29], 0.0f, 8.0f) ||
+         !DPCCInteger(state_in[state_offset + 30], -1.0f, (float)episode_step) ||
+         !DPCCInteger(state_in[state_offset + 31], 0.0f, 3.0f) ||
+         !DPCCInteger(state_in[state_offset + 32], 0.0f, 0.0f) ||
+         state.maximum_drawdown < 0.0f)
+        {
+         status[k] = (float)DPCC_STATUS_INVALID;
+         return;
+        }
+      state.currency_digits = (uint)state_in[state_offset + 29];
+      state.source_action = (int)state_in[state_offset + 30];
+      state.exit_kind = (int)state_in[state_offset + 31];
+      state.numeric_status = (int)state_in[state_offset + 32];
+      if(state.currency_digits != currency_digits)
+        {
+         status[k] = (float)DPCC_STATUS_INVALID;
+         return;
+        }
+     }
+   if(state.account[20] == 0.0f)
+     {
+      state.account[8] = state.account[1];
+      state.account[20] = 1.0f;
+     }
+
+   __global const float *action = plans + (size_t)plan_offset;
+   int valid_action = 1;
+   for(int i = 0; i < 6; i++)
+      if(!isfinite(action[i]))
+         valid_action = 0;
+   if(valid_action)
+     {
+      const float target = action[0] - action[3];
+      if(!isfinite(target))
+        {
+         status[k] = (float)DPCC_STATUS_NUMERIC;
+         return;
+        }
+      if(action[0] < 0.0f || action[3] < 0.0f ||
+         (target > 0.0f && (action[1] < 0.0f || action[2] < 0.0f)) ||
+         (target < 0.0f && (action[4] < 0.0f || action[5] < 0.0f)))
+         valid_action = 0;
+     }
+   if(!valid_action)
+      state.numeric_status = DPCC_STATUS_INVALID;
+
+   const float equity_before = state.account[1];
+   __global const float *ohlc = context + (size_t)k * 4;
+   __global const float *execution = context + off_execution + (size_t)k * 24;
+   __global const float *calendar = context + off_calendar + (size_t)k * E * 6;
+   const uint event_count = (uint)context[off_count];
+   float branch[4];
+   DPCCRiskState step_risk;
+   DPCCRiskInit(&step_risk);
+   DPCCAccountStep(&state, &step_risk, action, ohlc, instrument, execution, limits, calendar,
+                   event_count, volume_scale, price_scale, episode_step, episode_horizon, branch);
+   for(int i = 0; i < 24; i++)
+      if(!isfinite(state.account[i]))
+         state.numeric_status = DPCC_STATUS_NUMERIC;
+   if(state.numeric_status != 0)
+     {
+      status[k] = (float)state.numeric_status;
+      return;
+     }
+   const float reward = state.account[1] - equity_before;
+   if(!isfinite(reward) || !isfinite(state.equity_anchor) || !isfinite(state.entry_interest) ||
+      !isfinite(state.native_mark) || !isfinite(state.accrued_interest) ||
+      !isfinite(state.maximum_drawdown))
+     {
+      status[k] = (float)DPCC_STATUS_NUMERIC;
+      return;
+     }
+
+   rewards[k] = reward;
+   for(int i = 0; i < 24; i++)
+      state_out[state_offset + i] = state.account[i];
+   state_out[state_offset + 24] = state.equity_anchor;
+   state_out[state_offset + 25] = state.entry_interest;
+   state_out[state_offset + 26] = state.native_mark;
+   state_out[state_offset + 27] = state.accrued_interest;
+   state_out[state_offset + 28] = state.maximum_drawdown;
+   state_out[state_offset + 29] = (float)state.currency_digits;
+   state_out[state_offset + 30] = (float)state.source_action;
+   state_out[state_offset + 31] = (float)state.exit_kind;
+   state_out[state_offset + 32] = (float)state.numeric_status;
+    for(int i = 0; i < 4; i++)
+       branch_diagnostic[(size_t)k * 4 + i] = branch[i];
+   }
+//+------------------------------------------------------------------+
+//| Prepares exactly the causal open prefix and saves transient risk   |
+//+------------------------------------------------------------------+
+__kernel void DPCCRolloutPrepareOpen(__global const float *context,
+                                     __global const float *state_in,
+                                     __global float *state_out,
+                                     __global float *risk_out,
+                                     __global float *rewards,
+                                     __global float *status,
+                                     __global float *branch_diagnostic,
+                                     uint K, uint E, uint context_M,
+                                     uint off_account, uint off_instrument, uint off_limits,
+                                     uint off_execution, uint off_count, uint off_calendar,
+                                     uint off_active, uint total,
+                                     uint episode_step, uint episode_horizon,
+                                     float gamma, float volume_scale, float price_scale,
+                                     float max_quote_age, float max_last_age, float money_scale,
+                                     uint expected_basis, uint expected_adapter,
+                                     uint expected_calculation_contract, uint currency_digits,
+                                     uint initialize, uint observed_open)
+  {
+   const uint k = (uint)get_global_id(0);
+   if(k >= K)
+      return;
+   const size_t state_offset = (size_t)k * DPCC_NATIVE_CONTINUATION_FLOATS;
+   const size_t risk_offset = (size_t)k * DPCC_NATIVE_PENDING_PHASE_FLOATS;
+   rewards[k] = 0.0f;
+   status[k] = 0.0f;
+   for(int i = 0; i < 4; i++)
+      branch_diagnostic[(size_t)k * 4 + i] = 0.0f;
+   branch_diagnostic[(size_t)k * 4] = -1.0f;
+   for(int i = 0; i < DPCC_NATIVE_CONTINUATION_FLOATS; i++)
+      state_out[state_offset + i] = 0.0f;
+   for(int i = 0; i < DPCC_NATIVE_PENDING_PHASE_FLOATS; i++)
+      risk_out[risk_offset + i] = 0.0f;
+   if(episode_horizon == 0 || episode_horizon > DPCC_NATIVE_MAX_EXACT_FLOAT_INDEX ||
+      episode_step >= episode_horizon || initialize > 1U || observed_open > 1U ||
+      (initialize == 1U && episode_step != 0U) || (initialize == 0U && episode_step == 0U))
+     {
+      status[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   __global const float *instrument = context + off_instrument;
+   __global const float *limits = context + off_limits;
+   __global const float *account_context = context + off_account;
+   __global const float *account_override = initialize == 1U ? account_context :
+                                            state_in + state_offset;
+   uint context_failure_line=0; const int checked = DPCCValidateRolloutContext(context, account_override, account_context,
+                        k, K, 1, E, context_M, episode_step, off_account, off_instrument, off_limits,
+                        off_execution, off_count, off_calendar, off_active, total, expected_basis,
+                        expected_adapter, gamma, volume_scale, price_scale, max_quote_age,
+                        max_last_age, money_scale, expected_calculation_contract, currency_digits,
+                        initialize == 1U, (int)observed_open, initialize == 0U, &context_failure_line);
+   if(checked != 0)
+     {
+      status[k] = (float)checked;
+      return;
+     }
+   if(context[off_active] != 1.0f)
+     {
+      status[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   DPCCAccountState state;
+   for(int i = 0; i < 24; i++)
+      state.account[i] = account_override[i];
+   if(initialize == 1U)
+     {
+      state.entry_interest = 0.0f;
+      state.native_mark = expected_basis == 0U ? state.account[15] : instrument[33];
+      state.accrued_interest = instrument[23];
+      state.maximum_drawdown = 0.0f;
+      state.currency_digits = currency_digits;
+      state.source_action = -1;
+      state.exit_kind = 0;
+      state.numeric_status = 0;
+      const float initial_pnl = DPCCProfit(state.account[2], state.account[3],
+                                           state.account[state.account[2] >= 0.0f ? 15 : 16],
+                                           0.0f, instrument[23], instrument[12], instrument[13], instrument);
+      const float initial_collateral = (int)instrument[11] == DPCC_CALC_COLLATERAL ?
+                                       state.account[2] * instrument[2] * state.native_mark *
+                                       instrument[24] * instrument[12] : 0.0f;
+      state.equity_anchor = state.account[1] - state.account[0] - initial_pnl +
+                            state.account[6] - initial_collateral;
+      if(!isfinite(initial_pnl) || !isfinite(initial_collateral) || !isfinite(state.equity_anchor))
+        {
+         status[k] = (float)DPCC_STATUS_NUMERIC;
+         return;
+        }
+     }
+   else
+     {
+      for(int i = 24; i < DPCC_NATIVE_CONTINUATION_FLOATS; i++)
+         if(!isfinite(state_in[state_offset + i]))
+           {
+            status[k] = (float)DPCC_STATUS_NUMERIC;
+            return;
+           }
+      state.equity_anchor = state_in[state_offset + 24];
+      state.entry_interest = state_in[state_offset + 25];
+      state.native_mark = state_in[state_offset + 26];
+      state.accrued_interest = state_in[state_offset + 27];
+      state.maximum_drawdown = state_in[state_offset + 28];
+      if(!DPCCInteger(state_in[state_offset + 29], 0.0f, 8.0f) ||
+         !DPCCInteger(state_in[state_offset + 30], -1.0f, (float)episode_step) ||
+         !DPCCInteger(state_in[state_offset + 31], 0.0f, 3.0f) ||
+         !DPCCInteger(state_in[state_offset + 32], 0.0f, 0.0f) || state.maximum_drawdown < 0.0f)
+        {
+         status[k] = (float)DPCC_STATUS_INVALID;
+         return;
+        }
+      state.currency_digits = (uint)state_in[state_offset + 29];
+      state.source_action = (int)state_in[state_offset + 30];
+      state.exit_kind = (int)state_in[state_offset + 31];
+      state.numeric_status = (int)state_in[state_offset + 32];
+      if(state.currency_digits != currency_digits)
+        {
+         status[k] = (float)DPCC_STATUS_INVALID;
+         return;
+        }
+     }
+   if(state.account[20] == 0.0f)
+     {
+      state.account[8] = state.account[1];
+      state.account[20] = 1.0f;
+     }
+   const float equity_before = state.account[1];
+   DPCCRiskState risk;
+   DPCCRiskInit(&risk);
+   __global const float *ohlc = context + (size_t)k * 4;
+   __global const float *execution = context + off_execution + (size_t)k * 24;
+   __global const float *calendar = context + off_calendar + (size_t)k * E * 6;
+   const uint event_count = (uint)context[off_count];
+   float branch[4];
+   DPCCAccountPrepareOpen(&state, &risk, ohlc, instrument, execution, limits, calendar,
+                          event_count, volume_scale, episode_step, branch, (int)observed_open);
+   for(int i = 0; i < 24; i++)
+      if(!isfinite(state.account[i]))
+         state.numeric_status = DPCC_STATUS_NUMERIC;
+   if(state.numeric_status != 0)
+     {
+      status[k] = (float)state.numeric_status;
+      return;
+     }
+   const float reward = state.account[1] - equity_before;
+   if(!isfinite(reward) || !isfinite(state.equity_anchor) || !isfinite(state.entry_interest) ||
+      !isfinite(state.native_mark) || !isfinite(state.accrued_interest) ||
+      !isfinite(state.maximum_drawdown))
+     {
+      status[k] = (float)DPCC_STATUS_NUMERIC;
+      return;
+     }
+   rewards[k] = reward;
+   for(int i = 0; i < 24; i++)
+      state_out[state_offset + i] = state.account[i];
+   state_out[state_offset + 24] = state.equity_anchor;
+   state_out[state_offset + 25] = state.entry_interest;
+   state_out[state_offset + 26] = state.native_mark;
+   state_out[state_offset + 27] = state.accrued_interest;
+   state_out[state_offset + 28] = state.maximum_drawdown;
+   state_out[state_offset + 29] = (float)state.currency_digits;
+   state_out[state_offset + 30] = (float)state.source_action;
+   state_out[state_offset + 31] = (float)state.exit_kind;
+   state_out[state_offset + 32] = (float)state.numeric_status;
+   DPCCStoreRiskContinuation(&risk, risk_out, risk_offset);
+   risk_out[risk_offset + 20] = state.account[19] == 1.0f ? 0.0f : 1.0f;
+   for(int i = 0; i < 4; i++)
+      branch_diagnostic[(size_t)k * 4 + i] = branch[i];
+  }
+//+------------------------------------------------------------------+
+//| Validates factual data against the causally pinned observed open  |
+//+------------------------------------------------------------------+
+int DPCCValidateObservedCommitContext(__global const float *open_context,
+                                      __global const float *factual_context,
+                                      __global const float *account_override,
+                                      uint k, uint K, uint E, uint context_M,
+                                      uint episode_step, uint off_account,
+                                      uint off_instrument, uint off_limits,
+                                      uint off_execution, uint off_count,
+                                      uint off_calendar, uint off_active, uint total,
+                                      uint expected_basis, uint expected_adapter,
+                                      float gamma, float volume_scale, float price_scale,
+                                      float max_quote_age, float max_last_age, float money_scale,
+                                      uint expected_calculation_contract, uint currency_digits)
+  {
+   uint context_failure_line=0; const int factual_checked = DPCCValidateRolloutContext(factual_context, account_override,
+                                factual_context + off_account, k, K, 1, E, context_M,
+                                episode_step, off_account, off_instrument, off_limits,
+                                off_execution, off_count, off_calendar, off_active, total,
+                                expected_basis, expected_adapter, gamma, volume_scale,
+                                price_scale, max_quote_age, max_last_age, money_scale,
+                                expected_calculation_contract, currency_digits, 0, 0, 1U, &context_failure_line);
+   if(factual_checked != 0)
+      return(factual_checked);
+   for(uint i = 0; i < 24; i++)
+      if(as_uint(open_context[off_account + i]) != as_uint(factual_context[off_account + i]) ||
+         as_uint(open_context[off_limits + i]) != as_uint(factual_context[off_limits + i]))
+         return(DPCC_STATUS_INVALID);
+   for(uint i = 0; i < 48; i++)
+      if(as_uint(open_context[off_instrument + i]) != as_uint(factual_context[off_instrument + i]))
+         return(DPCC_STATUS_INVALID);
+   for(uint m = 0; m < context_M; m++)
+      if(as_uint(open_context[off_active + m]) != as_uint(factual_context[off_active + m]))
+         return(DPCC_STATUS_INVALID);
+   __global const float *open_ohlc = open_context + (size_t)k * 4;
+   __global const float *factual_ohlc = factual_context + (size_t)k * 4;
+   if(as_uint(open_ohlc[0]) != as_uint(factual_ohlc[0]))
+      return(DPCC_STATUS_INVALID);
+   __global const float *open_execution = open_context + off_execution + (size_t)k * 24;
+   __global const float *factual_execution = factual_context + off_execution + (size_t)k * 24;
+   for(uint i = 0; i < 24; i++)
+      if(i != 1U && i != 2U && i != 3U && i != 17U && i != 21U &&
+         as_uint(open_execution[i]) != as_uint(factual_execution[i]))
+         return(DPCC_STATUS_INVALID);
+   const float open_count_float = open_context[off_count];
+   const float factual_count_float = factual_context[off_count];
+   if(!DPCCInteger(open_count_float, 0.0f, (float)E) ||
+      !DPCCInteger(factual_count_float, 0.0f, (float)E))
+      return(DPCC_STATUS_INVALID);
+   const uint open_count = (uint)open_count_float;
+   const uint factual_count = (uint)factual_count_float;
+   if(open_count > factual_count)
+      return(DPCC_STATUS_INVALID);
+   __global const float *open_calendar = open_context + off_calendar + (size_t)k * E * 6;
+   __global const float *factual_calendar = factual_context + off_calendar + (size_t)k * E * 6;
+   for(uint event = 0; event < open_count; event++)
+     {
+      if(open_calendar[event * 6] >= 0.0f)
+         return(DPCC_STATUS_INVALID);
+      for(uint i = 0; i < 6; i++)
+         if(as_uint(open_calendar[event * 6 + i]) != as_uint(factual_calendar[event * 6 + i]))
+            return(DPCC_STATUS_INVALID);
+     }
+   for(uint event = open_count; event < factual_count; event++)
+      if(factual_calendar[event * 6] < 0.0f)
+         return(DPCC_STATUS_INVALID);
+   return(0);
+  }
+//+------------------------------------------------------------------+
+//| Consumes the prepared phase and applies exactly one action         |
+//+------------------------------------------------------------------+
+__kernel void DPCCRolloutCommitAction(__global const float *plans,
+                                      __global const float *context,
+                                      __global const float *state_in,
+                                      __global const float *risk_in,
+                                      __global const float *factual_context,
+                                      __global float *state_out,
+                                      __global float *rewards,
+                                      __global float *status,
+                                      __global float *branch_diagnostic,
+                                      uint plan_offset, uint K, uint E, uint context_M,
+                                      uint off_account, uint off_instrument, uint off_limits,
+                                      uint off_execution, uint off_count, uint off_calendar,
+                                      uint off_active, uint total,
+                                      uint episode_step, uint episode_horizon,
+                                      float gamma, float volume_scale, float price_scale,
+                                      float max_quote_age, float max_last_age, float money_scale,
+                                      uint expected_basis, uint expected_adapter,
+                                      uint expected_calculation_contract, uint currency_digits,
+                                      uint observed_commit, uint apply_action)
+  {
+   const uint k = (uint)get_global_id(0);
+   if(k >= K)
+      return;
+   const size_t state_offset = (size_t)k * DPCC_NATIVE_CONTINUATION_FLOATS;
+   const size_t risk_offset = (size_t)k * DPCC_NATIVE_PENDING_PHASE_FLOATS;
+   rewards[k] = 0.0f;
+   status[k] = 0.0f;
+   for(int i = 0; i < 4; i++)
+      branch_diagnostic[(size_t)k * 4 + i] = 0.0f;
+   branch_diagnostic[(size_t)k * 4] = -1.0f;
+   for(int i = 0; i < DPCC_NATIVE_CONTINUATION_FLOATS; i++)
+      state_out[state_offset + i] = 0.0f;
+   if(episode_horizon == 0 || episode_horizon > DPCC_NATIVE_MAX_EXACT_FLOAT_INDEX ||
+      episode_step >= episode_horizon || observed_commit > 1U || apply_action > 1U)
+     {
+      status[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   __global const float *instrument = context + off_instrument;
+   __global const float *limits = context + off_limits;
+   __global const float *account_context = context + off_account;
+   uint context_failure_line=0; const int checked = DPCCValidateRolloutContext(context, state_in + state_offset, account_context,
+                        k, K, 1, E, context_M, episode_step, off_account, off_instrument, off_limits,
+                        off_execution, off_count, off_calendar, off_active, total, expected_basis,
+                        expected_adapter, gamma, volume_scale, price_scale, max_quote_age,
+                        max_last_age, money_scale, expected_calculation_contract, currency_digits, 0, 0, 1U, &context_failure_line);
+   if(checked != 0)
+     {
+      status[k] = (float)checked;
+      return;
+     }
+   if(observed_commit != 0U)
+     {
+      const int factual_checked = DPCCValidateObservedCommitContext(context, factual_context,
+                                   state_in + state_offset, k, K, E, context_M, episode_step,
+                                   off_account, off_instrument, off_limits, off_execution,
+                                   off_count, off_calendar, off_active, total, expected_basis,
+                                   expected_adapter, gamma, volume_scale, price_scale, max_quote_age,
+                                   max_last_age, money_scale, expected_calculation_contract,
+                                   currency_digits);
+      if(factual_checked != 0)
+        {
+         status[k] = (float)factual_checked;
+         return;
+        }
+     }
+   if(context[off_active] != 1.0f)
+     {
+      status[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   DPCCAccountState state;
+   for(int i = 0; i < 24; i++)
+      state.account[i] = state_in[state_offset + i];
+   for(int i = 24; i < DPCC_NATIVE_CONTINUATION_FLOATS; i++)
+      if(!isfinite(state_in[state_offset + i]))
+        {
+         status[k] = (float)DPCC_STATUS_NUMERIC;
+         return;
+        }
+   state.equity_anchor = state_in[state_offset + 24];
+   state.entry_interest = state_in[state_offset + 25];
+   state.native_mark = state_in[state_offset + 26];
+   state.accrued_interest = state_in[state_offset + 27];
+   state.maximum_drawdown = state_in[state_offset + 28];
+   if(!DPCCInteger(state_in[state_offset + 29], 0.0f, 8.0f) ||
+      !DPCCInteger(state_in[state_offset + 30], -1.0f, (float)episode_step) ||
+      !DPCCInteger(state_in[state_offset + 31], 0.0f, 3.0f) ||
+      !DPCCInteger(state_in[state_offset + 32], 0.0f, 0.0f) || state.maximum_drawdown < 0.0f)
+     {
+      status[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   state.currency_digits = (uint)state_in[state_offset + 29];
+   state.source_action = (int)state_in[state_offset + 30];
+   state.exit_kind = (int)state_in[state_offset + 31];
+   state.numeric_status = (int)state_in[state_offset + 32];
+   if(state.currency_digits != currency_digits)
+     {
+      status[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   DPCCRiskState risk;
+   const int risk_status = DPCCLoadRiskContinuation(&risk, risk_in, risk_offset);
+   if(risk_status != 0)
+     {
+      status[k] = (float)risk_status;
+      return;
+     }
+   __global const float *action = plans;
+   if(apply_action != 0U)
+      action += (size_t)plan_offset;
+   int valid_action = 1;
+   if(apply_action != 0U)
+      for(int i = 0; i < 6; i++)
+         if(!isfinite(action[i]))
+            valid_action = 0;
+   if(apply_action != 0U && valid_action)
+     {
+      const float target = action[0] - action[3];
+      if(!isfinite(target))
+        {
+         status[k] = (float)DPCC_STATUS_NUMERIC;
+         return;
+        }
+      if(action[0] < 0.0f || action[3] < 0.0f ||
+         (target > 0.0f && (action[1] < 0.0f || action[2] < 0.0f)) ||
+         (target < 0.0f && (action[4] < 0.0f || action[5] < 0.0f)))
+         valid_action = 0;
+     }
+   if(!valid_action)
+      state.numeric_status = DPCC_STATUS_INVALID;
+   const float equity_before = state.account[1];
+   __global const float *market_context = observed_commit != 0U ? factual_context : context;
+   __global const float *ohlc = market_context + (size_t)k * 4;
+   __global const float *execution = market_context + off_execution + (size_t)k * 24;
+   __global const float *calendar = market_context + off_calendar + (size_t)k * E * 6;
+   const uint event_count = (uint)market_context[off_count];
+   uint cursor = 0;
+   if(observed_commit != 0U)
+      cursor = (uint)context[off_count];
+   else
+      while(cursor < event_count && calendar[cursor * 6] <= 0.0f)
+         cursor++;
+   float branch[4];
+   for(int i = 0; i < 4; i++)
+      branch[i] = (i == 0 ? -1.0f : 0.0f);
+   DPCCAccountCommitPrepared(&state, &risk, action, ohlc, instrument, execution, limits, calendar,
+                             event_count, cursor, volume_scale, price_scale, episode_step,
+                             episode_horizon, branch, apply_action);
+   for(int i = 0; i < 24; i++)
+      if(!isfinite(state.account[i]))
+         state.numeric_status = DPCC_STATUS_NUMERIC;
+   if(state.numeric_status != 0)
+     {
+      status[k] = (float)state.numeric_status;
+      return;
+     }
+   const float reward = state.account[1] - equity_before;
+   if(!isfinite(reward) || !isfinite(state.equity_anchor) || !isfinite(state.entry_interest) ||
+      !isfinite(state.native_mark) || !isfinite(state.accrued_interest) ||
+      !isfinite(state.maximum_drawdown))
+     {
+      status[k] = (float)DPCC_STATUS_NUMERIC;
+      return;
+     }
+   rewards[k] = reward;
+   for(int i = 0; i < 24; i++)
+      state_out[state_offset + i] = state.account[i];
+   state_out[state_offset + 24] = state.equity_anchor;
+   state_out[state_offset + 25] = state.entry_interest;
+   state_out[state_offset + 26] = state.native_mark;
+   state_out[state_offset + 27] = state.accrued_interest;
+   state_out[state_offset + 28] = state.maximum_drawdown;
+   state_out[state_offset + 29] = (float)state.currency_digits;
+   state_out[state_offset + 30] = (float)state.source_action;
+   state_out[state_offset + 31] = (float)state.exit_kind;
+   state_out[state_offset + 32] = (float)state.numeric_status;
+   for(int i = 0; i < 4; i++)
+      branch_diagnostic[(size_t)k * 4 + i] = branch[i];
+  }
+//+------------------------------------------------------------------+
+//| Slot feasibility and one-writer aggregate system status           |
+//+------------------------------------------------------------------+
+__kernel void DPCCRolloutReduce(__global const float *system_status,
+                                __global const float *violations,
+                                __global const float *slot_active,
+                                __global float *validity,
+                                __global float *aggregate_system,
+                                uint K, uint slots, uint slot_active_offset)
+  {
+   const size_t slot = get_global_id(0);
+   if(slot < slots)
+     {
+      float valid = slot_active[(size_t)slot_active_offset + slot] == 1.0f ? 1.0f : 0.0f;
+      for(uint k = 0; k < K; k++)
+        {
+         const size_t pair = slot * K + k;
+         if(system_status[pair] != 0.0f || violations[pair * 8] >= 0.0f ||
+            violations[pair * 8 + 5] != 0.0f || !isfinite(violations[pair * 8 + 2]) ||
+            !isfinite(violations[pair * 8 + 3]))
+            valid = 0.0f;
+        }
+      validity[slot] = valid;
+     }
+   else
+      if(slot == slots)
+        {
+         float status = 0.0f;
+         for(size_t pair = 0; pair < (size_t)slots * K; pair++)
+           {
+            const float current = system_status[pair];
+            if(!isfinite(current) || (current != 0.0f && current != 3.0f && current != 5.0f))
+               status = (float)DPCC_STATUS_NUMERIC;
+            else
+               status = fmax(status, current);
+           }
+         aggregate_system[0] = status;
+        }
+  }
+
+//+------------------------------------------------------------------+
+//| DPCC device-resident LOCAL_REPAIR_V2 projection control            |
+//+------------------------------------------------------------------+
+#define DPCC_PC_STRIDE       24
+#define DPCC_PS_STRIDE       12
+#define DPCC_PD_STRIDE       12
+#define DPCC_PROPOSALS        9
+#define DPCC_PC_ACTIVE        0
+#define DPCC_PC_STAGE         1
+#define DPCC_PC_EVAL          2
+#define DPCC_PC_ITER          3
+#define DPCC_PC_COUNT         4
+#define DPCC_PC_CURSOR        5
+#define DPCC_PC_H             6
+#define DPCC_PC_PHASE         7
+#define DPCC_PC_K             8
+#define DPCC_PC_CONSTRAINT    9
+#define DPCC_PC_SOURCE       10
+#define DPCC_PC_FEASIBLE     11
+#define DPCC_PC_VMAX         12
+#define DPCC_PC_VSUM         13
+#define DPCC_PC_DISTANCE     14
+#define DPCC_PC_IDENTITY     15
+#define DPCC_PC_LAST_P       16
+#define DPCC_PC_STATUS       17
+#define DPCC_PC_SYSTEM       18
+#define DPCC_PC_PROPOSED     19
+#define DPCC_PC_VERIFIED     20
+#define DPCC_PC_ORIGINAL_OK  21
+
+void DPCCProjectionCopy(__global const float *source, __global float *destination,
+                         size_t source_offset, size_t destination_offset, size_t count)
+  {
+   __global const uint *source_bits = (__global const uint *)source;
+   __global uint *destination_bits = (__global uint *)destination;
+   for(size_t i = 0; i < count; i++)
+      destination_bits[destination_offset + i] = source_bits[source_offset + i];
+  }
+
+void DPCCProjectionEncode(float q, float tp, float sl, __private float *action)
+  {
+   for(int a = 0; a < 6; a++)
+      action[a] = 0.0f;
+   if(q > 0.0f)
+     {
+      action[0] = q;
+      action[1] = tp;
+      action[2] = sl;
+     }
+   else
+      if(q < 0.0f)
+        {
+         action[3] = -q;
+         action[4] = tp;
+         action[5] = sl;
+        }
+  }
+
+void DPCCProjectionBase(__global float *control, __global const float *summary)
+  {
+   control[DPCC_PC_FEASIBLE] = summary[0];
+   control[DPCC_PC_VMAX] = summary[1];
+   control[DPCC_PC_VSUM] = summary[2];
+   control[DPCC_PC_DISTANCE] = summary[3];
+   for(int i = 0; i < 5; i++)
+      control[DPCC_PC_H + i] = summary[4 + i];
+   control[DPCC_PC_SYSTEM] = fmax(control[DPCC_PC_SYSTEM], summary[9]);
+  }
+
+void DPCCProjectionOrder(__global float *control, __global float *order, uint H, uint lookback)
+  {
+   control[DPCC_PC_COUNT] = 0.0f;
+   control[DPCC_PC_CURSOR] = 0.0f;
+   for(uint i = 0; i < H; i++)
+      order[i] = -1.0f;
+   const int h = (int)control[DPCC_PC_H];
+   const int phase = (int)control[DPCC_PC_PHASE];
+   if(h < 0 || h >= (int)H || phase < 0 || phase > 3 || lookback == 0)
+      return;
+   const int last = phase == 0 ? h - 1 : h;
+   if(last < 0)
+      return;
+   const int source = (int)control[DPCC_PC_SOURCE];
+   uint count = 0;
+   if(source >= 0 && source <= last)
+      order[count++] = (float)source;
+   for(int u = last; u >= 0 && count < lookback; u--)
+      if(u != source)
+         order[count++] = (float)u;
+   control[DPCC_PC_COUNT] = (float)count;
+  }
+
+// Only impossible targets are excluded here. Exact pre-action permissions
+// after gaps/protective closes remain the shared rollout's responsibility.
+int DPCCProjectionDirection(float target, __global const float *account,
+                              __global const float *instrument)
+  {
+   const float initial = account[2];
+   const int mode = (int)instrument[29];
+   if((int)instrument[11] == DPCC_CALC_COLLATERAL)
+      return(target == initial);
+   if(target == 0.0f)
+      return(1);
+   if(mode == 0)
+      return(target == initial);
+   if(mode == 3)
+      return(((target > 0.0f && initial > 0.0f) || (target < 0.0f && initial < 0.0f)) &&
+             fabs(target) <= fabs(initial));
+   if(mode == 1 && target < 0.0f)
+      return(initial < 0.0f && fabs(target) <= fabs(initial));
+   if(mode == 2 && target > 0.0f)
+      return(initial > 0.0f && fabs(target) <= fabs(initial));
+   return(1);
+  }
+
+int DPCCProjectionRiskBetter(__global const float *candidate, float feasible, float vmax,
+                               float vsum, float epsilon)
+  {
+   if(candidate[0] == 1.0f)
+      return(feasible == 0.0f);
+   if(feasible == 1.0f)
+      return(0);
+   return(candidate[1] < vmax - epsilon ||
+          (fabs(candidate[1] - vmax) <= epsilon && candidate[2] < vsum - epsilon));
+  }
+
+int DPCCProjectionPrefer(__global const float *candidate, __global const float *best,
+                           float epsilon, float distance_epsilon)
+  {
+   if(candidate[0] != best[0])
+      return(candidate[0] > best[0]);
+   if(candidate[0] == 0.0f)
+     {
+      if(DPCCProjectionRiskBetter(candidate, best[0], best[1], best[2], epsilon))
+         return(1);
+      if(DPCCProjectionRiskBetter(best, candidate[0], candidate[1], candidate[2], epsilon))
+         return(0);
+      if(fabs(candidate[1] - best[1]) > epsilon || fabs(candidate[2] - best[2]) > epsilon)
+         return(0);
+     }
+   // Stable p is retained on a distance tie because the scan is ascending.
+   return(candidate[3] < best[3] - distance_epsilon);
+  }
+
+__kernel void DPCCProjectionInit(__global const float *plans,
+                                  __global const float *context,
+                                  __global float *original,
+                                  __global float *current,
+                                  __global float *base_active,
+                                  __global float *final_active,
+                                  __global float *controls,
+                                  uint M, uint H, uint off_R_active, uint plan_offset)
+  {
+   const uint m = (uint)get_global_id(0);
+   if(m >= M)
+      return;
+   __global float *control = controls + (size_t)m * DPCC_PC_STRIDE;
+   for(int i = 0; i < DPCC_PC_STRIDE; i++)
+      control[i] = 0.0f;
+   control[DPCC_PC_STATUS] = 2.0f;
+   control[DPCC_PC_LAST_P] = -1.0f;
+   for(int i = DPCC_PC_H; i <= DPCC_PC_SOURCE; i++)
+      control[i] = -1.0f;
+   const float active = context[(size_t)off_R_active + m];
+   if(!DPCCBoolean(active))
+      control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+   else
+     {
+      control[DPCC_PC_ACTIVE] = active;
+      control[DPCC_PC_STAGE] = active == 1.0f ? 1.0f : 0.0f;
+     }
+   const size_t row = (size_t)m * H * 6;
+   DPCCProjectionCopy(plans, original, (size_t)plan_offset + row, row, (size_t)H * 6);
+   DPCCProjectionCopy(plans, current, (size_t)plan_offset + row, row, (size_t)H * 6);
+   for(uint h = 0; h < H; h++)
+     {
+      for(int a = 0; a < 6; a++)
+         if(!isfinite(original[row + (size_t)h * 6 + a]))
+            control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+      if(control[DPCC_PC_SYSTEM] == 0.0f &&
+         !isfinite(original[row + (size_t)h * 6] - original[row + (size_t)h * 6 + 3]))
+         control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+     }
+   base_active[m] = control[DPCC_PC_SYSTEM] == 0.0f ? control[DPCC_PC_ACTIVE] : 0.0f;
+   final_active[m] = 0.0f;
+  }
+
+__kernel void DPCCProjectionSummary(__global const float *plans,
+                                     __global const float *original,
+                                     __global const float *active,
+                                     __global const float *returns,
+                                     __global const float *states,
+                                     __global const float *violations,
+                                     __global float *summaries,
+                                     __global const float *action_scale,
+                                     uint M, uint K, uint H, uint P)
+  {
+   const size_t slot = get_global_id(0);
+   if(P == 0 || slot >= (size_t)M * P)
+      return;
+   __global float *summary = summaries + slot * DPCC_PS_STRIDE;
+   for(int i = 0; i < DPCC_PS_STRIDE; i++)
+      summary[i] = 0.0f;
+   for(int i = 4; i <= 8; i++)
+      summary[i] = -1.0f;
+   summary[10] = (float)(slot % P);
+   const float enabled = active[slot];
+   if(!DPCCBoolean(enabled) || K == 0 || K > 64 || (P != 1 && P != DPCC_PROPOSALS))
+     {
+      summary[9] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   summary[11] = enabled;
+   if(enabled == 0.0f)
+      return;
+   for(int a = 0; a < 6; a++)
+      if(!isfinite(action_scale[a]) || action_scale[a] <= 0.0f)
+        {
+         summary[9] = (float)DPCC_STATUS_INVALID;
+         return;
+        }
+   summary[0] = 1.0f;
+   for(uint k = 0; k < K; k++)
+     {
+      const size_t pair = slot * K + k;
+      __global const float *violation = violations + pair * 8;
+      for(int i = 0; i < 8; i++)
+         if(!isfinite(violation[i]))
+            summary[9] = (float)DPCC_STATUS_NUMERIC;
+      if(!isfinite(returns[pair]))
+         summary[9] = (float)DPCC_STATUS_NUMERIC;
+      for(size_t i = 0; i < ((size_t)H + 1) * 24; i++)
+         if(!isfinite(states[pair * ((size_t)H + 1) * 24 + i]))
+            summary[9] = (float)DPCC_STATUS_NUMERIC;
+      if(summary[9] != 0.0f)
+         continue;
+      if(!DPCCInteger(violation[0], -1.0f, (float)H - 1.0f) ||
+         !DPCCInteger(violation[1], -1.0f, 15.0f) ||
+         !DPCCInteger(violation[6], -1.0f, 3.0f) ||
+         !DPCCInteger(violation[7], -1.0f, (float)H - 1.0f) ||
+         violation[2] < 0.0f || violation[3] < 0.0f ||
+         (violation[5] != 0.0f && violation[5] != 3.0f && violation[5] != 5.0f))
+        {
+         summary[9] = (float)DPCC_STATUS_NUMERIC;
+         continue;
+        }
+      if(violation[5] == (float)DPCC_STATUS_NUMERIC)
+         summary[9] = (float)DPCC_STATUS_NUMERIC;
+      if(violation[0] >= 0.0f || violation[5] != 0.0f || violation[2] != 0.0f || violation[3] != 0.0f)
+         summary[0] = 0.0f;
+      summary[1] = fmax(summary[1], violation[2]);
+      summary[2] += violation[3];
+      if(violation[0] >= 0.0f)
+        {
+         if(violation[1] < 0.0f || violation[6] < 0.0f)
+           {
+            summary[9] = (float)DPCC_STATUS_NUMERIC;
+            continue;
+           }
+         const int earlier = summary[4] < 0.0f || violation[0] < summary[4] ||
+            (violation[0] == summary[4] && (violation[6] < summary[5] ||
+             (violation[6] == summary[5] && ((float)k < summary[6] ||
+              ((float)k == summary[6] && violation[1] < summary[7])))));
+         if(earlier)
+           {
+            summary[4] = violation[0];
+            summary[5] = violation[6];
+            summary[6] = (float)k;
+            summary[7] = violation[1];
+            summary[8] = violation[7];
+           }
+        }
+     }
+   const size_t row = slot * H * 6;
+   const size_t input_row = (slot / P) * H * 6;
+   float distance = 0.0f;
+   for(uint h = 0; h < H; h++)
+      for(int a = 0; a < 6; a++)
+        {
+         const size_t i = (size_t)h * 6 + a;
+         const float difference = (plans[row + i] - original[input_row + i]) / action_scale[a];
+         distance += difference * difference;
+        }
+   summary[3] = distance;
+   if(!isfinite(distance) || !isfinite(summary[1]) || !isfinite(summary[2]))
+      summary[9] = (float)DPCC_STATUS_NUMERIC;
+   if(summary[9] != 0.0f)
+      summary[0] = 0.0f;
+  }
+
+__kernel void DPCCProjectionPrepare(__global float *current,
+                                     __global const float *context,
+                                     __global const float *summaries,
+                                     __global float *controls,
+                                     __global float *base_active,
+                                     __global float *final_active,
+                                     __global float *orders,
+                                     uint M, uint H, uint stage, uint off_account,
+                                     uint off_instrument, uint off_limits,
+                                     uint max_eval, uint max_iter, uint lookback)
+  {
+   const uint m = (uint)get_global_id(0);
+   if(m >= M)
+      return;
+   __global float *control = controls + (size_t)m * DPCC_PC_STRIDE;
+   base_active[m] = 0.0f;
+   if(control[DPCC_PC_ACTIVE] == 0.0f || control[DPCC_PC_SYSTEM] != 0.0f)
+      return;
+   if((stage != 1 && stage != 2) || max_eval == 0 || max_eval > 160 ||
+      max_iter == 0 || max_iter > 16 || lookback > H)
+     {
+      control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   if(control[DPCC_PC_STAGE] != (float)stage)
+      return;
+   __global const float *summary = summaries + (size_t)m * DPCC_PS_STRIDE;
+   DPCCProjectionBase(control, summary);
+   if(summary[11] != 1.0f)
+      control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+   if(control[DPCC_PC_SYSTEM] != 0.0f)
+      return;
+   control[DPCC_PC_EVAL] += 1.0f;
+   if(control[DPCC_PC_EVAL] > (float)max_eval)
+     {
+      control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+      return;
+     }
+   if(stage == 1)
+     {
+      control[DPCC_PC_ORIGINAL_OK] = summary[0];
+      if(summary[0] == 1.0f)
+        {
+         control[DPCC_PC_IDENTITY] = 1.0f;
+         control[DPCC_PC_VERIFIED] = 1.0f;
+         control[DPCC_PC_STATUS] = 0.0f;
+         control[DPCC_PC_STAGE] = 5.0f;
+         return;
+        }
+      // Do not mutate the original without both canonical and final reserves.
+      if((float)max_eval - control[DPCC_PC_EVAL] < 2.0f)
+        {
+         control[DPCC_PC_STAGE] = 5.0f;
+         control[DPCC_PC_STATUS] = 2.0f;
+         return;
+        }
+      __global const float *limits = context + off_limits;
+      __global const float *instrument = context + off_instrument;
+      if(!DPCCInteger(limits[20], 0.0f, 511.0f))
+        {
+         control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+         return;
+        }
+      const uint mask = (uint)limits[20];
+      const size_t row = (size_t)m * H * 6;
+      for(uint h = 0; h < H; h++)
+        {
+         const size_t offset = row + (size_t)h * 6;
+         float q = current[offset] - current[offset + 3];
+         float tp = q > 0.0f ? current[offset + 1] : current[offset + 4];
+         float sl = q > 0.0f ? current[offset + 2] : current[offset + 5];
+         q = copysign(fmin(fabs(q), DPCC_ACTION_VOLUME_MAX), q);
+         if(mask & 1U)
+            q = copysign(fmin(fabs(q), limits[0]), q);
+         tp = fmax(0.0f, tp);
+         sl = fmax(0.0f, sl);
+         if(q != 0.0f)
+           {
+            if(((mask & 128U) && instrument[7] <= 0.0f) ||
+               ((mask & 256U) && instrument[6] <= 0.0f))
+              {
+               control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+               return;
+              }
+            if(mask & 128U)
+               sl = clamp(sl, limits[7] / instrument[7], limits[8] / instrument[7]);
+            if(mask & 256U)
+               tp = clamp(tp, limits[9] / instrument[6], limits[10] / instrument[6]);
+           }
+         float action[6];
+         DPCCProjectionEncode(q, tp, sl, action);
+         for(int a = 0; a < 6; a++)
+           {
+            if(!isfinite(action[a]))
+              {
+               control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+               return;
+              }
+            current[offset + a] = action[a];
+           }
+        }
+      control[DPCC_PC_STAGE] = 2.0f;
+      base_active[m] = 1.0f;
+      return;
+     }
+   DPCCProjectionOrder(control, orders + (size_t)m * H, H, lookback);
+   if(summary[0] == 1.0f || control[DPCC_PC_COUNT] == 0.0f ||
+      control[DPCC_PC_EVAL] >= (float)max_eval - 1.0f)
+     {
+      control[DPCC_PC_STAGE] = 4.0f;
+      final_active[m] = 1.0f;
+     }
+   else
+      control[DPCC_PC_STAGE] = 3.0f;
+  }
+
+__kernel void DPCCProjectionProposals(__global const float *current,
+                                       __global const float *context,
+                                       __global float *controls,
+                                       __global const float *orders,
+                                       __global float *proposals,
+                                       __global float *proposal_active,
+                                       uint M, uint H, uint off_account,
+                                       uint off_instrument, uint off_limits,
+                                       uint max_eval, uint max_iter)
+  {
+   const uint m = (uint)get_global_id(0);
+   if(m >= M)
+      return;
+   __global float *control = controls + (size_t)m * DPCC_PC_STRIDE;
+   const size_t row = (size_t)m * H * 6;
+   for(uint p = 0; p < DPCC_PROPOSALS; p++)
+     {
+      const size_t slot = (size_t)m * DPCC_PROPOSALS + p;
+      proposal_active[slot] = 0.0f;
+      DPCCProjectionCopy(current, proposals, row, slot * H * 6, (size_t)H * 6);
+     }
+   control[DPCC_PC_PROPOSED] = 0.0f;
+   if(control[DPCC_PC_STAGE] != 3.0f || control[DPCC_PC_SYSTEM] != 0.0f ||
+      control[DPCC_PC_ACTIVE] != 1.0f)
+      return;
+   const int available = (int)max_eval - (int)control[DPCC_PC_EVAL] - 1;
+   if(available <= 0 || control[DPCC_PC_ITER] >= (float)max_iter ||
+      control[DPCC_PC_CURSOR] >= control[DPCC_PC_COUNT])
+      return;
+   const uint cursor = (uint)control[DPCC_PC_CURSOR];
+   const float selected = orders[(size_t)m * H + cursor];
+   if(!DPCCInteger(selected, 0.0f, (float)H - 1.0f))
+     {
+      control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+      return;
+     }
+   const uint u = (uint)selected;
+   __global const float *account = context + off_account;
+   __global const float *instrument = context + off_instrument;
+   __global const float *limits = context + off_limits;
+   if(!DPCCInteger(limits[20], 0.0f, 511.0f))
+     {
+      control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   const uint mask = (uint)limits[20];
+   const size_t action_offset = row + (size_t)u * 6;
+   const float q = current[action_offset] - current[action_offset + 3];
+   const float original_tp = current[action_offset + (q > 0.0f ? 1 : 4)];
+   const float original_sl = current[action_offset + (q > 0.0f ? 2 : 5)];
+   int permitted[DPCC_PROPOSALS];
+   for(uint p = 0; p < DPCC_PROPOSALS; p++)
+      permitted[p] = 0;
+   int emitted = 0;
+   for(uint p = 0; p < DPCC_PROPOSALS; p++)
+     {
+      float target = q;
+      float tp = original_tp;
+      float sl = original_sl;
+      if(p < 4)
+        {
+         const float multiplier = p == 0 ? 0.75f : (p == 1 ? 0.5f : (p == 2 ? 0.25f : 0.0f));
+         target = q * multiplier;
+        }
+      else
+         if(p == 4)
+           {
+            if(u > 0)
+              {
+               const size_t previous = row + ((size_t)u - 1) * 6;
+               target = current[previous] - current[previous + 3];
+               tp = current[previous + (target > 0.0f ? 1 : 4)];
+               sl = current[previous + (target > 0.0f ? 2 : 5)];
+              }
+            else
+              {
+               target = account[2];
+               tp = 0.0f;
+               sl = 0.0f;
+               if(target != 0.0f)
+                 {
+                  if((account[17] == 1.0f && instrument[7] <= 0.0f) ||
+                     (account[18] == 1.0f && instrument[6] <= 0.0f) || instrument[0] <= 0.0f)
+                    {
+                     control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+                     return;
+                    }
+                  const float reference = account[target > 0.0f ? 16 : 15];
+                  if(account[17] == 1.0f)
+                     sl = (target > 0.0f ? reference - account[4] : account[4] - reference) /
+                          instrument[0] / instrument[7];
+                  if(account[18] == 1.0f)
+                     tp = (target > 0.0f ? account[5] - reference : reference - account[5]) /
+                          instrument[0] / instrument[6];
+                 }
+              }
+           }
+         else
+            if(p == 5 || p == 6)
+              {
+               if((mask & 128U) == 0)
+                  continue;
+               if(instrument[7] <= 0.0f)
+                 {
+                  control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+                  return;
+                 }
+               sl = limits[p == 5 ? 7 : 8] / instrument[7];
+              }
+            else
+              {
+               if((mask & 256U) == 0)
+                  continue;
+               if(instrument[6] <= 0.0f)
+                 {
+                  control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_INVALID;
+                  return;
+                 }
+               tp = limits[p == 7 ? 9 : 10] / instrument[6];
+              }
+      float action[6];
+      DPCCProjectionEncode(target, tp, sl, action);
+      for(int a = 0; a < 6; a++)
+         if(!isfinite(action[a]))
+           {
+            control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+            return;
+           }
+      if(!DPCCProjectionDirection(target, account, instrument))
+         continue;
+      const size_t slot = (size_t)m * DPCC_PROPOSALS + p;
+      const size_t plan = slot * H * 6;
+      for(int a = 0; a < 6; a++)
+         proposals[plan + (size_t)u * 6 + a] = action[a];
+      int duplicate = 1;
+      for(size_t i = 0; i < (size_t)H * 6; i++)
+         if(proposals[plan + i] != current[row + i])
+           {
+            duplicate = 0;
+            break;
+           }
+      for(uint previous_p = 0; previous_p < p && !duplicate; previous_p++)
+         if(permitted[previous_p])
+           {
+            duplicate = 1;
+            const size_t previous_plan = ((size_t)m * DPCC_PROPOSALS + previous_p) * H * 6;
+            for(size_t i = 0; i < (size_t)H * 6; i++)
+               if(proposals[plan + i] != proposals[previous_plan + i])
+                 {
+                  duplicate = 0;
+                  break;
+                 }
+           }
+      if(duplicate)
+         continue;
+      permitted[p] = 1;
+      if(emitted < available)
+        {
+         proposal_active[slot] = 1.0f;
+         emitted++;
+        }
+     }
+   control[DPCC_PC_PROPOSED] = (float)emitted;
+  }
+
+__kernel void DPCCProjectionSelect(__global const float *proposals,
+                                    __global const float *proposal_active,
+                                    __global const float *summaries,
+                                    __global float *current,
+                                    __global float *controls,
+                                    __global float *orders,
+                                    __global float *final_active,
+                                    uint M, uint H, uint max_eval, uint max_iter, uint lookback,
+                                    float improvement_atol, float distance_tie_atol)
+  {
+   const uint m = (uint)get_global_id(0);
+   if(m >= M)
+      return;
+   __global float *control = controls + (size_t)m * DPCC_PC_STRIDE;
+   if(control[DPCC_PC_STAGE] != 3.0f || control[DPCC_PC_SYSTEM] != 0.0f)
+      return;
+   int best = -1;
+   uint evaluated = 0;
+   for(uint p = 0; p < DPCC_PROPOSALS; p++)
+     {
+      const size_t slot = (size_t)m * DPCC_PROPOSALS + p;
+      if(!DPCCBoolean(proposal_active[slot]))
+        {
+         control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+         return;
+        }
+      if(proposal_active[slot] == 0.0f)
+         continue;
+      evaluated++;
+      __global const float *summary = summaries + slot * DPCC_PS_STRIDE;
+      control[DPCC_PC_SYSTEM] = fmax(control[DPCC_PC_SYSTEM], summary[9]);
+      if(summary[11] != 1.0f || summary[10] != (float)p)
+         control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+      if(control[DPCC_PC_SYSTEM] != 0.0f)
+         continue;
+      if(!DPCCProjectionRiskBetter(summary, control[DPCC_PC_FEASIBLE],
+                                   control[DPCC_PC_VMAX], control[DPCC_PC_VSUM], improvement_atol))
+         continue;
+      if(best < 0 || DPCCProjectionPrefer(summary,
+            summaries + ((size_t)m * DPCC_PROPOSALS + (uint)best) * DPCC_PS_STRIDE,
+            improvement_atol, distance_tie_atol))
+         best = (int)p;
+     }
+   control[DPCC_PC_EVAL] += (float)evaluated;
+   if(control[DPCC_PC_EVAL] > (float)max_eval - 1.0f ||
+      control[DPCC_PC_PROPOSED] != (float)evaluated)
+      control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+   if(control[DPCC_PC_SYSTEM] != 0.0f)
+      return;
+   if(best >= 0)
+     {
+      const size_t slot = (size_t)m * DPCC_PROPOSALS + (uint)best;
+      DPCCProjectionCopy(proposals, current, slot * H * 6, (size_t)m * H * 6, (size_t)H * 6);
+      DPCCProjectionBase(control, summaries + slot * DPCC_PS_STRIDE);
+      control[DPCC_PC_ITER] += 1.0f;
+      control[DPCC_PC_LAST_P] = (float)best;
+      DPCCProjectionOrder(control, orders + (size_t)m * H, H, lookback);
+     }
+   else
+      control[DPCC_PC_CURSOR] += 1.0f;
+   if(control[DPCC_PC_FEASIBLE] == 1.0f ||
+      control[DPCC_PC_ITER] >= (float)max_iter ||
+      control[DPCC_PC_EVAL] >= (float)max_eval - 1.0f ||
+      control[DPCC_PC_CURSOR] >= control[DPCC_PC_COUNT])
+     {
+      control[DPCC_PC_STAGE] = 4.0f;
+      final_active[m] = 1.0f;
+     }
+  }
+
+__kernel void DPCCProjectionPublish(__global const float *original,
+                                     __global const float *current,
+                                     __global const float *final_summaries,
+                                     __global float *controls,
+                                     __global float *result,
+                                     __global float *correction_cost,
+                                     __global float *candidate_status,
+                                     __global float *diagnostics,
+                                     uint M, uint H, uint max_eval)
+  {
+   const uint m = (uint)get_global_id(0);
+   if(m >= M)
+      return;
+   __global float *control = controls + (size_t)m * DPCC_PC_STRIDE;
+   const size_t row = (size_t)m * H * 6;
+   const size_t diagnostic = (size_t)m * DPCC_PD_STRIDE;
+   correction_cost[m] = 0.0f;
+   candidate_status[m] = 2.0f;
+   for(int i = 0; i < DPCC_PD_STRIDE; i++)
+      diagnostics[diagnostic + i] = 0.0f;
+   if(control[DPCC_PC_SYSTEM] != 0.0f)
+      return;
+   if(control[DPCC_PC_ACTIVE] == 1.0f && control[DPCC_PC_STAGE] == 4.0f)
+     {
+      __global const float *summary = final_summaries + (size_t)m * DPCC_PS_STRIDE;
+      DPCCProjectionBase(control, summary);
+      if(summary[11] != 1.0f)
+         control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+      control[DPCC_PC_EVAL] += 1.0f;
+      if(control[DPCC_PC_EVAL] > (float)max_eval)
+         control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+      if(control[DPCC_PC_SYSTEM] != 0.0f)
+         return;
+      control[DPCC_PC_STATUS] = summary[0] == 1.0f ? 0.0f : 2.0f;
+      control[DPCC_PC_VERIFIED] = 1.0f;
+      control[DPCC_PC_STAGE] = 5.0f;
+     }
+   else
+      if(control[DPCC_PC_ACTIVE] == 1.0f && control[DPCC_PC_STAGE] != 5.0f)
+        {
+         control[DPCC_PC_SYSTEM] = (float)DPCC_STATUS_NUMERIC;
+         return;
+        }
+   DPCCProjectionCopy(control[DPCC_PC_IDENTITY] == 1.0f ? original : current,
+                       result, row, row, (size_t)H * 6);
+   if(control[DPCC_PC_ACTIVE] == 1.0f)
+     {
+      correction_cost[m] = control[DPCC_PC_IDENTITY] == 1.0f ? 0.0f : control[DPCC_PC_DISTANCE];
+      candidate_status[m] = control[DPCC_PC_STATUS];
+     }
+   diagnostics[diagnostic] = control[DPCC_PC_EVAL];
+   diagnostics[diagnostic + 1] = control[DPCC_PC_ITER];
+   diagnostics[diagnostic + 2] = control[DPCC_PC_VMAX];
+   diagnostics[diagnostic + 3] = control[DPCC_PC_VSUM];
+   for(int i = 0; i < 5; i++)
+      diagnostics[diagnostic + 4 + i] = control[DPCC_PC_H + i];
+   diagnostics[diagnostic + 9] = control[DPCC_PC_LAST_P];
+   diagnostics[diagnostic + 10] = control[DPCC_PC_ACTIVE];
+   diagnostics[diagnostic + 11] = control[DPCC_PC_VERIFIED];
+  }
+
+__kernel void DPCCProjectionReduce(__global const float *controls,
+                                    __global float *aggregate, uint M, uint mode)
+  {
+   if(get_global_id(0) != 0)
+      return;
+   float system = 0.0f;
+   int searching = 0;
+   int exhausted = 0;
+   for(uint m = 0; m < M; m++)
+     {
+      __global const float *control = controls + (size_t)m * DPCC_PC_STRIDE;
+      const float status = control[DPCC_PC_SYSTEM];
+      if(!isfinite(status) || (status != 0.0f && status != 3.0f && status != 5.0f))
+         system = (float)DPCC_STATUS_NUMERIC;
+      else
+         system = fmax(system, status);
+      if(control[DPCC_PC_ACTIVE] == 1.0f)
+        {
+         if(control[DPCC_PC_STAGE] == 3.0f)
+            searching = 1;
+         if(control[DPCC_PC_STATUS] == 2.0f)
+            exhausted = 1;
+         if(mode == 1 && control[DPCC_PC_STAGE] != 5.0f)
+            system = (float)DPCC_STATUS_NUMERIC;
+        }
+     }
+   if(mode > 1)
+      system = (float)DPCC_STATUS_INVALID;
+   aggregate[0] = system != 0.0f ? system : (mode == 0 ? (float)searching : (exhausted ? 2.0f : 0.0f));
+  }
+//+------------------------------------------------------------------+
+//| Sparse branch derivative of the accepted projection operations   |
+//+------------------------------------------------------------------+
+typedef struct
+  {
+   int2 index;
+   float2 coefficient;
+   int valid;
+  } DPCCTracePair;
+
+DPCCTracePair DPCCTraceZero(void)
+  {
+   DPCCTracePair result;
+   result.index = (int2)(-1, -1);
+   result.coefficient = (float2)(0.0f, 0.0f);
+   result.valid = 1;
+   return result;
+  }
+
+DPCCTracePair DPCCTraceRead(__global const int *indices, __global const float *coefficients,
+                            size_t scalar)
+  {
+   DPCCTracePair result;
+   result.index = vload2(scalar, indices);
+   result.coefficient = vload2(scalar, coefficients);
+   result.valid = 1;
+   return result;
+  }
+
+DPCCTracePair DPCCTraceCombine(DPCCTracePair a, DPCCTracePair b, float sa, float sb)
+  {
+   DPCCTracePair result = DPCCTraceZero();
+   int source[4] = {a.index.x, a.index.y, b.index.x, b.index.y};
+   float value[4] = {a.coefficient.x * sa, a.coefficient.y * sa,
+                     b.coefficient.x * sb, b.coefficient.y * sb};
+   result.valid = a.valid && b.valid;
+   for(int i = 0; i < 4; i++)
+     {
+      if(!isfinite(value[i]))
+         result.valid = 0;
+      for(int j = 0; j < i; j++)
+         if(source[i] >= 0 && source[i] == source[j])
+           {
+            value[j] += value[i];
+            source[i] = -1;
+            value[i] = 0.0f;
+            break;
+           }
+     }
+   int count = 0;
+   for(int i = 0; i < 4; i++)
+      if(source[i] >= 0 && value[i] != 0.0f)
+        {
+         if(!isfinite(value[i]) || count >= 2)
+            result.valid = 0;
+         else
+           {
+            result.index[count] = source[i];
+            result.coefficient[count] = value[i];
+           }
+         count++;
+        }
+   return result;
+  }
+
+void DPCCTraceWrite(__global int *indices, __global float *coefficients, size_t scalar,
+                    DPCCTracePair value, __global float *error)
+  {
+   if(!value.valid)
+      *error = 1.0f;
+   vstore2(value.index, scalar, indices);
+   vstore2(value.coefficient, scalar, coefficients);
+  }
+
+void DPCCTraceEncode(float q, DPCCTracePair dq, DPCCTracePair dtp, DPCCTracePair dsl,
+                     __private DPCCTracePair *action)
+  {
+   for(int a = 0; a < 6; a++)
+      action[a] = DPCCTraceZero();
+   if(q > 0.0f || q < 0.0f)
+     {
+      const int side = q > 0.0f ? 0 : 3;
+      action[side] = DPCCTraceCombine(dq, DPCCTraceZero(), q > 0.0f ? 1.0f : -1.0f, 0.0f);
+      action[side + 1] = dtp;
+      action[side + 2] = dsl;
+     }
+  }
+
+__kernel void DPCCProjectionTrace(__global int *current_index,
+                                  __global float *current_coefficient,
+                                  __global int *proposal_index,
+                                  __global float *proposal_coefficient,
+                                  __global int *frame_index,
+                                  __global float *frame_coefficient,
+                                  __global float *wave,
+                                  __global float *errors,
+                                  __global float *common,
+                                  __global const float *current,
+                                  __global const float *context,
+                                  __global const float *controls,
+                                  __global const float *orders,
+                                  __global const float *summaries,
+                                  uint M, uint H, uint stage, uint frame,
+                                  uint off_account, uint off_instrument, uint off_limits,
+                                  uint max_eval)
+  {
+   const uint m = (uint)get_global_id(0);
+   if(stage == 5)
+     {
+      if(m == 0)
+        {
+         common[0] = 0.0f;
+         for(size_t row = 0; row < (size_t)M * H * 6; row++)
+            if(errors[row] != 0.0f)
+               common[0] = 1.0f;
+        }
+      return;
+     }
+   if(m >= M)
+      return;
+   const uint L = H * 6;
+   const size_t row = (size_t)m * L;
+   __global const float *control = controls + (size_t)m * DPCC_PC_STRIDE;
+   __global float *error = errors + m;
+   if(stage == 0)
+     {
+      *error = 0.0f;
+      for(uint r = 0; r < L; r++)
+        {
+         DPCCTracePair identity = DPCCTraceZero();
+         identity.index.x = (int)r;
+         identity.coefficient.x = 1.0f;
+         DPCCTraceWrite(current_index, current_coefficient, row + r, identity, error);
+        }
+      return;
+     }
+   if(stage == 1)
+     {
+      __global const float *summary = summaries + (size_t)m * DPCC_PS_STRIDE;
+      if(control[DPCC_PC_ACTIVE] != 1.0f || control[DPCC_PC_SYSTEM] != 0.0f ||
+         control[DPCC_PC_STAGE] != 1.0f || summary[11] != 1.0f ||
+         summary[0] == 1.0f || (float)max_eval - (control[DPCC_PC_EVAL] + 1.0f) < 2.0f)
+         return;
+      __global const float *instrument = context + off_instrument;
+      __global const float *limits = context + off_limits;
+      if(!DPCCInteger(limits[20], 0.0f, 511.0f))
+        {
+         *error = 1.0f;
+         return;
+        }
+      const uint mask = (uint)limits[20];
+      for(uint h = 0; h < H; h++)
+        {
+         const size_t offset = row + (size_t)h * 6;
+         float q = current[offset] - current[offset + 3];
+         const int side = q > 0.0f ? 0 : 3;
+         float tp = current[offset + side + 1];
+         float sl = current[offset + side + 2];
+         DPCCTracePair dq = DPCCTraceCombine(
+                              DPCCTraceRead(current_index, current_coefficient, offset),
+                              DPCCTraceRead(current_index, current_coefficient, offset + 3), 1.0f, -1.0f);
+         DPCCTracePair dtp = DPCCTraceRead(current_index, current_coefficient, offset + side + 1);
+         DPCCTracePair dsl = DPCCTraceRead(current_index, current_coefficient, offset + side + 2);
+         if(fabs(q) >= DPCC_ACTION_VOLUME_MAX)
+            dq = DPCCTraceZero();
+         q = copysign(fmin(fabs(q), DPCC_ACTION_VOLUME_MAX), q);
+         if(mask & 1U)
+           {
+            if(fabs(q) >= limits[0])
+               dq = DPCCTraceZero();
+            q = copysign(fmin(fabs(q), limits[0]), q);
+           }
+         if(tp <= 0.0f)
+            dtp = DPCCTraceZero();
+         if(sl <= 0.0f)
+            dsl = DPCCTraceZero();
+         tp = fmax(0.0f, tp);
+         sl = fmax(0.0f, sl);
+         if(q != 0.0f)
+           {
+            if(mask & 128U)
+               if(!(sl > limits[7] / instrument[7] && sl < limits[8] / instrument[7]))
+                  dsl = DPCCTraceZero();
+            if(mask & 256U)
+               if(!(tp > limits[9] / instrument[6] && tp < limits[10] / instrument[6]))
+                  dtp = DPCCTraceZero();
+           }
+         DPCCTracePair action[6];
+         DPCCTraceEncode(q, dq, dtp, dsl, action);
+         for(int a = 0; a < 6; a++)
+            DPCCTraceWrite(current_index, current_coefficient, offset + a, action[a], error);
+        }
+      return;
+     }
+   if(stage == 2)
+     {
+      wave[(size_t)m * 2] = -1.0f;
+      wave[(size_t)m * 2 + 1] = control[DPCC_PC_ITER];
+      if(control[DPCC_PC_STAGE] != 3.0f || control[DPCC_PC_ACTIVE] != 1.0f ||
+         control[DPCC_PC_SYSTEM] != 0.0f || control[DPCC_PC_CURSOR] >= control[DPCC_PC_COUNT])
+         return;
+      const float selected = orders[(size_t)m * H + (uint)control[DPCC_PC_CURSOR]];
+      if(!DPCCInteger(selected, 0.0f, (float)H - 1.0f))
+        {
+         *error = 1.0f;
+         return;
+        }
+      const uint u = (uint)selected;
+      wave[(size_t)m * 2] = selected;
+      for(uint p = 0; p < 9; p++)
+        {
+         size_t offset = row + (size_t)u * 6;
+         float q = current[offset] - current[offset + 3];
+         if(p == 4 && u > 0)
+           {
+            offset -= 6;
+            q = current[offset] - current[offset + 3];
+           }
+         const int side = q > 0.0f ? 0 : 3;
+         DPCCTracePair dq = DPCCTraceCombine(
+                              DPCCTraceRead(current_index, current_coefficient, offset),
+                              DPCCTraceRead(current_index, current_coefficient, offset + 3), 1.0f, -1.0f);
+         DPCCTracePair dtp = DPCCTraceRead(current_index, current_coefficient, offset + side + 1);
+         DPCCTracePair dsl = DPCCTraceRead(current_index, current_coefficient, offset + side + 2);
+         if(p < 4)
+           {
+            const float factor = p == 0 ? 0.75f : (p == 1 ? 0.5f : (p == 2 ? 0.25f : 0.0f));
+            q *= factor;
+            dq = DPCCTraceCombine(dq, DPCCTraceZero(), factor, 0.0f);
+           }
+         if(p == 4 && u == 0)
+           {
+            q = context[off_account + 2];
+            dq = DPCCTraceZero();
+            dtp = DPCCTraceZero();
+            dsl = DPCCTraceZero();
+           }
+         if(p == 5 || p == 6)
+            dsl = DPCCTraceZero();
+         if(p == 7 || p == 8)
+            dtp = DPCCTraceZero();
+         DPCCTracePair action[6];
+         DPCCTraceEncode(q, dq, dtp, dsl, action);
+         for(uint a = 0; a < 6; a++)
+            DPCCTraceWrite(proposal_index, proposal_coefficient,
+                            ((size_t)m * 9 + p) * 6 + a, action[a], error);
+        }
+      return;
+     }
+   if(stage == 3)
+     {
+      const float before = wave[(size_t)m * 2 + 1];
+      if(control[DPCC_PC_ITER] == before)
+         return;
+      const float u = wave[(size_t)m * 2];
+      const float p = control[DPCC_PC_LAST_P];
+      if(control[DPCC_PC_ITER] != before + 1.0f || !DPCCInteger(u, 0.0f, (float)H - 1.0f) ||
+         !DPCCInteger(p, 0.0f, 8.0f) || control[DPCC_PC_SYSTEM] != 0.0f)
+        {
+         *error = 1.0f;
+         return;
+        }
+      for(uint a = 0; a < 6; a++)
+         DPCCTraceWrite(current_index, current_coefficient, row + (uint)u * 6 + a,
+                         DPCCTraceRead(proposal_index, proposal_coefficient,
+                                       ((size_t)m * 9 + (uint)p) * 6 + a), error);
+      return;
+     }
+   if(stage == 4)
+     {
+      const size_t destination = ((size_t)frame * M + m) * L;
+      const float status = control[DPCC_PC_STATUS];
+      const int eligible = control[DPCC_PC_ACTIVE] == 1.0f && (status == 0.0f || status == 2.0f) &&
+                           control[DPCC_PC_VERIFIED] == 1.0f && control[DPCC_PC_SYSTEM] == 0.0f;
+      for(uint r = 0; r < L; r++)
+        {
+         DPCCTracePair value = DPCCTraceZero();
+         if(eligible)
+           {
+            if(control[DPCC_PC_IDENTITY] == 1.0f)
+              {
+               value.index.x = (int)r;
+               value.coefficient.x = 1.0f;
+              }
+            else
+               value = DPCCTraceRead(current_index, current_coefficient, row + r);
+           }
+         DPCCTraceWrite(frame_index, frame_coefficient, destination + r, value, error);
+        }
+      return;
+     }
+   *error = 1.0f;
+  }
+
+//+------------------------------------------------------------------+
+//| Deterministic gather VJP, one independent input scalar per lane   |
+//+------------------------------------------------------------------+
+__kernel void DPCCProjectionTraceVJP(__global const int *indices,
+                                     __global const float *coefficients,
+                                     __global const float *gradient_out,
+                                     __global float *gradient_in,
+                                     __global float *errors,
+                                     uint M, uint H, uint frame)
+  {
+   const uint i = (uint)get_global_id(0);
+   const uint L = H * 6;
+   if(i >= M * L)
+      return;
+   const uint m = i / L;
+   const int source = (int)(i % L);
+   const size_t base = ((size_t)frame * M + m) * L;
+   float sum = 0.0f;
+   int valid = 1;
+   for(uint r = 0; r < L; r++)
+     {
+      const float upstream = gradient_out[(size_t)m * L + r];
+      if(!isfinite(upstream))
+         valid = 0;
+      for(uint s = 0; s < 2; s++)
+        {
+         const size_t position = (base + r) * 2 + s;
+         const int index = indices[position];
+         const float coefficient = coefficients[position];
+         if(index < -1 || index >= (int)L || !isfinite(coefficient) ||
+            (index == -1 && coefficient != 0.0f))
+            valid = 0;
+         if(index == source)
+            sum += coefficient * upstream;
+        }
+     }
+   errors[i] = valid && isfinite(sum) ? 0.0f : 1.0f;
+   gradient_in[i] = sum;
+  }
+
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| DPCC shared exact-chain operators and native affine preflight     |
+//+------------------------------------------------------------------+
+inline int DPCCOperatorProductSum(float left, float right, __private float *sum)
+  {
+   if(!isfinite(left) || !isfinite(right))
+      return(0);
+   const float product = left * right;
+   if(!isfinite(product))
+      return(0);
+   const float next = *sum + product;
+   if(!isfinite(next))
+      return(0);
+   *sum = next;
+   return(1);
+  }
+//+------------------------------------------------------------------+
+//| DPCCDecoderPack permutes KVHD and KHVD without host transfer       |
+//+------------------------------------------------------------------+
+__kernel void DPCCDecoderPack(__global const float *source, __global float *destination,
+                             __global float *flags, uint K, uint V, uint H, uint D, uint inverse)
+  {
+   const size_t index = get_global_id(0);
+   const size_t total = (size_t)K * V * H * D;
+   if(index >= total)
+      return;
+   if(K == 0 || V == 0 || H == 0 || D == 0 || inverse > 1)
+     {
+      flags[index] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   const size_t d = index % D;
+   const size_t v = index / D % V;
+   const size_t h = index / ((size_t)V * D) % H;
+   const size_t k = index / ((size_t)V * H * D);
+   const size_t z = (((k * V + v) * H + h) * D + d);
+   const size_t from = inverse == 0 ? z : index;
+   const size_t to = inverse == 0 ? index : z;
+   const float value = source[from];
+   flags[index] = isfinite(value) ? 0.0f : (float)DPCC_STATUS_NUMERIC;
+   destination[to] = isfinite(value) ? value : 0.0f;
+  }
+//+------------------------------------------------------------------+
+//| DPCCOperatorActivation preserves the admitted clamped forward      |
+//+------------------------------------------------------------------+
+inline int DPCCOperatorActivation(float z, int activation,
+                                  __private float *value, __private float *derivative)
+  {
+   if(!isfinite(z))
+      return(DPCC_STATUS_NUMERIC);
+   if(activation == ActFunc_None)
+     {
+      *value = z;
+      *derivative = 1.0f;
+     }
+   else if(activation == ActFunc_TANH)
+     {
+      *value = tanh(clamp(z, -20.0f, 20.0f));
+      *derivative = fabs(z) < 20.0f ? 1.0f - *value * *value : 0.0f;
+     }
+   else if(activation == ActFunc_GELU)
+     {
+      const float az = 1.702f * z;
+      if(!isfinite(az))
+         return(DPCC_STATUS_NUMERIC);
+      const float denominator = 1.0f + exp(clamp(-az, -20.0f, 20.0f));
+      const float sigmoid = 1.0f / denominator;
+      *value = z / denominator;
+      *derivative = sigmoid;
+      if(fabs(az) < 20.0f)
+        {
+         const float product = az * sigmoid;
+         const float correction = product * (1.0f - sigmoid);
+         if(!isfinite(product) || !isfinite(correction))
+            return(DPCC_STATUS_NUMERIC);
+         *derivative += correction;
+        }
+     }
+   else
+      return(DPCC_STATUS_INVALID);
+   return(isfinite(*value) && isfinite(*derivative) ? 0 : DPCC_STATUS_NUMERIC);
+  }
+//+------------------------------------------------------------------+
+//| DPCCActivationForward keeps preactivation separate from output    |
+//+------------------------------------------------------------------+
+__kernel void DPCCActivationForward(__global const float *preactivation, __global float *output,
+                                   __global float *flags, int activation, uint count)
+  {
+   const size_t index = get_global_id(0);
+   if(index >= count)
+      return;
+   float value = 0.0f;
+   float derivative = 0.0f;
+   const int status = DPCCOperatorActivation(preactivation[index], activation, &value, &derivative);
+   flags[index] = (float)status;
+   output[index] = status == 0 ? value : 0.0f;
+  }
+//+------------------------------------------------------------------+
+//| DPCCActivationGradient computes the exact unclipped chain         |
+//+------------------------------------------------------------------+
+__kernel void DPCCActivationGradient(__global const float *preactivation,
+                                    __global const float *upstream, __global float *input_gradient,
+                                    __global float *flags, int activation, uint count)
+  {
+   const size_t index = get_global_id(0);
+   if(index >= count)
+      return;
+   float value = 0.0f;
+   float derivative = 0.0f;
+   int status = DPCCOperatorActivation(preactivation[index], activation, &value, &derivative);
+   const float gradient = upstream[index] * derivative;
+   if(!isfinite(upstream[index]) || !isfinite(gradient))
+      status = DPCC_STATUS_NUMERIC;
+   flags[index] = (float)status;
+   input_gradient[index] = status == 0 ? gradient : 0.0f;
+  }
+//+------------------------------------------------------------------+
+//| DPCCSharedAffineInputGradient excludes the last bias coordinate    |
+//+------------------------------------------------------------------+
+__kernel void DPCCSharedAffineInputGradient(__global const float *weights,
+                                          __global const float *upstream,
+                                          __global float *input_gradient, __global float *flags,
+                                          uint tokens, uint input_width, uint output_width)
+  {
+   const size_t i = get_global_id(0);
+   const size_t t = get_global_id(1);
+   if(i >= input_width || t >= tokens)
+      return;
+   const size_t index = t * input_width + i;
+   int status = output_width == 0 ? DPCC_STATUS_INVALID : 0;
+   float sum = 0.0f;
+   for(uint o = 0; o < output_width && status == 0; o++)
+      if(!DPCCOperatorProductSum(weights[(size_t)o * (input_width + 1) + i],
+                                upstream[t * output_width + o], &sum))
+         status = DPCC_STATUS_NUMERIC;
+   flags[index] = (float)status;
+   input_gradient[index] = status == 0 ? sum : 0.0f;
+  }
+//+------------------------------------------------------------------+
+//| DPCCSharedAffineForwardPreflight checks native ordered reduction   |
+//+------------------------------------------------------------------+
+__kernel void DPCCSharedAffineForwardPreflight(__global const float *weights,
+                                             __global const float *input, __global float *flags,
+                                             uint tokens, uint input_width, uint output_width)
+  {
+   const size_t o = get_global_id(0);
+   const size_t t = get_global_id(1);
+   if(o >= output_width || t >= tokens)
+      return;
+   int status = input_width == 0 ? DPCC_STATUS_INVALID : 0;
+   float sum = 0.0f;
+   for(uint i = 0; i < input_width && status == 0; i++)
+     {
+      const float x = input[t * input_width + i];
+      const float w = weights[o * ((size_t)input_width + 1) + i];
+      if(!isfinite(x) || !isfinite(w))
+         status = DPCC_STATUS_NUMERIC;
+      else if(x != 0.0f && !DPCCOperatorProductSum(x, w, &sum))
+         status = DPCC_STATUS_NUMERIC;
+     }
+   if(status == 0 && !DPCCOperatorProductSum(weights[o * ((size_t)input_width + 1) + input_width],
+                                           1.0f, &sum))
+      status = DPCC_STATUS_NUMERIC;
+   flags[t * output_width + o] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| DPCCSharedAffineAdamPreflight validates before any native write    |
+//+------------------------------------------------------------------+
+__kernel void DPCCSharedAffineAdamPreflight(__global const float *weights,
+                                          __global const float *gradient, __global const float *input,
+                                          __global const float *momentum1, __global const float *momentum2,
+                                          __global float *flags, uint tokens, uint input_width,
+                                          uint output_width, float learning_rate, float beta1, float beta2)
+  {
+   const size_t index = get_global_id(0);
+   const size_t stride = (size_t)input_width + 1;
+   if(index >= stride * output_width)
+      return;
+   if((tokens & 0x80000000U) != 0)
+     {
+      const uint frame_mode = (tokens >> 29) & 0x3U;
+      const uint frame_tokens = tokens & 0x1FFFFFFFU;
+      int frame_status = frame_tokens == 0 || input_width == 0 || output_width == 0 ||
+                         frame_mode == 0 || frame_mode > 3 ||
+                         (frame_mode != 1 && frame_tokens != 1) ? DPCC_STATUS_INVALID : 0;
+      if(!isfinite(learning_rate) || learning_rate <= 0.0f)
+         frame_status = DPCC_STATUS_NUMERIC;
+      const size_t o = index / stride;
+      const size_t i = index % stride;
+      if(frame_mode == 1)
+        {
+         float frame_sum = 0.0f;
+         for(uint t = 0; t < frame_tokens && frame_status == 0; t++)
+            if(!DPCCOperatorProductSum(gradient[(size_t)t * output_width + o],
+                                      i == input_width ? 1.0f : input[(size_t)t * input_width + i], &frame_sum))
+               frame_status = DPCC_STATUS_NUMERIC;
+         if(frame_status == 0)
+           {
+            const float old_sum = momentum1[index];
+            const float next_sum = old_sum + frame_sum;
+            if(!isfinite(old_sum) || !isfinite(next_sum))
+               frame_status = DPCC_STATUS_NUMERIC;
+            else
+               ((__global float *)momentum1)[index] = next_sum;
+           }
+        }
+      else if(frame_mode == 2 || frame_mode == 3)
+        {
+         const float sum = gradient[index];
+         const float old_w = weights[index];
+         const float old_m = momentum1[index];
+         const float old_v = momentum2[index];
+         if(!isfinite(sum) || !isfinite(old_w) || !isfinite(old_m) || !isfinite(old_v) || old_v < 0.0f)
+            frame_status = DPCC_STATUS_NUMERIC;
+         if(frame_status == 0)
+           {
+            const float g = clamp(sum, -MAX_GRAD, MAX_GRAD);
+            const float g2 = g * g;
+            const float mt = beta1 * old_m + (1.0f - beta1) * g;
+            const float vt = beta2 * old_v + (1.0f - beta2) * g2;
+            const float numerator = learning_rate * mt;
+            const float denominator = sqrt(vt);
+            const float delta = vt == 0.0f ? 0.0f : numerator / denominator;
+            const float next_w = old_w + delta;
+            if(!isfinite(g2) || !isfinite(mt) || !isfinite(vt) || vt < 0.0f ||
+               !isfinite(numerator) || !isfinite(denominator) || !isfinite(delta) || !isfinite(next_w))
+               frame_status = DPCC_STATUS_NUMERIC;
+            else if(frame_mode == 3)
+              {
+               ((__global float *)weights)[index] = next_w;
+               ((__global float *)momentum1)[index] = mt;
+               ((__global float *)momentum2)[index] = vt;
+              }
+           }
+        }
+      flags[index] = (float)frame_status;
+      return;
+     }
+   const uint mode = 0;
+   int status = tokens == 0 || input_width == 0 || mode > 3 ?
+                DPCC_STATUS_INVALID : 0;
+   if(!isfinite(learning_rate) || learning_rate <= 0.0f)
+      status = DPCC_STATUS_NUMERIC;
+   const size_t o = index / stride;
+   const size_t i = index % stride;
+   float sum = 0.0f;
+   if(mode == 0 || mode == 1)
+     {
+      for(uint t = 0; t < tokens && status == 0; t++)
+         if(!DPCCOperatorProductSum(gradient[(size_t)t * output_width + o],
+                                   i == input_width ? 1.0f : input[(size_t)t * input_width + i], &sum))
+            status = DPCC_STATUS_NUMERIC;
+      if(mode == 0)
+        {
+         const float old_w = weights[index];
+         const float old_m = momentum1[index];
+         const float old_v = momentum2[index];
+         if(!isfinite(old_w) || !isfinite(old_m) || !isfinite(old_v) || old_v < 0.0f)
+            status = DPCC_STATUS_NUMERIC;
+         if(status == 0)
+           {
+            const float g = clamp(sum, -MAX_GRAD, MAX_GRAD);
+            const float mt = beta1 * old_m + (1.0f - beta1) * g;
+            const float vt = beta2 * old_v + (1.0f - beta2) * (g * g);
+            const float numerator = learning_rate * mt;
+            const float denominator = sqrt(vt);
+            const float delta = vt == 0.0f ? 0.0f : numerator / denominator;
+            const float next_w = old_w + delta;
+            if(!isfinite(mt) || !isfinite(vt) || vt < 0.0f || !isfinite(numerator) ||
+               !isfinite(denominator) || !isfinite(delta) || !isfinite(next_w))
+               status = DPCC_STATUS_NUMERIC;
+           }
+        }
+      else if(status == 0)
+        {
+         const float old_sum = momentum1[index];
+         const float next_sum = old_sum + sum;
+         if(!isfinite(old_sum) || !isfinite(next_sum))
+            status = DPCC_STATUS_NUMERIC;
+         else
+            ((__global float *)momentum1)[index] = next_sum;
+        }
+     }
+   else
+     {
+      sum = gradient[index];
+      const float old_w = weights[index];
+      const float old_m = momentum1[index];
+      const float old_v = momentum2[index];
+      if(tokens != 1 || !isfinite(sum) || !isfinite(old_w) || !isfinite(old_m) ||
+         !isfinite(old_v) || old_v < 0.0f)
+         status = DPCC_STATUS_NUMERIC;
+      if(status == 0)
+        {
+         const float g = clamp(sum, -MAX_GRAD, MAX_GRAD);
+         const float g2 = g * g;
+         const float mt = beta1 * old_m + (1.0f - beta1) * g;
+         const float vt = beta2 * old_v + (1.0f - beta2) * g2;
+         const float numerator = learning_rate * mt;
+         const float denominator = sqrt(vt);
+         const float delta = vt == 0.0f ? 0.0f : numerator / denominator;
+         const float next_w = old_w + delta;
+         if(!isfinite(g2) || !isfinite(mt) || !isfinite(vt) || vt < 0.0f ||
+            !isfinite(numerator) || !isfinite(denominator) || !isfinite(delta) || !isfinite(next_w))
+            status = DPCC_STATUS_NUMERIC;
+         else if(mode == 3)
+           {
+            ((__global float *)weights)[index] = next_w;
+            ((__global float *)momentum1)[index] = mt;
+            ((__global float *)momentum2)[index] = vt;
+           }
+        }
+     }
+   flags[index] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| DPCCOperatorReduce publishes only complete finite status vectors   |
+//+------------------------------------------------------------------+
+__kernel void DPCCOperatorReduce(__global const float *flags, __global float *status, uint count)
+  {
+   if(get_global_id(0) != 0)
+      return;
+   float result = count == 0 ? (float)DPCC_STATUS_INVALID : 0.0f;
+   for(uint i = 0; i < count; i++)
+     {
+      const float code = flags[i];
+      if(!isfinite(code) || (code != 0.0f && code != (float)DPCC_STATUS_INVALID &&
+                            code != (float)DPCC_STATUS_NUMERIC))
+         result = (float)DPCC_STATUS_NUMERIC;
+      else
+         result = fmax(result, code);
+     }
+   status[0] = result;
+  }
+
+
+//+------------------------------------------------------------------+
+//| DPCCDecoderSnapshotCheck detects mutation of a live source tensor |
+//+------------------------------------------------------------------+
+__kernel void DPCCDecoderSnapshotCheck(__global const float *sourceKVHD,
+                                      __global const float *packedKHVD, __global float *flags,
+                                      uint K, uint V, uint H, uint D)
+  {
+   const size_t index = get_global_id(0);
+   const size_t total = (size_t)K * V * H * D;
+   if(index >= total)
+      return;
+   if(K == 0 || V == 0 || H == 0 || D == 0)
+     {
+      flags[index] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   const size_t d = index % D;
+   const size_t v = index / D % V;
+   const size_t h = index / ((size_t)V * D) % H;
+   const size_t k = index / ((size_t)V * H * D);
+   const size_t z = (((k * V + v) * H + h) * D + d);
+   const float source = sourceKVHD[z];
+   const float snapshot = packedKHVD[index];
+   if(!isfinite(source) || !isfinite(snapshot))
+      flags[index] = (float)DPCC_STATUS_NUMERIC;
+   else
+      flags[index] = as_uint(source) == as_uint(snapshot) ? 0.0f : (float)DPCC_STATUS_INVALID;
+  }
+
+//+------------------------------------------------------------------+
+//| DPCC exact denoiser layouts, attention derivatives and checks    |
+//+------------------------------------------------------------------+
+inline float DPCCAttentionNumber(float value, __private int *status)
+  {
+   if(!isfinite(value))
+      *status = DPCC_STATUS_NUMERIC;
+   return(value);
+  }
+//+------------------------------------------------------------------+
+//| DPCCAttentionProduct checks operands before retaining raw math   |
+//+------------------------------------------------------------------+
+inline float DPCCAttentionProduct(float left, float right, __private int *status)
+  {
+   DPCCAttentionNumber(left, status);
+   DPCCAttentionNumber(right, status);
+   return(DPCCAttentionNumber(left * right, status));
+  }
+//+------------------------------------------------------------------+
+//| DPCCAttentionSum preserves the raw binary reduction tree         |
+//+------------------------------------------------------------------+
+inline float DPCCAttentionSum(float value, __local float *scratch, __private int *status)
+  {
+   const uint lane = get_local_id(1);
+   const uint width = get_local_size(1);
+   scratch[lane] = DPCCAttentionNumber(value, status);
+   barrier(CLK_LOCAL_MEM_FENCE);
+   for(uint span = width / 2; span > 0; span /= 2)
+     {
+      if(lane < span)
+         scratch[lane] = DPCCAttentionNumber(scratch[lane] + scratch[lane + span], status);
+      barrier(CLK_LOCAL_MEM_FENCE);
+     }
+   const float result = DPCCAttentionNumber(scratch[0], status);
+   barrier(CLK_LOCAL_MEM_FENCE);
+   return(result);
+  }
+//+------------------------------------------------------------------+
+//| DPCCAttentionMaximum checks every raw reduction input            |
+//+------------------------------------------------------------------+
+inline float DPCCAttentionMaximum(float value, __local float *scratch, __private int *status)
+  {
+   const uint lane = get_local_id(1);
+   const uint width = get_local_size(1);
+   scratch[lane] = DPCCAttentionNumber(value, status);
+   barrier(CLK_LOCAL_MEM_FENCE);
+   for(uint span = width / 2; span > 0; span /= 2)
+     {
+      if(lane < span)
+         scratch[lane] = fmax(scratch[lane], scratch[lane + span]);
+      barrier(CLK_LOCAL_MEM_FENCE);
+     }
+   const float result = DPCCAttentionNumber(scratch[0], status);
+   barrier(CLK_LOCAL_MEM_FENCE);
+   return(result);
+  }
+//+------------------------------------------------------------------+
+//| DPCCAttentionNumber4 checks all four raw vector coordinates      |
+//+------------------------------------------------------------------+
+inline float4 DPCCAttentionNumber4(float4 value, __private int *status)
+  {
+   if(!all(isfinite(value)))
+      *status = DPCC_STATUS_NUMERIC;
+   return(value);
+  }
+//+------------------------------------------------------------------+
+//| DPCCAttentionSum4 retains every raw vector tree partial          |
+//+------------------------------------------------------------------+
+inline float4 DPCCAttentionSum4(float4 value, __local float4 *scratch, __private int *status)
+  {
+   const uint lane = get_local_id(1);
+   const uint width = get_local_size(1);
+   scratch[lane] = DPCCAttentionNumber4(value, status);
+   barrier(CLK_LOCAL_MEM_FENCE);
+   for(uint span = width / 2; span > 0; span /= 2)
+     {
+      if(lane < span)
+         scratch[lane] = DPCCAttentionNumber4(scratch[lane] + scratch[lane + span], status);
+      barrier(CLK_LOCAL_MEM_FENCE);
+     }
+   const float4 result = DPCCAttentionNumber4(scratch[0], status);
+   barrier(CLK_LOCAL_MEM_FENCE);
+   return(result);
+  }
+//+------------------------------------------------------------------+
+//| DPCCAttentionGradRow shares the exact derivative with preflight  |
+//+------------------------------------------------------------------+
+inline void DPCCAttentionGradRow(__global const float *query, __global const float *key_value,
+                                __global const float *logsumexp, __global const float *output,
+                                __global const float *output_gr, int dimension, int total_q,
+                                int total_kv, __local float *scratch, __private float *grad_q,
+                                __private float *grad_k, __private float *grad_v, __private int *status)
+  {
+   const size_t id = get_global_id(0);
+   const size_t d = get_local_id(1);
+   const size_t head = get_global_id(2);
+   const size_t heads = get_global_size(2);
+   const float scale = 1.0f / sqrt((float)dimension);
+   *grad_q = 0.0f;
+   *grad_k = 0.0f;
+   *grad_v = 0.0f;
+
+   //--- The query and key branches are uniform within each workgroup.
+   if(id < (size_t)total_q)
+     {
+      const size_t iq = (id * heads + head) * dimension + d;
+      const float lse = DPCCAttentionNumber(logsumexp[id * heads + head], status);
+      const float q = DPCCAttentionNumber(query[iq], status);
+      const float g = DPCCAttentionNumber(output_gr[iq], status);
+      const float out = DPCCAttentionNumber(output[iq], status);
+      const float row_dot = DPCCAttentionSum(DPCCAttentionProduct(g, out, status), scratch, status);
+      for(int k = 0; k < total_kv; k++)
+        {
+         const size_t ik = ((size_t)k * 2 * heads + head) * dimension + d;
+         const size_t iv = ik + heads * dimension;
+         const float key = DPCCAttentionNumber(key_value[ik], status);
+         const float value = DPCCAttentionNumber(key_value[iv], status);
+         const float dot_qk = DPCCAttentionSum(DPCCAttentionProduct(q, key, status), scratch, status);
+         const float score = DPCCAttentionProduct(dot_qk, scale, status);
+         const float exponent = DPCCAttentionNumber(score - lse, status);
+         const float probability = DPCCAttentionNumber(exp(exponent), status);
+         const float dp = DPCCAttentionSum(DPCCAttentionProduct(g, value, status), scratch, status);
+         const float ds = DPCCAttentionProduct(probability, DPCCAttentionNumber(dp - row_dot, status), status);
+         const float term = DPCCAttentionProduct(DPCCAttentionProduct(ds, key, status), scale, status);
+         *grad_q = DPCCAttentionNumber(*grad_q + term, status);
+        }
+     }
+
+   if(id < (size_t)total_kv)
+     {
+      const size_t ik = (id * 2 * heads + head) * dimension + d;
+      const size_t iv = ik + heads * dimension;
+      const float key = DPCCAttentionNumber(key_value[ik], status);
+      const float value = DPCCAttentionNumber(key_value[iv], status);
+      for(int q_id = 0; q_id < total_q; q_id++)
+        {
+         const size_t iq = ((size_t)q_id * heads + head) * dimension + d;
+         const float lse = DPCCAttentionNumber(logsumexp[(size_t)q_id * heads + head], status);
+         const float q = DPCCAttentionNumber(query[iq], status);
+         const float g = DPCCAttentionNumber(output_gr[iq], status);
+         const float out = DPCCAttentionNumber(output[iq], status);
+         const float row_dot = DPCCAttentionSum(DPCCAttentionProduct(g, out, status), scratch, status);
+         const float dot_qk = DPCCAttentionSum(DPCCAttentionProduct(q, key, status), scratch, status);
+         const float score = DPCCAttentionProduct(dot_qk, scale, status);
+         const float exponent = DPCCAttentionNumber(score - lse, status);
+         const float probability = DPCCAttentionNumber(exp(exponent), status);
+         const float dp = DPCCAttentionSum(DPCCAttentionProduct(g, value, status), scratch, status);
+         const float ds = DPCCAttentionProduct(probability, DPCCAttentionNumber(dp - row_dot, status), status);
+         const float term_k = DPCCAttentionProduct(DPCCAttentionProduct(ds, q, status), scale, status);
+         const float term_v = DPCCAttentionProduct(probability, g, status);
+         *grad_k = DPCCAttentionNumber(*grad_k + term_k, status);
+         *grad_v = DPCCAttentionNumber(*grad_v + term_v, status);
+        }
+     }
+  }
+//+------------------------------------------------------------------+
+//| DPCC_MHFlashAttentionGradient retains exact hidden gradients     |
+//+------------------------------------------------------------------+
+__kernel void DPCC_MHFlashAttentionGradient(__global const float *query, __global float *query_gr,
+                                          __global const float *key_value, __global float *key_value_gr,
+                                          __global const float *logsumexp, __global const float *output,
+                                          __global const float *output_gr, int dimension, int total_q,
+                                          int total_kv, int mask_future)
+  {
+   if(dimension < 4 || dimension > 64 || (dimension & (dimension - 1)) != 0 ||
+      total_q <= 0 || total_kv <= 0 || mask_future != 0 || get_local_size(0) != 1 ||
+      get_local_size(1) != (size_t)dimension || get_local_size(2) != 1)
+      return;
+   __local float scratch[64];
+   int status = 0;
+   float grad_q = 0.0f;
+   float grad_k = 0.0f;
+   float grad_v = 0.0f;
+   DPCCAttentionGradRow(query, key_value, logsumexp, output, output_gr, dimension,
+                        total_q, total_kv, scratch, &grad_q, &grad_k, &grad_v, &status);
+   const size_t id = get_global_id(0);
+   const size_t d = get_local_id(1);
+   const size_t head = get_global_id(2);
+   const size_t heads = get_global_size(2);
+   if(id < (size_t)total_q)
+      query_gr[(id * heads + head) * dimension + d] = grad_q;
+   if(id < (size_t)total_kv)
+     {
+      const size_t ik = (id * 2 * heads + head) * dimension + d;
+      key_value_gr[ik] = grad_k;
+      key_value_gr[ik + heads * dimension] = grad_v;
+     }
+  }
+//+------------------------------------------------------------------+
+//| DPCCAttentionPreflight checks raw forward and adjoint            |
+//+------------------------------------------------------------------+
+__kernel void DPCCAttentionPreflight(__global const float *query, __global const float *key_value,
+                                    __global const float *logsumexp, __global const float *output,
+                                    __global const float *output_gr, __global float *flags,
+                                    int dimension, int total_q, int total_kv, int mask_future, uint mode)
+  {
+   const size_t id = get_global_id(0);
+   const size_t lane = get_local_id(1);
+   const size_t head = get_global_id(2);
+   const size_t heads = get_global_size(2);
+   const size_t index = (id * heads + head) * get_global_size(1) + get_global_id(1);
+   if(dimension < 4 || dimension > 64 || (dimension & (dimension - 1)) != 0 ||
+      total_q <= 0 || total_kv <= 0 || mask_future != 0 || mode > 1 || get_local_size(0) != 1 ||
+      get_global_size(1) != (size_t)dimension || get_local_size(1) != (size_t)dimension ||
+      get_local_size(2) != 1 || get_global_size(0) != (size_t)max(total_q, total_kv))
+     {
+      flags[index] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   __local float scratch[64];
+   __local float4 scratch4[64];
+   int status = 0;
+   if(mode == 1)
+     {
+      float grad_q = 0.0f;
+      float grad_k = 0.0f;
+      float grad_v = 0.0f;
+      DPCCAttentionGradRow(query, key_value, logsumexp, output, output_gr, dimension,
+                           total_q, total_kv, scratch, &grad_q, &grad_k, &grad_v, &status);
+     }
+   else if(id < (size_t)total_q)
+     {
+      const size_t iq = (id * heads + head) * dimension;
+      float previous_max = MIN_VALUE;
+      float sumexp = 0.0f;
+      float result = 0.0f;
+      for(int tile = 0; tile < total_kv; tile += dimension)
+        {
+         const size_t key_id = (size_t)tile + lane;
+         const size_t ik = (key_id * 2 * heads + head) * dimension;
+         const size_t iv = ik + heads * dimension;
+         float score = MIN_VALUE;
+         if(key_id < (size_t)total_kv)
+           {
+            score = 0.0f;
+            for(int d = 0; d < dimension; d += 4)
+              {
+               const float4 q = DPCCAttentionNumber4(vload4(0, query + iq + d), &status);
+               const float4 k = DPCCAttentionNumber4(vload4(0, key_value + ik + d), &status);
+               DPCCAttentionNumber4(q * k, &status);
+               const float dot4 = DPCCAttentionNumber(dot(q, k), &status);
+               score = DPCCAttentionNumber(score + dot4, &status);
+              }
+            score = DPCCAttentionNumber(score / sqrt((float)dimension), &status);
+            if(score <= MIN_VALUE)
+               status = DPCC_STATUS_NUMERIC;
+           }
+         const float maximum = DPCCAttentionNumber(
+                                  fmax(previous_max, DPCCAttentionMaximum(score, scratch, &status)), &status);
+         const float probability = score > MIN_VALUE ?
+                                   DPCCAttentionNumber(exp(DPCCAttentionNumber(score - maximum, &status)), &status) :
+                                   0.0f;
+         const float tile_sum = DPCCAttentionSum(probability, scratch, &status);
+         const float rescale = sumexp == 0.0f ? 0.0f : DPCCAttentionNumber(
+                                 exp(DPCCAttentionNumber(previous_max - maximum, &status)), &status);
+         sumexp = sumexp == 0.0f ? tile_sum :
+                  DPCCAttentionNumber(DPCCAttentionProduct(rescale, sumexp, &status) + tile_sum, &status);
+         for(int d = 0; d < dimension; d += 4)
+           {
+            float4 weighted = (float4)0.0f;
+            if(key_id < (size_t)total_kv)
+              {
+               const float4 value = DPCCAttentionNumber4(vload4(0, key_value + iv + d), &status);
+               weighted = DPCCAttentionNumber4(value * probability, &status);
+              }
+            const float4 tile_value = DPCCAttentionSum4(weighted, scratch4, &status);
+            const int component = (int)lane - d;
+            if(component >= 0 && component < 4)
+              {
+               const float value = vget4(tile_value, component);
+               result = result == 0.0f ? value :
+                        DPCCAttentionNumber(DPCCAttentionProduct(rescale, result, &status) + value, &status);
+              }
+           }
+         previous_max = maximum;
+        }
+      if(sumexp <= 0.0f || !isfinite(sumexp))
+         status = DPCC_STATUS_NUMERIC;
+      DPCCAttentionNumber(result / sumexp, &status);
+      DPCCAttentionNumber(previous_max + log(sumexp), &status);
+     }
+   flags[index] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| DPCCDenoiserSelfLayout maps isolated plan rows to flash heads    |
+//+------------------------------------------------------------------+
+__kernel void DPCCDenoiserSelfLayout(__global const float *source0, __global const float *source1,
+                                    __global const float *source2, __global float *destination0,
+                                    __global float *destination1, __global float *flags,
+                                    uint L, uint N, uint heads, uint dimension, uint mode)
+  {
+   const size_t index = get_global_id(0);
+   const size_t width = (size_t)heads * dimension;
+   const size_t total = (size_t)L * N * width;
+   if(index >= total)
+      return;
+   if(L == 0 || N == 0 || heads == 0 || dimension == 0 || mode > 3)
+     {
+      flags[index] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   const size_t d = index % dimension;
+   const size_t a = index / dimension % heads;
+   const size_t n = index / width % N;
+   const size_t l = index / (width * N);
+   const size_t group = (size_t)L * heads;
+   const size_t physical = (n * group + l * heads + a) * dimension + d;
+   const size_t physical_k = (n * 2 * group + l * heads + a) * dimension + d;
+   const size_t physical_v = physical_k + group * dimension;
+   int status = 0;
+   if(mode == 0)
+     {
+      destination0[physical] = DPCCAttentionNumber(source0[index], &status);
+      destination1[physical_k] = DPCCAttentionNumber(source1[index], &status);
+      destination1[physical_v] = DPCCAttentionNumber(source2[index], &status);
+     }
+   else if(mode == 1)
+      destination0[index] = DPCCAttentionNumber(source0[physical], &status);
+   else if(mode == 3)
+      destination0[physical] = DPCCAttentionNumber(source0[index], &status);
+   else
+     {
+      destination0[index] = DPCCAttentionNumber(source0[physical_k], &status);
+      destination1[index] = DPCCAttentionNumber(source0[physical_v], &status);
+     }
+   flags[index] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| DPCCDenoiserCrossLayout preserves scenario concatenation         |
+//+------------------------------------------------------------------+
+__kernel void DPCCDenoiserCrossLayout(__global const float *source0, __global const float *source1,
+                                     __global float *destination0, __global float *destination1,
+                                     __global float *flags, uint L, uint R, uint H, uint K,
+                                     uint heads, uint dimension, uint mode)
+  {
+   const size_t index = get_global_id(0);
+   const size_t width = (size_t)heads * dimension;
+   const size_t rows = (size_t)L * R;
+   const size_t total = mode == 0 ? rows * K * width :
+                        (mode == 2 ? rows * width : (size_t)K * H * width);
+   if(index >= total)
+      return;
+   if(L == 0 || R == 0 || H == 0 || K == 0 || heads == 0 || dimension == 0 || mode > 3)
+     {
+      flags[index] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   const size_t d = index % dimension;
+   const size_t a = index / dimension % heads;
+   const size_t group = (size_t)K * heads;
+   int status = 0;
+   if(mode == 0)
+     {
+      const size_t q = index / ((size_t)K * width);
+      destination0[index] = DPCCAttentionNumber(source0[q * width + a * dimension + d], &status);
+     }
+   else if(mode == 2)
+     {
+      const size_t q = index / width;
+      float sum = 0.0f;
+      for(uint k = 0; k < K; k++)
+        {
+         const float value = DPCCAttentionNumber(source0[(q * group + (size_t)k * heads + a) * dimension + d],
+                                                 &status);
+         sum = DPCCAttentionNumber(sum + value, &status);
+        }
+      destination0[index] = sum;
+     }
+   else
+     {
+      const size_t h = index / width % H;
+      const size_t k = index / (width * H);
+      const size_t physical_k = (h * 2 * group + k * heads + a) * dimension + d;
+      const size_t physical_v = physical_k + group * dimension;
+      if(mode == 1)
+        {
+         destination0[physical_k] = DPCCAttentionNumber(source0[index], &status);
+         destination0[physical_v] = DPCCAttentionNumber(source1[index], &status);
+        }
+      else
+        {
+         destination0[index] = DPCCAttentionNumber(source0[physical_k], &status);
+         destination1[index] = DPCCAttentionNumber(source0[physical_v], &status);
+        }
+     }
+   flags[index] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| DPCCDenoiserPairMap pads or crops each candidate independently   |
+//+------------------------------------------------------------------+
+__kernel void DPCCDenoiserPairMap(__global const float *source, __global float *destination,
+                                 __global float *flags, uint L, uint H, uint W, uint mode)
+  {
+   const size_t index = get_global_id(0);
+   const size_t padded = ((size_t)H + 1) / 2 * 2 * W;
+   const size_t plain = (size_t)H * W;
+   const size_t stride = mode == 0 || mode == 2 ? padded : plain;
+   const size_t total = (size_t)L * stride;
+   if(index >= total)
+      return;
+   if(L == 0 || H == 0 || W == 0 || mode > 3)
+     {
+      flags[index] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   const size_t l = index / stride;
+   const size_t coordinate = index % stride;
+   int status = 0;
+   float value = 0.0f;
+   if(mode == 0 || mode == 2)
+      value = coordinate < plain ? DPCCAttentionNumber(source[l * plain + coordinate], &status) : 0.0f;
+   else
+      value = DPCCAttentionNumber(source[l * padded + coordinate], &status);
+   destination[index] = value;
+   flags[index] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| DPCCDenoiserBroadcastGradient sums shared row contributions      |
+//+------------------------------------------------------------------+
+__kernel void DPCCDenoiserBroadcastGradient(__global const float *source, __global float *destination,
+                                           __global float *flags, uint rows, uint width)
+  {
+   const size_t coordinate = get_global_id(0);
+   if(coordinate >= width)
+      return;
+   int status = rows == 0 || width == 0 ? DPCC_STATUS_INVALID : 0;
+   float sum = 0.0f;
+   for(uint row = 0; row < rows; row++)
+     {
+      const float value = DPCCAttentionNumber(source[(size_t)row * width + coordinate], &status);
+      sum = DPCCAttentionNumber(sum + value, &status);
+     }
+   destination[coordinate] = sum;
+   flags[coordinate] = (float)status;
+  }
+
+//+------------------------------------------------------------------+
+//| DPCCDecoderRhoLoss computes one checked scenario partial         |
+//+------------------------------------------------------------------+
+__kernel void DPCCDecoderRhoLoss(__global const float *y, __global const float *target,
+                                 __global const float *rho, __global float *gradient_scratch,
+                                 __global float *partials, __global float *flags,
+                                 uint K, uint H, uint prepare_gradient)
+  {
+   const size_t k = get_global_id(0);
+   if(k >= K)
+      return;
+   if(K == 0 || H == 0 || prepare_gradient > 1)
+     {
+      partials[k] = 0.0f;
+      flags[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   int status = 0;
+   const float mass = rho[k];
+   if(!isfinite(mass))
+      status = DPCC_STATUS_NUMERIC;
+   else if(mass < 0.0f)
+      status = DPCC_STATUS_INVALID;
+   const size_t width = (size_t)H * 4;
+   const float denominator = (float)width;
+   float sum = 0.0f;
+   for(size_t coordinate = 0; coordinate < width; coordinate++)
+     {
+      const size_t n = k * width + coordinate;
+      const float prediction = y[n];
+      const float expected = target[coordinate];
+      const float error = prediction - expected;
+      const float squared = error * error;
+      const float mean_squared = squared / denominator;
+      const float weighted = mass * mean_squared;
+      const float next = sum + weighted;
+      if(!isfinite(prediction) || !isfinite(expected) || !isfinite(error) ||
+         !isfinite(squared) || !isfinite(mean_squared) || !isfinite(weighted) || !isfinite(next))
+         status = DPCC_STATUS_NUMERIC;
+      sum = next;
+      if(prepare_gradient)
+        {
+         const float factor = -2.0f * mass;
+         const float product = factor * error;
+         const float gradient = product / denominator;
+         if(!isfinite(factor) || !isfinite(product) || !isfinite(gradient))
+            status = DPCC_STATUS_NUMERIC;
+         gradient_scratch[n] = gradient;
+        }
+     }
+   partials[k] = sum;
+   flags[k] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| DPCCDecoderRhoLossReduce admits complete rho and loss numerics    |
+//+------------------------------------------------------------------+
+__kernel void DPCCDecoderRhoLossReduce(__global const float *rho,
+                                       __global const float *partials,
+                                       __global const float *flags, __global float *control,
+                                       uint K, float tolerance)
+  {
+   if(get_global_id(0) != 0)
+      return;
+   int status = K == 0 || !isfinite(tolerance) || tolerance < 0.0f || tolerance >= 1.0f ?
+                 DPCC_STATUS_INVALID : 0;
+   float mass = 0.0f;
+   float loss = 0.0f;
+   for(uint k = 0; k < K; k++)
+     {
+      const float flag = flags[k];
+      const float r = rho[k];
+      const float partial = partials[k];
+      if(!isfinite(flag) || flag == (float)DPCC_STATUS_NUMERIC ||
+         !isfinite(r) || !isfinite(partial))
+         status = DPCC_STATUS_NUMERIC;
+      else if((flag != 0.0f || r < 0.0f || partial < 0.0f) && status != DPCC_STATUS_NUMERIC)
+         status = DPCC_STATUS_INVALID;
+      const float next_mass = mass + r;
+      const float next_loss = loss + partial;
+      if(!isfinite(next_mass) || !isfinite(next_loss))
+         status = DPCC_STATUS_NUMERIC;
+      mass = next_mass;
+      loss = next_loss;
+     }
+   if(isfinite(mass) && fabs(mass - 1.0f) > tolerance && status != DPCC_STATUS_NUMERIC)
+      status = DPCC_STATUS_INVALID;
+   control[0] = (float)status;
+   control[1] = loss;
+   control[2] = mass;
+  }
+
+// Work-only composite operators. No registration or public primitive class.
+// Host validates physical buffer sizes, disjoint ownership, C/R v2 layout,
+// integer dimensions and total byte bounds before dispatch. Flags per output
+// are reduced by existing DPCCOperatorReduce before any dependent launch.
+// Existing DPCCActivationForward(None) snapshots/prechecks the complete C.
+
+// Prepare the existing InitOwned(K*H*4), ADAM RevIN options (9 per element).
+// Its legacy kernel substitutes NaN, so preflight BOTH variance and restore.
+__kernel void DPCCCompositeNormOptions(__global const float *context,
+                                       __global const float *normalized,
+                                       __global float *options,
+                                       __global float *flags,
+                                       uint norm_offset, uint count)
+  {
+   const size_t n = get_global_id(0);
+   if(n >= count) return;
+   const size_t s = norm_offset + (n % 4) * 4;
+   const float mean = context[s], std = context[s + 1];
+   const float gain = context[s + 2], bias = context[s + 3];
+   float status = 0.0f;
+   if(!isfinite(mean) || !isfinite(std) || !isfinite(gain) || !isfinite(bias) ||
+      !isfinite(normalized[n]) || std <= 0.0f || gain != 1.0f || bias != 0.0f)
+      status = 3.0f;
+   const float variance = std * std;
+   const float centered = normalized[n] - bias;
+   const float scaled = sqrt(variance) * centered;
+   const float restored = scaled + mean;
+   if(status == 0.0f && (!isfinite(variance) || variance <= 0.0f ||
+      !isfinite(centered) || !isfinite(scaled) || !isfinite(restored)))
+      status = 5.0f;
+   for(uint i = 0; i < 9; i++) options[n * 9 + i] = 0.0f;
+   if(status == 0.0f)
+     {
+      options[n * 9] = mean;
+      options[n * 9 + 1] = variance;
+      options[n * 9 + 3] = 1.0f;
+      options[n * 9 + 4] = bias;
+     }
+   flags[n] = status;
+  }
+
+// Convert existing RevIN native output into X at the start of exact R.
+// R tail is contiguous C[Account..Calendar]; Active[M] starts all-one.
+// This packs values, not a second financial/event engine. The existing
+// rollout validator still checks the complete physical/event contract.
+__kernel void DPCCCompositeQuoteR(__global const float *context,
+                                  __global const float *native,
+                                  __global float *rollout_context,
+                                  __global float *flags,
+                                  uint K, uint H, uint M,
+                                  uint account_offset, uint execution_offset,
+                                  uint active_offset, uint total,
+                                  uint price_basis, uint quote_adapter,
+                                  float max_quote_age, float max_last_age)
+  {
+   const size_t n = get_global_id(0);
+   if(n >= total) return;
+   const size_t prices = (size_t)K * H * 4;
+   __global const float *account = context + account_offset;
+   __global const float *instrument = account + 24;
+   float status = 0.0f, value = 0.0f;
+   if(price_basis > 1 || quote_adapter != price_basis ||
+      instrument[31] != (float)price_basis || instrument[32] != (float)quote_adapter ||
+      !isfinite(max_quote_age) || max_quote_age < 0.0f ||
+      !isfinite(max_last_age) || max_last_age < 0.0f ||
+      !isfinite(instrument[36]) || instrument[36] < 0.0f || instrument[36] > max_quote_age ||
+      !isfinite(instrument[37]) || instrument[37] < 0.0f ||
+      (price_basis == 1 && instrument[37] > max_last_age) ||
+      !isfinite(account[15]) || !isfinite(account[16]) || account[16] < account[15] ||
+      (price_basis == 1 && !isfinite(instrument[33])))
+      status = 3.0f;
+   if(n < prices)
+     {
+      const size_t row = n / 4, ch = n % 4, h = row % H;
+      const float mark = price_basis == 0 ? account[15] : instrument[33];
+      // Preserve the causal host snapshot's frozen float delta. Its agreement
+      // with float Bid-Last uses the existing rollout price_atol convention.
+      const float delta = context[execution_offset + 20];
+      const float price_atol = context[account_offset + 24 + 48 + 15];
+      float o = h == 0 ? mark : native[row * 4];
+      const float hi = native[row * 4 + 1], lo = native[row * 4 + 2];
+      const float close = native[row * 4 + 3];
+      for(uint a = 0; a < 4; a++)
+         if(!isfinite(native[row * 4 + a])) status = 3.0f;
+      if(status == 0.0f && (!isfinite(delta) || !isfinite(price_atol) || price_atol < 0.0f))
+         status = 3.0f;
+      const float difference = account[15] - instrument[33] - delta;
+      if(status == 0.0f && price_basis == 1 && !isfinite(difference)) status = 5.0f;
+      if(status == 0.0f && ((price_basis == 0 && delta != 0.0f) ||
+         (price_basis == 1 && fabs(difference) > price_atol))) status = 3.0f;
+      if(status == 0.0f && (hi < o || hi < close || lo > o || lo > close || lo > hi))
+         status = 3.0f;
+      if(status == 0.0f && context[execution_offset + row * 24 + 20] != delta)
+         status = 3.0f;
+      value = (ch == 0 ? o : native[n]) + delta;
+      // Algebraic mark+delta can lose a bit; first Bid.Open is the snapshot.
+      if(h == 0 && ch == 0) value = account[15];
+      if(status == 0.0f && !isfinite(value)) status = 5.0f;
+      const float bid_o = h == 0 ? account[15] : o + delta;
+      const float bid_hi = hi + delta, bid_lo = lo + delta, bid_close = close + delta;
+      if(status == 0.0f && (!isfinite(bid_o) || !isfinite(bid_hi) ||
+         !isfinite(bid_lo) || !isfinite(bid_close))) status = 5.0f;
+      if(status == 0.0f && (bid_hi < bid_o || bid_hi < bid_close ||
+         bid_lo > bid_o || bid_lo > bid_close || bid_lo > bid_hi)) status = 3.0f;
+     }
+   else if(n < active_offset)
+      value = context[account_offset + n - prices];
+   else
+      value = 1.0f;
+   if(!isfinite(value) && status == 0.0f) status = 3.0f;
+   rollout_context[n] = status == 0.0f ? value : 0.0f;
+   flags[n] = status;
+  }
+
+// Exact SP-09 Tokens[K,H,V*(D+1)+1] followed by CTX-03 Global45.
+// Account13 is an external exact input; it is never rebuilt from Account24.
+// Step16 is updated separately, leaving market/global bytes immutable.
+__kernel void DPCCCompositeCondition(__global const float *context,
+                                     __global const float *account_features,
+                                     __global float *condition,
+                                     __global float *flags,
+                                     uint K, uint V, uint H, uint D,
+                                     uint u_offset, uint pi_offset, uint norm_offset,
+                                     uint account_offset, uint limits_offset,
+                                     float volume_scale, float price_scale,
+                                     float money_scale, uint price_basis)
+  {
+   const size_t n = get_global_id(0);
+   const size_t F = (size_t)V * (D + 1) + 1;
+   const size_t tokens = (size_t)K * H * F;
+   if(n >= tokens + 45) return;
+   float status = 0.0f, value = 0.0f;
+   if(n < tokens)
+     {
+      const size_t row = n / F, f = n % F, k = row / H, h = row % H;
+      if(f == F - 1)
+        {
+         const float p = context[pi_offset + k];
+         if(!isfinite(p) || p < 0.0f) status = 3.0f;
+         value = log(fmax(p, 1.0e-6f));
+        }
+      else
+        {
+         if(f < (size_t)V * D)
+           {
+            const size_t v = f / D, d = f % D;
+            value = context[((k * V + v) * H + h) * D + d];
+           }
+         else
+           {
+            const size_t v = f - (size_t)V * D;
+            const float u = context[u_offset + (k * V + v) * H + h];
+            if(!isfinite(u) || u < 0.0f) status = 3.0f;
+            value = log(fmax(u, 1.0e-6f));
+           }
+        }
+     }
+   else
+     {
+      const size_t i = n - tokens;
+      __global const float *a = context + account_offset;
+      __global const float *ins = a + 24;
+      __global const float *lim = context + limits_offset;
+      const float mask_f = lim[20];
+      if(!isfinite(volume_scale) || volume_scale <= 0.0f ||
+         !isfinite(price_scale) || price_scale <= 0.0f ||
+         !isfinite(money_scale) || money_scale <= 0.0f ||
+         !isfinite(mask_f) || mask_f < 0.0f || mask_f > 511.0f || floor(mask_f) != mask_f ||
+         lim[21] != money_scale || lim[22] != 2.0f || lim[23] != 0.0f ||
+         !isfinite(ins[0]) || ins[0] <= 0.0f || !isfinite(ins[1]) || ins[1] <= 0.0f ||
+         !isfinite(ins[5]) || ins[5] <= 0.0f ||
+         price_basis > 1 || ins[31] != (float)price_basis || ins[32] != (float)price_basis ||
+         !isfinite(a[15]) || !isfinite(a[16]) || a[16] < a[15] ||
+         !isfinite(ins[29]) || ins[29] < 0.0f || ins[29] > 4.0f || floor(ins[29]) != ins[29])
+         status = 3.0f;
+      for(uint t = 0; t < 24; t++) if(!isfinite(lim[t])) status = 3.0f;
+      const uint mask = status == 0.0f ? (uint)mask_f : 0;
+      if(i < 13) value = account_features[i];
+      else if(i < 24)
+        {
+         const uint li = (uint)i - 13;
+         const uint bit = li < 7 ? li : li < 9 ? 7 : 8;
+         value = (mask & (1U << bit)) ? lim[li] : 0.0f;
+         if(li == 0) value /= volume_scale;
+         else if(li == 1 || (li >= 3 && li <= 6)) value /= money_scale;
+         else if(li >= 7) value = value * ins[0] / price_scale;
+        }
+      else if(i == 24 || i == 25) value = lim[i - 13] / money_scale;
+      else if(i == 26) value = lim[13] * ins[0] / price_scale;
+      else if(i == 27) value = lim[14] / volume_scale;
+      else if(i == 28) value = lim[15] / price_scale;
+      else if(i == 29) value = lim[16] / money_scale;
+      else if(i == 30 || i == 31) value = lim[i - 13];
+      else if(i == 32) value = lim[19] / price_scale;
+      else if(i == 33) value = mask_f / 511.0f;
+      else if(i == 34) value = lim[21] / money_scale;
+      else if(i == 35) value = lim[22] / 2.0f;
+      else if(i == 36) value = 0.0f;
+      else if(i == 37) value = (a[16] - a[15]) / price_scale;
+      else if(i == 38) value = ins[1] / price_scale;
+      else if(i == 39) value = ins[3] / volume_scale;
+      else if(i == 40) value = ins[5] / volume_scale;
+      else if(i == 41) value = ins[15] * ins[14] * volume_scale / money_scale;
+      else if(i == 42) value = ins[21] * volume_scale / money_scale;
+      else if(i == 43)
+        {
+         const float std = context[norm_offset + 13];
+         if(!isfinite(std) || std <= 0.0f) status = 3.0f;
+         value = ((price_basis == 0 ? a[15] : ins[33]) - context[norm_offset + 12]) / std;
+        }
+      else value = ins[29] / 4.0f;
+     }
+   if(!isfinite(value) && status == 0.0f) status = 5.0f;
+   condition[n] = status == 0.0f ? value : 0.0f;
+   flags[n] = status;
+  }
+
+// Step16 uses the existing COpenCL::BufferWrite partial-write API directly;
+// no additional kernel, flags buffer, reduction or Step device holder.
+
+// Work-only kernels356..359. Composite owner validates exact physical sizes,
+// byte ranges, context/aliasing and snapshot before dispatch. All results remain
+// private until existing DPCCOperatorReduce accepts every output flag.
+__kernel void DPCCCompositeInitialNoise(__global const float *context,
+                                       __global float *rollout_context,
+                                       __global float *normalized,
+                                       __global float *candidate_status,
+                                       __global float *final_validity,
+                                       __global float *flags,
+                                       uint M, uint H, uint J, uint noise_offset, uint active_offset)
+  {
+   const size_t n = get_global_id(0);
+   const size_t row_size = (size_t)H * 6;
+   if(n >= (size_t)M * row_size) return;
+   const size_t m = n / row_size, coordinate = n % row_size;
+   const size_t source = noise_offset + (m * ((size_t)J + 1) + J) * row_size + coordinate;
+   const float value = context[source];
+   flags[n] = isfinite(value) ? 0.0f : 3.0f;
+   normalized[n] = isfinite(value) ? value : 0.0f;
+   if(coordinate == 0)
+     {
+      rollout_context[active_offset + m] = 1.0f;
+      candidate_status[m] = 0.0f;
+      // Final financial validation is still outstanding.
+      final_validity[m] = 0.0f;
+     }
+  }
+
+__kernel void DPCCCompositeReverse(__global const float *normalized,
+                                  __global const float *epsilon,
+                                  __global const float *context,
+                                  __global const float *rollout_context,
+                                  __global float *proposal,
+                                  __global float *flags,
+                                  uint M, uint H, uint J, uint j, uint noise_offset, uint active_offset,
+                                  float beta, float alpha_bar, float sigma)
+  {
+   const size_t n = get_global_id(0), row_size = (size_t)H * 6;
+   if(n >= (size_t)M * row_size) return;
+   const size_t m = n / row_size, coordinate = n % row_size;
+   const float active = rollout_context[active_offset + m], current = normalized[n];
+   float status = 0.0f, result = 0.0f, projected_value = 0.0f;
+   if(j == 0 || j > J || !isfinite(beta) || !isfinite(alpha_bar) || !isfinite(sigma) ||
+      beta <= 0.0f || beta >= 1.0f || alpha_bar <= 0.0f || alpha_bar >= 1.0f ||
+      sigma < 0.0f || (j == 1 && sigma != 0.0f) ||
+      (active != 0.0f && active != 1.0f) || !isfinite(current))
+      status = 3.0f;
+   if(status == 0.0f && active == 0.0f)
+      result = current; // No epsilon/noise reads or row compaction for inactive m.
+   if(status == 0.0f && active == 1.0f)
+     {
+      const float eps = epsilon[n];
+      if(!isfinite(eps)) status = 3.0f;
+      if(status == 0.0f)
+        {
+         const float root_variance = sqrt(1.0f - alpha_bar), root_alpha = sqrt(1.0f - beta);
+         const float product = beta * eps, correction = product / root_variance;
+         const float numerator = current - correction, mu = numerator / root_alpha;
+         if(!isfinite(root_variance) || !isfinite(root_alpha) || root_variance <= 0.0f || root_alpha <= 0.0f ||
+            !isfinite(product) || !isfinite(correction) || !isfinite(numerator) || !isfinite(mu))
+            status = 5.0f;
+         else
+           {
+            result = mu;
+            // DIF-02 deterministic j1: Noise[m,0] is never dereferenced.
+            if(j > 1)
+              {
+               const size_t source = noise_offset + (m * ((size_t)J + 1) + j - 1) * row_size + coordinate;
+               const float noise = context[source];
+               if(!isfinite(noise)) status = 3.0f;
+               else
+                 {
+                  const float perturbation = sigma * noise;
+                  result = mu + perturbation;
+                  if(!isfinite(perturbation) || !isfinite(result)) status = 5.0f;
+                 }
+              }
+           }
+        }
+     }
+   proposal[n] = status == 0.0f ? result : 0.0f;
+   flags[n] = status;
+  }
+
+// DATA-04 uses the same bounded action space in every projection mode.
+// direction0 maps denoiser values to probabilities; direction1 maps probabilities back to denoiser values.
+__kernel void DPCCCompositeActionAffine(__global const float *source,
+                                       __global float *destination,
+                                       __global const float *rollout_context,
+                                       __global float *flags,
+                                       __global float *probability_stack,
+                                       __global float *projected_stack,
+                                       uint M, uint H, uint active_offset, uint direction, uint sigmoid_output,
+                                       uint probability_offset,
+                                       float b0, float b1, float b2, float b3, float b4, float b5,
+                                       float s0, float s1, float s2, float s3, float s4, float s5)
+  {
+   const size_t n = get_global_id(0), row_size = (size_t)H * 6;
+   if(n >= (size_t)M * row_size) return;
+   const float biases[6] = {b0,b1,b2,b3,b4,b5}, scales[6] = {s0,s1,s2,s3,s4,s5};
+   const float active = rollout_context[active_offset + n / row_size], value = source[n];
+   const float bias = biases[n % 6], scale = scales[n % 6];
+   float status = 0.0f, result = 0.0f, projected_value = 0.0f;
+   if(direction > 1 || sigmoid_output != 1 ||
+      (active != 0.0f && active != 1.0f) || !isfinite(value) ||
+      !isfinite(bias) || !isfinite(scale) || scale <= 0.0f)
+      status = 3.0f;
+   if(status == 0.0f && active == 1.0f)
+     {
+      if(direction == 0)
+        {
+         const float logit = bias + scale * value;
+         if(!isfinite(logit)) status = 5.0f;
+         else result = logit >= 0.0f ? 1.0f / (1.0f + exp(-logit)) :
+                                          exp(logit) / (1.0f + exp(logit));
+        }
+      else
+        {
+         projected_value = clamp(value, 0.0f, 1.0f);
+         const float probability = clamp(projected_value, DPCC_ACTION_PROBABILITY_EPS,
+                                         1.0f - DPCC_ACTION_PROBABILITY_EPS);
+         const float logit = log(probability / (1.0f - probability));
+         result = (logit - bias) / scale;
+         if(!isfinite(logit) || !isfinite(result)) status = 5.0f;
+        }
+      if(!isfinite(result)) status = 5.0f;
+     }
+   if(probability_offset != 0xFFFFFFFFu)
+     {
+      if(direction == 0)
+         probability_stack[probability_offset + n] = (status == 0.0f && active == 1.0f ? result : 0.0f);
+      else
+         projected_stack[probability_offset + n] = (status == 0.0f && active == 1.0f ? projected_value : 0.0f);
+     }
+   // Inactive physical/normalized rows are finite service zeros, same index.
+   destination[n] = status == 0.0f ? result : 0.0f;
+   flags[n] = status;
+  }
+
+__kernel void DPCCCompositeProjectionMask(__global float *rollout_context,
+                                         __global float *candidate_status,
+                                         __global const float *projection_status,
+                                         __global float *normalized_corrected,
+                                         __global float *flags,
+                                         uint M, uint H, uint active_offset)
+  {
+   const size_t m = get_global_id(0), row_size = (size_t)H * 6;
+   if(m >= M) return;
+   const float active = rollout_context[active_offset + m], previous = candidate_status[m];
+   const float projected = projection_status[m];
+   float flag = 0.0f;
+   if((active != 0.0f && active != 1.0f) ||
+      (previous != 0.0f && previous != 1.0f && previous != 2.0f) ||
+      (projected != 0.0f && projected != 1.0f && projected != 2.0f) ||
+      (active == 1.0f && previous != 0.0f) || (active == 0.0f && previous == 0.0f))
+      flag = 3.0f;
+   for(size_t c = 0; c < row_size; c++)
+      if(!isfinite(normalized_corrected[m * row_size + c])) flag = 3.0f;
+   if(flag == 0.0f)
+     {
+      if(active == 1.0f && projected != 0.0f)
+        {
+         rollout_context[active_offset + m] = 0.0f;
+         candidate_status[m] = projected;
+        }
+      // An already failed row keeps its own explicit failure code permanently.
+      if(active == 0.0f || projected != 0.0f)
+         for(size_t c = 0; c < row_size; c++) normalized_corrected[m * row_size + c] = 0.0f;
+     }
+   flags[m] = flag;
+  }
+
+// ID360: owner Diagnostics[M,12] summaryV1. Not full proposal history.
+__kernel void DPCCCompositeSummary(__global const float *projection,
+ __global const float *R,__global const float *eligible,__global float *summary,
+ __global float *flags,const uint M,const uint activeOffset,const uint stage)
+  {
+   const uint m=get_global_id(0);if(m>=M)return;
+   const uint row=m*12;uint error=0;
+   const float active=R[activeOffset+m];
+   if(stage>2||!isfinite(active)||(active!=0&&active!=1)) error=3;
+   if(stage==0)
+     {
+      summary[row]=0;summary[row+1]=0;
+      for(uint i=2;i<10;i++)summary[row+i]=-1;
+      summary[row+10]=active;summary[row+11]=0;
+     }
+   else if(stage==1 && active==1)
+     {
+      for(uint i=0;i<12;i++)if(!isfinite(projection[row+i]))error=5;
+      const float eval=projection[row],iter=projection[row+1];
+      if(eval<0||iter<0||eval!=floor(eval)||iter!=floor(iter)||projection[row+10]!=1)error=3;
+      if(!isfinite(summary[row])||!isfinite(summary[row+1])||summary[row]<0||summary[row+1]<0||
+         eval>16777216-summary[row]||iter>16777216-summary[row+1])error=5;
+      const float evaluations=summary[row]+eval,iterations=summary[row+1]+iter;
+      if(!isfinite(evaluations)||!isfinite(iterations)||evaluations>16777216||iterations>16777216)error=5;
+      if(error==0)
+        {
+         summary[row]=evaluations;summary[row+1]=iterations;
+         for(uint i=2;i<10;i++)summary[row+i]=projection[row+i];
+        }
+     }
+   else if(stage==2)
+     {
+      const float valid=eligible[m];
+      if(!isfinite(valid)||(valid!=0&&valid!=1)||(active==0&&valid==1))error=3;
+      if(error==0){summary[row+10]=active;summary[row+11]=valid;}
+     }
+   flags[m]=(float)error;
+  }
+
+// ID361; host metadata contains relative seconds only, never absolute UTC.
+__kernel void DPCCCompositeBindTimes(__global const float *context,
+ __global const long *relative,__global float *flags,const uint K,const uint H,
+ const uint E,const uint executionOffset,const uint countOffset,const uint calendarOffset,
+ const uint firstMarkAtOpen)
+  {
+   const uint row=get_global_id(0);if(row>=K*H)return;
+   const uint h=row%H;uint error=0;
+   const long duration=relative[2*h],gap=relative[2*h+1];
+   if(duration<=0||gap<0||context[executionOffset+row*24+18]!=(float)duration ||
+      context[executionOffset+row*24+19]!=(float)gap)error=3;
+   const float n=context[countOffset+h];
+   if(!isfinite(n)||n<0||n>E||n!=floor(n)||context[executionOffset+row*24+21]!=n)error=3;
+   if(error==0)
+      for(uint e=0;e<E;e++)
+        {
+         const uint i=calendarOffset+(row*E+e)*6;
+         if(e<(uint)n)
+           {
+            const float offset=context[i];
+            // 2^63 is exactly representable; LONG_MAX rounds to it as float.
+            // Guard before conversion; converting an out-of-range float is undefined.
+            if(!isfinite(offset)||offset!=floor(offset)||offset>=0x1.0p63f||offset< -0x1.0p63f)error=3;
+            else
+              {
+               const long seconds=convert_long_rtz(offset);
+               if(seconds>duration || (h==0?(seconds<0||(firstMarkAtOpen&&seconds<=0)):seconds<=-gap))error=3;
+              }
+           }
+         else for(uint f=0;f<6;f++)if(context[i+f]!=0)error=3;
+        }
+   flags[row]=(float)error;
+  }
+// ID362: compact FNV mutation identity, not a cryptographic provenance digest.
+__kernel void DPCCCompositeSnapshotIdentity(__global const float *context,
+ __global const float *account,__global ulong *result,const uint count)
+  {
+   if(get_global_id(0)!=0)return;
+   ulong hash=(ulong)14695981039346656037UL;
+   hash^=(ulong)count;hash*=(ulong)1099511628211UL;
+   for(uint i=0;i<count;i++){hash^=(ulong)as_uint(context[i]);hash*=(ulong)1099511628211UL;}
+   hash^=(ulong)13;hash*=(ulong)1099511628211UL;
+   for(uint i=0;i<13;i++){hash^=(ulong)as_uint(account[i]);hash*=(ulong)1099511628211UL;}
+   result[0]=hash;
+  }
+
+// Work-only IDs 364 padding, 365 publication. Existing SRM helpers are reused.
+// No rho argument exists. Pi is exactly C.Pi[K]. SP10 padding is finite 0/0.
+__kernel void DPCCCompositePad(__global const float *returns,
+ __global const float *context, __global const float *R,
+ __global const float *status, __global const float *endvalid,
+ __global float *eligible, __global float *support, __global float *mass,
+ __global float *flags, const uint M,const uint K,const uint N,
+ const uint piOffset,const uint activeOffset,const float tolerance)
+  {
+   const uint m=get_global_id(0); if(m>=M) return;
+   if(K==0||K>N||N>64||(N&(N-1))!=0||!isfinite(tolerance)||tolerance<0||tolerance>=1)
+      {eligible[m]=0;flags[m]=4;return;}
+   uint error=0; float total=0;
+   for(uint k=0;k<K;k++)
+     { const float p=context[piOffset+k];
+       if(!isfinite(p)||p<0) error=3;
+       total+=p; }
+   if(!isfinite(total)||total<=0||fabs(total-1)>tolerance) error=3;
+   const float a=R[activeOffset+m],s=status[m],v=endvalid[m];
+   if(!isfinite(a)||(a!=0&&a!=1)||!isfinite(s)||(s!=0&&s!=1&&s!=2)||
+      !isfinite(v)||(v!=0&&v!=1)) error=3;
+   const uint valid=(a==1&&s==0&&v==1);
+   for(uint k=0;k<N;k++)
+     {
+      float z=0,p=0;
+      if(valid&&k<K)
+        { z=returns[m*K+k];p=context[piOffset+k]; if(!isfinite(z)) error=5; }
+      support[m*N+k]=(isfinite(z)?z:0); mass[m*N+k]=p;
+     }
+   eligible[m]=(error==0&&valid)?1:0; flags[m]=(float)error;
+  }
+
+// One work-item. All candidates are validated before the first publication.
+// receipt [status, original_index, selected_score, feasible_count].
+__kernel void DPCCCompositePublish(__global const float *plans,
+ __global const float *eligible,__global const float *scores,
+ __global const float *z,__global const float *p,__global const float *order,
+ __global const float *fqfdiag,__global float *selected,__global float *output,
+ __global float *receipt,const uint M,const uint H,const uint N,
+ const int risk_type,const float risk_parameter,const float mean_weight,
+ const float tolerance)
+  {
+   if(get_global_id(0)!=0) return;
+   for(uint i=0;i<H*6;i++) selected[i]=0;
+   for(uint i=0;i<6;i++) output[i]=0;
+   if(M==0||H==0||N==0||N>64||(N&(N-1))!=0)
+      {receipt[0]=4;receipt[1]=-1;receipt[2]=0;receipt[3]=0;return;}
+   uint error=0,count=0; int winner=-1; float best=0;
+   for(uint m=0;m<M;m++)
+     {
+      if(!isfinite(eligible[m])||(eligible[m]!=0&&eligible[m]!=1)) {error=5;continue;}
+      if(eligible[m]!=1) continue;
+      const uint d=m*6;
+      for(uint i=0;i<6;i++) if(!isfinite(fqfdiag[d+i])) error=5;
+      if(!isfinite(scores[m])||!isfinite(fqfdiag[d+2])||fabs(fqfdiag[d+2]-1)>tolerance||
+         fqfdiag[d+3]<0||fqfdiag[d+5]!=0) {error=5;continue;}
+      float prefix[64],next[64],terms[64]; uint seen[64];
+      for(uint k=0;k<N;k++) seen[k]=0;
+      float total=0;
+      for(uint k=0;k<N;k++)
+        {
+         const uint i=m*N+k;const float q=order[i];
+         if(!isfinite(z[i])||!isfinite(p[i])||p[i]<0||!isfinite(q)||q<0||q>=N||q!=floor(q)) error=5;
+         else {const uint original=(uint)q;if(seen[original]) error=5;seen[original]=1;}
+         if(k&& (z[i]<z[i-1]||(z[i]==z[i-1]&&q<order[i-1]))) error=5;
+         prefix[k]=p[i];total+=p[i];
+        }
+      if(!isfinite(total)||total<=0||fabs(total-1)>tolerance) {error=5;continue;}
+      // Reproduce the native parallel CDF, with explicit overflow checks.
+      for(uint offset=1;offset<N;offset<<=1)
+        {for(uint k=0;k<N;k++) next[k]=prefix[k]+(k>=offset?prefix[k-offset]:0);
+         for(uint k=0;k<N;k++) {prefix[k]=next[k];if(!isfinite(prefix[k])) error=5;}}
+      const float actualMass=prefix[N-1];
+      if(!isfinite(actualMass)||actualMass<=0) {error=5;continue;}
+      const float inverse=1.0f/actualMass;
+      for(uint k=0;k<N;k++)
+        {
+         const float hi=clamp(prefix[k]*inverse,0.0f,1.0f);
+         const float lo=k?clamp(prefix[k-1]*inverse,0.0f,1.0f):0;
+         const float weight=fmax(SRMCumulative(hi,risk_type,risk_parameter,mean_weight)-
+             SRMCumulative(lo,risk_type,risk_parameter,mean_weight),0.0f);
+         terms[k]=weight*z[m*N+k]; if(!isfinite(weight)||!isfinite(terms[k])) error=5;
+        }
+      for(uint width=N/2;width; width/=2)
+         for(uint k=0;k<width;k++) {terms[k]+=terms[k+width];if(!isfinite(terms[k])) error=5;}
+      // Native neutral-zero guards cannot authorize a corrupted computation.
+      if(scores[m]==0&&terms[0]!=0) error=5;
+      for(uint i=0;i<H*6;i++) if(!isfinite(plans[m*H*6+i])) error=5;
+      count++;
+      if(winner<0||scores[m]>best) {winner=(int)m;best=scores[m];}
+     }
+   receipt[0]=(float)(error?error:(winner<0?1:0));receipt[1]=(float)winner;
+   receipt[2]=(winner<0?0:best);receipt[3]=(float)count;
+   if(error||winner<0) return;
+   for(uint i=0;i<H*6;i++) selected[i]=plans[(uint)winner*H*6+i];
+   // DATA03 [BuyVolume,BuyTP,BuySL,SellVolume,SellTP,SellSL], first h=0.
+   for(uint i=0;i<6;i++) output[i]=selected[i];
+  }
+
+// Exact mean EPSILON_MSE; one work item performs complete numeric admission.
+// No public gradient is written here. Candidate storage is existing tape35.
+__kernel void DPCCDenoiserEpsilonMSE(__global const float *prediction,
+                                    __global const float *epsilon,
+                                    __global float *candidate,
+                                    __global float *receipt, const uint count)
+  {
+   if(get_global_id(0) != 0) return;
+   uint status = count == 0 ? 5 : 0;
+   float sum = 0.0f;
+   const float inverse = count == 0 ? 0.0f : 1.0f / (float)count;
+   for(uint i = 0; i < count; i++)
+     {
+      const float p = prediction[i], e = epsilon[i];
+      const float delta = p - e;
+      const float term = (delta * inverse) * delta;
+      const float gradient = (-2.0f * inverse) * delta;
+      if(!isfinite(p) || !isfinite(e) || !isfinite(delta) || !isfinite(term) ||
+         !isfinite(gradient)) status = 5;
+      sum += term;
+     }
+   if(!isfinite(sum) || sum < 0.0f) status = 5;
+   if(status == 0)
+      for(uint i = 0; i < count; i++)
+         candidate[i] = (2.0f * inverse) * (epsilon[i] - prediction[i]);
+   receipt[0] = (float)status;
+   receipt[1] = status == 0 ? sum : 0.0f;
+  }
+
+__kernel void DPCCDenoiserPrepare(__global const float *actions, __global const float *epsilon,
+                                  __global float *candidate, __global float *flags,
+                                  const uint count, const float alpha_bar,
+                                  const float b0, const float b1, const float b2,
+                                  const float b3, const float b4, const float b5,
+                                  const float s0, const float s1, const float s2,
+                                  const float s3, const float s4, const float s5)
+  {
+   const size_t n = get_global_id(0);
+   if(n >= count) return;
+   const float bias[] = {b0,b1,b2,b3,b4,b5}, scale[] = {s0,s1,s2,s3,s4,s5};
+   const uint a = n % 6;
+   float status = 0.0f;
+   const float raw = actions[n], noise = epsilon[n], b = bias[a], s = scale[a];
+   if(!isfinite(raw) || !isfinite(noise) || !isfinite(b) || !isfinite(s) || s <= 0.0f ||
+      !isfinite(alpha_bar) || alpha_bar <= 0.0f || alpha_bar >= 1.0f) status = 3.0f;
+   const float centered = raw - b, y0 = centered / s;
+   const float mean = sqrt(alpha_bar) * y0, stochastic = sqrt(1.0f-alpha_bar) * noise;
+   const float value = mean + stochastic;
+   if(status == 0.0f && (!isfinite(centered) || !isfinite(y0) || !isfinite(mean) ||
+      !isfinite(stochastic) || !isfinite(value))) status = 5.0f;
+   candidate[n] = status == 0.0f ? value : 0.0f;
+   flags[n] = status;
+  }
+
+// Causal affine target: no statistics are fitted from future native OHLC.
+// Existing rho loss broadcasts this H4 target across all K scenarios.
+__kernel void DPCCDecoderNativeTarget(__global const float *native,
+                                      __global const float *price_norm,
+                                      __global float *target,
+                                      __global float *receipt, const uint count)
+  {
+   if(get_global_id(0) != 0) return;
+   int status = count == 0 || count % 4 != 0 ? DPCC_STATUS_INVALID : 0;
+   for(uint i = 0; i < count; i++)
+     {
+      const uint p = (i % 4) * 4;
+      const float mean = price_norm[p], std = price_norm[p + 1];
+      const float gain = price_norm[p + 2], bias = price_norm[p + 3];
+      if(!isfinite(native[i]) || !isfinite(mean) || !isfinite(std) ||
+         !isfinite(gain) || !isfinite(bias))
+         status = DPCC_STATUS_NUMERIC;
+      else if((std <= 0.0f || gain != 1.0f || bias != 0.0f) && status != DPCC_STATUS_NUMERIC)
+         status = DPCC_STATUS_INVALID;
+      const float variance = std * std;
+      const float centered = native[i] - mean;
+      const float normalized = centered / std;
+      if(status == 0 && (!isfinite(variance) || variance <= 0.0f ||
+         !isfinite(centered) || !isfinite(normalized)))
+         status = DPCC_STATUS_NUMERIC;
+     }
+   // Complete admission precedes writes into the private normalized candidate.
+   if(status == 0)
+      for(uint i = 0; i < count; i++)
+        {
+         const uint p = (i % 4) * 4;
+         target[i] = (native[i] - price_norm[p]) / price_norm[p + 1];
+        }
+   receipt[0] = (float)status;
+   receipt[1] = 0.0f;
+   receipt[2] = 0.0f;
+  }
+
+//+------------------------------------------------------------------+
+//| Price head: causal normalized OHLC from shared raw parameters     |
+//+------------------------------------------------------------------+
+__kernel void DPCCDecoderPricePath(__global const float *raw, __global float *normalized,
+                                  __global float *flags, uint K, uint H)
+  {
+   const size_t k = get_global_id(0);
+   if(k >= K)
+      return;
+   int status = 0;
+   float previous_close = 0.0f;
+   for(uint h = 0; h < H; h++)
+     {
+      const size_t p = (k * H + h) * 4;
+      const float gap = h == 0 ? 0.0f : raw[p];
+      const float body = raw[p + 1];
+      const float upper_raw = raw[p + 2];
+      const float lower_raw = raw[p + 3];
+      const float upper = fmax(upper_raw, 0.0f) + log1p(exp(-fabs(upper_raw)));
+      const float lower = fmax(lower_raw, 0.0f) + log1p(exp(-fabs(lower_raw)));
+      const float open = h == 0 ? 0.0f : previous_close + gap;
+      const float close = open + body;
+      const float high = open + fmax(body, 0.0f) + upper;
+      const float low = open + fmin(body, 0.0f) - lower;
+      if(!isfinite(gap) || !isfinite(body) || !isfinite(upper_raw) || !isfinite(lower_raw) ||
+         !isfinite(upper) || !isfinite(lower) || !isfinite(open) || !isfinite(close) ||
+         !isfinite(high) || !isfinite(low) || high < fmax(open, close) || low > fmin(open, close))
+         status = DPCC_STATUS_NUMERIC;
+      normalized[p] = open;
+      normalized[p + 1] = high;
+      normalized[p + 2] = low;
+      normalized[p + 3] = close;
+      previous_close = close;
+     }
+   flags[k] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| Price head: immutable affine conversion and explicit H prefix    |
+//+------------------------------------------------------------------+
+__kernel void DPCCDecoderPriceNative(__global const float *normalized, __global float *native,
+                                    __global float *flags, uint K, uint H, uint plan_horizon,
+                                    float anchor, float scale, float half_tick,
+                                    float anchor_error, float scale_error)
+  {
+   const size_t row = get_global_id(0);
+   if(row >= (size_t)K * plan_horizon)
+      return;
+   const size_t source = (row / plan_horizon * H + row % plan_horizon) * 4;
+   float result[4];
+   int status = 0;
+   for(uint c = 0; c < 4; c++)
+     {
+      const float y = normalized[source + c];
+      const float product = scale * y;
+      const float price = anchor + product;
+      const float uncertainty = anchor_error + scale_error * fabs(y) +
+                                1.1920928955078125e-7f * (fabs(anchor) + fabs(product) + fabs(price));
+      if(!isfinite(y) || !isfinite(product) || !isfinite(price) || !isfinite(uncertainty) ||
+         uncertainty >= half_tick)
+         status = DPCC_STATUS_NUMERIC;
+      result[c] = price;
+     }
+   if(result[1] < fmax(result[0], result[3]) || result[2] > fmin(result[0], result[3]))
+      status = DPCC_STATUS_NUMERIC;
+   for(uint c = 0; c < 4; c++)
+      native[row * 4 + c] = status == 0 ? result[c] : 0.0f;
+   flags[row] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| Price head: exact reverse of the causal normalized OHLC path      |
+//+------------------------------------------------------------------+
+__kernel void DPCCDecoderPriceGradient(__global const float *raw, __global const float *upstream,
+                                      __global float *raw_gradient, __global float *flags,
+                                      uint K, uint H)
+  {
+   const size_t k = get_global_id(0);
+   if(k >= K)
+      return;
+   int status = H == 0 ? DPCC_STATUS_INVALID : 0;
+   float next_open_gradient = 0.0f;
+   for(uint reverse_h = H; reverse_h > 0; reverse_h--)
+     {
+      const uint h = reverse_h - 1;
+      const size_t p = (k * H + h) * 4;
+      const float body = raw[p + 1];
+      const float upper_raw = raw[p + 2];
+      const float lower_raw = raw[p + 3];
+      const float upper_exp = exp(-fabs(upper_raw));
+      const float lower_exp = exp(-fabs(lower_raw));
+      const float upper_sigmoid = upper_raw >= 0.0f ? 1.0f / (1.0f + upper_exp) :
+                                  upper_exp / (1.0f + upper_exp);
+      const float lower_sigmoid = lower_raw >= 0.0f ? 1.0f / (1.0f + lower_exp) :
+                                  lower_exp / (1.0f + lower_exp);
+      const float close_gradient = upstream[p + 3] + next_open_gradient;
+      const float body_gradient = close_gradient + (body > 0.0f ? upstream[p + 1] : 0.0f) +
+                                  (body < 0.0f ? upstream[p + 2] : 0.0f);
+      const float open_gradient = upstream[p] + upstream[p + 1] + upstream[p + 2] + close_gradient;
+      const float gap_gradient = h == 0 ? 0.0f : open_gradient;
+      const float upper_gradient = upstream[p + 1] * upper_sigmoid;
+      const float lower_gradient = -upstream[p + 2] * lower_sigmoid;
+      if((h > 0 && !isfinite(raw[p])) || !isfinite(body) || !isfinite(upper_raw) ||
+         !isfinite(lower_raw) || !isfinite(upstream[p]) || !isfinite(upstream[p + 1]) ||
+         !isfinite(upstream[p + 2]) || !isfinite(upstream[p + 3]) ||
+         !isfinite(close_gradient) || !isfinite(body_gradient) || !isfinite(open_gradient) ||
+         !isfinite(upper_gradient) || !isfinite(lower_gradient))
+         status = DPCC_STATUS_NUMERIC;
+      raw_gradient[p] = status == 0 ? gap_gradient : 0.0f;
+      raw_gradient[p + 1] = status == 0 ? body_gradient : 0.0f;
+      raw_gradient[p + 2] = status == 0 ? upper_gradient : 0.0f;
+      raw_gradient[p + 3] = status == 0 ? lower_gradient : 0.0f;
+      next_open_gradient = h == 0 || status != 0 ? 0.0f : open_gradient;
+     }
+   flags[k] = (float)status;
+  }
+//+------------------------------------------------------------------+
+//| DPCCDecoderPriceLoss builds detached rho-weighted Huber signals   |
+//+------------------------------------------------------------------+
+__kernel void DPCCDecoderPriceLoss(__global const float *y, __global const float *target,
+                                  __global const float *rho, __global float *gradient_scratch,
+                                  __global float *partials, __global float *flags,
+                                  uint K, uint H, uint prepare_gradient,
+                                  float lambda_price, float delta)
+  {
+   const size_t k = get_global_id(0);
+   if(k >= K)
+      return;
+   if(K == 0 || H == 0 || prepare_gradient > 1 ||
+      !isfinite(lambda_price) || lambda_price <= 0.0f || !isfinite(delta) || delta <= 0.0f)
+     {
+      partials[k] = 0.0f;
+      flags[k] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   int status = 0;
+   const float mass = rho[k];
+   if(!isfinite(mass))
+      status = DPCC_STATUS_NUMERIC;
+   else if(mass < 0.0f)
+      status = DPCC_STATUS_INVALID;
+   const size_t width = (size_t)H * 4;
+   const float factor = lambda_price * mass / (float)width;
+   if(!isfinite(factor))
+      status = DPCC_STATUS_NUMERIC;
+   float sum = 0.0f;
+   for(size_t coordinate = 0; coordinate < width; coordinate++)
+     {
+      const size_t n = k * width + coordinate;
+      const float prediction = y[n];
+      const float expected = target[coordinate];
+      const float error = prediction - expected;
+      const float magnitude = fabs(error);
+      const float huber = magnitude <= delta ? 0.5f * error * error : delta * (magnitude - 0.5f * delta);
+      const float weighted = factor * huber;
+      const float next = sum + weighted;
+      if(!isfinite(prediction) || !isfinite(expected) || !isfinite(error) || !isfinite(huber) ||
+         !isfinite(weighted) || !isfinite(next))
+         status = DPCC_STATUS_NUMERIC;
+      sum = next;
+      if(prepare_gradient)
+        {
+         const float gradient = -factor * clamp(error, -delta, delta);
+         if(!isfinite(gradient))
+            status = DPCC_STATUS_NUMERIC;
+         gradient_scratch[n] = gradient;
+        }
+     }
+   partials[k] = sum;
+   flags[k] = (float)status;
+  }
+
+//+------------------------------------------------------------------+
+//| Exact ForecastPrice branch in the native shared Conv layout       |
+//+------------------------------------------------------------------+
+__kernel void DPCCForecastPriceBridge(__global const float *price_z,
+                                     __global const float *weights,
+                                     __global const float *native_generator,
+                                     __global const float *native_e,
+                                     __global float *combined_generator,
+                                     __global float *price_e,
+                                     __global float *scratch,
+                                     __global float *control,
+                                     const uint scenarios,
+                                     const uint variables,
+                                     const uint horizon,
+                                     const uint dimension,
+                                     const uint phase,
+                                     __global const float *delta_target)
+  {
+   const uint id = get_global_id(0);
+   const uint state = variables * dimension;
+   if(phase == 1)
+     {
+      if(id != 0)
+         return;
+      float invalid = 0.0f;
+      float nonzero = 0.0f;
+      for(uint q = 0; q < state; q++)
+        {
+         invalid += scratch[2 * q];
+         nonzero += scratch[2 * q + 1];
+        }
+      control[0] = invalid;
+      control[1] = nonzero;
+      return;
+     }
+   if(id >= state || dimension == 0 || variables == 0 || horizon == 0 || scenarios == 0)
+      return;
+   const uint v = id / dimension;
+   const uint d = id % dimension;
+   float invalid = 0.0f;
+   float nonzero = 0.0f;
+   if(phase == 0)
+     {
+      float aggregate = 0.0f;
+      for(uint k = 0; k < scenarios; k++)
+         for(uint h = 0; h < horizon; h++)
+           {
+            const uint token = ((k * variables + v) * horizon + h) * dimension;
+            const float direct = price_z[token + d];
+            if(!isfinite(direct))
+               invalid = 1.0f;
+            if(direct != 0.0f)
+               nonzero = 1.0f;
+            float projected = 0.0f;
+//--- Native Conv variables=1; filter-major rows of width 2D+1.
+//--- Only E columns [0,D) propagate; prototype columns stay detached.
+            for(uint out = 0; out < dimension; out++)
+              {
+               const float g = price_z[token + out];
+               const float w = weights[out * (2 * dimension + 1) + d];
+               const float product = w * g;
+               if(!isfinite(g) || !isfinite(w) || !isfinite(product))
+                  invalid = 1.0f;
+               projected += product;
+              }
+            aggregate += direct + projected;
+           }
+      if(!isfinite(aggregate))
+         invalid = 1.0f;
+      price_e[id] = aggregate;
+     }
+   else if(phase == 2)
+     {
+//--- Preserve native generator signals until the native upstream is complete.
+      for(uint k = 0; k < scenarios; k++)
+         for(uint h = 0; h < horizon; h++)
+           {
+            const uint index = ((k * variables + v) * horizon + h) * dimension + d;
+            const float native = native_generator[index];
+            const float price = price_z[index];
+            const float sum = (price == 0.0f ? native : native + price);
+            if(!isfinite(native) || !isfinite(price) || !isfinite(sum))
+               invalid = 1.0f;
+            combined_generator[index] = sum;
+           }
+      const float native = native_e[id];
+      const float price = price_e[id];
+      const float sum = (price == 0.0f ? native : native + price);
+      if(!isfinite(native) || !isfinite(price) || !isfinite(sum))
+         invalid = 1.0f;
+      price_e[id] = sum;
+     }
+   else if(phase == 3)
+     {
+      for(uint h = 0; h < horizon; h++)
+         if(!isfinite(delta_target[(v * horizon + h) * dimension + d]))
+            invalid = 1.0f;
+     }
+   else
+      invalid = 1.0f;
+   scratch[2 * id] = invalid;
+   scratch[2 * id + 1] = nonzero;
+  }
+//+------------------------------------------------------------------+
+//| Prepares the immutable Action6 condition and canonical Pi         |
+//+------------------------------------------------------------------+
+__kernel void DPCCDenoiserFrameCondition(__global const float *source,
+                                        __global const float *profile,
+                                        __global float *account,
+                                        __global float *tokens,
+                                        __global float *pi,
+                                        __global float *flags,
+                                        uint K, uint token_count, uint dimension,
+                                        float probability_tolerance, uint mode)
+  {
+   const size_t n = get_global_id(0);
+   const size_t token_scalars = (size_t)K * token_count * (dimension + 1);
+   const size_t total = 109 + token_scalars + K;
+   if(n >= total)
+      return;
+   if(mode == 1)
+     {
+      uint error = 0;
+      float contribution = 0.0f;
+      if(n < 109)
+         contribution = account[n] * profile[109 + n];
+      else if(n < 109 + token_scalars)
+         contribution = tokens[n - 109];
+      else
+         contribution = pi[n - 109 - token_scalars];
+      const float next = source[n] + contribution;
+      if(!isfinite(source[n]) || !isfinite(contribution) || !isfinite(next))
+         error = DPCC_STATUS_NUMERIC;
+      ((__global float *)source)[n] = error == 0 ? next : 0.0f;
+      flags[n] = (float)error;
+      return;
+     }
+   if(mode != 0)
+     {
+      flags[n] = (float)DPCC_STATUS_INVALID;
+      return;
+     }
+   uint error = 0;
+   const float raw = source[n];
+   if(!isfinite(raw))
+      error = DPCC_STATUS_NUMERIC;
+   if(n < 109)
+     {
+      const float bias = profile[n], scale = profile[109 + n];
+      if(!isfinite(bias) || !isfinite(scale) || scale <= 0.0f)
+         error = DPCC_STATUS_INVALID;
+      const float value = (raw - bias) / scale;
+      if(!isfinite(value))
+         error = DPCC_STATUS_NUMERIC;
+      account[n] = error == 0 ? value : 0.0f;
+     }
+   else if(n < 109 + token_scalars)
+      tokens[n - 109] = error == 0 ? raw : 0.0f;
+   else
+     {
+      if(raw < 0.0f)
+         error = DPCC_STATUS_INVALID;
+      pi[n - 109 - token_scalars] = error == 0 ? raw : 0.0f;
+     }
+   if(n == 0)
+     {
+      float mass = 0.0f;
+      for(uint k = 0; k < K; k++)
+        {
+         const float value = source[109 + token_scalars + k];
+         if(!isfinite(value) || value < 0.0f)
+            error = DPCC_STATUS_INVALID;
+         mass += value;
+        }
+      if(!isfinite(mass) || mass <= 0.0f || fabs(mass - 1.0f) > probability_tolerance)
+         error = DPCC_STATUS_INVALID;
+     }
+   flags[n] = (float)error;
+  }
+//+------------------------------------------------------------------+
+//| Packs per-scenario attention and applies the original Market Pi   |
+//+------------------------------------------------------------------+
+__kernel void DPCCDenoiserFrameLayout(__global const float *key,
+                                     __global const float *value,
+                                     __global const float *query,
+                                     __global const float *pi,
+                                     __global float *packed_query,
+                                     __global float *packed_kv,
+                                     __global float *weighted,
+                                     __global float *flags,
+                                     uint K, uint tokens, uint width, uint heads, uint mode)
+  {
+   const size_t n = get_global_id(0);
+   if(mode == 0)
+     {
+      if(n >= (size_t)K * tokens * width)
+         return;
+      const uint dh = width / heads;
+      const size_t d = n % width, token = n / width % tokens, k = n / ((size_t)tokens * width);
+      const size_t group = k * heads + d / dh;
+      const size_t physical = (token * 2 * K * heads + group) * dh + d % dh;
+      uint error = 0;
+      const float kval = key[n], vval = value[n];
+      if(!isfinite(kval) || !isfinite(vval))
+         error = DPCC_STATUS_NUMERIC;
+      packed_kv[physical] = error == 0 ? kval : 0.0f;
+      packed_kv[physical + (size_t)K * width] = error == 0 ? vval : 0.0f;
+      if(token == 0)
+        {
+         const float q = query[d];
+         if(!isfinite(q))
+            error = DPCC_STATUS_NUMERIC;
+         packed_query[k * width + d] = error == 0 ? q : 0.0f;
+        }
+      flags[n] = (float)error;
+     }
+   else if(mode == 1)
+     {
+      if(n >= width)
+         return;
+      uint error = 0;
+      float result = 0.0f;
+      for(uint k = 0; k < K; k++)
+        {
+         const float p = pi[k], q = query[(size_t)k * width + n];
+         const float term = p * q;
+         if(!isfinite(p) || p < 0.0f || !isfinite(q) || !isfinite(term))
+            error = DPCC_STATUS_NUMERIC;
+         result += term;
+        }
+      if(!isfinite(result))
+         error = DPCC_STATUS_NUMERIC;
+      weighted[n] = error == 0 ? result : 0.0f;
+      flags[n] = (float)error;
+     }
+   else if(mode == 2)
+     {
+      if(n >= tokens)
+         return;
+      const float result = n < K ? key[n] : 0.0f;
+      const uint error = isfinite(result) ? 0 : DPCC_STATUS_NUMERIC;
+      weighted[n] = error == 0 ? result : 0.0f;
+      flags[n] = (float)error;
+     }
+   else if(mode == 3)
+     {
+      if(n >= (size_t)K * width)
+         return;
+      const uint k = (uint)(n / width);
+      const uint d = (uint)(n % width);
+      uint error = 0;
+      const float upstream = key[d];
+      const float probability = pi[k];
+      const float value = query[n];
+      const float grad = upstream * probability;
+      if(!isfinite(upstream) || !isfinite(probability) || probability < 0.0f ||
+         !isfinite(value) || !isfinite(grad))
+         error = DPCC_STATUS_NUMERIC;
+      packed_query[n] = error == 0 ? grad : 0.0f;
+      if(d == 0)
+        {
+         float probability_gradient = 0.0f;
+         for(uint i = 0; i < width && error == 0; i++)
+           {
+            const float term = key[i] * query[(size_t)k * width + i];
+            if(!isfinite(term))
+               error = DPCC_STATUS_NUMERIC;
+            else
+               probability_gradient += term;
+           }
+         if(!isfinite(probability_gradient))
+            error = DPCC_STATUS_NUMERIC;
+         packed_kv[k] = error == 0 ? probability_gradient : 0.0f;
+        }
+      flags[n] = (float)error;
+     }
+   else if(mode == 4)
+     {
+      if(n >= (size_t)K * tokens * width)
+         return;
+      const uint dh = width / heads;
+      const uint d = (uint)(n % width);
+      const uint token = (uint)(n / width % tokens);
+      const uint k = (uint)(n / ((size_t)tokens * width));
+      const uint group = k * heads + d / dh;
+      const size_t physical = ((size_t)token * 2 * K * heads + group) * dh + d % dh;
+      const float grad_key = value[physical];
+      const float grad_value = value[physical + (size_t)K * width];
+      uint error = 0;
+      if(!isfinite(grad_key) || !isfinite(grad_value))
+         error = DPCC_STATUS_NUMERIC;
+      packed_kv[n] = error == 0 ? grad_key : 0.0f;
+      weighted[n] = error == 0 ? grad_value : 0.0f;
+      if(k == 0 && token == 0)
+        {
+         float grad_query = 0.0f;
+         for(uint scenario = 0; scenario < K && error == 0; scenario++)
+           {
+            const float term = key[(size_t)scenario * width + d];
+            if(!isfinite(term))
+               error = DPCC_STATUS_NUMERIC;
+            else
+               grad_query += term;
+           }
+         if(!isfinite(grad_query))
+            error = DPCC_STATUS_NUMERIC;
+         packed_query[d] = error == 0 ? grad_query : 0.0f;
+        }
+      flags[n] = (float)error;
+     }
+   else if(mode == 5)
+     {
+      if(n >= tokens)
+         return;
+      const float result = n < K ? key[n] : 0.0f;
+      const uint error = K > tokens ? DPCC_STATUS_INVALID :
+                         (isfinite(result) ? 0 : DPCC_STATUS_NUMERIC);
+      weighted[n] = error == 0 ? result : 0.0f;
+      flags[n] = (float)error;
+     }
+   else
+     {
+      if(n < (size_t)K * width * tokens)
+         flags[n] = (float)DPCC_STATUS_INVALID;
+     }
+  }
+
+
+//+------------------------------------------------------------------+
+//| Read-only AC-SRM candidate rows.                                 |
+//+------------------------------------------------------------------+
+inline void DPCCQBad(__global float *f,uint r){atomic_or((volatile __global uint*)(f+r),0x3f800000U);}
+inline float DPCCQFinite(float v,__global float *f,uint r){if(!isfinite(v)){DPCCQBad(f,r);return 0.0f;}return v;}
+__kernel void DPCCQRowsDense(__global const float*w,__global const float*x,__global float*y,__global float*f,
+ const uint ni,const uint no,const uint shared,const int act)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1);float s=0.0f;
+ for(uint i=0;i<ni;i++){float a=DPCCQFinite(x[(shared?0:r*ni)+i],f,r),b=DPCCQFinite(w[n*(ni+1)+i],f,r);
+ if(a!=0.0f)s+=IsNaNOrInf(a*b,0.0f);if(!isfinite(a*b)||!isfinite(s))DPCCQBad(f,r);}
+ s+=DPCCQFinite(w[n*(ni+1)+ni],f,r);y[r*no+n]=fActivation(DPCCQFinite(s,f,r),act);
+ }
+__kernel void DPCCQRowsConv(__global const float*w,__global const float*x,__global float*y,__global float*f,
+ const uint ni,const uint units,const uint vars,const uint win,const uint step,const uint filters,const int act)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1),per=units*filters,v=n/per,u=(n%per)/filters,o=n%filters;
+ const uint base=(v*filters+o)*(win+1),start=u*step;float s=0.0f;
+ for(uint i=0;i<win&&start+i<ni;i++){float a=DPCCQFinite(x[(r*vars+v)*ni+start+i],f,r),b=DPCCQFinite(w[base+i],f,r);
+ if(a!=0.0f)s+=IsNaNOrInf(a*b,0.0f);if(!isfinite(a*b)||!isfinite(s))DPCCQBad(f,r);}
+ s+=DPCCQFinite(w[base+win],f,r);y[r*vars*per+n]=fActivation(DPCCQFinite(s,f,r),act);
+ }
+__kernel void DPCCQRowsMultiWindow(__global const float*w,__global const float*x,__global const int*windows,
+ __global float*y,__global float*f,const uint ni,const uint no,const uint vars,const uint count,const uint filters,const int act)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1),per=no/vars,v=n/per,pos=n%per,block=filters*count;
+ const uint wid=(pos%block)/filters,o=pos%filters;uint shift=0,edge=0,stride=0;
+ for(uint j=0;j<count;j++){if(j<wid){shift+=windows[j];edge+=(windows[j]+1)*filters;}stride+=windows[j];}
+ shift+=(pos/block)*stride;const uint win=windows[wid];edge+=o*(win+1);float s=DPCCQFinite(w[edge+win],f,r);
+ for(uint i=0;i<win&&shift+i<ni;i++){float a=DPCCQFinite(x[(r*vars+v)*ni+shift+i],f,r),b=DPCCQFinite(w[edge+i],f,r);
+ if(a!=0.0f)s+=IsNaNOrInf(a*b,0.0f);if(!isfinite(a*b)||!isfinite(s))DPCCQBad(f,r);}
+ y[r*no+n]=fActivation(DPCCQFinite(s,f,r),act);
+ }
+__kernel void DPCCQRowsBatchNorm(__global const float*x,__global const float*o,__global float*y,__global float*f,
+ const uint width,const uint stride,const int act,const uint bypass)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1),s=n*stride;float v=DPCCQFinite(x[r*width+n],f,r);
+ if(bypass){y[r*width+n]=v;return;}float mean=DPCCQFinite(o[s],f,r),variance=DPCCQFinite(o[s+1],f,r);
+ if(variance<=0.0f)variance=1.0f;float gamma=DPCCQFinite(o[s+3],f,r);if(gamma==0.0f)gamma=1.0f;
+ y[r*width+n]=fActivation(DPCCQFinite(gamma*(v-mean)/sqrt(variance)+DPCCQFinite(o[s+4],f,r),f,r),act);
+ }
+__kernel void DPCCQRowsSpike(__global const float*x,__global const float*prev,__global const float*levels,
+ __global const float*gates,__global float*y,__global float*next,__global float*f,const uint width)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1),at=r*width+n;float a=DPCCQFinite(x[at],f,r),p=DPCCQFinite(prev[n],f,r);
+ float g=DPCCQFinite(gates[n],f,r),l=DPCCQFinite(levels[n],f,r),v=0.0f;
+ if(a!=0.0f&&g!=0.0f)v+=g*a;if(p!=0.0f&&(1.0f-g)!=0.0f)v+=(1.0f-g)*p;v=DPCCQFinite(v,f,r);
+ float s=(v==0.0f||fabs(v)<l?0.0f:sign(v));y[at]=s;next[at]=(s==0.0f?v:sign(v)*(fabs(v)-l));
+ }
+__kernel void DPCCQRowsMap(__global const float*a,__global const float*b,__global float*y,__global float*f,
+ const uint width,const uint sa,const uint sb,const uint oa,const uint ob,const uint mode)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1);float x=DPCCQFinite(a[r*sa+oa+n],f,r),v=x;
+ if(mode){float z=DPCCQFinite(b[r*sb+ob+n],f,r);v=(mode==1?x+z:x*z);}y[r*width+n]=DPCCQFinite(v,f,r);
+ }
+__kernel void DPCCQRowsAttention(__global const float*q,__global const float*t,__global const float*pi,
+ __global float*y,__global float*lse,__global float*f,const uint queries,const uint scenarios,const uint steps,const uint dim)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1),d=n%dim,k=(n/dim)%scenarios,h=n/(dim*scenarios);
+ const uint qb=((r*queries+h)*scenarios+k)*dim;float maximum=-INFINITY;
+ for(uint u=0;u<steps;u++){float s=0.0f;for(uint j=0;j<dim;j++)s+=DPCCQFinite(q[qb+j]*t[(k*steps+u)*dim+j],f,r);
+ maximum=fmax(maximum,s/sqrt((float)dim));}float mass=0.0f,v=0.0f;
+ for(uint u=0;u<steps;u++){float s=0.0f;for(uint j=0;j<dim;j++)s+=DPCCQFinite(q[qb+j]*t[(k*steps+u)*dim+j],f,r);
+ float p=exp(s/sqrt((float)dim)-maximum);mass+=p;v+=p*DPCCQFinite(t[(k*steps+u)*dim+d],f,r);}
+ float gate=DPCCQFinite(pi[k],f,r);if(!(mass>0.0f)||gate<0.0f){DPCCQBad(f,r);y[qb+d]=0.0f;}
+ else y[qb+d]=DPCCQFinite(v/mass*gate,f,r);if(d==0)lse[(r*queries+h)*scenarios+k]=DPCCQFinite(log(mass)+maximum,f,r);
+ }
+__kernel void DPCCQRowsSoftmax(__global const float*x,__global float*y,__global float*f,const uint width)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1);float maximum=-INFINITY,mass=0.0f;
+ for(uint i=0;i<width;i++)maximum=fmax(maximum,DPCCQFinite(x[r*width+i],f,r));
+ for(uint i=0;i<width;i++)mass+=exp(x[r*width+i]-maximum);y[r*width+n]=DPCCQFinite(exp(x[r*width+n]-maximum)/mass,f,r);
+ }
+__kernel void DPCCQRowsCosine(__global const float*p,__global float*y,__global float*f,const uint width)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1);float c=0.0f;
+ for(uint i=0;i<n;i++)c+=DPCCQFinite(p[r*width+i],f,r);c+=DPCCQFinite(p[r*width+n],f,r)/2.0f;
+ y[r*width+n]=cos(n*M_PI_F*c);
+ }
+__kernel void DPCCQRowsValidate(__global const float*q,__global const float*p,__global float*f,const uint width,const float tolerance)
+ {
+ const uint r=get_global_id(0);float mass=0.0f;for(uint i=0;i<width;i++){float a=q[r*width+i],b=p[r*width+i];
+ if(!isfinite(a)||!isfinite(b)||b<0.0f)DPCCQBad(f,r);mass+=b;}if(!isfinite(mass)||fabs(mass-1.0f)>=tolerance)DPCCQBad(f,r);
+ }
+__kernel void DPCCQRowsJoin(__global const float*a,__global const float*p,__global float*q,__global float*f,const uint horizon)
+ {
+ const uint n=get_global_id(0),r=get_global_id(1);q[r*19+n]=DPCCQFinite(n<13?a[n]:p[r*horizon*6+n-13],f,r);
+ }
+__kernel void DPCCQRowsRank(__global const float*q1,__global const float*q2,__global const float*allowed,
+ __global const float*f,__global float*scores,__global float*selected,const uint rows)
+ {
+ uint best=rows;float value=-INFINITY;for(uint m=0;m<rows;m++){float s=fmin(q1[m],q2[m]);scores[m]=s;
+ if(f[m]!=0.0f||!isfinite(q1[m])||!isfinite(q2[m])){selected[0]=-2.0f;return;}
+ if(allowed[m]!=0.0f)continue;if(best==rows||s>value){best=m;value=s;}}
+ selected[0]=(best==rows?-1.0f:(float)best);
+ }
+
+// ABI3 Action6 condition: I09 raw query followed by Z/logU tokens and Pi.
+__kernel void DPCCAction6PackCondition(__global const float *account13,
+                                      __global const float *physical,
+                                      __global const float *z,
+                                      __global const float *logu,
+                                      __global const float *pi,
+                                      __global float *condition,
+                                      __global float *flags,
+                                      const uint K,const uint V,const uint Hm,const uint D,
+                                      const uint account_offset,const uint instrument_offset,
+                                      const uint limits_offset,const uint condition_count)
+  {
+   const uint i=get_global_id(0);
+   if(i>=condition_count)return;
+   const uint tokens=K*V*Hm, token_width=D+1, token_values=tokens*token_width;
+   float value=0.0f; uint error=0;
+   if(i<13) value=account13[i];
+   else if(i<37) value=physical[account_offset+i-13];
+   else if(i<85) value=physical[instrument_offset+i-37];
+   else if(i<109) value=physical[limits_offset+i-85];
+   else if(i<109+token_values)
+     {
+      const uint at=i-109, token=at/token_width, feature=at%token_width;
+      value=(feature<D ? z[token*D+feature] : logu[token]);
+     }
+   else value=pi[i-109-token_values];
+   if(!isfinite(value))error=3;
+   condition[i]=(error==0?value:0.0f);flags[i]=(float)error;
+  }
+
+__kernel void DPCCAction6InitialNoise(__global const float *noise,
+                                      __global const float *context,
+                                      __global float *current,
+                                      __global float *status,
+                                      __global float *candidate_status,
+                                      __global float *flags,
+                                      const uint M,const uint H,const uint J,
+                                      const uint noise_offset,const uint active_offset)
+  {
+   const uint n=get_global_id(0),row=H*6;
+   if(n>=M*row)return;
+   const uint m=n/row,coordinate=n%row;
+   const float active=context[active_offset+m];
+   const uint source=noise_offset+(m*(J+1)+J)*row+coordinate;
+   const float value=noise[source];
+   uint error=(!isfinite(active)||(active!=0.0f&&active!=1.0f)||!isfinite(value)?3:0);
+   current[n]=(error==0&&active==1.0f?value:0.0f);
+   if(coordinate==0)
+     {
+      status[m]=(error==0?0.0f:3.0f);
+      // Initial inactivity is a candidate disposition, not a numerical failure.
+      candidate_status[m]=(error==0&&active==1.0f?0.0f:1.0f);
+     }
+   flags[n]=(float)error;
+  }
+
+__kernel void DPCCAction6Reverse(__global const float *current,
+                                 __global const float *epsilon,
+                                 __global const float *noise,
+                                 __global const float *context,
+                                 __global float *proposal,
+                                 __global const float *status,
+                                 __global float *flags,
+                                 const uint M,const uint H,const uint J,const uint j,
+                                 const uint noise_offset,const uint active_offset,
+                                 const float beta,const float alpha_bar,const float sigma)
+  {
+   const uint n=get_global_id(0),row=H*6;
+   if(n>=M*row)return;
+   const uint m=n/row,coordinate=n%row;
+   const float active=context[active_offset+m],x=current[n];
+   uint error=0;float value=0.0f;
+   if(j==0||j>J||!isfinite(beta)||beta<=0.0f||beta>=1.0f||
+      !isfinite(alpha_bar)||alpha_bar<=0.0f||alpha_bar>=1.0f||
+      !isfinite(sigma)||sigma<0.0f||(j==1&&sigma!=0.0f)||
+      !isfinite(active)||(active!=0.0f&&active!=1.0f)||!isfinite(x)||
+      !isfinite(status[m])||(status[m]!=0.0f&&status[m]!=3.0f))error=3;
+   if(error==0&&active==0.0f)value=x;
+   if(error==0&&active==1.0f&&status[m]==0.0f)
+     {
+      const float eps=epsilon[n],root_var=sqrt(1.0f-alpha_bar),root_alpha=sqrt(1.0f-beta);
+      const float correction=beta*eps/root_var,mu=(x-correction)/root_alpha;
+      if(!isfinite(eps)||!isfinite(root_var)||root_var<=0.0f||!isfinite(root_alpha)||root_alpha<=0.0f||!isfinite(mu))error=5;
+      else
+        {
+         value=mu;
+         if(j>1)
+           {
+            const uint at=noise_offset+(m*(J+1)+j-1)*row+coordinate;
+            const float perturbation=sigma*noise[at];value=mu+perturbation;
+            if(!isfinite(noise[at])||!isfinite(perturbation)||!isfinite(value))error=5;
+           }
+        }
+     }
+   proposal[n]=(error==0?value:0.0f);flags[n]=(float)error;
+  }
+
+// Candidate flags consumed by DPCCQRowsRank: zero is allowed, nonzero excluded.
+// Keep the projector's detailed reason in candidate_status; publish the merged
+// Full-H validity is required for training; inference ranks the current Action6.
+__kernel void DPCCAction6CandidateMask(__global const float *candidate_status,
+                                       __global const float *rollout_valid,
+                                       __global float *candidate_flags,
+                                       const uint M, const uint require_rollout_valid)
+  {
+   const uint m=get_global_id(0);
+   if(m>=M) return;
+   const float projected=candidate_status[m],valid=rollout_valid[m];
+   const uint rollout_allowed = (require_rollout_valid == 0U || valid == 1.0f);
+   candidate_flags[m] = (isfinite(projected) && isfinite(valid) && projected == 0.0f && rollout_allowed) ? 0.0f : 1.0f;
+  }
+
+// Seed a physical Action6 VJP at only (selected,h=0). No sigmoid or row reduction.
+__kernel void DPCCAction6GradientSeed(__global const float *gradient6,
+                                      __global const float *projection_status,
+                                      __global const float *rollout_valid,
+                                      __global const float *context,
+                                      __global float *plan_gradient,
+                                      __global float *flags,
+                                      const uint M,const uint H,const uint selected,
+                                      const uint active_offset)
+  {
+   const uint n=get_global_id(0),row=H*6;
+   if(n>=M*row)return;
+   const uint m=n/row,c=n%6,h=(n%row)/6;
+   uint error=0;
+   float value=0.0f;
+   if(selected>=M)error=3;
+   else
+     {
+      const float projected=projection_status[selected],valid=rollout_valid[selected];
+      const float active=context[active_offset+selected];
+      if(!isfinite(projected)||projected!=0.0f||!isfinite(valid)||valid!=1.0f||
+         !isfinite(active)||active!=1.0f)error=3;
+      if(error==0&&m==selected&&h==0)
+        {
+         value=gradient6[c];
+         if(!isfinite(value))error=5;
+        }
+     }
+   plan_gradient[n]=(error==0?value:0.0f);
+   flags[n]=(float)error;
+  }
+
+// Seed all H physical derivatives for only the selected candidate.
+__kernel void DPCCFullPlanGradientSeed(__global const float *gradient_h6,
+                                       __global const float *projection_status,
+                                       __global const float *rollout_valid,
+                                       __global const float *context,
+                                       __global float *plan_gradient,
+                                       __global float *flags,
+                                       const uint M, const uint H, const uint selected,
+                                       const uint active_offset,
+                                       const uint allow_invalid_rollout)
+  {
+   const uint n = get_global_id(0), row = H * 6;
+   if(n >= M * row) return;
+   const uint m = n / row, coordinate = n % row;
+   uint error = 0;
+   float value = 0.0f;
+   if(selected >= M || allow_invalid_rollout > 1U)
+      error = 3;
+   else
+     {
+      const float projected = projection_status[selected], valid = rollout_valid[selected];
+      const float active = context[active_offset + selected];
+      if(!isfinite(projected) || projected != 0.0f || !isfinite(valid) || (valid != 1.0f && !(allow_invalid_rollout == 1U && valid == 0.0f)) ||
+         !isfinite(active) || active != 1.0f)
+         error = 3;
+      if(error == 0 && m == selected)
+        {
+         value = gradient_h6[coordinate];
+         if(!isfinite(value)) error = 5;
+        }
+     }
+   plan_gradient[n] = (error == 0 ? value : 0.0f);
+   flags[n] = (float)error;
+  }
+// mode0: affine adjoint; mode1: inverse affine adjoint; mode2: reverse-DDPM;
+// mode3: branch sum; mode4: sigmoid pullback using the saved bounded action.
+// All four plan operands and flags have disjoint device ranges at the caller.
+__kernel void DPCCAction6GradientStep(__global const float *source,
+                                      __global const float *other,
+                                      __global float *result,
+                                      __global float *epsilon_gradient,
+                                      __global float *flags,
+                                      const uint count,const uint mode,const uint other_offset,
+                                      const float beta,const float alpha_bar,
+                                      const float s0,const float s1,const float s2,
+                                      const float s3,const float s4,const float s5)
+  {
+   const uint n=get_global_id(0);
+   if(n>=count)return;
+   const float scales[6]={s0,s1,s2,s3,s4,s5};
+   const float g=source[n],scale=scales[n%6];
+   float value=0.0f,epsilon=0.0f;
+   uint error=(!isfinite(g)||!isfinite(scale)||scale<=0.0f||mode>5?3:0);
+   if(error==0)
+     {
+      if(mode==0)value=g*scale;
+      else if(mode==1 || mode==5)
+        {
+         const float probability=other[other_offset+n];
+         if(!isfinite(probability)||probability<0.0f||probability>1.0f)error=5;
+         else if(probability<=DPCC_ACTION_PROBABILITY_EPS||
+                 probability>=1.0f-DPCC_ACTION_PROBABILITY_EPS)value=0.0f;
+         else if(mode==1)value=g/(scale*probability*(1.0f-probability));
+         else value=g;
+        }
+      else if(mode==2)
+        {
+         if(!isfinite(beta)||beta<=0.0f||beta>=1.0f||
+            !isfinite(alpha_bar)||alpha_bar<=0.0f||alpha_bar>=1.0f)error=3;
+         else
+           {
+            const float root_alpha=sqrt(1.0f-beta),root_variance=sqrt(1.0f-alpha_bar);
+            value=g/root_alpha;
+            epsilon=-beta*g/(root_alpha*root_variance);
+           }
+        }
+      else
+        {
+         if(mode==3)
+           {
+            const float branch=other[other_offset+n];
+            if(!isfinite(branch))error=5;
+            else value=g+branch;
+   
+   
+           }
+         else
+           {
+            const float probability=other[other_offset+n];
+            if(!isfinite(probability)||probability<0.0f||probability>1.0f)error=5;
+            else value=g*scale*probability*(1.0f-probability);
+           }
+
+
+        }
+     }
+   if(!isfinite(value)||(mode==2&&!isfinite(epsilon)))error=5;
+   result[n]=(error==0?value:0.0f);
+   if(mode==2)epsilon_gradient[n]=(error==0?epsilon:0.0f);
+   flags[n]=(float)error;
+  }

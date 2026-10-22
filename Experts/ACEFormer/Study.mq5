@@ -1,23 +1,26 @@
-//+------------------------------------------------------------------+
-//| Study.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+﻿//+------------------------------------------------------------------+
+//|                                                        Study.mq5 |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
+#define Study
 #define Critic
 #include "Trajectory.mqh"
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
+input int                  Iterations     = 100000;
 input int                  Batch          = 10;
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
+STrajectory          Buffer[];
 CNet                 cEncoder;
 CNet                 cActor;
 CNet                 cDirector;
@@ -37,8 +40,9 @@ vector<float>        STD_Actor;
 vector<float>        STD_Goal;
 COpenCLMy            *OpenCL;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
+int OnInit()
   {
 //---
    ResetLastError();
@@ -153,8 +157,9 @@ COpenCLMy            *OpenCL;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
+void OnDeinit(const int reason)
   {
 //---
    if(!(reason == REASON_INITFAILED || reason == REASON_RECOMPILE))
@@ -167,8 +172,9 @@ COpenCLMy            *OpenCL;
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| ChartEvent function                                         |
+//| ChartEvent function                                              |
 //+------------------------------------------------------------------+
+void OnChartEvent(const int id,
                   const long &lparam,
                   const double &dparam,
                   const string &sparam)
@@ -178,8 +184,9 @@ COpenCLMy            *OpenCL;
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train function                                              |
+//| Train function                                                   |
 //+------------------------------------------------------------------+
+void Train(void)
   {
 //---
    vector<float> probability = vector<float>::Full(Buffer.Size(), 1.0f / Buffer.Size());
@@ -214,7 +221,6 @@ COpenCLMy            *OpenCL;
       for(int i = start; i < MathMin(Buffer[tr].Total, start + Batch); i++)
         {
          if(!state.Assign(Buffer[tr].States[i].state) ||
-            // Implements MathAbs.
             MathAbs(state).Sum() == 0 ||
             !bState.AssignArray(state))
            {
@@ -268,7 +274,6 @@ COpenCLMy            *OpenCL;
          bActions.AssignArray(target);
          if(!state.Assign(Buffer[tr].States[i + NForecast].state) ||
             !state.Resize(NForecast * BarDescr) ||
-            // Implements MathAbs.
             MathAbs(state).Sum() == 0)
            {
             iter -= Batch + start - i;
@@ -491,4 +496,3 @@ COpenCLMy            *OpenCL;
 //---
   }
 //+------------------------------------------------------------------+
-

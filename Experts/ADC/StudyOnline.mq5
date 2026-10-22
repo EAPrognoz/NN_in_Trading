@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                     Research.mq5 |
 //|                                                   Copyright DNG® |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -7,45 +7,59 @@
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| Includes                                                    |
+//| Includes                                                         |
 //+------------------------------------------------------------------+
+#define StudyOnline
 #define Critic
 #include "Trajectory.mqh"
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
+input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_CURRENT;
+//---
 input group                "---- RSI ----"
 input int                  RSIPeriod   =  14;            //Period
 input ENUM_APPLIED_PRICE   RSIPrice    =  PRICE_CLOSE;   //Applied price
+//---
 input group                "---- CCI ----"
 input int                  CCIPeriod   =  14;            //Period
 input ENUM_APPLIED_PRICE   CCIPrice    =  PRICE_TYPICAL; //Applied price
+//---
 input group                "---- ATR ----"
 input int                  ATRPeriod   =  14;            //Period
+//---
 input group                "---- MACD ----"
 input int                  FastPeriod  =  12;            //Fast
 input int                  SlowPeriod  =  26;            //Slow
 input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input int                  Agent = 1;
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+SState               sState;
 CNet                 cEncoder[2];
 CNet                 cTask[2];
 CNet                 cActor[2];
 CNet                 cProbability;
 CNet                 cDirector;
 CNet                 cCritic[6];
+//---
 float                dError;
 datetime             dtStudied;
+//---
 CSymbolInfo          Symb;
 CTrade               Trade;
+//---
 MqlRates             Rates[];
 CiRSI                RSI;
 CiCCI                CCI;
 CiATR                ATR;
 CiMACD               MACD;
+//---
 CBufferFloat         bState;
 CBufferFloat         bTime;
 CBufferFloat         bAccount;
@@ -55,18 +69,24 @@ double               PrevBalance = 0;
 double               PrevEquity = 0;
 bool                 bFirstRun = true;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
+int OnInit()
   {
+//---
    if(!Symb.Name(_Symbol))
       return INIT_FAILED;
    Symb.Refresh();
+//---
    if(!RSI.Create(Symb.Name(), TimeFrame, RSIPeriod, RSIPrice))
       return INIT_FAILED;
+//---
    if(!CCI.Create(Symb.Name(), TimeFrame, CCIPeriod, CCIPrice))
       return INIT_FAILED;
+//---
    if(!ATR.Create(Symb.Name(), TimeFrame, ATRPeriod))
       return INIT_FAILED;
+//---
    if(!MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice))
       return INIT_FAILED;
    if(!RSI.BufferResize(HistoryBars) || !CCI.BufferResize(HistoryBars) ||
@@ -75,9 +95,10 @@ bool                 bFirstRun = true;
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return INIT_FAILED;
      }
+//---
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
       return INIT_FAILED;
-// Load Models.
+//--- load models
    float temp;
    CArrayObj *encoder = new CArrayObj();
    CArrayObj *task = new CArrayObj();
@@ -220,6 +241,7 @@ bool                 bFirstRun = true;
    delete probability;
    delete director;
    delete critic;
+//---
    for(int i = 0; i < 2; i++)
      {
       cEncoder[i].TrainMode(true);
@@ -247,27 +269,33 @@ bool                 bFirstRun = true;
       cCritic[i].SetOpenCL(cActor[0].GetOpenCL());
       cCritic[i].Clear();
      }
+//---
    cActor[0].getResults(Result);
    if(Result.Total() != NActions)
      {
       PrintFormat("The scope of the actor does not match the actions count (%d <> %d)", NActions, Result.Total());
       return INIT_FAILED;
      }
+//---
    cEncoder[0].GetLayerOutput(0, Result);
    if(Result.Total() != (HistoryBars * BarDescr))
      {
       PrintFormat("Input size of Encoder doesn't match state description (%d <> %d)", Result.Total(), (HistoryBars * BarDescr));
       return INIT_FAILED;
      }
+//---
    PrevBalance = AccountInfoDouble(ACCOUNT_BALANCE);
    PrevEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    bFirstRun = true;
+//---
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
+void OnDeinit(const int reason)
   {
+//---
    if(!(reason == REASON_RECOMPILE))
      {
       cEncoder[0].Save(FileName + "Enc.nnw", 0, 0, 0, TimeCurrent(), true);
@@ -283,20 +311,25 @@ bool                 bFirstRun = true;
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                        |
+//| Expert tick function                                             |
 //+------------------------------------------------------------------+
+void OnTick()
   {
+//---
    if(!IsNewBar())
       return;
+//---
    int bars = CopyRates(Symb.Name(), TimeFrame, iTime(Symb.Name(), TimeFrame, 1), HistoryBars, Rates);
    if(!ArraySetAsSeries(Rates, true))
       return;
+//---
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
    Symb.Refresh();
    Symb.RefreshRates();
+//---
    float atr = 0;
    for(int b = 0; b < (int)HistoryBars; b++)
      {
@@ -308,6 +341,7 @@ bool                 bFirstRun = true;
       float sign = (float)MACD.Signal(b);
       if(rsi == EMPTY_VALUE || cci == EMPTY_VALUE || atr == EMPTY_VALUE || macd == EMPTY_VALUE || sign == EMPTY_VALUE)
          continue;
+      //---
       int shift = b * BarDescr;
       sState.state[shift] = (float)(Rates[b].close - open);
       sState.state[shift + 1] = (float)(Rates[b].high - open);
@@ -319,8 +353,10 @@ bool                 bFirstRun = true;
       sState.state[shift + 7] = macd;
       sState.state[shift + 8] = sign;
      }
+//---
    sState.account[0] = (float)AccountInfoDouble(ACCOUNT_BALANCE);
    sState.account[1] = (float)AccountInfoDouble(ACCOUNT_EQUITY);
+//---
    double buy_value = 0, sell_value = 0, buy_profit = 0, sell_profit = 0;
    double position_discount = 0;
    double multiplyer = 1.0 / (60.0 * 60.0 * 10.0);
@@ -350,6 +386,7 @@ bool                 bFirstRun = true;
    sState.account[5] = (float)sell_profit;
    sState.account[6] = (float)position_discount;
    sState.account[7] = (float)Rates[0].time;
+//---
    bTime.Clear();
    double time = (double)Rates[0].time;
    double x = time / (double)(D'2024.01.01' - D'2023.01.01');
@@ -362,6 +399,7 @@ bool                 bFirstRun = true;
    bTime.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
    if(bTime.GetIndex() >= 0)
       bTime.BufferWrite();
+//---
    bAccount.Clear();
    bAccount.Add((float)((sState.account[0] - PrevBalance) / PrevBalance));
    bAccount.Add((float)(sState.account[1] / PrevBalance));
@@ -372,13 +410,15 @@ bool                 bFirstRun = true;
    bAccount.Add((float)(sState.account[5] / PrevBalance));
    bAccount.Add((float)(sState.account[6] / PrevBalance));
    bAccount.AddArray(GetPointer(bTime));
+//---
    if(bAccount.GetIndex() >= 0)
       if(!bAccount.BufferWrite())
          return;
+//---
    bState.AssignArray(sState.state);
    if(!bFirstRun)
      {
-      // Target Nets.
+      //--- Target Nets
       if(!cEncoder[1].feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CBufferFloat*)NULL)
          || !cTask[1].feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CNet*)GetPointer(cEncoder[1]), LatentLayer)
          || !cActor[1].feedForward((CBufferFloat*)GetPointer(bAccount), 1, false, GetPointer(cTask[1]), -1)
@@ -391,7 +431,7 @@ bool                 bFirstRun = true;
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
          return;
         }
-      // Critic 1.
+      //--- Critic 1
       cCritic[2].getResults(Result);
       float reward = Result[0];
       cCritic[4].getResults(Result);
@@ -412,7 +452,7 @@ bool                 bFirstRun = true;
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             return;
            }
-      // Critic 2.
+      //--- Critic 2
       cCritic[3].getResults(Result);
       reward = Result[0];
       cCritic[5].getResults(Result);
@@ -433,7 +473,7 @@ bool                 bFirstRun = true;
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
             return;
            }
-      // Director.
+      //--- Director
       Result.Clear();
       if((sState.account[1] - PrevEquity) > 0)
          Result.Add(1);
@@ -447,7 +487,7 @@ bool                 bFirstRun = true;
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
          return;
         }
-      // Probability.
+      //--- Probability
       vector<float> target = vector<float>::Zeros(NActions / 3);
       if(sState.state[0] > 0)
          target[0] = 1;
@@ -463,7 +503,7 @@ bool                 bFirstRun = true;
          return;
         }
      }
-// New State.
+//--- New state
    if(!cEncoder[0].feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CBufferFloat*)NULL)
       || !cTask[0].feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CNet*)GetPointer(cEncoder[0]), LatentLayer)
       || !cActor[0].feedForward((CBufferFloat*)GetPointer(bAccount), 1, false, (CNet*)GetPointer(cTask[0]), -1)
@@ -476,12 +516,16 @@ bool                 bFirstRun = true;
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return;
      }
+//---
    PrevBalance = sState.account[0];
    PrevEquity = sState.account[1];
+//---
    vector<float> temp;
    cActor[0].getResults(temp);
+//---
    if(temp.Size() < NActions)
       temp = vector<float>::Zeros(NActions);
+//---
    double min_lot = Symb.LotsMin();
    double step_lot = Symb.LotsStep();
    double stops = (MathMax(Symb.StopsLevel(), 1) + Symb.Spread()) * Symb.Point();
@@ -495,7 +539,7 @@ bool                 bFirstRun = true;
       temp[3] -= temp[0];
       temp[0] = 0;
      }
-// Buy Control.
+//--- buy control
    if(temp[0] < min_lot || (temp[1] * MaxTP * Symb.Point()) <= 2 * stops || (temp[2] * MaxSL * Symb.Point()) <= stops)
      {
       if(buy_value > 0)
@@ -530,7 +574,7 @@ bool                 bFirstRun = true;
                     }
         }
      }
-// Sell Control.
+//--- sell control
    if(temp[3] < min_lot || (temp[4] * MaxTP * Symb.Point()) <= 2 * stops || (temp[5] * MaxSL * Symb.Point()) <= stops)
      {
       if(sell_value > 0)
@@ -565,7 +609,9 @@ bool                 bFirstRun = true;
                     }
         }
      }
+//---
    bFirstRun = false;
+//---
    if((int(Rates[0].time / PeriodSeconds(TimeFrame)) % TragetUpdate) == 0)
      {
       if(MathRand() / 32767.0 > 0.5)
@@ -584,4 +630,3 @@ bool                 bFirstRun = true;
       ExpertRemove();
   }
 //+------------------------------------------------------------------+
-

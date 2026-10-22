@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                        Study.mq5 |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -12,14 +12,28 @@
 //+------------------------------------------------------------------+
 //| Input parameters                                                 |
 //+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+#define Study
+#include "Trajectory.mqh"
+//+------------------------------------------------------------------+
+//| Input parameters                                                 |
+//+------------------------------------------------------------------+
+input int                  Iterations     = 10000;
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+STrajectory          Buffer[];
 CNet                 ADAPTEncoder;
 CNet                 ADAPTEndpoints;
 CNet                 ADAPTProbability;
 CNet                 StateEncoder;
 CNet                 EndpointEncoder;
 CNet                 Actor;
+//---
 float                dError;
 datetime             dtStudied;
+//---
 CBufferFloat         bState;
 CBufferFloat         bAccount;
 CBufferFloat         bGradient;
@@ -28,10 +42,14 @@ CBufferFloat         *Result;
 vector<float>        check;
 vector<float>        STD_Actor;
 vector<float>        STD_Goal;
+//---
 COpenCLMy           *OpenCL;
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
+int OnInit()
+  {
+//---
    ResetLastError();
    if(!LoadTotalBase())
      {
@@ -68,6 +86,7 @@ COpenCLMy           *OpenCL;
       delete prob;
       delete encoder;
      }
+//---
    if(!StateEncoder.Load(FileName + "StEnc.nnw", temp, temp, temp, dtStudied, true) ||
       !EndpointEncoder.Load(FileName + "EndEnc.nnw", temp, temp, temp, dtStudied, true) ||
       !Actor.Load(FileName + "Act.nnw", temp, temp, temp, dtStudied, true))
@@ -92,47 +111,58 @@ COpenCLMy           *OpenCL;
       delete actor;
       delete endpoint;
       delete encoder;
+      //---
      }
+//---
    OpenCL = Actor.GetOpenCL();
    StateEncoder.SetOpenCL(OpenCL);
    EndpointEncoder.SetOpenCL(OpenCL);
    ADAPTEncoder.SetOpenCL(OpenCL);
    ADAPTEndpoints.SetOpenCL(OpenCL);
    ADAPTProbability.SetOpenCL(OpenCL);
+//---
    Actor.getResults(Result);
    if(Result.Total() != NActions)
      {
       PrintFormat("The scope of the actor does not match the actions count (%d <> %d)", NActions, Result.Total());
       return INIT_FAILED;
      }
+//---
    ADAPTEndpoints.getResults(Result);
    if(Result.Total() != 3 * NForecast)
      {
       PrintFormat("The scope of the Endpoints does not match forecat endpoints (%d <> %d)", 3 * NForecast, Result.Total());
       return INIT_FAILED;
      }
+//---
    ADAPTEncoder.GetLayerOutput(0, Result);
    if(Result.Total() != (HistoryBars * BarDescr))
      {
       PrintFormat("Input size of Encoder doesn't match state description (%d <> %d)", Result.Total(), (HistoryBars * BarDescr));
       return INIT_FAILED;
      }
+//---
    if(!bGradient.BufferInit(MathMax(AccountDescr, NForecast), 0) ||
       !bGradient.BufferCreate(OpenCL))
      {
       PrintFormat("Error of create buffers: %d", GetLastError());
       return INIT_FAILED;
      }
+//---
    if(!EventChartCustom(ChartID(), 1, 0, 0, "Init"))
      {
       PrintFormat("Error of create study event: %d", GetLastError());
       return INIT_FAILED;
      }
+//---
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+  {
+//---
    if(!(reason == REASON_INITFAILED || reason == REASON_RECOMPILE))
      {
       Actor.Save(FileName + "Act.nnw", 0, 0, 0, TimeCurrent(), true);
@@ -148,20 +178,29 @@ COpenCLMy           *OpenCL;
 //+------------------------------------------------------------------+
 //| ChartEvent function                                              |
 //+------------------------------------------------------------------+
+void OnChartEvent(const int id,
+                  const long &lparam,
                   const double &dparam,
                   const string &sparam)
   {
+//---
    if(id == 1001)
       Train();
   }
 //+------------------------------------------------------------------+
 //| Train function                                                   |
 //+------------------------------------------------------------------+
+void Train(void)
+  {
+//---
    vector<float> probability = GetProbTrajectories(Buffer, 0.9);
+//---
    vector<float> result, target;
    matrix<float> targets, temp_m;
    bool Stop = false;
+//---
    uint ticks = GetTickCount();
+//---
    for(int iter = 0; (iter < Iterations && !IsStopped() && !Stop); iter ++)
      {
       int tr = SampleTrajectory(probability);
@@ -196,6 +235,7 @@ COpenCLMy           *OpenCL;
             Stop = true;
             break;
            }
+         //---
          targets = matrix<float>::Zeros(PrecoderBars, 3);
          for(int t = 0; t < PrecoderBars; t++)
            {
@@ -235,6 +275,7 @@ COpenCLMy           *OpenCL;
             target = targets.Min(AXIS_HORZ);
             target[1] = targets.Col(1).Max();
            }
+         //---
          ADAPTEndpoints.getResults(result);
          targets.Reshape(1, result.Size());
          targets.Row(result, 0);
@@ -246,6 +287,7 @@ COpenCLMy           *OpenCL;
          ulong pos = temp_m.Sum(AXIS_VERT).ArgMin();
          targets.Row(target, pos);
          Result.AssignArray(targets);
+         //---
          if(!ADAPTEndpoints.backProp(Result, (CBufferFloat*)NULL))
            {
             PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
@@ -358,6 +400,7 @@ COpenCLMy           *OpenCL;
             Stop = true;
             break;
            }
+         //---
          if(GetTickCount() - ticks > 500)
            {
             double percent = (double(i - state) / ((end - state)) + iter) * 100.0 / (Iterations);
@@ -370,9 +413,11 @@ COpenCLMy           *OpenCL;
         }
      }
    Comment("");
+//---
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Actor", Actor.getRecentAverageError());
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Endpoints", ADAPTEndpoints.getRecentAverageError());
    PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Probability", ADAPTProbability.getRecentAverageError());
    ExpertRemove();
+//---
   }
 //+------------------------------------------------------------------+

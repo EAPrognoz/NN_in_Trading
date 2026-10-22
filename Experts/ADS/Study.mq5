@@ -1,26 +1,29 @@
-//+------------------------------------------------------------------+
-//| Study.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+﻿//+------------------------------------------------------------------+
+//|                                                        Study.mq5 |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
+#define Study
 #define StudyOnline
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
+input datetime             Start          = D'2024.01.01';
 input datetime             End            = D'2025.07.01';
 input int                  Epochs         = 100;
 input double               MinBalance     = 50;
 input double               MaxBalance     = 150;
 #include "Trajectory.mqh"
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
+CNet                 cActor;
 CNet                 cCritic;
 //---
 float                dError;
@@ -33,8 +36,9 @@ CBufferFloat         *Result;
 CBufferFloat         *Action;
 vector<float>        check;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
+int OnInit()
   {
 //---
    ResetLastError();
@@ -44,9 +48,7 @@ vector<float>        check;
    CArrayObj *critic = new CArrayObj();
    if(!CreateDescriptions(actor, critic))
      {
-      // Implements DeleteObj.
       DeleteObj(actor)
-      // Implements DeleteObj.
       DeleteObj(critic)
       PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
       return INIT_FAILED;
@@ -57,9 +59,7 @@ vector<float>        check;
       if(!cActor.Create(actor))
         {
          PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
-         // Implements DeleteObj.
          DeleteObj(actor)
-         // Implements DeleteObj.
          DeleteObj(critic)
          return INIT_FAILED;
         }
@@ -114,8 +114,9 @@ vector<float>        check;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
+void OnDeinit(const int reason)
   {
 //---
    if(!(reason == REASON_INITFAILED || reason == REASON_RECOMPILE))
@@ -129,8 +130,9 @@ vector<float>        check;
    delete Action;
   }
 //+------------------------------------------------------------------+
-//| ChartEvent function                                         |
+//| ChartEvent function                                              |
 //+------------------------------------------------------------------+
+void OnChartEvent(const int id,
                   const long &lparam,
                   const double &dparam,
                   const string &sparam)
@@ -152,8 +154,9 @@ vector<float>        check;
      }
   }
 //+------------------------------------------------------------------+
-//| Train function                                              |
+//| Train function                                                   |
 //+------------------------------------------------------------------+
+void Train(void)
   {
    int start = iBarShift(Symb.Name(), TimeFrame, Start);
    int end = iBarShift(Symb.Name(), TimeFrame, End);
@@ -339,4 +342,3 @@ vector<float>        check;
 //---
   }
 //+------------------------------------------------------------------+
-

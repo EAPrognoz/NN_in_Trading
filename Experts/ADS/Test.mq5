@@ -1,25 +1,28 @@
-//+------------------------------------------------------------------+
-//| Test.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+﻿//+------------------------------------------------------------------+
+//|                                                         Test.mq5 |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| Includes                                                    |
+//| Includes                                                         |
 //+------------------------------------------------------------------+
+#define StudyOnline
 #include "Trajectory.mqh"
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
+input group                "---- Other ----"
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
+CNet                 cActor;
 //---
 float                dError;
 datetime             dtStudied;
@@ -32,8 +35,9 @@ double               PrevBalance = 0;
 double               PrevEquity = 0;
 bool                 bFillStack = true;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
+int OnInit()
   {
 //---
    if(!Symb.Name(_Symbol))
@@ -91,16 +95,18 @@ bool                 bFillStack = true;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
+void OnDeinit(const int reason)
   {
 //---
    DeleteObj(Result);
    DeleteObj(bAction);
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                        |
+//| Expert tick function                                             |
 //+------------------------------------------------------------------+
+void OnTick()
   {
    if(bFillStack)
      {
@@ -265,7 +271,7 @@ bool                 bFillStack = true;
      }
   }
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 bool FillStack(void)
   {
@@ -342,4 +348,3 @@ bool FillStack(void)
    return true;
   }
 //+------------------------------------------------------------------+
-

@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
-//| Research.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                     Research.mq5 |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"

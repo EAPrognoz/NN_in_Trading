@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                         NeuroNet_Definitions.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -11,7 +11,6 @@
 //--- \brief NeuroNet.mqh
 //--- Library for creating Neural network for use in MQL5 experts
 //--- \author [DNG](https://www.mql5.com/en/users/dng)
-//+------------------------------------------------------------------+
 //---\mainpage NeuronNet
 //--- Library for creating Neural network for use in MQL5 experts.
 //--- - \ref const
@@ -20,7 +19,6 @@
 //--- - \ref group1
 //--- - [<b>Class Hierarchy</b>](hierarchy.html)
 //--- - [<b>Files</b>](files.html)
-//+------------------------------------------------------------------+
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 //+------------------------------------------------------------------+
@@ -32,12 +30,14 @@
 #include <OpenCL\OpenCL.mqh>
 #include <Math\Stat\Normal.mqh>
 //+------------------------------------------------------------------+
-//--- Defines
+//| Defines                                                          |
 //+------------------------------------------------------------------+
 //---\defgroup const  Global constants
 //---@{
-#define  lr                3.0e-4f  ///<learning rate
-#define  momentum          0.9f     ///<momentum for SGD optimization
+/// learning rate
+#define  lr                3.0e-4f
+/// momentum for SGD optimization
+#define  momentum          0.9f
 #define  WeightsMultiplier 0.01f
 //---
 /** First momentum multiplier of Adam optimization*/
@@ -114,13 +114,13 @@ uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRan
 #define D2SKILL_PROTECTED                        2
 #define D2SKILL_ACTIVE                           3
 #define D2SKILL_INACTIVE                         4
-template<typename T1, typename T2>
 //+------------------------------------------------------------------+
 //| Implements the pow helper function.                              |
 //+------------------------------------------------------------------+
+template<typename T1, typename T2>
 T1 pow(T2 a, T1 b)
   {
-   return (T1)MathPow((T1)a, (T1)b);
+   return(T1)MathPow((T1)a, (T1)b);
   }
 //+------------------------------------------------------------------+
 //| Declares the uaLongChar union.                                   |
@@ -130,49 +130,74 @@ union uaLongChar
    long data[3];
    uchar cdata[24];
   };
-//+------------------------------------------------------------------+
 //---\defgroup ObjectTypes  Defines Object types identified
 //---Used to identify classes in a library
 //---@{
-//+------------------------------------------------------------------+
 //---\defgroup arr Arrays
 //---Used to identify array classes
 //---\{
-#define  defArrayConnects  0x7782   ///<Array of connections \details Identified class #CArrayCon
-#define  defLayer          0x7787   ///<Layer of neurons \details Identified class #CLayer
-#define  defArrayLayer     0x7788   ///<Array of layers \details Identified class #CArrayLayer
-#define  defNet            0x7790   ///<Neuron Net \details Identified class #CNet
+/// Array of connections \details Identified class #CArrayCon
+#define  defArrayConnects  0x7782
+/// Layer of neurons \details Identified class #CLayer
+#define  defLayer          0x7787
+/// Array of layers \details Identified class #CArrayLayer
+#define  defArrayLayer     0x7788
+/// Neuron Net \details Identified class #CNet
+#define  defNet            0x7790
 //---\}
 //---\defgroup cpu CPU
 //---Used to identify classes with CPU calculation
 //---\{
-#define  defConnect        0x7781   ///<Connection \details Identified class #CConnection
-#define  defNeuronBase     0x7783   ///<Neuron base type \details Identified class #CNeuronBase
-#define  defNeuron         0x7784   ///<Full connected neuron \details Identified class #CNeuron
-#define  defNeuronConv     0x7785   ///<Convolution neuron \details Identified class #CNeuronConv
-#define  defNeuronProof    0x7786   ///<Proof neuron \details Identified class #CNeuronProof
-#define  defNeuronLSTM     0x7791   ///<LSTM Neuron \details Identified class #CNeuronLSTM
+/// Connection \details Identified class #CConnection
+#define  defConnect        0x7781
+/// Neuron base type \details Identified class #CNeuronBase
+#define  defNeuronBase     0x7783
+/// Full connected neuron \details Identified class #CNeuron
+#define  defNeuron         0x7784
+/// Convolution neuron \details Identified class #CNeuronConv
+#define  defNeuronConv     0x7785
+/// Proof neuron \details Identified class #CNeuronProof
+#define  defNeuronProof    0x7786
+/// LSTM Neuron \details Identified class #CNeuronLSTM
+#define  defNeuronLSTM     0x7791
 //---\}
 //---\defgroup gpu GPU
 //---Used to identify classes with GPU calculation
 //---\{
-#define  defBufferDouble               0x7882   ///<Data Buffer OpenCL \details Identified class #CBufferFloat
-#define  defNeuronBaseOCL              0x7883   ///<Neuron Base OpenCL \details Identified class #CNeuronBaseOCL
-#define  defNeuronConvOCL              0x7885   ///<Conolution neuron OpenCL \details Identified class #CNeuronConvOCL
-#define  defNeuronProofOCL             0x7886   ///<Proof neuron OpenCL \details Identified class #CNeuronProofOCL
-#define  defNeuronAttentionOCL         0x7887   ///<Attention neuron OpenCL \details Identified class #CNeuronAttentionOCL
-#define  defNeuronMHAttentionOCL       0x7888   ///<Multi-Head Attention neuron OpenCL \details Identified class #CNeuronMHAttentionOCL
-#define  defNeuronMLMHAttentionOCL     0x7889   ///<Multilayer multi-headed attention neuron OpenCL \details Identified class #CNeuronMLMHAttentionOCL
-#define  defNeuronDropoutOCL           0x7890   ///<Dropout neuron OpenCL \details Identified class #CNeuronDropoutOCL
-#define  defNeuronBatchNormOCL         0x7891   ///<Batchnorm neuron OpenCL \details Identified class #CNeuronBatchNormOCL
-#define  defNeuronVAEOCL               0x7892   ///<VAE neuron OpenCL \details Identified class #CVAE
-#define  defNeuronBayesianLinearOCL     0x811F   ///<Bayesian linear neuron OpenCL
-#define  defNeuronOMPBOCL               0x8120   ///<Online posterior mean bridge OpenCL
-#define  defNeuronLSTMOCL              0x7893   ///<LSTM Neuron \details Identified class #CNeuronLSTMOCL
-#define  defNeuronSoftMaxOCL           0x7894   ///<SoftMax layer \details Identified class #CNeuronSoftMaxOCL
-#define  defNeuronFQF                  0x7895   ///<FQF layer \details Identified class #CNeuronFQF
-#define  defNeuronMLMHSparseAttentionOCL        0x7896   ///<Multilayer multi-headed sparse attention neuron OpenCL \details Identified class #CNeuronMLMHAttentionOCL
-#define  defNeuronMultiModels          0x7897   ///<Neuron Base MultiModels OpenCL \details Identified class #CNeuronMultiModels
+/// Data Buffer OpenCL \details Identified class #CBufferFloat
+#define  defBufferDouble               0x7882
+/// Neuron Base OpenCL \details Identified class #CNeuronBaseOCL
+#define  defNeuronBaseOCL              0x7883
+/// Conolution neuron OpenCL \details Identified class #CNeuronConvOCL
+#define  defNeuronConvOCL              0x7885
+/// Proof neuron OpenCL \details Identified class #CNeuronProofOCL
+#define  defNeuronProofOCL             0x7886
+/// Attention neuron OpenCL \details Identified class #CNeuronAttentionOCL
+#define  defNeuronAttentionOCL         0x7887
+/// Multi-Head Attention neuron OpenCL \details Identified class #CNeuronMHAttentionOCL
+#define  defNeuronMHAttentionOCL       0x7888
+/// Multilayer multi-headed attention neuron OpenCL \details Identified class #CNeuronMLMHAttentionOCL
+#define  defNeuronMLMHAttentionOCL     0x7889
+/// Dropout neuron OpenCL \details Identified class #CNeuronDropoutOCL
+#define  defNeuronDropoutOCL           0x7890
+/// Batchnorm neuron OpenCL \details Identified class #CNeuronBatchNormOCL
+#define  defNeuronBatchNormOCL         0x7891
+/// VAE neuron OpenCL \details Identified class #CVAE
+#define  defNeuronVAEOCL               0x7892
+/// Bayesian linear neuron OpenCL
+#define  defNeuronBayesianLinearOCL     0x811F
+/// Online posterior mean bridge OpenCL
+#define  defNeuronOMPBOCL               0x8120
+/// LSTM Neuron \details Identified class #CNeuronLSTMOCL
+#define  defNeuronLSTMOCL              0x7893
+/// SoftMax layer \details Identified class #CNeuronSoftMaxOCL
+#define  defNeuronSoftMaxOCL           0x7894
+/// FQF layer \details Identified class #CNeuronFQF
+#define  defNeuronFQF                  0x7895
+/// Multilayer multi-headed sparse attention neuron OpenCL \details Identified class #CNeuronMLMHAttentionOCL
+#define  defNeuronMLMHSparseAttentionOCL        0x7896
+/// Neuron Base MultiModels OpenCL \details Identified class #CNeuronMultiModels
+#define  defNeuronMultiModels          0x7897
 #define  defNeuronConcatenate          0x7898
 #define  defNeuronSoftActorCritic      0x7899
 #define  defNeuronEmbeddingOCL         0x7900
@@ -511,7 +536,6 @@ union uaLongChar
 #define  defNeuronACSRM                 0x8121   ///\<Spectral-risk (AC-SRM) critic layer \\details Identified class #CNeuronACSRM
 //---\}
 //---@}
-//+------------------------------------------------------------------+
 //---\defgroup group1 Defines for OpenCL kernels identified
 //--- Used as indexes when calling functions OpenCL.
 //---@{
@@ -523,68 +547,116 @@ union uaLongChar
 //--- Describes the forward path process for the Neuron Base.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para41">the link.</A>
 //---@{
-#define  def_k_FeedForward       0  ///< Index of #FeedForward kernel
-#define  def_k_ff_matrix_w       0  ///< Weights matrix (m+1)*n, where m - number of neurons in layer and n - number of outputs (neurons in next layer)
-#define  def_k_ff_matrix_i       1  ///< Inputs tesor
-#define  def_k_ff_matrix_o       2  ///< Output tensor
-#define  def_k_ff_inputs         3  ///< Number of inputs
-#define  def_k_ff_activation     4  ///< Activation type (#ENUM_ACTIVATION)
-#define  def_k_ff_numeric_flags  5  ///< Per-logical-output numeric status buffer
-#define  def_k_ff_flags_enabled  6  ///< Nonzero enables numeric status writes
+/// Index of #FeedForward kernel
+#define  def_k_FeedForward       0
+/// Weights matrix (m+1)*n, where m - number of neurons in layer and n - number of outputs (neurons in next layer)
+#define  def_k_ff_matrix_w       0
+/// Inputs tesor
+#define  def_k_ff_matrix_i       1
+/// Output tensor
+#define  def_k_ff_matrix_o       2
+/// Number of inputs
+#define  def_k_ff_inputs         3
+/// Activation type (#ENUM_ACTIVATION)
+#define  def_k_ff_activation     4
+/// Per-logical-output numeric status buffer
+#define  def_k_ff_numeric_flags  5
+/// Nonzero enables numeric status writes
+#define  def_k_ff_flags_enabled  6
 //---@}
 //---\defgroup neuron_base_gr Gradients Calculation kernels
 //--- Describes the process of gradients calculation for the Neuron Base.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para42">the link.</A>
 //---@{
-#define  def_k_CalcOutputGradient 1  ///< Index of Output gradients calculation kernel (#CalcOutputGradient)
-#define  def_k_cog_matrix_t       0  ///< Target tensor
-#define  def_k_cog_matrix_o       1  ///< Output tensor
-#define  def_k_cog_matrix_ig      2  ///< Tensor of gradients at previous layer
-#define  def_k_cog_activation     3  ///< Activation type (#ENUM_ACTIVATION)
-#define  def_k_cog_error          4  ///< Error
+/// Index of Output gradients calculation kernel (#CalcOutputGradient)
+#define  def_k_CalcOutputGradient 1
+/// Target tensor
+#define  def_k_cog_matrix_t       0
+/// Output tensor
+#define  def_k_cog_matrix_o       1
+/// Tensor of gradients at previous layer
+#define  def_k_cog_matrix_ig      2
+/// Activation type (#ENUM_ACTIVATION)
+#define  def_k_cog_activation     3
+/// Error
+#define  def_k_cog_error          4
 //---
-#define  def_k_CalcHiddenGradient 2  ///< Index of Hidden gradients calculation kernel (#CalcHiddenGradient)
-#define  def_k_chg_matrix_w       0  ///< Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
-#define  def_k_chg_matrix_g       1  ///< Tensor of gradients at current layer
-#define  def_k_chg_matrix_o       2  ///< Output tensor
-#define  def_k_chg_matrix_ig      3  ///< Tensor of gradients at previous layer
-#define  def_k_chg_outputs        4  ///< Number of outputs
-#define  def_k_chg_activation     5  ///< Activation type (#ENUM_ACTIVATION)
+/// Index of Hidden gradients calculation kernel (#CalcHiddenGradient)
+#define  def_k_CalcHiddenGradient 2
+/// Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
+#define  def_k_chg_matrix_w       0
+/// Tensor of gradients at current layer
+#define  def_k_chg_matrix_g       1
+/// Output tensor
+#define  def_k_chg_matrix_o       2
+/// Tensor of gradients at previous layer
+#define  def_k_chg_matrix_ig      3
+/// Number of outputs
+#define  def_k_chg_outputs        4
+/// Activation type (#ENUM_ACTIVATION)
+#define  def_k_chg_activation     5
 //---@}
 //---\defgroup neuron_base_opt Updating Weights Calculation kernel
 //--- Describes the process of optimization weights for the Neuron Base.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para43">the link.</A>
 //--- For Adam optimization look <A HREF="https://www.mql5.com/ru/articles/8598#para31">the link.</A>
 //---@{
-#define  def_k_UpdateWeightsMomentum      3   ///< Index SGD optomization Update weights kernel (#UpdateWeightsMomentum)
-#define  def_k_uwm_matrix_w        0  ///< SGD Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
-#define  def_k_uwm_matrix_g        1  ///< SGD Tensor of gradients at current layer
-#define  def_k_uwm_matrix_i        2  ///< SGD Inputs tesor
-#define  def_k_uwm_matrix_dw       3  ///< SGD Matrix of delta weights in last correction
-#define  def_k_uwm_inputs          4  ///< SGD Number of inputs
-#define  def_k_uwm_learning_rates  5  ///< SGD Learning rates
-#define  def_k_uwm_momentum        6  ///< SGD Momentum multiplier
+/// Index SGD optomization Update weights kernel (#UpdateWeightsMomentum)
+#define  def_k_UpdateWeightsMomentum      3
+/// SGD Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
+#define  def_k_uwm_matrix_w        0
+/// SGD Tensor of gradients at current layer
+#define  def_k_uwm_matrix_g        1
+/// SGD Inputs tesor
+#define  def_k_uwm_matrix_i        2
+/// SGD Matrix of delta weights in last correction
+#define  def_k_uwm_matrix_dw       3
+/// SGD Number of inputs
+#define  def_k_uwm_inputs          4
+/// SGD Learning rates
+#define  def_k_uwm_learning_rates  5
+/// SGD Momentum multiplier
+#define  def_k_uwm_momentum        6
 //---
-#define  def_k_UpdateWeightsAdam   4  ///< Index Adam optomization Update weights kernel (#UpdateWeightsAdam)
-#define  def_k_uwa_matrix_w        0  ///< Adam Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
-#define  def_k_uwa_matrix_g        1  ///< Adam Tensor of gradients at current layer
-#define  def_k_uwa_matrix_i        2  ///< Adam Inputs tesor
-#define  def_k_uwa_matrix_m        3  ///< Adam Matrix of first momentum
-#define  def_k_uwa_matrix_v        4  ///< Adam Matrix of seconfd momentum
-#define  def_k_uwa_inputs          5  ///< Adam Number of inputs
-#define  def_k_uwa_l               6  ///< Adam Learning rates
-#define  def_k_uwa_b1              7  ///< Adam First momentum multiplier
-#define  def_k_uwa_b2              8  ///< Adam Second momentum multiplier
+/// Index Adam optomization Update weights kernel (#UpdateWeightsAdam)
+#define  def_k_UpdateWeightsAdam   4
+/// Adam Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
+#define  def_k_uwa_matrix_w        0
+/// Adam Tensor of gradients at current layer
+#define  def_k_uwa_matrix_g        1
+/// Adam Inputs tesor
+#define  def_k_uwa_matrix_i        2
+/// Adam Matrix of first momentum
+#define  def_k_uwa_matrix_m        3
+/// Adam Matrix of seconfd momentum
+#define  def_k_uwa_matrix_v        4
+/// Adam Number of inputs
+#define  def_k_uwa_inputs          5
+/// Adam Learning rates
+#define  def_k_uwa_l               6
+/// Adam First momentum multiplier
+#define  def_k_uwa_b1              7
+/// Adam Second momentum multiplier
+#define  def_k_uwa_b2              8
 //---
-#define  def_k_UpdateWeightsLS    28  ///< Index Least Squares optomization Update weights kernel (#UpdateWeightsLS)
-#define  def_k_uwls_matrix_w       0  ///< Least Squares Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
-#define  def_k_uwls_matrix_g       1  ///< Least Squares Tensor of gradients at current layer
-#define  def_k_uwls_matrix_i       2  ///< Least Squares Inputs tesor
-#define  def_k_uwls_matrix_xg      3  ///< Least Squares Matrix of summ x*g
-#define  def_k_uwls_matrix_xx      4  ///< Least Squares Matrix of summ x*x
-#define  def_k_uwls_inputs         5  ///< Least Squares Number of inputs
-#define  def_k_uwls_l              6  ///< Least Squares Learning rates
-#define  def_k_uwls_update         7  ///< Least Squares Update flag
+/// Index Least Squares optomization Update weights kernel (#UpdateWeightsLS)
+#define  def_k_UpdateWeightsLS    28
+/// Least Squares Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
+#define  def_k_uwls_matrix_w       0
+/// Least Squares Tensor of gradients at current layer
+#define  def_k_uwls_matrix_g       1
+/// Least Squares Inputs tesor
+#define  def_k_uwls_matrix_i       2
+/// Least Squares Matrix of summ x*g
+#define  def_k_uwls_matrix_xg      3
+/// Least Squares Matrix of summ x*x
+#define  def_k_uwls_matrix_xx      4
+/// Least Squares Number of inputs
+#define  def_k_uwls_inputs         5
+/// Least Squares Learning rates
+#define  def_k_uwls_l              6
+/// Least Squares Update flag
+#define  def_k_uwls_update         7
 //---@}
 //---@}
 //---
@@ -594,25 +666,39 @@ union uaLongChar
 //---\defgroup neuron_proof_ff Pooling layer's neuron Feed Forward
 //--- Describes the feed forward process for the Neuron of pooling layer.
 //---@{
-#define  def_k_FeedForwardProof    5  ///< Index of the kernel of the Pooling neuron for Feed forward process (#FeedForwardProof)
-#define  def_k_ffp_matrix_i        0  ///< Inputs tesor
-#define  def_k_ffp_matrix_o        1  ///< Output tensor
-#define  def_k_ffp_inputs          2  ///< Number of inputs
-#define  def_k_ffp_window          3  ///< Size of input window
-#define  def_k_ffp_step            4  ///< Step size
+/// Index of the kernel of the Pooling neuron for Feed forward process (#FeedForwardProof)
+#define  def_k_FeedForwardProof    5
+/// Inputs tesor
+#define  def_k_ffp_matrix_i        0
+/// Output tensor
+#define  def_k_ffp_matrix_o        1
+/// Number of inputs
+#define  def_k_ffp_inputs          2
+/// Size of input window
+#define  def_k_ffp_window          3
+/// Step size
+#define  def_k_ffp_step            4
 //---@}
 //---
 //---\defgroup neuron_proof_gr Pooling layer's neuron Gradients Calculation kernels
 //--- Describes the gradient calculation process for the Neuron of pooling layer.
 //---@{
-#define  def_k_CalcInputGradientProof 6  ///< Index of the kernel of the Pooling neuron to transfer gradient to previous layer (#CalcInputGradientProof)
-#define  def_k_cigp_matrix_i      0  ///< Inputs tesor
-#define  def_k_cigp_matrix_g      1  ///< Tensor of gradients at current layer
-#define  def_k_cigp_matrix_o      2  ///< Output tensor
-#define  def_k_cigp_matrix_ig     3  ///< Tensor of gradients at previous layer
-#define  def_k_cigp_outputs       4  ///< Number of outputs
-#define  def_k_cigp_window        5  ///< Size of input window
-#define  def_k_cigp_step          6  ///< Step size
+/// Index of the kernel of the Pooling neuron to transfer gradient to previous layer (#CalcInputGradientProof)
+#define  def_k_CalcInputGradientProof 6
+/// Inputs tesor
+#define  def_k_cigp_matrix_i      0
+/// Tensor of gradients at current layer
+#define  def_k_cigp_matrix_g      1
+/// Output tensor
+#define  def_k_cigp_matrix_o      2
+/// Tensor of gradients at previous layer
+#define  def_k_cigp_matrix_ig     3
+/// Number of outputs
+#define  def_k_cigp_outputs       4
+/// Size of input window
+#define  def_k_cigp_window        5
+/// Step size
+#define  def_k_cigp_step          6
 //---@}
 //---@}
 //---
@@ -622,74 +708,130 @@ union uaLongChar
 //---\defgroup neuron_conv_ff Convolution layer's neuron Feed Forward
 //--- Describes the feed forward process for the Neuron of convolution layer.
 //---@{
-#define  def_k_FeedForwardConv    7  ///< Index of the kernel of the convolution neuron for Feed forward process (#FeedForwardConv)
-#define  def_k_ffc_matrix_w       0  ///< Weights matrix (m+1)*n, where m - input window and n - output window
-#define  def_k_ffc_matrix_i       1  ///< Inputs tesor
-#define  def_k_ffc_matrix_o       2  ///< Output tensor
-#define  def_k_ffc_inputs         3  ///< Number of inputs
-#define  def_k_ffc_step           4  ///< Step size
-#define  def_k_ffc_window_in      5  ///< Size of input window
-#define  def_k_ffс_window_out     6  ///< Size of output window
-#define  def_k_ffc_activation     7  ///< Activation type (#ENUM_ACTIVATION)
+/// Index of the kernel of the convolution neuron for Feed forward process (#FeedForwardConv)
+#define  def_k_FeedForwardConv    7
+/// Weights matrix (m+1)*n, where m - input window and n - output window
+#define  def_k_ffc_matrix_w       0
+/// Inputs tesor
+#define  def_k_ffc_matrix_i       1
+/// Output tensor
+#define  def_k_ffc_matrix_o       2
+/// Number of inputs
+#define  def_k_ffc_inputs         3
+/// Step size
+#define  def_k_ffc_step           4
+/// Size of input window
+#define  def_k_ffc_window_in      5
+/// Size of output window
+#define  def_k_ffс_window_out     6
+/// Activation type (#ENUM_ACTIVATION)
+#define  def_k_ffc_activation     7
 //---@}
 //---
 //---\defgroup neuron_conv_gr Convolution layer's neuron Gradients Calculation kernels
 //--- Describes the gradient calculation process for the Neuron of convolution layer.
 //---@{
-#define  def_k_CalcHiddenGradientConv 8  ///< Index of the kernel of the convolution neuron to transfer gradient to previous layer (#CalcHiddenGradientConv)
-#define  def_k_chgc_matrix_w      0  ///< Weights matrix (m+1)*n, where m - input window and n - output window
-#define  def_k_chgc_matrix_g      1  ///< Tensor of gradients at current layer
-#define  def_k_chgc_matrix_o      2  ///< Output tensor
-#define  def_k_chgc_matrix_ig     3  ///< Tensor of gradients at previous layer
-#define  def_k_chgc_outputs       4  ///< Number of outputs
-#define  def_k_chgc_step          5  ///< Step size
-#define  def_k_chgc_window_in     6  ///< Size of input window
-#define  def_k_chgc_window_out    7  ///< Size of output window
-#define  def_k_chgc_activation    8  ///< Activation type (#ENUM_ACTIVATION)
-#define  def_k_chgc_shift_out     9  ///< Activation type (#ENUM_ACTIVATION)
+/// Index of the kernel of the convolution neuron to transfer gradient to previous layer (#CalcHiddenGradientConv)
+#define  def_k_CalcHiddenGradientConv 8
+/// Weights matrix (m+1)*n, where m - input window and n - output window
+#define  def_k_chgc_matrix_w      0
+/// Tensor of gradients at current layer
+#define  def_k_chgc_matrix_g      1
+/// Output tensor
+#define  def_k_chgc_matrix_o      2
+/// Tensor of gradients at previous layer
+#define  def_k_chgc_matrix_ig     3
+/// Number of outputs
+#define  def_k_chgc_outputs       4
+/// Step size
+#define  def_k_chgc_step          5
+/// Size of input window
+#define  def_k_chgc_window_in     6
+/// Size of output window
+#define  def_k_chgc_window_out    7
+/// Activation type (#ENUM_ACTIVATION)
+#define  def_k_chgc_activation    8
+/// Activation type (#ENUM_ACTIVATION)
+#define  def_k_chgc_shift_out     9
 //---@}
 //---
 //---\defgroup neuron_conv_opt Convolution layer's neuron Update weights kernels
 //--- Describes the optimization process for the Neuron of convolution layer.
 //---@{
-#define  def_k_UpdateWeightsConvMomentum      9  ///< Index of the kernel of the convolution neuron to update weights SGD (#UpdateWeightsConvMomentum)
-#define  def_k_uwcm_matrix_w       0  ///< Weights matrix (m+1)*n, where m - input window and n - output window
-#define  def_k_uwcm_matrix_g       1  ///< Tensor of gradients at current layer
-#define  def_k_uwcm_matrix_i       2  ///< Inputs tesor
-#define  def_k_uwcm_matrix_dw      3  ///< Matrix of delta weights in last correction
-#define  def_k_uwcm_inputs         4  ///< Number of inputs
-#define  def_k_uwcm_learning_rates 5  ///< Learning rates
-#define  def_k_uwcm_momentum       6  ///< Momentum multiplier
-#define  def_k_uwcm_window_in      7  ///< Size of input window
-#define  def_k_uwcm_window_out     8  ///< Size of output window
-#define  def_k_uwcm_step           9  ///< Step size
+/// Index of the kernel of the convolution neuron to update weights SGD (#UpdateWeightsConvMomentum)
+#define  def_k_UpdateWeightsConvMomentum      9
+/// Weights matrix (m+1)*n, where m - input window and n - output window
+#define  def_k_uwcm_matrix_w       0
+/// Tensor of gradients at current layer
+#define  def_k_uwcm_matrix_g       1
+/// Inputs tesor
+#define  def_k_uwcm_matrix_i       2
+/// Matrix of delta weights in last correction
+#define  def_k_uwcm_matrix_dw      3
+/// Number of inputs
+#define  def_k_uwcm_inputs         4
+/// Learning rates
+#define  def_k_uwcm_learning_rates 5
+/// Momentum multiplier
+#define  def_k_uwcm_momentum       6
+/// Size of input window
+#define  def_k_uwcm_window_in      7
+/// Size of output window
+#define  def_k_uwcm_window_out     8
+/// Step size
+#define  def_k_uwcm_step           9
 //---
-#define  def_k_UpdateWeightsConvAdam   10  ///< Index of the kernel of the convolution neuron to update weights Adam (#UpdateWeightsConvAdam)
-#define  def_k_uwca_matrix_w      0  ///< Weights matrix (m+1)*n, where m - input window and n - output window
-#define  def_k_uwca_matrix_g      1  ///< Tensor of gradients at current layer
-#define  def_k_uwca_matrix_i      2  ///< Inputs tesor
-#define  def_k_uwca_matrix_m      3  ///< Matrix of first momentum
-#define  def_k_uwca_matrix_v      4  ///< Matrix of seconfd momentum
-#define  def_k_uwca_inputs        5  ///< Number of inputs
-#define  def_k_uwca_l             6  ///< Learning rates
-#define  def_k_uwca_b1            7  ///< First momentum multiplier
-#define  def_k_uwca_b2            8  ///< Second momentum multiplier
-#define  def_k_uwca_window_in     9  ///< Size of input window
-#define  def_k_uwca_window_out    10  ///< Size of output window
-#define  def_k_uwca_step          11  ///< Step size
+/// Index of the kernel of the convolution neuron to update weights Adam (#UpdateWeightsConvAdam)
+#define  def_k_UpdateWeightsConvAdam   10
+/// Weights matrix (m+1)*n, where m - input window and n - output window
+#define  def_k_uwca_matrix_w      0
+/// Tensor of gradients at current layer
+#define  def_k_uwca_matrix_g      1
+/// Inputs tesor
+#define  def_k_uwca_matrix_i      2
+/// Matrix of first momentum
+#define  def_k_uwca_matrix_m      3
+/// Matrix of seconfd momentum
+#define  def_k_uwca_matrix_v      4
+/// Number of inputs
+#define  def_k_uwca_inputs        5
+/// Learning rates
+#define  def_k_uwca_l             6
+/// First momentum multiplier
+#define  def_k_uwca_b1            7
+/// Second momentum multiplier
+#define  def_k_uwca_b2            8
+/// Size of input window
+#define  def_k_uwca_window_in     9
+/// Size of output window
+#define  def_k_uwca_window_out    10
+/// Step size
+#define  def_k_uwca_step          11
 //---
-#define  def_k_UpdateWeightsConvLS   29  ///< Index of the kernel of the convolution neuron to update weights Least Squares(#UpdateWeightsConvLS)
-#define  def_k_uwcls_matrix_w     0  ///< Weights matrix (m+1)*n, where m - input window and n - output window
-#define  def_k_uwcls_matrix_g     1  ///< Tensor of gradients at current layer
-#define  def_k_uwcls_matrix_i     2  ///< Inputs tesor
-#define  def_k_uwcls_matrix_xg    3  ///< Matrix of first momentum
-#define  def_k_uwcls_matrix_xx    4  ///< Matrix of seconfd momentum
-#define  def_k_uwcls_inputs       5  ///< Number of inputs
-#define  def_k_uwcls_l            6  ///< Learning rates
-#define  def_k_uwcls_update       7  ///< Update flag
-#define  def_k_uwcls_window_in    8  ///< Size of input window
-#define  def_k_uwcls_window_out   9  ///< Size of output window
-#define  def_k_uwcls_step         10  ///< Step size
+/// Index of the kernel of the convolution neuron to update weights Least Squares(#UpdateWeightsConvLS)
+#define  def_k_UpdateWeightsConvLS   29
+/// Weights matrix (m+1)*n, where m - input window and n - output window
+#define  def_k_uwcls_matrix_w     0
+/// Tensor of gradients at current layer
+#define  def_k_uwcls_matrix_g     1
+/// Inputs tesor
+#define  def_k_uwcls_matrix_i     2
+/// Matrix of first momentum
+#define  def_k_uwcls_matrix_xg    3
+/// Matrix of seconfd momentum
+#define  def_k_uwcls_matrix_xx    4
+/// Number of inputs
+#define  def_k_uwcls_inputs       5
+/// Learning rates
+#define  def_k_uwcls_l            6
+/// Update flag
+#define  def_k_uwcls_update       7
+/// Size of input window
+#define  def_k_uwcls_window_in    8
+/// Size of output window
+#define  def_k_uwcls_window_out   9
+/// Step size
+#define  def_k_uwcls_step         10
 //---@}
 //---@}
 //---
@@ -701,101 +843,176 @@ union uaLongChar
 //--- Describes the feed forward process for the Neuron of attention layer.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para43">the link.</A>
 //---@{
-#define  def_k_AttentionScore     11 ///< Index of the kernel of the attention neuron to calculate score matrix (#AttentionScore)
-#define  def_k_as_querys          0  ///< Matrix of Querys
-#define  def_k_as_keys            1  ///< Matriz of Keys
-#define  def_k_as_score           2  ///< Matrix of Scores
-#define  def_k_as_dimension       3  ///< Dimension of Key
-#define  def_k_as_mask            4  ///< 1 - calc only previous units, 0 - calc all
+/// Index of the kernel of the attention neuron to calculate score matrix (#AttentionScore)
+#define  def_k_AttentionScore     11
+/// Matrix of Querys
+#define  def_k_as_querys          0
+/// Matriz of Keys
+#define  def_k_as_keys            1
+/// Matrix of Scores
+#define  def_k_as_score           2
+/// Dimension of Key
+#define  def_k_as_dimension       3
+/// 1 - calc only previous units, 0 - calc all
+#define  def_k_as_mask            4
 //---
-#define  def_k_AttentionOut       12 ///< Index of the Attention Neuron Output calculation kernel (#AttentionOut)
-#define  def_k_aout_scores        0  ///< Matrix of Scores
-#define  def_k_aout_values        1  ///< Matrix of Values
-#define  def_k_aout_inputs        2  ///< Inputs tesor
-#define  def_k_aout_out           3  ///< Output tesor
+/// Index of the Attention Neuron Output calculation kernel (#AttentionOut)
+#define  def_k_AttentionOut       12
+/// Matrix of Scores
+#define  def_k_aout_scores        0
+/// Matrix of Values
+#define  def_k_aout_values        1
+/// Inputs tesor
+#define  def_k_aout_inputs        2
+/// Output tesor
+#define  def_k_aout_out           3
 //---
-#define  def_k_MatrixSum          13 ///< Index of the kernel for calculation Sum of 2 matrix with multiplyer (#SumMatrix)
-#define  def_k_sum_matrix1        0  ///< First matrix
-#define  def_k_sum_matrix2        1  ///< Second matrix
-#define  def_k_sum_matrix_out     2  ///< Output matrix
-#define  def_k_sum_dimension      3  ///< Dimension of matrix
-#define  def_k_sum_multiplyer     4  ///< Multiplyer for output
+/// Index of the kernel for calculation Sum of 2 matrix with multiplyer (#SumMatrix)
+#define  def_k_MatrixSum          13
+/// First matrix
+#define  def_k_sum_matrix1        0
+/// Second matrix
+#define  def_k_sum_matrix2        1
+/// Output matrix
+#define  def_k_sum_matrix_out     2
+/// Dimension of matrix
+#define  def_k_sum_dimension      3
+/// Multiplyer for output
+#define  def_k_sum_multiplyer     4
 #define  def_k_sum_shift_in1      5
 #define  def_k_sum_shift_in2      6
 #define  def_k_sum_shift_out      7
 #define  def_k_sum_numeric_flags  8
 #define  def_k_sum_flags_enabled  9
 //---
-#define  def_k_Matrix5Sum          19 ///< Index of the kernel for calculation Sum of 2 matrix with multiplyer (#SumMatrix)
-#define  def_k_sum5_matrix1        0  ///< First matrix
-#define  def_k_sum5_matrix2        1  ///< Second matrix
-#define  def_k_sum5_matrix3        2  ///< Third matrix
-#define  def_k_sum5_matrix4        3  ///< Fourth matrix
-#define  def_k_sum5_matrix5        4  ///< Fifth matrix
-#define  def_k_sum5_matrix_out     5  ///< Output matrix
-#define  def_k_sum5_dimension      6  ///< Dimension of matrix
-#define  def_k_sum5_multiplyer     7  ///< Multiplyer for output
+/// Index of the kernel for calculation Sum of 2 matrix with multiplyer (#SumMatrix)
+#define  def_k_Matrix5Sum          19
+/// First matrix
+#define  def_k_sum5_matrix1        0
+/// Second matrix
+#define  def_k_sum5_matrix2        1
+/// Third matrix
+#define  def_k_sum5_matrix3        2
+/// Fourth matrix
+#define  def_k_sum5_matrix4        3
+/// Fifth matrix
+#define  def_k_sum5_matrix5        4
+/// Output matrix
+#define  def_k_sum5_matrix_out     5
+/// Dimension of matrix
+#define  def_k_sum5_dimension      6
+/// Multiplyer for output
+#define  def_k_sum5_multiplyer     7
 //---
-#define  def_k_MHAttentionScore    20 ///< Index of the kernel of the multi-heads attention neuron to calculate score matrix (#MHAttentionScore)
-#define  def_k_mhas_qkv            0  ///< Matrix of Queries, Keys, Values
-#define  def_k_mhas_score          1  ///< Matrix of Scores
-#define  def_k_mhas_dimension      2  ///< Dimension of Key
-#define  def_k_mhas_mask           3  ///< 1 - calc only previous units, 0 - calc all
+/// Index of the kernel of the multi-heads attention neuron to calculate score matrix (#MHAttentionScore)
+#define  def_k_MHAttentionScore    20
+/// Matrix of Queries, Keys, Values
+#define  def_k_mhas_qkv            0
+/// Matrix of Scores
+#define  def_k_mhas_score          1
+/// Dimension of Key
+#define  def_k_mhas_dimension      2
+/// 1 - calc only previous units, 0 - calc all
+#define  def_k_mhas_mask           3
 //---
-#define  def_k_MHAttentionOut      21 ///< Index of the kernel of the multi-heads attention neuron to calculate multi-heads out matrix (#MHAttentionOut)
-#define  def_k_mhao_score          0  ///< Matrix of Scores
-#define  def_k_mhao_qkv            1  ///< Matrix of Queries, Keys, Values
-#define  def_k_mhao_out            2  ///< Matrix of Outputs
-#define  def_k_mhao_dimension      3  ///< Dimension of Key
+/// Index of the kernel of the multi-heads attention neuron to calculate multi-heads out matrix (#MHAttentionOut)
+#define  def_k_MHAttentionOut      21
+/// Matrix of Scores
+#define  def_k_mhao_score          0
+/// Matrix of Queries, Keys, Values
+#define  def_k_mhao_qkv            1
+/// Matrix of Outputs
+#define  def_k_mhao_out            2
+/// Dimension of Key
+#define  def_k_mhao_dimension      3
 //---
-#define  def_k_ConcatenateMatrix  17 ///< Index of the Multi Head Attention Neuron Concatenate Output kernel (#ConcatenateBuffers)
-#define  def_k_conc_input1        0  ///< Matrix of Buffer 1
-#define  def_k_conc_window1       1  ///< Window of Buffer 1
-#define  def_k_conc_input2        2  ///< Matrix of Buffer 2
-#define  def_k_conc_window2       3  ///< Window of Buffer 2
-#define  def_k_conc_input3        4  ///< Matrix of Buffer 3
-#define  def_k_conc_window3       5  ///< Window of Buffer 3
-#define  def_k_conc_input4        6  ///< Matrix of Buffer 4
-#define  def_k_conc_window4       7  ///< Window of Buffer 4
-#define  def_k_conc_out           8  ///< Output tesor
+/// Index of the Multi Head Attention Neuron Concatenate Output kernel (#ConcatenateBuffers)
+#define  def_k_ConcatenateMatrix  17
+/// Matrix of Buffer 1
+#define  def_k_conc_input1        0
+/// Window of Buffer 1
+#define  def_k_conc_window1       1
+/// Matrix of Buffer 2
+#define  def_k_conc_input2        2
+/// Window of Buffer 2
+#define  def_k_conc_window2       3
+/// Matrix of Buffer 3
+#define  def_k_conc_input3        4
+/// Window of Buffer 3
+#define  def_k_conc_window3       5
+/// Matrix of Buffer 4
+#define  def_k_conc_input4        6
+/// Window of Buffer 4
+#define  def_k_conc_window4       7
+/// Output tesor
+#define  def_k_conc_out           8
 //---@}
 //---
 //---\defgroup neuron_atten_gr Attention layer's neuron Gradients Calculation
 //--- Describes the gradients calculation process for the Neuron of attention layer.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para44">the link.</A>
 //---@{
-#define  def_k_AttentionGradients 14    ///< Index of the kernel for gradients calculation process (#AttentionInsideGradients)
-#define  def_k_ag_querys          0     ///< Matrix of Querys
-#define  def_k_ag_querys_g        1     ///< Matrix of Querys' Gradients
-#define  def_k_ag_keys            2     ///< Matrix of Keys
-#define  def_k_ag_keys_g          3     ///< Matrix of Keys' Gradients
-#define  def_k_ag_values          4     ///< Matrix of Values
-#define  def_k_ag_values_g        5     ///< Matrix of Values' Gradients
-#define  def_k_ag_scores          6     ///< Matrix of Scores
-#define  def_k_ag_gradient        7     ///< Matrix of Gradients from previous iteration
+/// Index of the kernel for gradients calculation process (#AttentionInsideGradients)
+#define  def_k_AttentionGradients 14
+/// Matrix of Querys
+#define  def_k_ag_querys          0
+/// Matrix of Querys' Gradients
+#define  def_k_ag_querys_g        1
+/// Matrix of Keys
+#define  def_k_ag_keys            2
+/// Matrix of Keys' Gradients
+#define  def_k_ag_keys_g          3
+/// Matrix of Values
+#define  def_k_ag_values          4
+/// Matrix of Values' Gradients
+#define  def_k_ag_values_g        5
+/// Matrix of Scores
+#define  def_k_ag_scores          6
+/// Matrix of Gradients from previous iteration
+#define  def_k_ag_gradient        7
 //---
-#define  def_k_DeconcatenateMatrix 18 ///< Index of the Multi Head Attention Neuron Deconcatenate Output kernel (#DeconcatenateBuffers)
-#define  def_k_dconc_output1       0  ///< Matrix of Buffer 1
-#define  def_k_dconc_window1       1  ///< Window of Buffer 1
-#define  def_k_dconc_output2       2  ///< Matrix of Buffer 2
-#define  def_k_dconc_window2       3  ///< Window of Buffer 2
-#define  def_k_dconc_output3       4  ///< Matrix of Buffer 3
-#define  def_k_dconc_window3       5  ///< Window of Buffer 3
-#define  def_k_dconc_output4       6  ///< Matrix of Buffer 4
-#define  def_k_dconc_window4       7  ///< Window of Buffer 4
-#define  def_k_dconc_inputs        8  ///< Input tesor
+/// Index of the Multi Head Attention Neuron Deconcatenate Output kernel (#DeconcatenateBuffers)
+#define  def_k_DeconcatenateMatrix 18
+/// Matrix of Buffer 1
+#define  def_k_dconc_output1       0
+/// Window of Buffer 1
+#define  def_k_dconc_window1       1
+/// Matrix of Buffer 2
+#define  def_k_dconc_output2       2
+/// Window of Buffer 2
+#define  def_k_dconc_window2       3
+/// Matrix of Buffer 3
+#define  def_k_dconc_output3       4
+/// Window of Buffer 3
+#define  def_k_dconc_window3       5
+/// Matrix of Buffer 4
+#define  def_k_dconc_output4       6
+/// Window of Buffer 4
+#define  def_k_dconc_window4       7
+/// Input tesor
+#define  def_k_dconc_inputs        8
 //---
-#define def_k_MHAttentionGradients  22    ///< Index of the kernel for gradients calculation process (#AttentionInsideGradients)
-#define def_k_mhag_qkv              0     ///< Matrix of Queries, Keys, Values
-#define def_k_mhag_qkv_g            1     ///< Matrix of Gradients to Queries, Keys, Values
-#define def_k_mhag_score            2     ///< Matrix of Scores
-#define def_k_mhag_gradient         3     ///< Matrix of Gradients from previous iteration
+/// Index of the kernel for gradients calculation process (#AttentionInsideGradients)
+#define def_k_MHAttentionGradients  22
+/// Matrix of Queries, Keys, Values
+#define def_k_mhag_qkv              0
+/// Matrix of Gradients to Queries, Keys, Values
+#define def_k_mhag_qkv_g            1
+/// Matrix of Scores
+#define def_k_mhag_score            2
+/// Matrix of Gradients from previous iteration
+#define def_k_mhag_gradient         3
 //---
-#define def_k_Dropout               23    ///< Index of the kernel for Dropout process (#Dropout)
-#define def_k_dout_input            0     ///< Inputs Tensor
-#define def_k_dout_map              1     ///< Map Tensor
-#define def_k_dout_out              2     ///< Out Tensor
-#define def_k_dout_dimension        3     ///< Dimension of Inputs
+/// Index of the kernel for Dropout process (#Dropout)
+#define def_k_Dropout               23
+/// Inputs Tensor
+#define def_k_dout_input            0
+/// Map Tensor
+#define def_k_dout_map              1
+/// Out Tensor
+#define def_k_dout_out              2
+/// Dimension of Inputs
+#define def_k_dout_dimension        3
 //---@}
 //---@}
 //---
@@ -803,42 +1020,73 @@ union uaLongChar
 //--- Describes the process of matrix normalization.
 //---\details Detailed description on <A HREF="https://arxiv.org/abs/1607.06450">the link.</A>
 //---@{
-#define def_k_Normalize          15    ///< Index of the kernel for matrix normalization (#Normalize)
-#define def_k_norm_buffer        0     ///< In/Out Matrix
-#define def_k_norm_dimension     1     ///< Dimension of matrix
+/// Index of the kernel for matrix normalization (#Normalize)
+#define def_k_Normalize          15
+/// In/Out Matrix
+#define def_k_norm_buffer        0
+/// Dimension of matrix
+#define def_k_norm_dimension     1
 //---
-#define def_k_NormalizeWeights   16    ///< Index of the kernel for weights matrix normalization (#NormalizeWeights)
+/// Index of the kernel for weights matrix normalization (#NormalizeWeights)
+#define def_k_NormalizeWeights   16
 //---
-#define def_k_BatchFeedForward         24 ///< Index of the kernel for Batch Normalization Feed Forward process (#CNeuronBathcNormOCL)
-#define def_k_bff_inputs               0  ///< Inputs data tenzor
-#define def_k_bff_options              1  ///< Tenzor of variables
-#define def_k_bff_output               2  ///< Tenzor of output data
-#define def_k_bff_batch                3  ///< Batch size
-#define def_k_bff_optimization         4  ///< Optimization type
-#define def_k_bff_activation           5  ///< Activation type
-#define def_k_bff_training             6  ///< Training mode (stats are immutable in inference)
+/// Index of the kernel for Batch Normalization Feed Forward process (#CNeuronBathcNormOCL)
+#define def_k_BatchFeedForward         24
+/// Inputs data tenzor
+#define def_k_bff_inputs               0
+/// Tenzor of variables
+#define def_k_bff_options              1
+/// Tenzor of output data
+#define def_k_bff_output               2
+/// Batch size
+#define def_k_bff_batch                3
+/// Optimization type
+#define def_k_bff_optimization         4
+/// Activation type
+#define def_k_bff_activation           5
+/// Training mode (stats are immutable in inference)
+#define def_k_bff_training             6
 //---
-#define def_k_CalcHiddenGradientBatch   25 ///< Index of the Kernel of the Batch neuron to transfer gradient to previous layer (#CNeuronBathcNormOCL)
-#define def_k_bchg_options             0  ///<[in] Options matrix m*(7 or 9), where m - Number of neurons in previous layer
-#define def_k_bchg_matrix_g            1  ///<[in] Tensor of gradients at current layer
-#define def_k_bchg_matrix_i            2  ///<[in] Tensor of previous layer output
-#define def_k_bchg_matrix_ig           3  ///<[out] Tensor of gradients at previous layer
-#define def_k_bchg_activation          4  ///< Activation type (#ENUM_ACTIVATION)
-#define def_k_bchg_batch               5  ///< Batch size
-#define def_k_bchg_optimization        6  ///< Optimization type
+/// Index of the Kernel of the Batch neuron to transfer gradient to previous layer (#CNeuronBathcNormOCL)
+#define def_k_CalcHiddenGradientBatch   25
+/// [in] Options matrix m*(7 or 9), where m - Number of neurons in previous layer
+#define def_k_bchg_options             0
+/// [in] Tensor of gradients at current layer
+#define def_k_bchg_matrix_g            1
+/// [in] Tensor of previous layer output
+#define def_k_bchg_matrix_i            2
+/// [out] Tensor of gradients at previous layer
+#define def_k_bchg_matrix_ig           3
+/// Activation type (#ENUM_ACTIVATION)
+#define def_k_bchg_activation          4
+/// Batch size
+#define def_k_bchg_batch               5
+/// Optimization type
+#define def_k_bchg_optimization        6
 //---
-#define def_k_UpdateBatchOptionsMomentum  26 ///< Index of the kernel for Describe the process of SGD optimization options for the Batch normalization Neuron (#CNeuronBatchNormOCL).
-#define def_k_buom_options                0  ///<[in] Options matrix m*(7 or 9), where m - Number of neurons in previous layer
-#define def_k_buom_matrix_g               1  ///<[in] Tensor of gradients at current layer
-#define def_k_buom_learning_rates         2  ///< Learning rates
-#define def_k_buom_momentum               3  ///< Momentum multiplier
+/// Index of the kernel for Describe the process of SGD optimization options for the Batch normalization Neuron (#CNeuronBatchNormOCL).
+#define def_k_UpdateBatchOptionsMomentum  26
+/// [in] Options matrix m*(7 or 9), where m - Number of neurons in previous layer
+#define def_k_buom_options                0
+/// [in] Tensor of gradients at current layer
+#define def_k_buom_matrix_g               1
+/// Learning rates
+#define def_k_buom_learning_rates         2
+/// Momentum multiplier
+#define def_k_buom_momentum               3
 //---
-#define def_k_UpdateBatchOptionsAdam      27 ///< Index of the kernel for Describe the process of Adam optimization options for the Batch normalization Neuron (#CNeuronBatchNormOCL).
-#define def_k_buoa_options                0  ///<[in] Options matrix m*(7 or 9), where m - Number of neurons in previous layer
-#define def_k_buoa_matrix_g               1  ///<[in] Tensor of gradients at current layer
-#define def_k_buoa_l                      2  ///< Learning rates
-#define def_k_buoa_b1                     3  ///< First momentum multiplier
-#define def_k_buoa_b2                     4  ///< Second momentum multiplier
+/// Index of the kernel for Describe the process of Adam optimization options for the Batch normalization Neuron (#CNeuronBatchNormOCL).
+#define def_k_UpdateBatchOptionsAdam      27
+/// [in] Options matrix m*(7 or 9), where m - Number of neurons in previous layer
+#define def_k_buoa_options                0
+/// [in] Tensor of gradients at current layer
+#define def_k_buoa_matrix_g               1
+/// Learning rates
+#define def_k_buoa_l                      2
+/// First momentum multiplier
+#define def_k_buoa_b1                     3
+/// Second momentum multiplier
+#define def_k_buoa_b2                     4
 //---@}
 //---\defgroup VAE neuron Kernels of Variant Aoutoencodre
 //--- Describes the process of Variant Aoutoencodre.
@@ -965,11 +1213,13 @@ union uaLongChar
 #define def_k_fqfsrm_mean_weight              5
 //--- Spectral Risk Measure types (FQF_SRMForward)
 #define defSRM_MEAN                           0
-#define defSRM_CVAR                           1  ///< lower-tail RETURN CVaR (risk_variable=return): E[R | R in the lower alpha tail]; the Actor maximizes it
+/// lower-tail RETURN CVaR (risk_variable=return): E[R | R in the lower alpha tail]; the Actor maximizes it
+#define defSRM_CVAR                           1
 #define defSRM_MEAN_CVAR                      2
 #define defSRM_EXPONENTIAL                    3
 #define defSRM_DUAL_POWER                     4
-#define defFQF_LOCAL_ARRAY_SIZE             64  ///< Must match LOCAL_ARRAY_SIZE of NeuroNet.cl
+/// Must match LOCAL_ARRAY_SIZE of NeuroNet.cl
+#define defFQF_LOCAL_ARRAY_SIZE             64
 //---
 #define def_k_FQF_SRMGradient                 323
 #define def_k_fqfsrmg_quantiles               0
@@ -1004,69 +1254,123 @@ union uaLongChar
 #define def_k_fqfrg_probabilities_gradient     4
 //---
 //--- FQF probability/numerical contract tolerances (MQL5 side)
-#define defFQF_PROBABILITY_TOLERANCE      1.0e-3f  ///< Max |sum(p)-1| before the SRM probability contract is violated
-#define defFQF_SPECTRAL_EPS               1.0e-4f  ///< Float tolerance for Phi(tau_high) >= Phi(tau_low) - eps
-#define defFQF_KINK_EPS                   1.0e-5f  ///< |tau - alpha| below this counts a CVaR break-point hit
-#define defFQF_DIAGNOSTIC_FLOATS          6        ///< Floats per task in the FQF_MonotoneRearrange diagnostics row
+/// Max |sum(p)-1| before the SRM probability contract is violated
+#define defFQF_PROBABILITY_TOLERANCE      1.0e-3f
+/// Float tolerance for Phi(tau_high) >= Phi(tau_low) - eps
+#define defFQF_SPECTRAL_EPS               1.0e-4f
+/// |tau - alpha| below this counts a CVaR break-point hit
+#define defFQF_KINK_EPS                   1.0e-5f
+/// Floats per task in the FQF_MonotoneRearrange diagnostics row
+#define defFQF_DIAGNOSTIC_FLOATS          6
 //---
 //---
-#define def_k_MHSparseAttentionScore    44 ///< Index of the kernel of the multi-heads sparse attention neuron to calculate score matrix (#MHSparseAttentionScore)
-#define def_k_mhas_sparse                3  ///< less than 1.0 сoefficient of sparse
+/// Index of the kernel of the multi-heads sparse attention neuron to calculate score matrix (#MHSparseAttentionScore)
+#define def_k_MHSparseAttentionScore    44
+/// less than 1.0 сoefficient of sparse
+#define def_k_mhas_sparse                3
 //---
-#define def_k_MHSparseAttentionOut      45 ///< Index of the kernel of the multi-heads sparse attention neuron to calculate multi-heads out matrix (#MHSparseAttentionOut)
+/// Index of the kernel of the multi-heads sparse attention neuron to calculate multi-heads out matrix (#MHSparseAttentionOut)
+#define def_k_MHSparseAttentionOut      45
 //---
-#define def_k_FFMultiModels             46 ///< Index of the kernel of the multi-models neuron to calculate feed forward
-#define def_k_HGMultiModels             47 ///< Index of the kernel of the multi-models neuron to calculate hiden gradient
-#define def_k_chg_model                 6  ///< Number of model to calculate
-#define def_k_UWMultiModels             48 ///< Index of the kernel of the multi-models neuron to update weights
-#define def_k_uwa_model                 9  ///< Number of model to update
+/// Index of the kernel of the multi-models neuron to calculate feed forward
+#define def_k_FFMultiModels             46
+/// Index of the kernel of the multi-models neuron to calculate hiden gradient
+#define def_k_HGMultiModels             47
+/// Number of model to calculate
+#define def_k_chg_model                 6
+/// Index of the kernel of the multi-models neuron to update weights
+#define def_k_UWMultiModels             48
+/// Number of model to update
+#define def_k_uwa_model                 9
 //---@}
 //---@}
-#define def_k_ConcatFeedForward        49 ///< Index of #FeedForward kernel
-#define def_k_cff_matrix_w             0  ///< Weights matrix (m+1)*n, where m - number of neurons in layer and n - number of outputs (neurons in next layer)
-#define def_k_cff_matrix_i1            1  ///< Inputs tesor
-#define def_k_cff_matrix_i2            2  ///< Inputs tesor
-#define def_k_cff_matrix_o             3  ///< Output tensor
-#define def_k_cff_inputs1              4  ///< Number of inputs
-#define def_k_cff_inputs2              5  ///< Number of inputs
-#define def_k_cff_activation           6  ///< Activation type (#ENUM_ACTIVATION)
+/// Index of #FeedForward kernel
+#define def_k_ConcatFeedForward        49
+/// Weights matrix (m+1)*n, where m - number of neurons in layer and n - number of outputs (neurons in next layer)
+#define def_k_cff_matrix_w             0
+/// Inputs tesor
+#define def_k_cff_matrix_i1            1
+/// Inputs tesor
+#define def_k_cff_matrix_i2            2
+/// Output tensor
+#define def_k_cff_matrix_o             3
+/// Number of inputs
+#define def_k_cff_inputs1              4
+/// Number of inputs
+#define def_k_cff_inputs2              5
+/// Activation type (#ENUM_ACTIVATION)
+#define def_k_cff_activation           6
 //---
-#define def_k_ConcatCalcHiddenGradient 50 ///< Index of Hidden gradients calculation kernel (#CalcHiddenGradient)
-#define def_k_cchg_matrix_w            0  ///< Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
-#define def_k_cchg_matrix_g            1  ///< Tensor of gradients at current layer
-#define def_k_cchg_matrix_o1           2  ///< Output tensor
-#define def_k_cchg_matrix_o2           3  ///< Output tensor
-#define def_k_cchg_matrix_ig1          4  ///< Tensor of gradients at previous layer
-#define def_k_cchg_matrix_ig2          5  ///< Tensor of gradients at previous layer
-#define def_k_cchg_outputs             6  ///< Number of outputs
-#define def_k_cchg_inputs1             7  ///< Number of inputs1
-#define def_k_cchg_inputs2             8  ///< Number of inputs2
-#define def_k_cchg_activation1         9  ///< Activation type (#ENUM_ACTIVATION)
-#define def_k_cchg_activation2         10  ///< Activation type (#ENUM_ACTIVATION)
+/// Index of Hidden gradients calculation kernel (#CalcHiddenGradient)
+#define def_k_ConcatCalcHiddenGradient 50
+/// Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
+#define def_k_cchg_matrix_w            0
+/// Tensor of gradients at current layer
+#define def_k_cchg_matrix_g            1
+/// Output tensor
+#define def_k_cchg_matrix_o1           2
+/// Output tensor
+#define def_k_cchg_matrix_o2           3
+/// Tensor of gradients at previous layer
+#define def_k_cchg_matrix_ig1          4
+/// Tensor of gradients at previous layer
+#define def_k_cchg_matrix_ig2          5
+/// Number of outputs
+#define def_k_cchg_outputs             6
+/// Number of inputs1
+#define def_k_cchg_inputs1             7
+/// Number of inputs2
+#define def_k_cchg_inputs2             8
+/// Activation type (#ENUM_ACTIVATION)
+#define def_k_cchg_activation1         9
+/// Activation type (#ENUM_ACTIVATION)
+#define def_k_cchg_activation2         10
 //---
-#define def_k_ConcatUpdWeightsMomentum 51 ///< Index SGD optomization Update weights kernel (#UpdateWeightsMomentum)
-#define def_k_cuwm_matrix_w            0  ///< SGD Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
-#define def_k_cuwm_matrix_g            1  ///< SGD Tensor of gradients at current layer
-#define def_k_cuwm_matrix_i1           2  ///< SGD Inputs tesor
-#define def_k_cuwm_matrix_i2           3  ///< SGD Inputs tesor
-#define def_k_cuwm_matrix_dw           4  ///< SGD Matrix of delta weights in last correction
-#define def_k_cuwm_inputs1             5  ///< SGD Number of inputs
-#define def_k_cuwm_inputs2             6  ///< SGD Number of inputs
-#define def_k_cuwm_learning_rates      7  ///< SGD Learning rates
-#define def_k_cuwm_momentum            8  ///< SGD Momentum multiplier
+/// Index SGD optomization Update weights kernel (#UpdateWeightsMomentum)
+#define def_k_ConcatUpdWeightsMomentum 51
+/// SGD Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
+#define def_k_cuwm_matrix_w            0
+/// SGD Tensor of gradients at current layer
+#define def_k_cuwm_matrix_g            1
+/// SGD Inputs tesor
+#define def_k_cuwm_matrix_i1           2
+/// SGD Inputs tesor
+#define def_k_cuwm_matrix_i2           3
+/// SGD Matrix of delta weights in last correction
+#define def_k_cuwm_matrix_dw           4
+/// SGD Number of inputs
+#define def_k_cuwm_inputs1             5
+/// SGD Number of inputs
+#define def_k_cuwm_inputs2             6
+/// SGD Learning rates
+#define def_k_cuwm_learning_rates      7
+/// SGD Momentum multiplier
+#define def_k_cuwm_momentum            8
 //---
-#define def_k_ConcatUpdWeightsAdam     52 ///< Index Adam optomization Update weights kernel (#UpdateWeightsAdam)
-#define def_k_cuwa_matrix_w            0  ///< Adam Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
-#define def_k_cuwa_matrix_g            1  ///< Adam Tensor of gradients at current layer
-#define def_k_cuwa_matrix_i1           2  ///< Adam Inputs tesor
-#define def_k_cuwa_matrix_i2           3  ///< Adam Inputs tesor
-#define def_k_cuwa_matrix_m            4  ///< Adam Matrix of first momentum
-#define def_k_cuwa_matrix_v            5  ///< Adam Matrix of seconfd momentum
-#define def_k_cuwa_inputs1             6  ///< Adam Number of inputs
-#define def_k_cuwa_inputs2             7  ///< Adam Number of inputs
-#define def_k_cuwa_l                   8  ///< Adam Learning rates
-#define def_k_cuwa_b1                  9  ///< Adam First momentum multiplier
-#define def_k_cuwa_b2                  10 ///< Adam Second momentum multiplier
+/// Index Adam optomization Update weights kernel (#UpdateWeightsAdam)
+#define def_k_ConcatUpdWeightsAdam     52
+/// Adam Weights matrix (m+1)*n, where m - number of neurons in previous layer and n - number of neurons in current layer
+#define def_k_cuwa_matrix_w            0
+/// Adam Tensor of gradients at current layer
+#define def_k_cuwa_matrix_g            1
+/// Adam Inputs tesor
+#define def_k_cuwa_matrix_i1           2
+/// Adam Inputs tesor
+#define def_k_cuwa_matrix_i2           3
+/// Adam Matrix of first momentum
+#define def_k_cuwa_matrix_m            4
+/// Adam Matrix of seconfd momentum
+#define def_k_cuwa_matrix_v            5
+/// Adam Number of inputs
+#define def_k_cuwa_inputs1             6
+/// Adam Number of inputs
+#define def_k_cuwa_inputs2             7
+/// Adam Learning rates
+#define def_k_cuwa_l                   8
+/// Adam First momentum multiplier
+#define def_k_cuwa_b1                  9
+/// Adam Second momentum multiplier
+#define def_k_cuwa_b2                  10
 //---
 #define def_k_SoftUpdate               53
 #define def_k_su_target                0
@@ -1152,32 +1456,54 @@ union uaLongChar
 #define def_k_tr_matrix_out            1
 //---
 #define  def_k_MH2AttentionOut         63
-#define  def_k_mh2ao_q                 0  ///< Matrix of Queries
-#define  def_k_mh2ao_kv                1  ///< Matrix of Keys, Values
-#define  def_k_mh2ao_score             2  ///< Matrix of Scores
-#define  def_k_mh2ao_out               3  ///< Matrix of Outputs
-#define  def_k_mh2ao_dimension         4  ///< Dimension of Key
-#define  def_k_mh2ao_heads_kv          5  ///< Heads of Key
-#define  def_k_mh2ao_mask              6  ///< mask 1 - calc only previous units, 0 - calc all
+/// Matrix of Queries
+#define  def_k_mh2ao_q                 0
+/// Matrix of Keys, Values
+#define  def_k_mh2ao_kv                1
+/// Matrix of Scores
+#define  def_k_mh2ao_score             2
+/// Matrix of Outputs
+#define  def_k_mh2ao_out               3
+/// Dimension of Key
+#define  def_k_mh2ao_dimension         4
+/// Heads of Key
+#define  def_k_mh2ao_heads_kv          5
+/// mask 1 - calc only previous units, 0 - calc all
+#define  def_k_mh2ao_mask              6
 //---
 #define  def_k_MH2AttentionInsideGradients   64
-#define  def_k_mh2aig_q                0  ///< Matrix of Queries
-#define  def_k_mh2aig_qg               1  ///< Matrix of Queries gradient
-#define  def_k_mh2aig_kv               2  ///< Matrix of Keys, Values
-#define  def_k_mh2aig_kvg              3  ///< Matrix of Keys, Values gradient
-#define  def_k_mh2aig_score            4  ///< Matrix of Scores
-#define  def_k_mh2aig_outg             5  ///< Matrix of Outputs gradient
-#define  def_k_mh2aig_kunits           6  ///< Size of Key
-#define  def_k_mh2aig_heads_kv         7  ///< Heads of Key
+/// Matrix of Queries
+#define  def_k_mh2aig_q                0
+/// Matrix of Queries gradient
+#define  def_k_mh2aig_qg               1
+/// Matrix of Keys, Values
+#define  def_k_mh2aig_kv               2
+/// Matrix of Keys, Values gradient
+#define  def_k_mh2aig_kvg              3
+/// Matrix of Scores
+#define  def_k_mh2aig_score            4
+/// Matrix of Outputs gradient
+#define  def_k_mh2aig_outg             5
+/// Size of Key
+#define  def_k_mh2aig_kunits           6
+/// Heads of Key
+#define  def_k_mh2aig_heads_kv         7
 //---
 #define  def_k_CGConv_HiddenGradient   65
-#define  def_k_cgc_matrix_g            0  ///<[in] Tensor of gradients at current layer
-#define  def_k_cgc_matrix_f            1  ///<[in] Previous layer Output tensor
-#define  def_k_cgc_matrix_s            2  ///<[in] Previous layer Output tensor
-#define  def_k_cgc_matrix_fg           3  ///<[out] Tensor of gradients at previous layer
-#define  def_k_cgc_matrix_sg           4  ///<[out] Tensor of gradients at previous layer
-#define  def_k_cgc_activationf         5  ///< Activation type (#ENUM_ACTIVATION)
-#define  def_k_cgc_activations         6  ///< Activation type (#ENUM_ACTIVATION)
+/// [in] Tensor of gradients at current layer
+#define  def_k_cgc_matrix_g            0
+/// [in] Previous layer Output tensor
+#define  def_k_cgc_matrix_f            1
+/// [in] Previous layer Output tensor
+#define  def_k_cgc_matrix_s            2
+/// [out] Tensor of gradients at previous layer
+#define  def_k_cgc_matrix_fg           3
+/// [out] Tensor of gradients at previous layer
+#define  def_k_cgc_matrix_sg           4
+/// Activation type (#ENUM_ACTIVATION)
+#define  def_k_cgc_activationf         5
+/// Activation type (#ENUM_ACTIVATION)
+#define  def_k_cgc_activations         6
 //---
 #define  def_k_XCiTFeedForward         66
 #define  def_k_XCiTff_qkv              0
@@ -3248,6 +3574,50 @@ union uaLongChar
 #define def_k_ompbkl_output                             2
 #define def_k_ompbkl_total                              3
 //+------------------------------------------------------------------+
+//| DPCC contract constants and public modes                         |
+//+------------------------------------------------------------------+
+#define DPCC_CONTRACT_VERSION       2
+#define DPCC_BINARY_LAYER_VERSION   3
+#define DPCC_FINANCIAL_ENVELOPE_VERSION 4
+#define DPCC_MARGIN_EXTERNAL_V2 0
+#define DPCC_MARGIN_FOREX_SPOT_V1 1
+#define DPCC_MARGIN_HISTORICAL_CLOSE_V1 2
+#define DPCC_HISTORICAL_FX_ENVELOPE_VERSION 5
+#define DPCC_ACTION_COMPONENTS      6
+#define DPCC_STATE_COMPONENTS      13
+#define DPCC_CONTEXT_SECTIONS      11
+
+enum ENUM_DPCC_MODE
+  {
+   DPCC_P0 = 0,
+   DPCC_P1 = 1,
+   DPCC_P2 = 2
+  };
+//+------------------------------------------------------------------+
+//| DPCC public completion statuses                                  |
+//+------------------------------------------------------------------+
+enum ENUM_DPCC_STATUS
+  {
+   DPCC_OK                   = 0,
+   DPCC_NO_FEASIBLE_CANDIDATE = 1,
+   DPCC_SEARCH_EXHAUSTED     = 2,
+   DPCC_INVALID_INPUT        = 3,
+   DPCC_CONTRACT_MISMATCH    = 4,
+   DPCC_NUMERIC_ERROR        = 5,
+   DPCC_OPENCL_ERROR         = 6,
+   DPCC_BACKWARD_UNSUPPORTED = 7
+  };
+//+------------------------------------------------------------------+
+//| DPCC internal account evaluation phases                          |
+//+------------------------------------------------------------------+
+enum ENUM_DPCC_PHASE
+  {
+   PRE_ACTION   = 0,
+   AFTER_ACTION = 1,
+   INTRABAR     = 2,
+   BAR_END      = 3
+  };
+//+------------------------------------------------------------------+
 //| OMPB runtime mode                                                |
 //+------------------------------------------------------------------+
 //| Declares the ENUM_OMPB_MODE enumeration.                         |
@@ -3266,31 +3636,347 @@ enum ENUM_OMPB_MODE
 #resource "..\\NeuroNet_DNG\\NeuroNet.cl" as string cl_program
 enum ENUM_ACTIVATION
   {
-   None = -1,  ///< Without activation formula
-   TANH = 0,     ///< Use \f$tanh(x)\f$ for activation neuron
-   SIGMOID = 1,  ///< Use \f$\frac{1}{1+e^x}\f$ for activation neuron
-   LReLU = 2,    ///< For activation neuron use LReLU \f[\left\{ \begin{array} a x>=0, \ x \\x<0, \ 0.01*x \end{array} \right.\f]
+   //--- Without activation formula
+   None = -1,
+   //--- Use \f$tanh(x)\f$ for activation neuron
+   TANH = 0,
+   //--- Use \f$\frac{1}{1+e^x}\f$ for activation neuron
+   SIGMOID = 1,
+   //--- For activation neuron use LReLU \f[\left\{ \begin{array} a x>=0, \ x \\x<0, \ 0.01*x \end{array} \right.\f]
+   LReLU = 2,
    SoftPlus = 3,
    GELU = 4,
    MinusSoftPlus = 5,
    ELU = 6,
   };
 //+------------------------------------------------------------------+
-//--- Enum of optimization method used
+//| Enum of optimization method used                                 |
 //+------------------------------------------------------------------+
 enum ENUM_OPTIMIZATION
   {
-   SGD = 0,      ///< Stochastic gradient descent
-   ADAM = 1,     ///< Adam
-   LS = 2,       ///< Least Squares
-   ADAM_MINI = 3 ///< Adam-mini
+   //--- Stochastic gradient descent
+   SGD = 0,
+   //--- Adam
+   ADAM = 1,
+   //--- Least Squares
+   LS = 2,
+   //--- Adam-mini
+   ADAM_MINI = 3
   };
 //---@}
-//+------------------------------------------------------------------+
 //---\class CConnection
 //---\brief Class of connection to anothe neuron
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/7447#para51">the link.</A>
 //+------------------------------------------------------------------+
+//| DPCC rollout registration and explicit profile encodings         |
+//+------------------------------------------------------------------+
+#define defNeuronScenarioRolloutOCL             0x8123
+#define defNeuronPlanProjectionOCL              0x8124
+#define defNeuronPlanProjectionTraceOCL         0x8129
+#define DPCC_PROJECTION_TRACE_ABI               1
+#define DPCC_TRACE_CONTRACT_MISMATCH            DPCC_CONTRACT_MISMATCH
+#define def_k_DPCCProjectionTrace               376
+#define def_k_DPCCProjectionTraceVJP            377
+#define DPCC_TW_CURRENT_INDEX                   0
+#define DPCC_TW_CURRENT_COEFFICIENT             1
+#define DPCC_TW_PROPOSAL_INDEX                  2
+#define DPCC_TW_PROPOSAL_COEFFICIENT            3
+#define DPCC_TW_FRAME_INDEX                     4
+#define DPCC_TW_FRAME_COEFFICIENT               5
+#define DPCC_TW_WAVE                            6
+#define DPCC_TW_ERROR                           7
+#define DPCC_TW_COMMON                          8
+#define DPCC_TW_COUNT                           9
+#define DPCC_PRICE_BID                          0
+#define DPCC_PRICE_LAST                         1
+#define DPCC_QUOTE_BID_IDENTITY_V1               0
+#define DPCC_QUOTE_LAST_FROZEN_OFFSET_V1         1
+#define DPCC_EVENT_LOCAL_TWO_PATH_V1             1
+#define DPCC_NORMALIZATION_CAUSAL_AFFINE_V2       1
+#define DPCC_LOSS_NORMALIZED                     1
+#define DPCC_RANDOM_INDEXED_NORMAL_V1            1
+#define DPCC_LAYER_CONSTRUCTED                   0
+#define DPCC_LAYER_SHAPED                        1
+#define DPCC_LAYER_CONFIGURED                    2
+#define DPCC_LAYER_READY                         3
+#define DPCC_LAYER_FAILED                        4
+#define DPCC_CONTINUATION_ACCOUNT_OFFSET         0
+#define DPCC_CONTINUATION_EQUITY_ANCHOR          24
+#define DPCC_CONTINUATION_ENTRY_INTEREST         25
+#define DPCC_CONTINUATION_NATIVE_MARK            26
+#define DPCC_CONTINUATION_ACCRUED_INTEREST       27
+#define DPCC_CONTINUATION_MAX_DRAWDOWN           28
+#define DPCC_CONTINUATION_CURRENCY_DIGITS        29
+#define DPCC_CONTINUATION_SOURCE_ACTION          30
+#define DPCC_CONTINUATION_EXIT_KIND              31
+#define DPCC_CONTINUATION_NUMERIC_STATUS         32
+#define DPCC_CONTINUATION_FLOATS                 33
+#define DPCC_NATIVE_RISK_CONTINUATION_FLOATS      20
+#define DPCC_NATIVE_PENDING_PHASE_FLOATS           21
+#define def_k_DPCCRollout                      328
+#define def_k_DPCCRolloutReduce                329
+#define def_k_DPCCRolloutStep                  368
+#define def_k_DPCCRolloutPrepareOpen           369
+#define def_k_DPCCRolloutCommitAction          370
+#define def_k_DPCCProjectionInit                 330
+#define def_k_DPCCProjectionSummary              331
+#define def_k_DPCCProjectionPrepare              332
+#define def_k_DPCCProjectionProposals            333
+#define def_k_DPCCProjectionSelect               334
+#define def_k_DPCCProjectionPublish              335
+#define def_k_DPCCProjectionReduce               336
+#define DPCC_PROJECTION_CONTROL_STRIDE          24
+#define DPCC_PROJECTION_SUMMARY_STRIDE          12
+#define DPCC_PROJECTION_DIAGNOSTIC_STRIDE       12
+union UDPCCDoubleBits
+  {
+   double            value;
+   ulong             bits;
+  };
+//+------------------------------------------------------------------+
+//| DPCC shared exact-chain kernel identifiers and argument order    |
+//+------------------------------------------------------------------+
+#define def_k_DPCCDecoderPack                                  337
+#define def_k_DPCCDecoderPack_source                           0
+#define def_k_DPCCDecoderPack_destination                      1
+#define def_k_DPCCDecoderPack_flags                            2
+#define def_k_DPCCDecoderPack_K                                3
+#define def_k_DPCCDecoderPack_V                                4
+#define def_k_DPCCDecoderPack_H                                5
+#define def_k_DPCCDecoderPack_D                                6
+#define def_k_DPCCDecoderPack_inverse                          7
+#define def_k_DPCCActivationForward                            338
+#define def_k_DPCCActivationForward_preactivation              0
+#define def_k_DPCCActivationForward_output                     1
+#define def_k_DPCCActivationForward_flags                      2
+#define def_k_DPCCActivationForward_activation                 3
+#define def_k_DPCCActivationForward_count                      4
+#define def_k_DPCCActivationGradient                           339
+#define def_k_DPCCActivationGradient_preactivation             0
+#define def_k_DPCCActivationGradient_upstream                  1
+#define def_k_DPCCActivationGradient_input_gradient            2
+#define def_k_DPCCActivationGradient_flags                     3
+#define def_k_DPCCActivationGradient_activation                4
+#define def_k_DPCCActivationGradient_count                     5
+#define def_k_DPCCSharedAffineInputGradient                    340
+#define def_k_DPCCSharedAffineInputGradient_weights            0
+#define def_k_DPCCSharedAffineInputGradient_upstream           1
+#define def_k_DPCCSharedAffineInputGradient_input_gradient     2
+#define def_k_DPCCSharedAffineInputGradient_flags              3
+#define def_k_DPCCSharedAffineInputGradient_tokens             4
+#define def_k_DPCCSharedAffineInputGradient_input_width        5
+#define def_k_DPCCSharedAffineInputGradient_output_width       6
+#define def_k_DPCCSharedAffineForwardPreflight                 341
+#define def_k_DPCCSharedAffineForwardPreflight_weights         0
+#define def_k_DPCCSharedAffineForwardPreflight_input           1
+#define def_k_DPCCSharedAffineForwardPreflight_flags           2
+#define def_k_DPCCSharedAffineForwardPreflight_tokens          3
+#define def_k_DPCCSharedAffineForwardPreflight_input_width     4
+#define def_k_DPCCSharedAffineForwardPreflight_output_width    5
+#define def_k_DPCCSharedAffineAdamPreflight                    342
+#define def_k_DPCCSharedAffineAdamPreflight_weights            0
+#define def_k_DPCCSharedAffineAdamPreflight_gradient           1
+#define def_k_DPCCSharedAffineAdamPreflight_input              2
+#define def_k_DPCCSharedAffineAdamPreflight_momentum1          3
+#define def_k_DPCCSharedAffineAdamPreflight_momentum2          4
+#define def_k_DPCCSharedAffineAdamPreflight_flags              5
+#define def_k_DPCCSharedAffineAdamPreflight_tokens             6
+#define def_k_DPCCSharedAffineAdamPreflight_input_width        7
+#define def_k_DPCCSharedAffineAdamPreflight_output_width       8
+#define def_k_DPCCSharedAffineAdamPreflight_learning_rate      9
+#define def_k_DPCCSharedAffineAdamPreflight_beta1              10
+#define def_k_DPCCSharedAffineAdamPreflight_beta2              11
+#define def_k_DPCCSharedAffineAdamPreflight_frame_tag          0x80000000
+#define def_k_DPCCSharedAffineAdamPreflight_frame_mode_shift    29
+#define def_k_DPCCSharedAffineAdamPreflight_frame_count_mask    0x1FFFFFFF
+#define def_k_DPCCSharedAffineAdamPreflight_accumulate         1
+#define def_k_DPCCSharedAffineAdamPreflight_update_preflight   2
+#define def_k_DPCCSharedAffineAdamPreflight_update_apply       3
+#define def_k_DPCCOperatorReduce                               343
+#define def_k_DPCCOperatorReduce_flags                         0
+#define def_k_DPCCOperatorReduce_status                        1
+#define def_k_DPCCOperatorReduce_count                         2
+//+------------------------------------------------------------------+
+//| DPCC decoder type and saved-source identity operator             |
+//+------------------------------------------------------------------+
+#define defNeuronScenarioDecoderOCL                            0x8122
+#define def_k_DPCCDecoderSnapshotCheck                         344
+#define def_k_DPCCDecoderSnapshotCheck_sourceKVHD              0
+#define def_k_DPCCDecoderSnapshotCheck_packedKHVD              1
+#define def_k_DPCCDecoderSnapshotCheck_flags                   2
+#define def_k_DPCCDecoderSnapshotCheck_K                       3
+#define def_k_DPCCDecoderSnapshotCheck_V                       4
+#define def_k_DPCCDecoderSnapshotCheck_H                       5
+#define def_k_DPCCDecoderSnapshotCheck_D                       6
+//+------------------------------------------------------------------+
+//| DPCC exact denoiser kernel IDs and argument order                |
+//+------------------------------------------------------------------+
+#define def_k_DPCC_MHFlashAttentionGradient                               345
+#define def_k_DPCC_MHFlashAttentionGradient_query                         0
+#define def_k_DPCC_MHFlashAttentionGradient_query_gr                      1
+#define def_k_DPCC_MHFlashAttentionGradient_key_value                     2
+#define def_k_DPCC_MHFlashAttentionGradient_key_value_gr                  3
+#define def_k_DPCC_MHFlashAttentionGradient_logsumexp                     4
+#define def_k_DPCC_MHFlashAttentionGradient_output                        5
+#define def_k_DPCC_MHFlashAttentionGradient_output_gr                     6
+#define def_k_DPCC_MHFlashAttentionGradient_dimension                     7
+#define def_k_DPCC_MHFlashAttentionGradient_total_q                       8
+#define def_k_DPCC_MHFlashAttentionGradient_total_kv                      9
+#define def_k_DPCC_MHFlashAttentionGradient_mask_future                   10
+#define def_k_DPCCAttentionPreflight                                      346
+#define def_k_DPCCAttentionPreflight_query                                0
+#define def_k_DPCCAttentionPreflight_key_value                            1
+#define def_k_DPCCAttentionPreflight_logsumexp                            2
+#define def_k_DPCCAttentionPreflight_output                               3
+#define def_k_DPCCAttentionPreflight_output_gr                            4
+#define def_k_DPCCAttentionPreflight_flags                                5
+#define def_k_DPCCAttentionPreflight_dimension                            6
+#define def_k_DPCCAttentionPreflight_total_q                              7
+#define def_k_DPCCAttentionPreflight_total_kv                             8
+#define def_k_DPCCAttentionPreflight_mask_future                          9
+#define def_k_DPCCAttentionPreflight_mode                                 10
+#define def_k_DPCCDenoiserSelfLayout                                      347
+#define def_k_DPCCDenoiserSelfLayout_source0                              0
+#define def_k_DPCCDenoiserSelfLayout_source1                              1
+#define def_k_DPCCDenoiserSelfLayout_source2                              2
+#define def_k_DPCCDenoiserSelfLayout_destination0                         3
+#define def_k_DPCCDenoiserSelfLayout_destination1                         4
+#define def_k_DPCCDenoiserSelfLayout_flags                                5
+#define def_k_DPCCDenoiserSelfLayout_L                                    6
+#define def_k_DPCCDenoiserSelfLayout_N                                    7
+#define def_k_DPCCDenoiserSelfLayout_heads                                8
+#define def_k_DPCCDenoiserSelfLayout_dimension                            9
+#define def_k_DPCCDenoiserSelfLayout_mode                                 10
+#define def_k_DPCCDenoiserCrossLayout                                     348
+#define def_k_DPCCDenoiserCrossLayout_source0                             0
+#define def_k_DPCCDenoiserCrossLayout_source1                             1
+#define def_k_DPCCDenoiserCrossLayout_destination0                        2
+#define def_k_DPCCDenoiserCrossLayout_destination1                        3
+#define def_k_DPCCDenoiserCrossLayout_flags                               4
+#define def_k_DPCCDenoiserCrossLayout_L                                   5
+#define def_k_DPCCDenoiserCrossLayout_R                                   6
+#define def_k_DPCCDenoiserCrossLayout_H                                   7
+#define def_k_DPCCDenoiserCrossLayout_K                                   8
+#define def_k_DPCCDenoiserCrossLayout_heads                               9
+#define def_k_DPCCDenoiserCrossLayout_dimension                           10
+#define def_k_DPCCDenoiserCrossLayout_mode                                11
+#define def_k_DPCCDenoiserPairMap                                         349
+#define def_k_DPCCDenoiserPairMap_source                                  0
+#define def_k_DPCCDenoiserPairMap_destination                             1
+#define def_k_DPCCDenoiserPairMap_flags                                   2
+#define def_k_DPCCDenoiserPairMap_L                                       3
+#define def_k_DPCCDenoiserPairMap_H                                       4
+#define def_k_DPCCDenoiserPairMap_W                                       5
+#define def_k_DPCCDenoiserPairMap_mode                                    6
+#define def_k_DPCCDenoiserPairMap_forward_pad                             0
+#define def_k_DPCCDenoiserPairMap_forward_crop                            1
+#define def_k_DPCCDenoiserPairMap_backward_crop                           2
+#define def_k_DPCCDenoiserPairMap_backward_pad                            3
+#define def_k_DPCCDenoiserBroadcastGradient                               350
+#define def_k_DPCCDenoiserBroadcastGradient_source                        0
+#define def_k_DPCCDenoiserBroadcastGradient_destination                   1
+#define def_k_DPCCDenoiserBroadcastGradient_flags                         2
+#define def_k_DPCCDenoiserBroadcastGradient_rows                          3
+#define def_k_DPCCDenoiserBroadcastGradient_width                         4
+//+------------------------------------------------------------------+
+//| Exact conditioned denoiser public type                           |
+//+------------------------------------------------------------------+
+#define defNeuronPlanDenoiserOCL                               0x8125
+//+------------------------------------------------------------------+
+//| DPCC decoder rho loss kernel IDs and argument order              |
+//+------------------------------------------------------------------+
+#define def_k_DPCCDecoderRhoLoss                 351
+#define def_k_DPCCDecoderRhoLossReduce           352
+
+#define defNeuronDPCCOCL 0x8126
+#define defNeuronDPCCActorOCL 0x8127
+//+------------------------------------------------------------------+
+//| Scenario forecast price type and phase contract                  |
+//+------------------------------------------------------------------+
+#define defNeuronScenarioForecastPriceOCL       0x8128
+#define defScenarioForecastPriceABI             1
+#define defNeuronScenarioCrossAttentionPriceOCL 0x812A
+#define defScenarioCrossAttentionPriceABI       1
+#define defScenarioDecoderPriceABI              3
+#define def_k_DPCCDecoderPricePath              371
+#define def_k_DPCCDecoderPriceNative            372
+#define def_k_DPCCDecoderPriceGradient          373
+#define def_k_DPCCDecoderPriceLoss              374
+#define def_k_DPCCForecastPriceBridge           375
+#define def_k_DPCCDenoiserFrameCondition        378
+#define def_k_DPCCDenoiserFrameLayout           379
+#define def_k_DPCCDenoiserFrameCondition_mode   10
+#define def_k_DPCCDenoiserFrameCondition_forward 0
+#define def_k_DPCCDenoiserFrameCondition_backward 1
+#define def_k_DPCCDenoiserFrameLayout_key      0
+#define def_k_DPCCDenoiserFrameLayout_value    1
+#define def_k_DPCCDenoiserFrameLayout_query    2
+#define def_k_DPCCDenoiserFrameLayout_pi       3
+#define def_k_DPCCDenoiserFrameLayout_packed_query 4
+#define def_k_DPCCDenoiserFrameLayout_packed_kv 5
+#define def_k_DPCCDenoiserFrameLayout_weighted 6
+#define def_k_DPCCDenoiserFrameLayout_flags    7
+#define def_k_DPCCDenoiserFrameLayout_K        8
+#define def_k_DPCCDenoiserFrameLayout_tokens   9
+#define def_k_DPCCDenoiserFrameLayout_width    10
+#define def_k_DPCCDenoiserFrameLayout_heads    11
+#define def_k_DPCCDenoiserFrameLayout_mode     12
+#define def_k_DPCCDenoiserFrameLayout_forward_attention 0
+#define def_k_DPCCDenoiserFrameLayout_forward_weighted 1
+#define def_k_DPCCDenoiserFrameLayout_forward_plan_prefix 2
+#define def_k_DPCCDenoiserFrameLayout_backward_weighted 3
+#define def_k_DPCCDenoiserFrameLayout_backward_attention 4
+#define def_k_DPCCDenoiserFrameLayout_backward_plan_prefix 5
+#define defForecastPriceLatentPrepare           1
+#define defForecastPriceJoint                   2
+#define defForecastPriceOMPBCalibrate         3
+#define defForecastPriceAdapt                   4
+#define defForecastPriceVerify                  5
+#define defForecastPriceFrameFree               0
+#define defForecastPriceFrameLive               1
+#define defForecastPriceFrameFailed             4
+#define def_k_DPCCCompositeNormOptions 353
+#define def_k_DPCCCompositeQuoteR 354
+#define def_k_DPCCCompositeCondition 355
+#define def_k_DPCCCompositeInitialNoise 356
+#define def_k_DPCCCompositeReverse 357
+#define def_k_DPCCCompositeActionAffine 358
+#define def_k_DPCCCompositeProjectionMask 359
+#define def_k_DPCCCompositeSummary 360
+#define def_k_DPCCCompositeBindTimes 361
+#define def_k_DPCCCompositeSnapshotIdentity 362
+#define def_k_DPCCCompositePad 363
+#define def_k_DPCCCompositePublish 364
+#define def_k_DPCCDenoiserEpsilonMSE 365
+#define def_k_DPCCDenoiserPrepare 366
+#define def_k_DPCCDecoderNativeTarget 367
+//--- Read-only AC-SRM candidate-row operations.
+#define def_k_DPCCQRowsDense 380
+#define def_k_DPCCQRowsConv 381
+#define def_k_DPCCQRowsMultiWindow 382
+#define def_k_DPCCQRowsBatchNorm 383
+#define def_k_DPCCQRowsSpike 384
+#define def_k_DPCCQRowsMap 385
+#define def_k_DPCCQRowsAttention 386
+#define def_k_DPCCQRowsSoftmax 387
+#define def_k_DPCCQRowsCosine 388
+#define def_k_DPCCQRowsValidate 389
+#define def_k_DPCCQRowsJoin 390
+#define def_k_DPCCQRowsRank 391
+#define def_k_DPCCAction6PackCondition 392
+#define def_k_DPCCAction6InitialNoise 393
+#define def_k_DPCCAction6Reverse 394
+#define def_k_DPCCAction6CandidateMask 395
+//--- ABI3-only physical Action6 backward: selected seed and exact unroll arithmetic.
+#define def_k_DPCCAction6GradientSeed 396
+#define def_k_DPCCAction6GradientStep 397
+#define def_k_DPCCFullPlanGradientSeed 398
+#define def_k_DPCCAction6GradientStep_affine_pullback        0
+#define def_k_DPCCAction6GradientStep_normalization_pullback 1
+#define def_k_DPCCAction6GradientStep_ddpm_split             2
+#define def_k_DPCCAction6GradientStep_branch_sum             3
+#define def_k_DPCCAction6GradientStep_sigmoid_pullback        4
+#define def_k_DPCCAction6GradientStep_final_roundtrip_pullback 5
 #endif // NEURONET_DEFINITIONS_MQH
 
 #ifndef NEURONET_BUILDING_FACADE

@@ -1,20 +1,22 @@
-//+------------------------------------------------------------------+
-//| Research.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+﻿//+------------------------------------------------------------------+
+//|                                                     Research.mq5 |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| Includes                                                    |
+//| Includes                                                         |
 //+------------------------------------------------------------------+
+#include "Trajectory.mqh"
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
+input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_H1;
 //---
 input group                "---- RSI ----"
 input int                  RSIPeriod   =  14;            //Period
@@ -34,8 +36,9 @@ input int                  SignalPeriod =  9;            //Signal
 input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
+SState               sState;
 STrajectory          Base;
 STrajectory          Buffer[];
 STrajectory          Frame[1];
@@ -63,8 +66,9 @@ vector<float>        check;
 double               PrevBalance = 0;
 double               PrevEquity = 0;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
+int OnInit()
   {
 //---
    if(!Symb.Name(_Symbol))
@@ -124,8 +128,9 @@ double               PrevEquity = 0;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
+void OnDeinit(const int reason)
   {
 //---
 //if(Base.Total > 0)
@@ -141,8 +146,9 @@ double               PrevEquity = 0;
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                        |
+//| Expert tick function                                             |
 //+------------------------------------------------------------------+
+void OnTick()
   {
 //---
    if(!IsNewBar())
@@ -322,4 +328,3 @@ double               PrevEquity = 0;
      }
   }
 //+------------------------------------------------------------------+
-

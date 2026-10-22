@@ -1,16 +1,24 @@
-//+------------------------------------------------------------------+
-//| Study.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+﻿//+------------------------------------------------------------------+
+//|                                                        Study.mq5 |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Input parameters                                            | |
+#define Study
+#include "Trajectory.mqh"
 //+------------------------------------------------------------------+
+//| Input parameters                                                 |
+//+------------------------------------------------------------------+
+input int                  Iterations     = 100000;
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+STrajectory          Buffer[];
 CNet                 Encoder;
 CNet                 Actor;
 CNet                 Critic;
@@ -30,8 +38,10 @@ vector<float>        STD_Goal;
 //---
 COpenCLMy           *OpenCL;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
+int OnInit()
+  {
 //---
    ResetLastError();
    if(!LoadTotalBase())
@@ -118,8 +128,10 @@ COpenCLMy           *OpenCL;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+  {
 //---
    if(!(reason == REASON_INITFAILED || reason == REASON_RECOMPILE))
      {
@@ -131,8 +143,10 @@ COpenCLMy           *OpenCL;
    delete OpenCL;
   }
 //+------------------------------------------------------------------+
-//| ChartEvent function                                         |
+//| ChartEvent function                                              |
 //+------------------------------------------------------------------+
+void OnChartEvent(const int id,
+                  const long &lparam,
                   const double &dparam,
                   const string &sparam)
   {
@@ -141,8 +155,10 @@ COpenCLMy           *OpenCL;
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train function                                              |
+//| Train function                                                   |
 //+------------------------------------------------------------------+
+void Train(void)
+  {
 //---
    vector<float> probability = GetProbTrajectories(Buffer, 0.9);
 //---
@@ -281,4 +297,3 @@ COpenCLMy           *OpenCL;
 //---
   }
 //+------------------------------------------------------------------+
-

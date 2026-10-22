@@ -1,20 +1,22 @@
-//+------------------------------------------------------------------+
-//| Research.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+﻿//+------------------------------------------------------------------+
+//|                                                     Research.mq5 |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| Includes                                                    |
+//| Includes                                                         |
 //+------------------------------------------------------------------+
+#include "Trajectory.mqh"
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
 #include <Indicators\Oscilators.mqh>
 //+------------------------------------------------------------------+
-//| Input parameters                                            |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
+input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_H1;
 input double               MinProfit   =  -10000;
 //---
 input group                "---- RSI ----"
@@ -36,8 +38,9 @@ input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
 //---
 input int                  Agent = 1;
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
+SState               sState;
 STrajectory          Base;
 STrajectory          Buffer[];
 STrajectory          Frame[1];
@@ -58,8 +61,9 @@ CiMACD               MACD;
 double               PrevBalance = 0;
 double               PrevEquity = 0;
 //+------------------------------------------------------------------+
-//| Expert initialization function                              |
+//| Expert initialization function                                   |
 //+------------------------------------------------------------------+
+int OnInit()
   {
 //---
    if(!Symb.Name(_Symbol))
@@ -96,14 +100,16 @@ double               PrevEquity = 0;
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                            |
+//| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
+void OnDeinit(const int reason)
   {
 //---
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                        |
+//| Expert tick function                                             |
 //+------------------------------------------------------------------+
+void OnTick()
   {
 //---
    if(!IsNewBar())
@@ -251,7 +257,7 @@ double               PrevEquity = 0;
       ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| Tester function                                             |
+//| Tester function                                                  |
 //+------------------------------------------------------------------+
 double OnTester()
   {
@@ -266,7 +272,7 @@ double OnTester()
    return(ret);
   }
 //+------------------------------------------------------------------+
-//| TesterInit function                                         |
+//| TesterInit function                                              |
 //+------------------------------------------------------------------+
 void OnTesterInit()
   {
@@ -274,7 +280,7 @@ void OnTesterInit()
    LoadTotalBase();
   }
 //+------------------------------------------------------------------+
-//| TesterPass function                                         |
+//| TesterPass function                                              |
 //+------------------------------------------------------------------+
 void OnTesterPass()
   {
@@ -329,8 +335,9 @@ void OnTesterPass()
      }
   }
 //+------------------------------------------------------------------+
-//| TesterDeinit function                                       |
+//| TesterDeinit function                                            |
 //+------------------------------------------------------------------+
+void OnTesterDeinit()
   {
 //---
    int total = ArraySize(Buffer);
@@ -340,4 +347,3 @@ void OnTesterPass()
    Print("Saved");
   }
 //+------------------------------------------------------------------+
-

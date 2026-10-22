@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -10,6 +10,7 @@
 //| Rewards structure 0 - Delta Balance 1 - Delta Equity ( "-"  Drawdown / "+" Profit) 2 - Penalty for no open positions  |
 //+-----------------------------------------------------------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
+//---
 #define        HistoryBars             1             //Depth of history
 #define        GPTBars                 100           //Analitic Depth of history
 #define        PrecoderBars            10            //Forecast Depth
@@ -32,12 +33,18 @@
 #define        STE_Multiplier          1.0f/2
 #define        STE_Noise_Multiplier    1.0f/10        // λ определяет влияние ошибки прогнозирования шума
 #define        STD_Delta_Multiplier    1.0f/20        // коэффициент шума ω
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+struct SState
   {
    float             state[HistoryBars * BarDescr];
    float             account[AccountDescr - 4];
    float             action[NActions];
    float             rewards[NRewards];
+   //---
                      SState(void);
+   //---
    bool              Save(int file_handle);
    bool              Load(int file_handle);
    //--- Overloading.
@@ -66,18 +73,21 @@ bool SState::Save(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
       return false;
+//---
    int total = ArraySize(state);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       return false;
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, state[i]) < sizeof(float))
          return false;
+//---
    total = ArraySize(account);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       return false;
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, account[i]) < sizeof(float))
          return false;
+//---
    total = ArraySize(action);
    if(FileWriteInteger(file_handle, total) < sizeof(int))
       return false;
@@ -90,6 +100,7 @@ bool SState::Save(int file_handle)
    for(int i = 0; i < total; i++)
       if(FileWriteFloat(file_handle, rewards[i]) < sizeof(float))
          return false;
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -101,52 +112,68 @@ bool SState::Load(int file_handle)
       return false;
    if(FileIsEnding(file_handle))
       return false;
+//---
    int total = FileReadInteger(file_handle);
    if(total != ArraySize(state))
       return false;
+//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          return false;
       state[i] = FileReadFloat(file_handle);
      }
+//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(account))
       return false;
+//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          return false;
       account[i] = FileReadFloat(file_handle);
      }
+//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(action))
       return false;
+//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          return false;
       action[i] = FileReadFloat(file_handle);
      }
+//---
    total = FileReadInteger(file_handle);
    if(total != ArraySize(rewards))
       return false;
+//---
    for(int i = 0; i < total; i++)
      {
       if(FileIsEnding(file_handle))
          return false;
       rewards[i] = FileReadFloat(file_handle);
      }
+//---
    return true;
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+struct STrajectory
   {
    SState            States[Buffer_Size];
    int               Total;
    float             DiscountFactor;
    bool              CumCounted;
+   //---
                      STrajectory(void);
+   //---
    bool              Add(SState &state);
    void              CumRevards(void);
+   //---
    bool              Save(int file_handle);
    bool              Load(int file_handle);
   };
@@ -167,6 +194,7 @@ bool STrajectory::Save(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
       return false;
+//---
    if(!CumCounted)
       CumRevards();
    if(FileWriteInteger(file_handle, Total) < sizeof(int))
@@ -176,6 +204,7 @@ bool STrajectory::Save(int file_handle)
    for(int i = 0; i < Total; i++)
       if(!States[i].Save(file_handle))
          return false;
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -185,14 +214,17 @@ bool STrajectory::Load(int file_handle)
   {
    if(file_handle == INVALID_HANDLE)
       return false;
+//---
    Total = FileReadInteger(file_handle);
    if(FileIsEnding(file_handle) || Total >= ArraySize(States))
       return false;
    DiscountFactor = FileReadFloat(file_handle);
    CumCounted = true;
+//---
    for(int i = 0; i < Total; i++)
       if(!States[i].Load(file_handle))
          return false;
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -202,6 +234,7 @@ void STrajectory::CumRevards(void)
   {
    if(CumCounted)
       return;
+//---
    for(int i = Total - 2; i >= 0; i--)
       for(int r = 0; r < NRewards; r++)
          States[i].rewards[r] += States[i + 1].rewards[r] * DiscountFactor;
@@ -216,6 +249,7 @@ bool STrajectory::Add(SState &state)
       return false;
    States[Total] = state;
    Total++;
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -243,6 +277,7 @@ bool SaveTotalBase(void)
         }
    FileFlush(handle);
    FileClose(handle);
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -271,6 +306,7 @@ bool LoadTotalBase(void)
          return false;
         }
    FileClose(handle);
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -278,7 +314,9 @@ bool LoadTotalBase(void)
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *state_encoder)
   {
+//---
    CLayerDescription *descr;
+//---
    if(!actor)
      {
       actor = new CArrayObj();
@@ -416,6 +454,7 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
       delete descr;
       return false;
      }
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -423,7 +462,9 @@ bool CreateDescriptions(CArrayObj *actor, CArrayObj *end_encoder, CArrayObj *sta
 //+------------------------------------------------------------------+
 bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayObj *probability)
   {
+//---
    CLayerDescription *descr;
+//---
    if(!encoder)
      {
       encoder = new CArrayObj();
@@ -686,6 +727,7 @@ bool CreateTrajNetDescriptions(CArrayObj *encoder, CArrayObj *endpoints, CArrayO
       delete descr;
       return false;
      }
+//---
    return true;
   }
 #ifndef Study
@@ -697,6 +739,7 @@ bool IsNewBar(void)
    static datetime last_bar = 0;
    if(last_bar >= iTime(Symb.Name(), TimeFrame, 0))
       return false;
+//---
    last_bar = iTime(Symb.Name(), TimeFrame, 0);
    return true;
   }
@@ -715,6 +758,7 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
          continue;
       result = (Trade.PositionClose(PositionGetInteger(POSITION_TICKET)) && result);
      }
+//---
    return result;
   }
 //+------------------------------------------------------------------+
@@ -724,6 +768,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
   {
    int total = PositionsTotal();
    bool result = true;
+//---
    for(int i = 0; i < total; i++)
      {
       if(PositionGetSymbol(i) != Symb.Name())
@@ -763,6 +808,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
       if(modify)
          result = (Trade.PositionModify(PositionGetInteger(POSITION_TICKET), psl, ptp) && result);
      }
+//---
    return result;
   }
 //+------------------------------------------------------------------+
@@ -772,6 +818,7 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
   {
    if(value <= 0)
       return true;
+//---
    for(int i = 0; (i < PositionsTotal() && value > 0); i++)
      {
       if(PositionGetSymbol(i) != Symb.Name())
@@ -793,6 +840,7 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
             value = 0;
         }
      }
+//---
    return (value <= 0);
   }
 #endif
@@ -812,6 +860,7 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
          result[i] = -FLT_MAX;
      }
    float max_reward = result.Max();
+//---
    vector<float> sorted = result;
    bool sort = true;
    int iter = 0;
@@ -828,6 +877,7 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
            }
       iter++;
      }
+//---
    float min = result.Min() - 0.1f * MathAbs(max_reward);
    if(max_reward > min)
      {
@@ -841,6 +891,7 @@ vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
       result.Fill(1);
    result = result / result.Sum();
    result = result.CumSum();
+//---
    return result;
   }
 //+------------------------------------------------------------------+
@@ -873,6 +924,10 @@ int SampleTrajectory(vector<float> &probability)
 //--- return result.
    return result;
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CDeal       :  public CObject
   {
 public:
    datetime             OpenTime;
@@ -883,8 +938,10 @@ public:
    double               StopLos;
    double               TakeProfit;
    double               point;
+   //---
                      CDeal(void);
                     ~CDeal(void) {};
+   //---
    vector<float>        Action(datetime current, double ask, double bid, int period_seconds);
   };
 //+------------------------------------------------------------------+
@@ -915,6 +972,7 @@ vector<float> CDeal::Action(datetime current, double ask, double bid, int period
    vector<float> result = vector<float>::Zeros(NActions);
    if((OpenTime - period_seconds) > current || CloseTime <= current)
       return result;
+//---
    switch(Type)
      {
       case POSITION_TYPE_BUY:
@@ -932,14 +990,20 @@ vector<float> CDeal::Action(datetime current, double ask, double bid, int period
             result[5] = float((StopLos - bid) / (MaxSL * point));
          break;
      }
+//---
    return result;
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+class CDeals
   {
 protected:
    CArrayObj         Deals;
 public:
                      CDeals(void) { Deals.Clear(); }
                     ~CDeals(void) { Deals.Clear(); }
+   //---
    bool              LoadDeals(string file_name, string symbol, double point);
    vector<float>     Action(datetime current, double ask, double bid, int period_seconds);
   };
@@ -958,6 +1022,7 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
       symbol = _Symbol;
       point = _Point;
      }
+//---
    ResetLastError();
    int handle = FileOpen(file_name, FILE_READ | FILE_ANSI | FILE_CSV | FILE_COMMON, short(';'), CP_ACP);
    if(handle == INVALID_HANDLE)
@@ -982,6 +1047,7 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
       s = FileReadString(handle);
       if(StringFind(deal_symbol, symbol, 0) < 0)
          continue;
+      //---
       ResetLastError();
       CDeal *deal = new CDeal();
       if(!deal)
@@ -1022,6 +1088,7 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
             deal.StopLos = close_price;
            }
         }
+      //---
       ResetLastError();
       if(!Deals.Add(deal))
         {
@@ -1029,7 +1096,9 @@ bool CDeals::LoadDeals(string file_name, string symbol, double point)
          return false;
         }
      }
+//---
    FileClose(handle);
+//---
    return true;
   }
 //+------------------------------------------------------------------+
@@ -1051,6 +1120,7 @@ vector<float> CDeals::Action(datetime current, double ask, double bid, int perio
       result[4] = MathMax(result[4], action[4]);
       result[5] = MathMax(result[5], action[5]);
      }
+//---
    return result;
   }
 //+------------------------------------------------------------------+

@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                     NeuroNet.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -10,7 +10,6 @@
 //--- \file
 //--- \brief NeuroNet.mqh
 //--- Facade include for the logical NeuroNet blocks.
-//+------------------------------------------------------------------+
 #include "NeuroNet_Definitions.mqh"
 #include "NeuroNet_Declarations.mqh"
 #include "NeuroNet_Core.mqh"
@@ -23,6 +22,7 @@
 #include "NeuroNet_TimeSeries.mqh"
 #include "NeuroNet_D2Skill.mqh"
 #include "NeuroNet_Misc.mqh"
+#include "NeuroNet_InferenceSnapshot.mqh"
 #undef NEURONET_BUILDING_FACADE
 #endif // NEURONET_MQH
 //+------------------------------------------------------------------+
