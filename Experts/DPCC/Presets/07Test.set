@@ -1,0 +1,16 @@
+; DPCC Test EURUSD H1; P1; frozen policy; server-time [2026-01-01, 2026-06-01)
+; Strategy Tester: January-May 2026; see 07Test_P1_2026_Jan_May.ini for date settings
+
+InpTimeframe=16385
+RSIPeriod=14
+RSIPrice=1
+CCIPeriod=14
+CCIPrice=6
+ATRPeriod=14
+FastPeriod=12
+SlowPeriod=26
+SignalPeriod=9
+MACDPrice=1
+InpMode=1
+InpMagic=33062
+InpMeasureLatency=false
