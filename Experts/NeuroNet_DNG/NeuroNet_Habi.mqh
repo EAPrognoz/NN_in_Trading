@@ -3,6 +3,10 @@
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
+#ifndef NEURONET_DECLARATIONS_MQH
+#include "NeuroNet.mqh"
+#endif
+
 #ifndef NEURONET_HABI_MQH
 #define NEURONET_HABI_MQH
 
@@ -339,9 +343,10 @@ public:
       return(defNeuronHabiObservationOCL);
      }
    bool              BNReady();
+   bool              BNStateValid(bool ready);
    bool              BNStateValid()
      {
-      return(!initialized || BNReady());
+      return(BNStateValid(initialized));
      }
    bool              BNGeometry();
    bool              CopyBN(CNeuronHabiObservationOCL *src);
@@ -439,10 +444,18 @@ bool CNeuronHabiObservationOCL::updateInputWeights(CNeuronBaseOCL *p)
 //+------------------------------------------------------------------+
 bool CNeuronHabiObservationOCL::BNReady()
   {
+   return(initialized && BNStateValid(true));
+  }
+//+------------------------------------------------------------------+
+//| BNStateValid - Check statistics and the actual batch counter     |
+//+------------------------------------------------------------------+
+bool CNeuronHabiObservationOCL::BNStateValid(bool ready)
+  {
    CBufferFloat *options=bn.getBatchOptions();
+   int           count=bn.GetBatchCount();
 
-   if(!initialized || bn.GetBatchCount()<2 || !options || options.Total()!=9*M ||
-      !options.BufferRead())
+   if(!BNGeometry() || (ready?(count<2 || (long)count>(long)Norm+1):count!=1) ||
+      !options || !options.BufferRead())
       return(false);
 
    for(int j=0;j<options.Total();j++)
@@ -503,38 +516,113 @@ bool CNeuronHabiObservationOCL::SetOpenCLChecked(COpenCLMy *cl)
 //+------------------------------------------------------------------+
 bool CNeuronHabiObservationOCL::Save(const int h)
   {
-   if(!CNeuronHabiLeafOCL::Save(h))
+   if(!BNStateValid() || !CNeuronHabiLeafOCL::Save(h))
       return(false);
 
+//--- версия локального состояния; старые checkpoint не поддерживаются
+   dFileWriteUInt(h,0x48424E31)
+   dFileWriteUInt(h,1)
+   dFileWriteUInt(h,M)
+   dFileWriteUInt(h,Norm)
+   dFileWriteUInt(h,posterior)
    dFileWriteUInt(h,initialized)
    dFileWriteUInt(h,bn.GetBatchCount())
 
-   return(bn.Save(h));
+   ulong position=FileTell(h);
+
+   dFileWriteUInt(h,0)
+
+   ulong start=FileTell(h);
+
+   if(!bn.Save(h))
+      return(false);
+
+   ulong size=FileTell(h)-start;
+
+   if(size>0xFFFFFFFF)
+      return(false);
+
+   dFileWriteUInt(h,0x48424E31)
+
+   ulong end=FileTell(h);
+
+   if(!FileSeek(h,(long)position,SEEK_SET))
+      return(false);
+
+   dFileWriteUInt(h,size)
+
+   return(FileSeek(h,(long)end,SEEK_SET));
   }
 //+------------------------------------------------------------------+
 //| CNeuronHabiObservationOCL::Load - read encoder state             |
 //+------------------------------------------------------------------+
 bool CNeuronHabiObservationOCL::Load(const int h)
   {
-   if(!CNeuronHabiLeafOCL::Load(h))
+   initialized=false;
+   frame.Reset();
+
+   if(!CNeuronHabiLeafOCL::Load(h) || FileSize(h)-FileTell(h)<32)
       return(false);
 
-   uint stored=0;
+   uint marker=0;
+   uint version=0;
+   uint width=0;
+   uint norm=0;
+   uint role=0;
+   uint ready=0;
+   uint count=0;
+   uint size=0;
 
-   dFileReadUInt(h,stored)
-   initialized=(stored!=0);
+   dFileReadUInt(h,marker)
+   dFileReadUInt(h,version)
 
-   dFileReadUInt(h,stored)
-   int count=(int)stored;
+   if(marker!=0x48424E31 || version!=1)
+     {
+      Print("Habi Observation: unsupported checkpoint version");
+      return(false);
+     }
 
-   dFileReadUInt(h,stored)
-   if(stored!=defNeuronBatchNormOCL)
+   dFileReadUInt(h,width)
+   dFileReadUInt(h,norm)
+   dFileReadUInt(h,role)
+   dFileReadUInt(h,ready)
+   dFileReadUInt(h,count)
+   dFileReadUInt(h,size)
+
+   if(width!=M || norm!=Norm || role>1 || (role!=0)!=posterior || ready>1 ||
+      Neurons()!=M+13+(posterior?A:0) ||
+      (ready==1?(count<2 || (ulong)count>(ulong)Norm+1):count!=1) ||
+      count>0x7FFFFFFF || size<4 || FileSize(h)-FileTell(h)<(ulong)size+4)
+      return(false);
+
+//--- проверка границы вложенного состояния до его восстановления
+   ulong start=FileTell(h);
+   ulong end=start+size;
+
+   if(!FileSeek(h,(long)end,SEEK_SET))
+      return(false);
+
+   dFileReadUInt(h,marker)
+
+   if(marker!=0x48424E31 || !FileSeek(h,(long)start,SEEK_SET))
+      return(false);
+
+   dFileReadUInt(h,marker)
+
+   if(marker!=defNeuronBatchNormOCL)
       return(false);
 
    bn.AttachOpenCL(OpenCL);
 
-   return(bn.Load(h) && bn.SetBatchCount(count) && BNGeometry() && BNStateValid() &&
-          market.Init(0,0,OpenCL,M,ADAM,iBatch));
+   if(!bn.Load(h) || FileTell(h)!=end || !BNGeometry() ||
+      !bn.SetBatchCount((int)count) || !BNStateValid(ready==1) ||
+      !market.Init(0,0,OpenCL,M,ADAM,iBatch) ||
+      !FileSeek(h,(long)(end+4),SEEK_SET))
+      return(false);
+
+   initialized=(ready==1);
+
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| CNeuronHabiObservationOCL::WeightsUpdate - blend encoder weights |
@@ -933,10 +1021,18 @@ bool CNeuronHabiVAEOCL::calcInputGradients(CNeuronBaseOCL *p,CBufferFloat *ctx,
    int mode;
    uint token;
 
-   if(!frame.Header(ctx,mode,token) || !frame.Backward(ctx,mode==23?6:N*6+N*L))
+   if(!frame.Header(ctx,mode,token))
       return(false);
 
-   if(mode==24)
+   if(mode!=B_DECODER_BC && mode!=B_DECODER_POLICY)
+      return(false);
+
+   int payload=(int)(mode==B_DECODER_BC?6:N*6+N*L);
+
+   if(!frame.Backward(ctx,payload))
+      return(false);
+
+   if(mode==B_DECODER_POLICY)
      {
       if(!HabiPayload(ctx,4+N*6,N*L,GetPointer(direct),OpenCL) ||
          !SumAndNormalize(Gradient,GetPointer(direct),Gradient,N*L,false,0,0,0,1))
