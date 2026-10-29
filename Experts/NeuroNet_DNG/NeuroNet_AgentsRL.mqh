@@ -10706,7 +10706,7 @@ bool CNeuronDPCCOCL::ProjectAction6Current(const uint trace_slot)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Shared bounded action mapping for P0/P1/P2                        |
+//| Shared bounded action mapping for P0/P1/P2                       |
 //+------------------------------------------------------------------+
 bool CNeuronDPCCOCL::Action6Affine(CBufferFloat *source, CBufferFloat *destination, const uint direction,
                                   const uint frame_slot)

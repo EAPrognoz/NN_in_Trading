@@ -17986,6 +17986,8 @@ bool NNQSelectedPolicyGradient(CNet *critic, CNet *market, CBufferFloat *account
                                const float upstream, SLayerReadState &state, SLayerRowsWorkspace &work,
                                CBufferFloat *action_gradient);
 
+#include "NeuroNet_Habi.mqh"
+
 #endif // NEURONET_DECLARATIONS_MQH
 
 #ifndef NEURONET_BUILDING_FACADE

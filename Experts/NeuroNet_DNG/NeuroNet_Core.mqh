@@ -562,6 +562,20 @@ bool CLayer::CreateElement(int index)
       int type = FileReadInteger(iFileHandle);
       switch(type)
         {
+         case defNeuronHabiObservationOCL:
+         case defNeuronHabiGaussianOCL:
+         case defNeuronHabiVAEOCL:
+         case defNeuronHabiDecoderHeadOCL:
+         case defNeuronHabiCriticInputOCL:
+         case defNeuronHabiCriticHeadOCL:
+           {
+            CNeuronBaseOCL *habi=HabiNew(type);
+            if(!habi) return false;
+            habi.AttachOpenCL(OpenCL);
+            m_data[index]=habi;
+            return true;
+           }
+
          case defNeuron:
             temp = new CNeuron();
             if(CheckPointer(temp) == POINTER_INVALID)
@@ -5023,6 +5037,21 @@ bool CNet::Create(CArrayObj *Description)
          //---
          switch(desc.type)
            {
+            case defNeuronHabiObservationOCL:
+            case defNeuronHabiGaussianOCL:
+            case defNeuronHabiVAEOCL:
+            case defNeuronHabiDecoderHeadOCL:
+            case defNeuronHabiCriticInputOCL:
+            case defNeuronHabiCriticHeadOCL:
+              {
+               CNeuronBaseOCL *habi=HabiNew(desc.type);
+               if(!habi || !habi.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch) ||
+                  !HabiConfigure(habi,desc))
+                 { if(habi) delete habi; DeleteObj(temp); return false; }
+               if(!temp.Add(habi)) { delete habi; DeleteObj(temp); return false; }
+               break;
+              }
+
             case defNeuron:
             case defNeuronBase:
             case defNeuronBaseOCL:
@@ -19354,7 +19383,10 @@ bool CNet::OpenCLInit(void)
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(399);
+   opencl.SetKernelsCount(402);
+   CreateKernel(def_k_HabiGaussianForward, "HabiGaussianForward")
+   CreateKernel(def_k_HabiGaussianBackward, "HabiGaussianBackward")
+   CreateKernel(def_k_HabiCriticSeed, "HabiCriticSeed")
    CreateKernel(def_k_FeedForward, "FeedForward")
    CreateKernel(def_k_CalcOutputGradient, "CalcOutputGradient")
    CreateKernel(def_k_CalcHiddenGradient, "CalcHiddenGradient")

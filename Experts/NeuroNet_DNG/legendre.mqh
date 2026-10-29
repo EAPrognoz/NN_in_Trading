@@ -1,7 +1,36 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                     legendre.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+#ifndef LEGENDRE_MQH
+#define LEGENDRE_MQH
+
+//+------------------------------------------------------------------+
+//| Legendre - evaluate the Legendre polynomial of the given order   |
+//+------------------------------------------------------------------+
+double Legendre(uint poly,double x)
+  {
+   double result=0;
+
+   switch(poly)
+     {
+      case 0:
+         result=1.0;
+         break;
+      case 1:
+         result=x;
+         break;
+      default:
+         result=((2.0*(poly-1.0)+1.0)*x*Legendre(poly-1,x)-(poly-1)*Legendre(poly-2,x))/poly;
+         break;
+     }
+
+//--- recursion unwinds to the value of the requested order
+   return(result);
+  }
+//+------------------------------------------------------------------+
+//| Legendre4 - Legendre20: fixed-order polynomial shortcuts         |
 //+------------------------------------------------------------------+
 #define Legendre4(x)    Legendre(4,2*x-1)
 #define Legendre6(x)    Legendre(6,2*x-1)
@@ -12,27 +41,6 @@
 #define Legendre16(x)   Legendre(16,2*x-1)
 #define Legendre18(x)   Legendre(18,2*x-1)
 #define Legendre20(x)   Legendre(20,2*x-1)
-//+------------------------------------------------------------------+
-//| Legendre Polynoms                                                |
-//+------------------------------------------------------------------+
-//| Implements Legendre.                                             |
-//+------------------------------------------------------------------+
-double Legendre(uint poly, double x)
-  {
-   double result = 0;
-   switch(poly)
-     {
-      case 0:
-         result = 1.0;
-         break;
-      case 1:
-         result = x;
-         break;
-      default:
-         result = ((2.0 * (poly - 1.0) + 1.0) * x * Legendre(poly - 1, x) - (poly - 1) * Legendre(poly - 2, x)) / poly ;
-         break;
-     }
-//---
-   return(result);
-  }
+#endif
+
 //+------------------------------------------------------------------+

@@ -1828,6 +1828,20 @@ __kernel void VAE_FeedForward(__global float *inputs, __global float *random,
   {
    uint i = (uint)get_global_id(0);
    uint total = (uint)get_global_size(0);
+   // Habi: the Gaussian remains compact [2L], only Z/epsilon have N rows.
+   if(get_work_dim() == 2)
+     {
+      uint k = (uint)get_global_id(1) * total + i;
+      float mean = inputs[i], ell = inputs[i + total], eps = random[k];
+      float sigma = exp(0.5f * ell);
+      float z = mean + sigma * eps;
+      if(flags_enabled)
+         numeric_flags[k] = (!isfinite(mean) || !isfinite(ell) ||
+                             !isfinite(eps) || !isfinite(sigma) || !isfinite(z));
+      outputs[k] = z;
+      return;
+     }
+
    if(flags_enabled)
      {
       //--- Read the raw VAE operands before this work-item updates a potentially aliased output.
@@ -1858,6 +1872,23 @@ __kernel void VAE_CalcHiddenGradient(__global float *inputs,
   {
    uint i = (uint)get_global_id(0);
    uint total = (uint)get_global_size(0);
+   __local float4 scratch[LOCAL_ARRAY_SIZE];
+   if(get_work_dim() == 2)
+     {
+      // Every lane reaches every barrier, including for non-power-of-two N.
+      uint k = (uint)get_global_id(1) * total + i;
+      float c = clamp(IsNaNOrInf(gradient[k], 0), -MAX_GRAD, MAX_GRAD);
+      float ell_gradient = 0.5f*c*exp(0.5f*inputs[i+total])*random[k];
+      float4 v = (float4)(c, ell_gradient, !isfinite(ell_gradient), 0);
+      float4 sum = LocalSum4(v, 1, scratch);
+      if(get_local_id(1) == 0)
+        {
+         inp_grad[i] = sum.z>0 ? nan((uint)0) : sum.x;
+         inp_grad[i+total] = sum.z>0 ? nan((uint)0) : sum.y;
+        }
+      return;
+     }
+
    float log_var = IsNaNOrInf(inputs[i + total], 0);
    float mean = IsNaNOrInf(inputs[i], 0);
    float sigma = exp(0.5f * log_var);
@@ -24213,4 +24244,48 @@ __kernel void DPCCAction6GradientStep(__global const float *source,
    result[n]=(error==0?value:0.0f);
    if(mode==2)epsilon_gradient[n]=(error==0?epsilon:0.0f);
    flags[n]=(float)error;
+  }
+
+// Habi leaf operations. No model orchestration or historical accounting here.
+__kernel void HabiGaussianForward(__global const float *x, __global float *out,
+                                  __global float *chain, __global float *flags, int L)
+  {
+   int j=get_global_id(0);
+   float xi=x[j+L];
+   float sigma=fmax(xi,0.0f)+log1p(exp(-fabs(xi)))+0.01f;
+   float sigmoid=xi>=0 ? 1.0f/(1.0f+exp(-xi)) : exp(xi)/(1.0f+exp(xi));
+   out[j]=x[j]; out[j+L]=2.0f*log(sigma); chain[j]=2.0f*sigmoid/sigma;
+   flags[j]=(!isfinite(out[j]) || !isfinite(out[j+L]) || !isfinite(chain[j]));
+  }
+__kernel void HabiGaussianBackward(__global const float *self,
+                  __global const float *peer, __global const float *reconstruction,
+                  __global const float *chain, __global float *gradient_mu,
+                  __global float *gradient_xi, __global float *terms, __global float *flags,
+                  int L, int mode, float beta)
+  {
+   int j=get_global_id(0);
+   float gm=0, ge=0, kl=0;
+   if(mode==13) { gm=reconstruction[j]; ge=reconstruction[j+L]; }
+   else
+     {
+      float mq=mode==12?self[j]:peer[j], mp=mode==12?peer[j]:self[j];
+      float lq=mode==12?self[j+L]:peer[j+L], lp=mode==12?peer[j+L]:self[j+L];
+      float d=mq-mp, ivp=exp(-lp), ratio=exp(lq-lp);
+      kl=0.5f*(lp-lq+ratio+d*d*ivp-1.0f);
+      if(mode==12) { gm=reconstruction[j]-beta*d*ivp;
+                     ge=reconstruction[j+L]-0.5f*beta*(ratio-1.0f); }
+      else { gm=beta*d*ivp; ge=0.5f*beta*(ratio+d*d*ivp-1.0f); }
+     }
+   gradient_mu[j]=gm; gradient_xi[j]=ge*chain[j]; terms[j]=kl;
+   flags[j]=(!isfinite(gm)||!isfinite(gradient_xi[j])||!isfinite(kl));
+  }
+__kernel void HabiCriticSeed(__global const float *q, __global const float *ctx,
+                            __global float *gradient, __global float *flags,
+                            int N, int mode, float gamma)
+  {
+   int n=get_global_id(0); float y=0;
+   if(mode==32) y=ctx[4+n];
+   if(mode==33) y=ctx[4+n]+gamma*(1.0f-ctx[4+N+n])*ctx[4+2*N+n];
+   float g=mode==34 ? 1.0f/N : 2.0f*(y-q[n])/N;
+   gradient[n]=g; flags[n]=(!isfinite(g)||!isfinite(q[n]));
   }

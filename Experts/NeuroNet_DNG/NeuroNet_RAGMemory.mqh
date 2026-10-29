@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                           NeuroNet_RAGMemory.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -405,15 +405,15 @@ bool CNeuronRAGMemory::ValidAction(const float &action[]) const
 bool CNeuronRAGMemory::ValidTerminal(const SRAGTerminalOutcome &terminal) const
   {
    return(MathIsValidNumber(terminal.relative_return) &&
-           MathIsValidNumber(terminal.maxDrawdown) &&
-           MathIsValidNumber(terminal.costs) &&
-           MathIsValidNumber(terminal.riskUsage) &&
-           MathIsValidNumber(terminal.duration) &&
-           MathIsValidNumber(terminal.reward) &&
-           terminal.maxDrawdown >= 0.0f && terminal.costs >= 0.0f &&
-           terminal.riskUsage >= 0.0f && terminal.riskUsage <= 1.0f &&
-           terminal.duration >= 0.0f && terminal.duration <= 1.0f &&
-           MathAbs(terminal.reward - terminal.relative_return) <= RAG_TERMINAL_EPSILON);
+          MathIsValidNumber(terminal.maxDrawdown) &&
+          MathIsValidNumber(terminal.costs) &&
+          MathIsValidNumber(terminal.riskUsage) &&
+          MathIsValidNumber(terminal.duration) &&
+          MathIsValidNumber(terminal.reward) &&
+          terminal.maxDrawdown >= 0.0f && terminal.costs >= 0.0f &&
+          terminal.riskUsage >= 0.0f && terminal.riskUsage <= 1.0f &&
+          terminal.duration >= 0.0f && terminal.duration <= 1.0f &&
+          MathAbs(terminal.reward - terminal.relative_return) <= RAG_TERMINAL_EPSILON);
   }
 //+------------------------------------------------------------------+
 //| Handles the CNeuronRAGMemory merge terminal operation.           |
@@ -425,7 +425,7 @@ void CNeuronRAGMemory::MergeTerminal(SRAGTerminalOutcome &destination,
   {
    const double total = (double)destinationHits + (double)sourceHits;
    destination.relative_return= (float)((destination.relative_return* destinationHits +
-                                          source.relative_return* sourceHits) / total);
+                                         source.relative_return* sourceHits) / total);
    destination.maxDrawdown = (float)((destination.maxDrawdown * destinationHits +
                                       source.maxDrawdown * sourceHits) / total);
    destination.costs = (float)((destination.costs * destinationHits +
@@ -623,7 +623,7 @@ bool CNeuronRAGMemory::FindNearestActionPair(const uint scenarioId,
          ArrayCopy(flat, actionCandidates[action].centroid, action * (int)iActionDimension, 0, (int)iActionDimension);
         }
       return(scenarioId < iScenarioCapacity && FindNearestPairGPU(flat, used, (uint)candidates,
-              iActionDimension, 1, destination, source));
+             iActionDimension, 1, destination, source));
      }
    const float maxFloat = RAG_MAX_FLOAT;
    float nearest = maxFloat;
@@ -690,7 +690,8 @@ bool CNeuronRAGMemory::ConsolidateActionCandidates(SRAGScenarioCentroid &candida
          for(uint batch = 0; batch < batchCount; batch++)
            {
             const int scenario = activeScenarios[batch];
-            int destination = -1, source = -1;
+            int destination=-1;
+            int source=-1;
             if(!FindNearestActionPair((uint)scenario, candidateSnapshot[scenario].actions,
                                       destination, source) ||
                !MergeActionCandidates((uint)scenario,
@@ -1917,10 +1918,10 @@ bool CNeuronRAGMemory::ReadPublishedSnapshot(const int file_handle,
         }
      }
    return((ulong)FileTell(file_handle) == snapshotEnd &&
-           snapshotEnd == (ulong)FileSize(file_handle) &&
-           ValidateSnapshot(snapshot, scenarioCount, embedding, actionDimension,
-                            scenarioCapacity, actionCapacity) &&
-           SnapshotFingerprint(snapshot, scenarioCount) == fingerprint);
+          snapshotEnd == (ulong)FileSize(file_handle) &&
+          ValidateSnapshot(snapshot, scenarioCount, embedding, actionDimension,
+                           scenarioCapacity, actionCapacity) &&
+          SnapshotFingerprint(snapshot, scenarioCount) == fingerprint);
   }
 //+------------------------------------------------------------------+
 //| Handles the CNeuronRAGMemory save published snapshot operation.  |
@@ -2334,7 +2335,7 @@ bool CNeuronRAGMemory::ActionCentroid(const uint scenarioId, const uint actionId
 ulong CNeuronRAGMemory::ScenarioHitCount(const uint scenarioId) const
   {
    return(scenarioId < iScenarioCapacity && scenarios[scenarioId].used ?
-           scenarios[scenarioId].hit_count : 0);
+          scenarios[scenarioId].hit_count : 0);
   }
 //+------------------------------------------------------------------+
 //| Handles the CNeuronRAGMemory action hit count operation.         |
@@ -2342,8 +2343,8 @@ ulong CNeuronRAGMemory::ScenarioHitCount(const uint scenarioId) const
 ulong CNeuronRAGMemory::ActionHitCount(const uint scenarioId, const uint actionId) const
   {
    return(scenarioId < iScenarioCapacity && actionId < iActionCapacity &&
-           scenarios[scenarioId].actions[actionId].used ?
-           scenarios[scenarioId].actions[actionId].hit_count : 0);
+          scenarios[scenarioId].actions[actionId].used ?
+          scenarios[scenarioId].actions[actionId].hit_count : 0);
   }
 //+------------------------------------------------------------------+
 //| Returns the layer info of the CNeuronRAGMemory.                  |

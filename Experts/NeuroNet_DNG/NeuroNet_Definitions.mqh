@@ -3977,6 +3977,17 @@ union UDPCCDoubleBits
 #define def_k_DPCCAction6GradientStep_branch_sum             3
 #define def_k_DPCCAction6GradientStep_sigmoid_pullback        4
 #define def_k_DPCCAction6GradientStep_final_roundtrip_pullback 5
+// Habi IDs are appended; existing serialized IDs and kernel slots stay stable.
+#define defNeuronHabiObservationOCL 0x7A01
+#define defNeuronHabiGaussianOCL    0x7A02
+#define defNeuronHabiVAEOCL         0x7A03
+#define defNeuronHabiDecoderHeadOCL 0x7A04
+#define defNeuronHabiCriticInputOCL 0x7A05
+#define defNeuronHabiCriticHeadOCL  0x7A06
+#define def_k_HabiGaussianForward 399
+#define def_k_HabiGaussianBackward 400
+#define def_k_HabiCriticSeed 401
+
 #endif // NEURONET_DEFINITIONS_MQH
 
 #ifndef NEURONET_BUILDING_FACADE
