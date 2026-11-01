@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
-//| Trajectory.mqh |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                   Trajectory.mqh |
+//|                                                   Copyright DNG® |
+//|                                https://www.mql5.com/ru/users/dng |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
