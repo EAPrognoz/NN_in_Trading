@@ -1295,7 +1295,7 @@ __kernel void Normalize(__global float *buffer, int dimension)
    for(int i = 0; i < dimension; i++)
      {
       float val = IsNaNOrInf(buffer[shift + i], 0);
-      double delta = val - mean;
+      float delta = val - mean;
       mean += delta / (i + 1);
       M2 += delta * (val - mean);
      }
