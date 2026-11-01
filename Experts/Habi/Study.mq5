@@ -1,117 +1,166 @@
+//+------------------------------------------------------------------+
+//|                                                       Study.mq5  |
+//|                                 Copyright 2026, MetaQuotes Ltd.  |
+//|                                                    www.mql5.com  |
+//+------------------------------------------------------------------+
+#property copyright   "Copyright 2026, MetaQuotes Ltd."
+#property link        "https://www.mql5.com"
+#property version     "1.00"
+#property description "Offline study pass for the Habi policy"
+#property description "Fits prior, decoder and critic from history"
+#property description "Runs bounded work chunks from a timer"
 #property strict
-#property version "0.26"
 #include "Trajectory.mqh"
-input uint StudyWorkBudgetMs=200;
-// Scheduling budget, independent of model/batch geometry.
-CHabiModels Models;
-CHabiHistory History;
-bool Running=false,Finished=false,Failed=false;
-int Pass=0,Decision=-1;
-ulong Examples=0,Skipped=0;
 
 //+------------------------------------------------------------------+
-//| OnInit.
+//| Входные параметры                                                |
+//+------------------------------------------------------------------+
+input uint StudyWorkBudgetMs=200;    // timer work chunk, ms
+
+//+------------------------------------------------------------------+
+//| Глобальные переменные                                            |
+//+------------------------------------------------------------------+
+CHabiModels   ExtModels;          // model container
+CHabiHistory  ExtHistory;         // history and sampling
+bool          ExtRunning=false;   // timer reentry guard
+bool          ExtFinished=false;  // study finished flag
+bool          ExtFailed=false;    // fatal error flag
+int           ExtPass=0;          // fitted pass counter
+int           ExtDecision=-1;     // current sample index
+ulong         ExtExamples=0;      // trained examples counter
+ulong         ExtSkipped=0;       // skipped examples counter
+
+//+------------------------------------------------------------------+
+//| OnInit - prepares modules and starts the study timer             |
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   if(StudyWorkBudgetMs<1 || !HabiStart(Models,History,0) || !History.Load())
-      return INIT_FAILED;
-   Decision=ArraySize(History.rates)-MathMax(HistoryBars,5)-1;
-   if(!EventSetMillisecondTimer(20))
-      return INIT_FAILED;
-   return INIT_SUCCEEDED;
-  }
+   if(StudyWorkBudgetMs<1 || !HabiStart(ExtModels,ExtHistory,0) || !ExtHistory.Load())
+      return(INIT_FAILED);
 
+   ExtDecision=ArraySize(ExtHistory.rates)-MathMax(HistoryBars,5)-1;
+
+   if(!EventSetMillisecondTimer(20))
+      return(INIT_FAILED);
+
+   return(INIT_SUCCEEDED);
+  }
 //+------------------------------------------------------------------+
-//| StudyStep.
+//| StudyStep - performs one training step on the current sample     |
 //+------------------------------------------------------------------+
 bool StudyStep()
   {
-   if(Decision<MathMax(PlanningHorizonBars,NForecast)-1)
+   if(ExtDecision<MathMax(PlanningHorizonBars,NForecast)-1)
      {
-      Pass++;
-      if(Pass>=FitPasses)
+      ExtPass++;
+
+      if(ExtPass>=FitPasses)
         {
-         Finished=true;
+         ExtFinished=true;
          EventKillTimer();
-         if(!Models.Save())
+
+         if(!ExtModels.Save())
            {
-            Failed=true;
+            ExtFailed=true;
             HabiFatal("Study Save failed");
            }
          else
-            PrintFormat("Habi Study complete: examples=%I64u skipped=%I64u",Examples,Skipped);
-         return false;
+            PrintFormat("Habi Study complete: examples=%I64u skipped=%I64u",ExtExamples,ExtSkipped);
+
+         return(false);
         }
-      Decision=ArraySize(History.rates)-MathMax(HistoryBars,5)-1;
+
+      ExtDecision=ArraySize(ExtHistory.rates)-MathMax(HistoryBars,5)-1;
      }
-   int e=Decision--;
+
+   int e=ExtDecision--;
    SState record;
    SHabiSnapshot snapshot;
-   float observation[],teacher[],z[],actions[];
+   float observation[];
+   float teacher[];
+   float z[];
+   float actions[];
    SHabiEvaluation evaluation;
    uint id=0;
    double teacher_return=0;
-   if(!History.Sample(e,snapshot,record,observation) || !HabiTeacher(History,e,snapshot,observation,teacher,teacher_return))
+
+   if(!ExtHistory.Sample(e,snapshot,record,observation) || !HabiTeacher(ExtHistory,e,snapshot,observation,teacher,teacher_return))
      {
-      Skipped++;
-      return true;
+      ExtSkipped++;
+
+      return(true);
      }
-   if(!Models.BC(observation,teacher))
+
+   if(!ExtModels.BC(observation,teacher))
      {
-      Failed=true;
+      ExtFailed=true;
       EventKillTimer();
       HabiFatal("Study BC update failed");
-      return false;
+
+      return(false);
      }
+
    for(int k=0;k<6;k++)
       record.action[k]=teacher[k];
+
    record.rewards[0]=(float)teacher_return;
-   if(!Models.MC(observation,teacher,z,actions,id))
+
+   if(!ExtModels.MC(observation,teacher,z,actions,id))
      {
-      Failed=true;
+      ExtFailed=true;
       EventKillTimer();
       HabiFatal("Study posterior generation failed");
-      return false;
+
+      return(false);
      }
-   if(!HabiHistoricalEvaluate(History,e,snapshot,actions,Models.g.N,evaluation))
+
+   if(!HabiHistoricalEvaluate(ExtHistory,e,snapshot,actions,ExtModels.g.N,evaluation))
      {
-      Skipped++;
-      return true;
+      ExtSkipped++;
+
+      return(true);
      }
-   if(!Models.LearnMC(z,actions,evaluation.target,id))
+
+   if(!ExtModels.LearnMC(z,actions,evaluation.target,id))
      {
-      Failed=true;
+      ExtFailed=true;
       EventKillTimer();
       HabiFatal("Study Critic MC update failed");
-      return false;
-     }
-   Examples++;
-   return true;
-  }
 
+      return(false);
+     }
+
+   ExtExamples++;
+
+   return(true);
+  }
 //+------------------------------------------------------------------+
-//| OnTimer.
+//| OnTimer - runs study steps within the time budget                |
 //+------------------------------------------------------------------+
 void OnTimer()
   {
-   if(Running || Finished || Failed || IsStopped())
+   if(ExtRunning || ExtFinished || ExtFailed || IsStopped())
       return;
-   Running=true;
-   ulong started=GetMicrosecondCount(),budget=(ulong)StudyWorkBudgetMs*1000;
+
+   ExtRunning=true;
+   ulong started=GetMicrosecondCount();
+   ulong budget=(ulong)StudyWorkBudgetMs*1000;
+
    do
      {
       if(IsStopped() || !StudyStep())
          break;
      }
-   while(!Finished && !Failed && !IsStopped() && GetMicrosecondCount()-started<budget);
-   Running=false;
-  }
+   while(!ExtFinished && !ExtFailed && !IsStopped() && GetMicrosecondCount()-started<budget);
 
+   ExtRunning=false;
+  }
 //+------------------------------------------------------------------+
-//| OnDeinit.
+//| OnDeinit - stops the study timer                                 |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
    EventKillTimer();
   }
+
+//+------------------------------------------------------------------+
