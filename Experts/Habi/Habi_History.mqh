@@ -226,79 +226,13 @@ bool HabiAccount(SHabiSnapshot &s,datetime time,float &account[])
    return(HabiFinite(account,13));
   }
 //+------------------------------------------------------------------+
-//| HabiFinancialNumber - parses a strict decimal                    |
-//+------------------------------------------------------------------+
-bool HabiFinancialNumber(string text,double &value)
-  {
-   StringTrimLeft(text);
-   StringTrimRight(text);
-
-   int n=StringLen(text);
-   int i=0;
-   int digits=0;
-
-   if(n==0)
-      return(false);
-
-   ushort ch=StringGetCharacter(text,i);
-
-   if(ch=='+' || ch=='-')
-      i++;
-
-   while(i<n && StringGetCharacter(text,i)>='0' && StringGetCharacter(text,i)<='9')
-     {
-      digits++;
-      i++;
-     }
-
-   if(i<n && StringGetCharacter(text,i)=='.')
-     {
-      i++;
-
-      while(i<n && StringGetCharacter(text,i)>='0' && StringGetCharacter(text,i)<='9')
-        {
-         digits++;
-         i++;
-        }
-     }
-
-   if(digits==0)
-      return(false);
-
-   if(i<n && (StringGetCharacter(text,i)=='e' || StringGetCharacter(text,i)=='E'))
-     {
-      i++;
-
-      if(i<n && (StringGetCharacter(text,i)=='+' || StringGetCharacter(text,i)=='-'))
-         i++;
-
-      int exponent=0;
-
-      while(i<n && StringGetCharacter(text,i)>='0' && StringGetCharacter(text,i)<='9')
-        {
-         exponent++;
-         i++;
-        }
-
-      if(exponent==0)
-         return(false);
-     }
-
-   if(i!=n)
-      return(false);
-
-   value=StringToDouble(text);
-
-   return(MathIsValidNumber(value));
-  }
-//+------------------------------------------------------------------+
 //| CHabiHistory - history access and sampling                       |
 //+------------------------------------------------------------------+
 class CHabiHistory
   {
 public:
    MqlRates          rates[];                   // copied history rates
-   SHabiCost         costs[];                   // loaded cost records
+   SHabiCost         costs[];                   // terminal-derived bar profiles
    SHabiSymbol       symbol;                    // symbol constraints
    int               rsi;                       // rsi indicator handle
    int               cci;                       // cci indicator handle
@@ -339,26 +273,26 @@ public:
       if(!symbol.Read())
          return(false);
 
-      rsi=iRSI(_Symbol,DataTimeframe,14,PRICE_CLOSE);
-      cci=iCCI(_Symbol,DataTimeframe,14,PRICE_TYPICAL);
-      atr=iATR(_Symbol,DataTimeframe,14);
-      macd=iMACD(_Symbol,DataTimeframe,12,26,9,PRICE_CLOSE);
+      rsi=iRSI(_Symbol,TimeFrame,RSIPeriod,RSIPrice);
+      cci=iCCI(_Symbol,TimeFrame,CCIPeriod,CCIPrice);
+      atr=iATR(_Symbol,TimeFrame,ATRPeriod);
+      macd=iMACD(_Symbol,TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice);
 
       return(rsi!=INVALID_HANDLE && cci!=INVALID_HANDLE && atr!=INVALID_HANDLE && macd!=INVALID_HANDLE);
      }
 //+------------------------------------------------------------------+
-//| Load - loads history rates and cost records                      |
+//| Load - loads terminal rates and symbol profiles                      |
 //+------------------------------------------------------------------+
    bool              Load()
      {
-      if(FitStart<=0 || FitEnd<=FitStart || PlanningHorizonBars<1 || NForecast<1 || FitPasses<1 || HistoricalCostsFile=="")
+      if(Start<=0 || End<=Start || PlanningHorizonBars<1 || NForecast<1 || Epochs<1)
          return(false);
 
-      bool range=OfflineBalanceMin!=0 || OfflineBalanceMax!=0;
+      bool range=MinBalance!=0 || MaxBalance!=0;
 
       if(range)
         {
-         if(!MathIsValidNumber(OfflineBalanceMin+OfflineBalanceMax) || OfflineBalanceMin<=0 || OfflineBalanceMax<OfflineBalanceMin)
+         if(!MathIsValidNumber(MinBalance+MaxBalance) || MinBalance<=0 || MaxBalance<MinBalance)
             return(false);
         }
       else
@@ -367,97 +301,71 @@ public:
 
       ArraySetAsSeries(rates,true);
 
-      if(CopyRates(_Symbol,DataTimeframe,FitStart,FitEnd,rates)<HistoryBars+MathMax(PlanningHorizonBars,NForecast)+5)
+      if(CopyRates(_Symbol,TimeFrame,Start,End,rates)<HistoryBars+MathMax(PlanningHorizonBars,NForecast)+5)
          return(false);
 
-      if(rates[0].time>=iTime(_Symbol,DataTimeframe,0))
+      if(rates[0].time>=iTime(_Symbol,TimeFrame,0))
         {
          Print("Habi: FIT must end before the current unfinished bar");
 
          return(false);
         }
 
-      int h=FileOpen(HistoricalCostsFile,FILE_READ|FILE_CSV|FILE_ANSI|(CommonFiles?FILE_COMMON:0),',');
+      //--- AC-SRM methodology: symbol money value and native margin, no file input.
+      double tick_value=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
+      double price_value=tick_value/symbol.tick;
+      double volume=symbol.lot_min;
+      int count=ArraySize(rates);
 
-      if(h==INVALID_HANDLE)
+      if(!MathIsValidNumber(price_value) || price_value<=0 || ArrayResize(costs,count)!=count)
          return(false);
 
-      //--- every cost row is read in file order and appended once
-      while(!FileIsEnding(h))
+      for(int i=0;i<count;i++)
         {
          SHabiCost c;
-         double    fields[10];
+         ZeroMemory(c);
+         c.time=rates[i].time;
+         c.buy_value=price_value;
+         c.sell_value=price_value;
+         double bid=rates[i].open;
+         double ask=bid+rates[i].spread*symbol.point;
 
-         c.time=StringToTime(FileReadString(h));
-
-         for(int k=0;k<10;k++)
-           {
-            if(FileIsEnding(h) || FileIsLineEnding(h) || !HabiFinancialNumber(FileReadString(h),fields[k]))
-              {
-               FileClose(h);
-
-               return(false);
-              }
-           }
-
-         if(!FileIsLineEnding(h) && !FileIsEnding(h))
-           {
-            FileClose(h);
-
+         if(bid<=0 || ask<bid ||
+            !OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,volume,ask,c.margin_buy) ||
+            !OrderCalcMargin(ORDER_TYPE_SELL,_Symbol,volume,bid,c.margin_sell))
             return(false);
-           }
 
-         c.buy_value=fields[0];
-         c.sell_value=fields[1];
-         c.margin_buy=fields[2];
-         c.margin_sell=fields[3];
-         c.entry_cash=fields[4];
-         c.exit_cash=fields[5];
-         c.hold_buy=fields[6];
-         c.hold_sell=fields[7];
-         c.swap_buy=fields[8];
-         c.swap_sell=fields[9];
-
-         if(!c.Valid() || c.time<=0)
-           {
-            FileClose(h);
-
+         c.margin_buy/=volume;
+         c.margin_sell/=volume;
+         //--- Spread is already in historical bid/ask prices. AC-SRM does not
+         //--- add commission or swap to its virtual horizon labels.
+         if(!c.Valid())
             return(false);
-           }
-
-         for(int k=0;k<ArraySize(costs);k++)
-            if(costs[k].time==c.time)
-              {
-               FileClose(h);
-
-               return(false);
-              }
-
-         int n=ArraySize(costs);
-
-         ArrayResize(costs,n+1);
-
-         costs[n]=c;
+         costs[i]=c;
         }
-
-      FileClose(h);
-
-      return(ArraySize(costs)>0);
+      PrintFormat("Habi history: terminal bars=%d, no external cost file",count);
+      return(count>0);
      }
 //+------------------------------------------------------------------+
-//| Cost - returns the cost record of a bar time                     |
+//| Cost - returns the terminal profile for one loaded bar           |
 //+------------------------------------------------------------------+
    bool              Cost(datetime t,SHabiCost &c)
      {
-      //--- explicit historical conversion and cost records, no current-FX substitution
-      for(int i=0;i<ArraySize(costs);i++)
-         if(costs[i].time==t)
+      //--- CopyRates series is newest first; keep lookup logarithmic.
+      int left=0,right=ArraySize(costs)-1;
+      while(left<=right)
+        {
+         int mid=left+(right-left)/2;
+         if(costs[mid].time==t)
            {
-            c=costs[i];
-
+            c=costs[mid];
             return(c.Valid());
            }
-
+         if(costs[mid].time>t)
+            left=mid+1;
+         else
+            right=mid-1;
+        }
       return(false);
      }
 //+------------------------------------------------------------------+
@@ -465,7 +373,7 @@ public:
 //+------------------------------------------------------------------+
    bool              Market(datetime boundary,float &out[])
      {
-      int shift=iBarShift(_Symbol,DataTimeframe,boundary,true);
+      int shift=iBarShift(_Symbol,TimeFrame,boundary,true);
 
       if(shift<0)
          return(false);
@@ -475,16 +383,16 @@ public:
       MqlRates past[];
       ArraySetAsSeries(past,true);
 
-      if(CopyRates(_Symbol,DataTimeframe,shift+1,HistoryBars,past)!=HistoryBars)
+      if(CopyRates(_Symbol,TimeFrame,shift+1,HistoryBars,past)!=HistoryBars)
          return(false);
 
       for(int j=0;j<HistoryBars;j++)
         {
          double   v[1];
          datetime t=past[j].time;
-         int      k=iBarShift(_Symbol,DataTimeframe,t,true);
+         int      k=iBarShift(_Symbol,TimeFrame,t,true);
 
-         if(k<0 || iTime(_Symbol,DataTimeframe,k)!=t)
+         if(k<0 || iTime(_Symbol,TimeFrame,k)!=t)
             return(false);
 
          out[j]=(float)(past[j].close-past[j].open);
@@ -561,12 +469,12 @@ public:
       if(e<0 || e+MathMax(HistoryBars,5)>=ArraySize(rates))
          return(false);
 
-      bool range=OfflineBalanceMin!=0 || OfflineBalanceMax!=0;
+      bool range=MinBalance!=0 || MaxBalance!=0;
 
-      if(range && (OfflineBalanceMin<=0 || OfflineBalanceMax<OfflineBalanceMin))
+      if(range && (MinBalance<=0 || MaxBalance<MinBalance))
          return(false);
 
-      s.balance=range?OfflineBalanceMin+Uniform()*(OfflineBalanceMax-OfflineBalanceMin):InitialOfflineBalance;
+      s.balance=range?MinBalance+Uniform()*(MaxBalance-MinBalance):InitialOfflineBalance;
 
       if(!MathIsValidNumber(s.balance) || s.balance<=0)
          return(false);

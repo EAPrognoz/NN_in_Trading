@@ -5,8 +5,7 @@
 //+------------------------------------------------------------------+
 #ifndef HABI_MODELS_MQH
 #define HABI_MODELS_MQH
-#include "..\NeuroNet_DNG\NeuroNet.mqh"
-#include "Habi_Settings.mqh"
+//--- Shared declarations are provided by Trajectory.mqh.
 
 //+------------------------------------------------------------------+
 //| HabiFinite - checks the array size and every value               |
@@ -153,8 +152,13 @@ bool HabiLayer(CArrayObj &list,uint type,uint count,SHabiGeometry &g,int activat
 //+------------------------------------------------------------------+
 //| HabiCreate - creates the graph of one model role                 |
 //+------------------------------------------------------------------+
-bool HabiCreate(CNet *net,int role,SHabiGeometry &g)
+bool HabiCreate(CNet *net,int role,SHabiGeometry &g,string model="")
   {
+   if(model=="")
+      model=role==0?"Prior":(role==1?"Posterior":(role==2?"Decoder":"Critic"));
+   NNHabiInitModel=model;
+   ulong started=GetTickCount64();
+   PrintFormat("Habi Init [%s]: CREATE BEGIN",model);
    CArrayObj d;
 
    d.FreeMode(true);
@@ -181,12 +185,14 @@ bool HabiCreate(CNet *net,int role,SHabiGeometry &g)
             return(false);
         }
 
-   return(net.Create(GetPointer(d)));
+   bool ok=net.Create(GetPointer(d));
+   PrintFormat("Habi Init [%s]: CREATE END ok=%s elapsed_ms=%I64u",model,ok?"true":"false",GetTickCount64()-started);
+   return(ok);
   }
 //+------------------------------------------------------------------+
 //| HabiLoad - loads a model from a file                             |
 //+------------------------------------------------------------------+
-bool HabiLoad(CNet *net,string file)
+bool HabiLoad(CNet *net,string file,string model="")
   {
    if(file=="")
       return(false);
@@ -196,7 +202,14 @@ bool HabiLoad(CNet *net,string file)
    float forecast;
    datetime stamp;
 
-   return(net.Load(file,error,undefined,forecast,stamp,CommonFiles));
+   if(model=="")
+      model=file;
+   NNHabiInitModel=model;
+   ulong started=GetTickCount64();
+   PrintFormat("Habi Init [%s]: LOAD BEGIN file=%s",model,file);
+   bool ok=net.Load(file,error,undefined,forecast,stamp,CommonFiles);
+   PrintFormat("Habi Init [%s]: LOAD END ok=%s elapsed_ms=%I64u",model,ok?"true":"false",GetTickCount64()-started);
+   return(ok);
   }
 //+------------------------------------------------------------------+
 //| HabiShape - validates the geometry of a loaded graph             |
@@ -322,7 +335,7 @@ bool HabiImport(CNet *destination,string file,string indices,int role,SHabiGeome
 
    CNet source;
 
-   if(!HabiLoad(GetPointer(source),file))
+   if(!source.UseOpenCLRuntime(destination.GetOpenCL()) || !HabiLoad(GetPointer(source),file))
       return(false);
 
    string parts[];
@@ -482,13 +495,16 @@ public:
    //+------------------------------------------------------------------+
    bool              Role(CNet *net,string path,int role,bool training)
      {
+      if(net!=prior && !net.UseOpenCLRuntime(prior.GetOpenCL()))
+         return(false);
+      string model=net==target_prior?"TargetPrior":(net==target_decoder?"TargetDecoder":(net==target_critic?"TargetCritic":(net==posterior?"Posterior":(net==decoder?"Decoder":(net==critic?"Critic":"Prior")))));
       if(path!="")
         {
-         if(!HabiLoad(net,path))
+         if(!HabiLoad(net,path,model))
             return(false);
         }
       else
-         if(!training || !HabiCreate(net,role,g))
+         if(!training || !HabiCreate(net,role,g,model))
             return(false);
 
       if(!HabiShape(net,role,g))
@@ -502,11 +518,85 @@ public:
       return(true);
      }
    //+------------------------------------------------------------------+
+   //| Check public device buffers for cross-model aliases.            |
+   //+------------------------------------------------------------------+
+   bool              RuntimeBuffer(CBufferFloat *buffer,int role,int &ids[],int &owners[])
+     {
+      if(CheckPointer(buffer)==POINTER_INVALID || buffer.Total()==0 || buffer.GetIndex()<0)
+         return(true);
+      int id=buffer.GetIndex();
+      for(int i=0;i<ArraySize(ids);i++)
+         if(ids[i]==id)
+            return(owners[i]==role);
+      int count=ArraySize(ids);
+      if(ArrayResize(ids,count+1)!=count+1 || ArrayResize(owners,count+1)!=count+1)
+         return(false);
+      ids[count]=id;
+      owners[count]=role;
+      return(true);
+     }
+   //+------------------------------------------------------------------+
+   //| Verify one program/context and distinct model-owned buffers.    |
+   //+------------------------------------------------------------------+
+   bool              ValidateRuntime()
+     {
+      CNet *nets[7];
+      nets[0]=prior;
+      nets[1]=decoder;
+      nets[2]=critic;
+      nets[3]=posterior;
+      nets[4]=target_prior;
+      nets[5]=target_decoder;
+      nets[6]=target_critic;
+      COpenCLMy *runtime=prior.GetOpenCL();
+      int ids[],owners[];
+      int roles=0;
+      for(int n=0;n<7;n++)
+        {
+         if(nets[n]==NULL)
+            continue;
+         if(nets[n].GetOpenCL()!=runtime || !nets[n].IsOpenCLTransferReady())
+            return(false);
+         roles++;
+         for(int layer=0;layer<7;layer++)
+           {
+            CNeuronBaseOCL *p=nets[n].Layer(layer);
+            if(p==NULL)
+               break;
+            if(!RuntimeBuffer(p.getOutput(),n,ids,owners) ||
+               !RuntimeBuffer(p.getGradient(),n,ids,owners) ||
+               !RuntimeBuffer(p.getWeights(),n,ids,owners))
+              {
+               PrintFormat("Habi runtime: buffer alias role=%d layer=%d",n,layer);
+               return(false);
+              }
+           }
+        }
+      PrintFormat("Habi runtime: shared roles=%d context=%d program=%d distinct_public_buffers=%d",roles,runtime.GetContext(),runtime.GetProgram(),ArraySize(ids));
+      return(true);
+     }
+   //+------------------------------------------------------------------+
    //| Init - builds or loads the graphs for the requested stage        |
    //+------------------------------------------------------------------+
    bool              Init(int stage)
      {
       bool training=stage!=2;
+      if(!training && (!FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0) ||
+                       !FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0) ||
+                       !FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0)))
+        {
+         Print("Habi: Test requires saved Prior/Decoder/Critic models");
+         return(false);
+        }
+
+      //--- Training creates missing files; Test requires saved core models.
+      string prior_file=(!training || FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0))?PriorFile:"";
+      string posterior_file=(!training || FileIsExist(PosteriorFile,CommonFiles?FILE_COMMON:0))?PosteriorFile:"";
+      string decoder_file=(!training || FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0))?DecoderFile:"";
+      string critic_file=(!training || FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0))?CriticFile:"";
+      string target_prior_file=(!training || FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0))?PriorFile:"";
+      string target_decoder_file=(!training || FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0))?DecoderFile:"";
+      string target_critic_file=(!training || FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0))?CriticFile:"";
 
       g.M=HistoryBars*9;
       g.O=g.M+13;
@@ -519,9 +609,13 @@ public:
       if(!prior)
          return(false);
 
-      if(PriorFile!="")
+      NNHabiInitModel="SharedRuntime";
+      if(!prior.PrepareOpenCLRuntime())
+         return(false);
+
+      if(prior_file!="")
         {
-         if(!HabiLoad(prior,PriorFile) || !prior.Layer(5) || prior.Layer(5).Type()!=defNeuronHabiGaussianOCL)
+         if(!HabiLoad(prior,prior_file,"Prior") || !prior.Layer(5) || prior.Layer(5).Type()!=defNeuronHabiGaussianOCL)
             return(false);
 
          g.L=((CNeuronHabiGaussianOCL*)prior.Layer(5)).Latent();
@@ -530,19 +624,19 @@ public:
       //--- decoder defines N for imported models, before creating any other graph
       decoder=new CNet();
 
-      if(!decoder)
+      if(!decoder || !decoder.UseOpenCLRuntime(prior.GetOpenCL()))
          return(false);
 
-      if(DecoderFile!="")
+      if(decoder_file!="")
         {
-         if(!HabiLoad(decoder,DecoderFile) || !decoder.Layer(1) || decoder.Layer(1).Type()!=defNeuronHabiVAEOCL)
+         if(!HabiLoad(decoder,decoder_file,"Decoder") || !decoder.Layer(1) || decoder.Layer(1).Type()!=defNeuronHabiVAEOCL)
             return(false);
 
          CNeuronHabiVAEOCL *s=decoder.Layer(1);
 
          g.N=s.Rows();
 
-         if(PriorFile=="")
+         if(prior_file=="")
             g.L=s.Latent();
          else
             if(g.L!=s.Latent())
@@ -552,13 +646,13 @@ public:
       if(g.N<1 || g.L<1 || (ulong)g.N*(g.L+g.A)>INT_MAX || (ulong)(g.L+1)*2*g.L>INT_MAX || g.M>INT_MAX-19)
          return(false);
 
-      if(PriorFile=="" && (!training || !HabiCreate(prior,0,g)))
+      if(prior_file=="" && (!training || !HabiCreate(prior,0,g)))
          return(false);
 
       if(!HabiShape(prior,0,g))
          return(false);
 
-      if(DecoderFile=="" && (!training || !HabiCreate(decoder,2,g)))
+      if(decoder_file=="" && (!training || !HabiCreate(decoder,2,g)))
          return(false);
 
       if(!HabiShape(decoder,2,g) || !decoder.SetOpenCLChecked(prior.GetOpenCL()))
@@ -566,7 +660,7 @@ public:
 
       critic=new CNet();
 
-      if(!critic || !Role(critic,CriticFile,3,training))
+      if(!critic || !Role(critic,critic_file,3,training))
          return(false);
 
       if(training && !((CNeuronHabiCriticHeadOCL*)critic.Layer(6)).Discount((float)DiscountGamma))
@@ -576,10 +670,10 @@ public:
         {
          posterior=new CNet();
 
-         if(!posterior || !Role(posterior,PosteriorFile,1,true))
+         if(!posterior || !Role(posterior,posterior_file,1,true))
             return(false);
 
-         if((PosteriorFile=="" || ResetLoadedBeta) && !((CNeuronHabiGaussianOCL*)posterior.Layer(5)).Beta(AdaptiveBeta,BetaValue,BetaLearningRate,KTarget,BetaRho1,BetaRho2,BetaEpsilon))
+         if((posterior_file=="" || ResetLoadedBeta) && !((CNeuronHabiGaussianOCL*)posterior.Layer(5)).Beta(AdaptiveBeta,BetaValue,BetaLearningRate,KTarget,BetaRho1,BetaRho2,BetaEpsilon))
             return(false);
         }
 
@@ -592,10 +686,10 @@ public:
          target_decoder=new CNet();
          target_critic=new CNet();
 
-         if(!target_prior || !target_decoder || !target_critic || !Role(target_prior,TargetPriorFile,0,true) || !Role(target_decoder,TargetDecoderFile,2,true) || !Role(target_critic,TargetCriticFile,3,true))
+         if(!target_prior || !target_decoder || !target_critic || !Role(target_prior,target_prior_file,0,true) || !Role(target_decoder,target_decoder_file,2,true) || !Role(target_critic,target_critic_file,3,true))
             return(false);
 
-         if((TargetPriorFile=="" && !target_prior.WeightsUpdate(prior,1)) || (TargetDecoderFile=="" && !target_decoder.WeightsUpdate(decoder,1)) || (TargetCriticFile=="" && !target_critic.WeightsUpdate(critic,1)))
+         if((target_prior_file=="" && !target_prior.WeightsUpdate(prior,1)) || (target_decoder_file=="" && !target_decoder.WeightsUpdate(decoder,1)) || (target_critic_file=="" && !target_critic.WeightsUpdate(critic,1)))
             return(false);
         }
 
@@ -603,7 +697,7 @@ public:
         {
          bool ready=((CNeuronHabiObservationOCL*)target_prior.Layer(1)).BNReady();
 
-         if(TargetPriorFile!="" && !ready)
+         if(target_prior_file!="" && !ready)
             return(false);
 
          target_bn_pending=!ready;
@@ -615,7 +709,7 @@ public:
       HabiRelease(prior);
       HabiRelease(decoder);
 
-      return(true);
+      return(ValidateRuntime());
      }
    //+------------------------------------------------------------------+
    //| Generate - samples latent and actions from the given networks    |
@@ -845,7 +939,7 @@ public:
    //+------------------------------------------------------------------+
    bool              SaveRole(CNet *net,string suffix)
      {
-      return(!net || net.Save(OutputPrefix+suffix+".nnw",net.getRecentAverageError(),0,0,TimeCurrent(),CommonFiles));
+      return(!net || net.Save(FileName+suffix+".nnw",net.getRecentAverageError(),0,0,TimeCurrent(),CommonFiles));
      }
    //+------------------------------------------------------------------+
    //| Save - saves every network of the container                      |

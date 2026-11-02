@@ -39,7 +39,7 @@ void OnTick()
    if(ExtFailed)
       return;
 
-   datetime bar=iTime(_Symbol,DataTimeframe,0);
+   datetime bar=iTime(_Symbol,TimeFrame,0);
 
    if(bar<=0 || bar==ExtLastBar)
       return;

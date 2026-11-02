@@ -206,8 +206,20 @@ bool CNeuron::feedForward(CLayer *prevLayer)
 //+------------------------------------------------------------------+
 bool COpenCLMy::Initialize(const string program, const bool show_log = true)
   {
+#ifdef NN_HABI_INIT_DIAGNOSTICS
+   ulong started=GetTickCount64();
+   PrintFormat("Habi Init [%s]: OpenCL context BEGIN source_chars=%d",NNHabiInitModel,StringLen(program));
+   if(!ContextCreate(CL_USE_ANY))
+      ReturnFalse;
+   PrintFormat("Habi Init [%s]: OpenCL context END elapsed_ms=%I64u; program BEGIN",NNHabiInitModel,GetTickCount64()-started);
+   started=GetTickCount64();
+   if(!ProgramCreate(program,show_log))
+      ReturnFalse;
+   PrintFormat("Habi Init [%s]: OpenCL program END elapsed_ms=%I64u",NNHabiInitModel,GetTickCount64()-started);
+#else
    if(!COpenCL::Initialize(program, show_log))
       ReturnFalse;
+#endif
    uint size = 0;
    if(!CLGetDeviceInfo(GetContext(), CL_DEVICE_MAX_WORK_ITEM_SIZES, uLocalDimension.cdata, size))
       ReturnFalse;
@@ -4685,6 +4697,45 @@ float CNet::recentAverageSmoothingFactor = 10000.0;
 //+------------------------------------------------------------------+
 //| Handles the CNet create operation.                               |
 //+------------------------------------------------------------------+
+bool CNet::PrepareOpenCLRuntime(void)
+  {
+   if(!IsOpenCLTransferReady() || m_inference_load_active)
+      ReturnFalse;
+   if(CheckPointer(opencl)!=POINTER_INVALID)
+      return(opencl.GetContext()!=INVALID_HANDLE && opencl.GetProgram()!=INVALID_HANDLE);
+   if(!OpenCLInit())
+     {
+      if(bOwnOpenCL && CheckPointer(opencl)!=POINTER_INVALID)
+        {
+         opencl.Shutdown();
+         delete opencl;
+        }
+      opencl=NULL;
+      bOwnOpenCL=false;
+      ReturnFalse;
+     }
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Borrow a ready runtime only while this network is still empty.  |
+//+------------------------------------------------------------------+
+bool CNet::UseOpenCLRuntime(COpenCLMy *runtime)
+  {
+   if(CheckPointer(runtime)==POINTER_INVALID || runtime.GetContext()==INVALID_HANDLE ||
+      runtime.GetProgram()==INVALID_HANDLE || !IsOpenCLTransferReady() || m_inference_load_active ||
+      (CheckPointer(layers)!=POINTER_INVALID && layers.Total()>0))
+      ReturnFalse;
+   if(opencl==runtime)
+      return(true);
+   if(CheckPointer(opencl)!=POINTER_INVALID)
+      ReturnFalse;
+   opencl=runtime;
+   bOwnOpenCL=false;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Create layers with an owned or previously borrowed runtime.     |
+//+------------------------------------------------------------------+
 bool CNet::Create(CArrayObj *Description)
   {
    if(!IsOpenCLTransferReady())
@@ -4723,13 +4774,23 @@ bool CNet::Create(CArrayObj *Description)
      }
    else
      {
-      DeleteObj(opencl);
+      if(bOwnOpenCL)
+        {
+         DeleteObj(opencl);
+         bOwnOpenCL=false;
+        }
+      else
+         opencl=NULL;
      }
 //---
    for(int i = 0; i < total; i++)
      {
       prev = desc;
       desc = Description.At(i);
+#ifdef NN_HABI_INIT_DIAGNOSTICS
+      ulong layer_started=GetTickCount64();
+      PrintFormat("Habi Init [%s]: layer=%d BEGIN type=%d count=%u",NNHabiInitModel,i,(int)desc.type,desc.count);
+#endif
       if((i + 1) < total)
         {
          next = Description.At(i + 1);
@@ -10867,6 +10928,9 @@ bool CNet::Create(CArrayObj *Description)
          DeleteObj(layers);
          ReturnFalse;
         }
+#ifdef NN_HABI_INIT_DIAGNOSTICS
+      PrintFormat("Habi Init [%s]: layer=%d END elapsed_ms=%I64u",NNHabiInitModel,i,GetTickCount64()-layer_started);
+#endif
      }
 //---
    return(true);
@@ -11725,6 +11789,10 @@ bool CNet::Load(string file_name, float &error, float &undefine, float &forecast
      {
       for(i = 0; i < num; i++)
         {
+#ifdef NN_HABI_INIT_DIAGNOSTICS
+         ulong layer_started=GetTickCount64();
+         PrintFormat("Habi Init [%s]: load layer=%d BEGIN",NNHabiInitModel,i);
+#endif
          //--- create new element
          CLayer *Layer = new CLayer(0, handle, opencl);
          if(!Layer.Load(handle))
@@ -11781,6 +11849,9 @@ bool CNet::Load(string file_name, float &error, float &undefine, float &forecast
             DeleteObj(Layer);
             break;
            }
+#ifdef NN_HABI_INIT_DIAGNOSTICS
+         PrintFormat("Habi Init [%s]: load layer=%d END type=%d elapsed_ms=%I64u",NNHabiInitModel,i,Layer.At(0).Type(),GetTickCount64()-layer_started);
+#endif
         }
      }
    FileClose(handle);
@@ -19384,6 +19455,10 @@ bool CNet::OpenCLInit(void)
      }
 //--- create kernels
    opencl.SetKernelsCount(402);
+#ifdef NN_HABI_INIT_DIAGNOSTICS
+   ulong kernel_started=GetTickCount64();
+   PrintFormat("Habi Init [%s]: kernels BEGIN count=402",NNHabiInitModel);
+#endif
    CreateKernel(def_k_HabiGaussianForward, "HabiGaussianForward")
    CreateKernel(def_k_HabiGaussianBackward, "HabiGaussianBackward")
    CreateKernel(def_k_HabiCriticSeed, "HabiCriticSeed")
@@ -19786,6 +19861,9 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_OMPBDisagreement, "OMPBDisagreement")
    CreateKernel(def_k_OMPBDisagreementGrad, "OMPBDisagreementGrad")
    CreateKernel(def_k_OMPBGaussianKL, "OMPBGaussianKL")
+#ifdef NN_HABI_INIT_DIAGNOSTICS
+   PrintFormat("Habi Init [%s]: kernels END elapsed_ms=%I64u",NNHabiInitModel,GetTickCount64()-kernel_started);
+#endif
 //---
    return(true);
   }

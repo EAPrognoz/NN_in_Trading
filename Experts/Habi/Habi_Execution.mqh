@@ -1065,7 +1065,7 @@ public:
 //+------------------------------------------------------------------+
    bool              Request(int n,MqlTradeRequest &request)
      {
-      if(slots[n].pending || slots[n].unknown || iTime(_Symbol,DataTimeframe,0)!=slots[n].bar)
+      if(slots[n].pending || slots[n].unknown || iTime(_Symbol,TimeFrame,0)!=slots[n].bar)
          return(false);
 
       request.symbol=_Symbol;
@@ -1454,8 +1454,8 @@ public:
          if(records[k].boundary || records[k].used || records[k].gap || records[k].start>=bar)
             continue;
 
-         int distance=iBarShift(_Symbol,DataTimeframe,records[k].start,true);
-         int end_shift=iBarShift(_Symbol,DataTimeframe,bar,true);
+         int distance=iBarShift(_Symbol,TimeFrame,records[k].start,true);
+         int end_shift=iBarShift(_Symbol,TimeFrame,bar,true);
 
          if(distance<0 || end_shift<0 || distance-end_shift!=1)
            {

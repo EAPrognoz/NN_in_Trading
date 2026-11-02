@@ -548,6 +548,9 @@ public:
       Create(Description);
      }
    bool                    Create(CArrayObj *Description);
+   //--- Prepare an owned runtime once, or borrow a ready runtime before Create/Load.
+   bool                    PrepareOpenCLRuntime(void);
+   bool                    UseOpenCLRuntime(COpenCLMy *runtime);
    /** Destructor */      ~CNet(void);
    //--- Feed Forward method.@param[in] prevLayer Pointer to previos layer. @param[in] window Window of input data. @param[in] tem Use Time Embedding.
    bool                    feedForward(CArrayFloat *inputVals,
