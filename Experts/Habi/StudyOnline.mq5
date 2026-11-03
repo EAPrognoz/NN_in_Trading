@@ -93,7 +93,7 @@ void OnTick()
 
       if(k>=0)
         {
-         if(!ExtModels.TD(ExtExecution.records[k].z,ExtExecution.records[k].actions,ExtExecution.records[k].reward,ExtExecution.records[k].done,ExtExecution.records[k].next))
+         if(!ExtModels.TD(ExtExecution.records[k].distribution,ExtExecution.records[k].actions,ExtExecution.records[k].reward,ExtExecution.records[k].done,ExtExecution.records[k].next))
            {
             Stop("Critic TD update failed");
 
@@ -163,7 +163,7 @@ void OnTick()
 
    ExtExecution.CommitAccountBoundary();
 
-   if(!ExtExecution.Begin(observation,ExtModels.last_z,ExtModels.last_actions,bar))
+   if(!ExtExecution.Begin(observation,ExtModels.last_distribution,ExtModels.last_actions,bar))
      {
       Stop("new command packet failed");
 

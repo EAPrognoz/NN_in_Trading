@@ -46,7 +46,7 @@ struct SHabiTransition
    datetime          start;                   // start boundary time
    datetime          finish;                  // end boundary time
    float             observation[];           // observation at the start
-   float             z[];                     // latent sample of the policy
+   float             distribution[];                     // snapshot of the policy distribution
    float             actions[];               // actions applied to the slots
    float             reward[];                // reward of every slot
    float             done[];                  // terminal flag of every slot
@@ -1360,7 +1360,7 @@ public:
 //+------------------------------------------------------------------+
 //| Begin - opens a transition record and applies actions            |
 //+------------------------------------------------------------------+
-   bool              Begin(const float &observation[],const float &z[],const float &actions[],datetime bar)
+   bool              Begin(const float &observation[],const float &distribution[],const float &actions[],datetime bar)
      {
       int k=ArraySize(records);
       int N=ArraySize(slots);
@@ -1373,7 +1373,7 @@ public:
       records[k].start=bar;
 
       ArrayCopy(records[k].observation,observation);
-      ArrayCopy(records[k].z,z);
+      ArrayCopy(records[k].distribution,distribution);
       ArrayCopy(records[k].actions,actions);
 
       ArrayResize(records[k].start_float,N);

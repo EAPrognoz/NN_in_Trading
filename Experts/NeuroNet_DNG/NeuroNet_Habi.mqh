@@ -1027,17 +1027,10 @@ bool CNeuronHabiVAEOCL::calcInputGradients(CNeuronBaseOCL *p,CBufferFloat *ctx,
    if(mode!=B_DECODER_BC && mode!=B_DECODER_POLICY)
       return(false);
 
-   int payload=(int)(mode==B_DECODER_BC?6:N*6+N*L);
+   int payload=(int)(mode==B_DECODER_BC?6:N*6+2*L);
 
    if(!frame.Backward(ctx,payload))
       return(false);
-
-   if(mode==B_DECODER_POLICY)
-     {
-      if(!HabiPayload(ctx,4+N*6,N*L,GetPointer(direct),OpenCL) ||
-         !SumAndNormalize(Gradient,GetPointer(direct),Gradient,N*L,false,0,0,0,1))
-         return(false);
-     }
 
    long memory=0;
 
@@ -1060,6 +1053,20 @@ bool CNeuronHabiVAEOCL::calcInputGradients(CNeuronBaseOCL *p,CBufferFloat *ctx,
    uint local[]= {1,N};
 
    kernelExecuteLoc(k,off,sz,local)
+
+   if(mode!=B_DECODER_POLICY)
+      return(true);
+
+   CBufferFloat *input_gradient=p.getGradient();
+   if(!HabiPayload(ctx,4+N*6,2*L,GetPointer(direct),OpenCL) ||
+      !HabiScratch(GetPointer(flags),OpenCL,2*L) ||
+      !SumAndNormalize(input_gradient,GetPointer(direct),input_gradient,2*L,
+                       false,0,0,0,1,GetPointer(flags)) || !flags.BufferRead())
+      return(false);
+
+   for(int i=0;i<flags.Total();i++)
+      if(flags.At(i)!=0)
+         return(false);
 
    return(true);
   }
@@ -1140,7 +1147,7 @@ bool CNeuronHabiDecoderHeadOCL::calcInputGradients(CNeuronBaseOCL *p,CBufferFloa
    uint token;
 
    if(!frame.Header(ctx,mode,token) || (mode!=23 && mode!=24) ||
-      !frame.Backward(ctx,mode==23?A:N*A+N*L))
+      !frame.Backward(ctx,mode==23?A:N*A+2*L))
       return(false);
 
    if(mode==23)
@@ -1158,20 +1165,22 @@ bool CNeuronHabiDecoderHeadOCL::calcInputGradients(CNeuronBaseOCL *p,CBufferFloa
    return(DeActivation(p.getOutput(),p.getGradient(),Gradient,SIGMOID));
   }
 //+------------------------------------------------------------------+
-//| CNeuronHabiCriticInputOCL - Critic input of latent and act       |
+//| CNeuronHabiCriticInputOCL - Critic input of distribution and action       |
 //+------------------------------------------------------------------+
 class CNeuronHabiCriticInputOCL : public CNeuronHabiLeafOCL
   {
 public:
+   CNeuronHabiCriticInputOCL() { direct_valid=false; }
    virtual int       Type() const override
      {
       return(defNeuronHabiCriticInputOCL);
      }
    bool              DirectGradient(float &v[])
      {
-      return(scratch[1].GetData(v)==(int)(N*L));
+      return(direct_valid && scratch[2].GetData(v)==(int)(2*L));
      }
 protected:
+   bool direct_valid;
    virtual bool      feedForward(CNeuronBaseOCL *p,CBufferFloat *ctx) override;
    virtual bool      calcInputGradients(CNeuronBaseOCL *p,CBufferFloat *ctx,CBufferFloat *sg,
                                         ENUM_ACTIVATION ac=None) override;
@@ -1181,12 +1190,20 @@ protected:
 //+------------------------------------------------------------------+
 bool CNeuronHabiCriticInputOCL::feedForward(CNeuronBaseOCL *p,CBufferFloat *ctx)
   {
-   if(!p || p.Neurons()!=N*A || !frame.Forward(ctx,N*L,bTrain) ||
+   direct_valid=false;
+   ulong width=2*(ulong)L+A;
+   if(!p || N==0 || L==0 || A==0 || width>INT_MAX || N>INT_MAX/width ||
+      p.Neurons()!=N*A || Neurons()!=N*width ||
+      !frame.Forward(ctx,2*L,bTrain) ||
       (frame.mode!=31 && frame.mode!=35 && frame.mode!=36) ||
-      !HabiPayload(ctx,4,N*L,GetPointer(scratch[0]),OpenCL))
+      !HabiPayload(ctx,4,2*L,GetPointer(scratch[0]),OpenCL))
       return(false);
 
-   return(Concat(GetPointer(scratch[0]),p.getOutput(),Output,L,A,N));
+   for(int i=0;i<scratch[0].Total();i++)
+      if(!MathIsValidNumber(scratch[0].At(i)))
+         return(false);
+
+   return(ConcatVecMatrix(GetPointer(scratch[0]),p.getOutput(),Output,2*L,N,A,1,true));
   }
 //+------------------------------------------------------------------+
 //| CNeuronHabiCriticInputOCL::calcInputGradients - backward pass    |
@@ -1194,14 +1211,35 @@ bool CNeuronHabiCriticInputOCL::feedForward(CNeuronBaseOCL *p,CBufferFloat *ctx)
 bool CNeuronHabiCriticInputOCL::calcInputGradients(CNeuronBaseOCL *p,CBufferFloat *ctx,
       CBufferFloat *sg,ENUM_ACTIVATION ac=None)
   {
+   direct_valid=false;
    int mode;
    uint token;
 
-   if(!frame.Header(ctx,mode,token) || !frame.Backward(ctx,mode==32?N:(mode==33?3*N:0)) ||
-      !Ready(1,N*L))
+   if(!p || !frame.Header(ctx,mode,token) || !frame.Backward(ctx,mode==32?N:(mode==33?3*N:0)) ||
+      !Ready(1,N*2*L) ||
+      !DeConcat(GetPointer(scratch[1]),p.getGradient(),Gradient,2*L,A,N))
       return(false);
 
-   return(DeConcat(GetPointer(scratch[1]),p.getGradient(),Gradient,L,A,N));
+   if(mode!=34)
+      return(true);
+   if(!Ready(2,2*L) || !Ready(6,2*L))
+      return(false);
+
+   int k=def_k_DPCCDenoiserBroadcastGradient;
+
+   setBuffer(k,0,scratch[1].GetIndex())
+   setBuffer(k,1,scratch[2].GetIndex())
+   setBuffer(k,2,scratch[6].GetIndex())
+   setArgument(k,3,(int)N)
+   setArgument(k,4,(int)(2*L))
+
+   uint off[]={0};
+   uint size[]={2*L};
+
+   kernelExecute(k,off,size)
+
+   direct_valid=Finite(2*L);
+   return(direct_valid);
   }
 //+------------------------------------------------------------------+
 //| CNeuronHabiCriticHeadOCL - Critic head of the risk value         |
@@ -1224,7 +1262,7 @@ protected:
    float             gamma;
    virtual bool      feedForward(CNeuronBaseOCL *p,CBufferFloat *ctx) override
      {
-      return(frame.Forward(ctx,N*L,bTrain) && (frame.mode==31 || frame.mode==35 ||
+      return(frame.Forward(ctx,2*L,bTrain) && (frame.mode==31 || frame.mode==35 ||
              frame.mode==36) && Pass(p));
      }
    virtual bool      calcInputGradients(CNeuronBaseOCL *p,CBufferFloat *ctx,CBufferFloat *sg,

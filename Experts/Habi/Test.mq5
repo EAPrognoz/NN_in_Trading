@@ -57,7 +57,7 @@ void OnTick()
    float observation[];
    float scores[];
 
-   if(!ExtExecution.Observation(ExtHistory,bar,observation) || !ExtModels.Predict(observation,false) || !ExtModels.Scores(ExtModels.critic,ExtModels.last_z,ExtModels.last_actions,++ExtModels.serial,35,false,scores))
+   if(!ExtExecution.Observation(ExtHistory,bar,observation) || !ExtModels.Predict(observation,false) || !ExtModels.Scores(ExtModels.critic,ExtModels.last_distribution,ExtModels.last_actions,++ExtModels.serial,35,false,scores))
      {
       ExtFailed=true;
       HabiFatal("Test observation/forward failed");

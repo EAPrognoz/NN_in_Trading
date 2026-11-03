@@ -147,7 +147,7 @@ bool StudyStep()
    SHabiSnapshot snapshot;
    float observation[];
    float teacher[];
-   float z[];
+   float distribution[];
    float actions[];
    SHabiEvaluation evaluation;
    uint id=0;
@@ -176,7 +176,7 @@ bool StudyStep()
 
    record.rewards[0]=(float)teacher_return;
 
-   if(!ExtModels.MC(observation,teacher,z,actions,id))
+   if(!ExtModels.MC(observation,teacher,distribution,actions,id))
      {
       ExtFailed=true;
       ExtStage="Ошибка генерации Posterior";
@@ -194,7 +194,7 @@ bool StudyStep()
       return(true);
      }
 
-   if(!ExtModels.LearnMC(z,actions,evaluation.target,id))
+   if(!ExtModels.LearnMC(distribution,actions,evaluation.target,id))
      {
       ExtFailed=true;
       ExtStage="Ошибка обучения Critic MC";
