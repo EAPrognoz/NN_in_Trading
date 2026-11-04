@@ -776,10 +776,10 @@ public:
    //+------------------------------------------------------------------+
    //| BC - runs one behavioural cloning update                         |
    //+------------------------------------------------------------------+
-   bool              BC(const float &o[],const float &teacher[])
+   bool              BC(const float &o[],const float &teacher[],double &mse,double &kl,double &beta_used)
      {
       uint id=++serial;
-      float empty[],qinput[],pv[],qv[],reconstruction[],payload[];
+      float empty[],qinput[],pv[],qv[],reconstruction[],payload[],prediction[];
 
       ArrayCopy(qinput,o);
       ArrayCopy(qinput,teacher,ArraySize(o));
@@ -793,7 +793,7 @@ public:
 
       float beta=((CNeuronHabiGaussianOCL*)posterior.Layer(5)).EffectiveBeta();
 
-      if(!HabiForward(decoder,qv,21,id,empty,true) || !HabiBackward(decoder,23,id,teacher) || !HabiGradient(decoder,reconstruction))
+      if(!HabiForward(decoder,qv,21,id,empty,true) || !HabiOutput(decoder,5,g.N*g.A,prediction) || !HabiBackward(decoder,23,id,teacher) || !HabiGradient(decoder,reconstruction))
          return(false);
 
       ArrayCopy(payload,pv);
@@ -809,7 +809,19 @@ public:
       ArrayResize(payload,2*g.L+1);
       payload[2*g.L]=beta;
 
-      return(HabiBackward(prior,11,id,payload));
+      if(!HabiBackward(prior,11,id,payload))
+         return(false);
+
+      mse=0;
+      for(uint i=0;i<g.N*g.A;i++)
+        {
+         double residual=(double)prediction[i]-teacher[i%g.A];
+         mse+=residual*residual;
+        }
+      mse/=g.N*g.A;
+      kl=((CNeuronHabiGaussianOCL*)posterior.Layer(5)).LastKL();
+      beta_used=beta;
+      return(true);
      }
    //+------------------------------------------------------------------+
    //| MC - draws one posterior sample and decodes it                   |
@@ -831,11 +843,21 @@ public:
    //+------------------------------------------------------------------+
    //| LearnMC - updates the critic towards the given targets           |
    //+------------------------------------------------------------------+
-   bool              LearnMC(const float &distribution[],const float &a[],const float &targets[],uint id)
+   bool              LearnMC(const float &distribution[],const float &a[],const float &targets[],uint id,double &mse)
      {
       float q[];
 
-      return(Scores(critic,distribution,a,id,31,true,q) && HabiBackward(critic,32,id,targets));
+      if(!Scores(critic,distribution,a,id,31,true,q) || !HabiBackward(critic,32,id,targets))
+         return(false);
+
+      mse=0;
+      for(uint i=0;i<g.N;i++)
+        {
+         double residual=(double)q[i]-targets[i];
+         mse+=residual*residual;
+        }
+      mse/=g.N;
+      return(true);
      }
    //+------------------------------------------------------------------+
    //| TD - runs one critic TD update using the target networks         |

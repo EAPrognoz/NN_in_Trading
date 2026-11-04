@@ -4787,10 +4787,6 @@ bool CNet::Create(CArrayObj *Description)
      {
       prev = desc;
       desc = Description.At(i);
-#ifdef NN_HABI_INIT_DIAGNOSTICS
-      ulong layer_started=GetTickCount64();
-      PrintFormat("Habi Init [%s]: layer=%d BEGIN type=%d count=%u",NNHabiInitModel,i,(int)desc.type,desc.count);
-#endif
       if((i + 1) < total)
         {
          next = Description.At(i + 1);
@@ -10928,9 +10924,6 @@ bool CNet::Create(CArrayObj *Description)
          DeleteObj(layers);
          ReturnFalse;
         }
-#ifdef NN_HABI_INIT_DIAGNOSTICS
-      PrintFormat("Habi Init [%s]: layer=%d END elapsed_ms=%I64u",NNHabiInitModel,i,GetTickCount64()-layer_started);
-#endif
      }
 //---
    return(true);
@@ -11789,10 +11782,6 @@ bool CNet::Load(string file_name, float &error, float &undefine, float &forecast
      {
       for(i = 0; i < num; i++)
         {
-#ifdef NN_HABI_INIT_DIAGNOSTICS
-         ulong layer_started=GetTickCount64();
-         PrintFormat("Habi Init [%s]: load layer=%d BEGIN",NNHabiInitModel,i);
-#endif
          //--- create new element
          CLayer *Layer = new CLayer(0, handle, opencl);
          if(!Layer.Load(handle))
@@ -11849,9 +11838,6 @@ bool CNet::Load(string file_name, float &error, float &undefine, float &forecast
             DeleteObj(Layer);
             break;
            }
-#ifdef NN_HABI_INIT_DIAGNOSTICS
-         PrintFormat("Habi Init [%s]: load layer=%d END type=%d elapsed_ms=%I64u",NNHabiInitModel,i,Layer.At(0).Type(),GetTickCount64()-layer_started);
-#endif
         }
      }
    FileClose(handle);

@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                       Study.mq5  |
 //|                                 Copyright 2026, MetaQuotes Ltd.  |
 //|                                                    www.mql5.com  |
@@ -40,11 +40,29 @@ ulong         ExtSkipped=0;       // skipped examples counter
 ulong         ExtStartedMs=0;     // elapsed wall time, including initialization
 ulong         ExtShownMs=0;       // last chart update
 ulong         ExtTotal=0;         // planned sample decisions across all passes
+const string  StudyStopButton="HABI_Study_Stop";
+ulong         ExtBCUpdates=0;
+double        ExtBCSquaredError=0;
+double        ExtKLSum=0;
+double        ExtBeta=0;
+double        ExtMCSquaredError=0;
 string        ExtStage="Инициализация моделей / OpenCL";
 
 //+------------------------------------------------------------------+
 //| StudyProgress - refreshes the chart without slowing each sample |
 //+------------------------------------------------------------------+
+string StudyMetrics()
+  {
+   string bc=ExtBCUpdates>0 ?
+             StringFormat("BC Action6 RMSE=%.6g | KL(q||p)=%.6g | beta=%.6g | BC=%I64u",
+                          MathSqrt(ExtBCSquaredError/ExtBCUpdates),ExtKLSum/ExtBCUpdates,
+                          ExtBeta,ExtBCUpdates) : "BC Action6 RMSE / KL / beta: —";
+   string mc=ExtExamples>0 ?
+             StringFormat("Critic MC RMSE=%.6g | MC=%I64u",
+                          MathSqrt(ExtMCSquaredError/ExtExamples),ExtExamples) : "Critic MC RMSE: —";
+   return(bc+" | "+mc);
+  }
+
 void StudyProgress(bool force=false)
   {
    ulong now=GetTickCount64();
@@ -58,11 +76,11 @@ void StudyProgress(bool force=false)
    Comment(StringFormat("HABI Study | %s %s\nЭтап: %s\nFIT: %s — %s\n"+
                         "Проход: %d/%d | Прогресс: %.2f%% (%I64u/%I64u)\n"+
                         "Обучено: %I64u | Пропущено: %I64u\n"+
-                        "Время: %I64u:%02u:%02u | Скорость: %.2f прим./с",
+                        "Время: %I64u:%02u:%02u | Скорость: %.2f прим./с\n%s",
                         _Symbol,EnumToString(TimeFrame==PERIOD_CURRENT?(ENUM_TIMEFRAMES)_Period:TimeFrame),
                         ExtStage,TimeToString(Start,TIME_DATE),TimeToString(End,TIME_DATE),
                         MathMin(ExtPass+1,MathMax(Epochs,1)),Epochs,percent,processed,ExtTotal,
-                        ExtExamples,ExtSkipped,seconds/3600,(uint)((seconds/60)%60),(uint)(seconds%60),speed));
+                        ExtExamples,ExtSkipped,seconds/3600,(uint)((seconds/60)%60),(uint)(seconds%60),speed,StudyMetrics()));
    ChartRedraw();
   }
 
@@ -72,6 +90,22 @@ void StudyProgress(bool force=false)
 int OnInit()
   {
    ExtStartedMs=GetTickCount64();
+   if(!ObjectCreate(0,StudyStopButton,OBJ_BUTTON,0,0,0) ||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_CORNER,CORNER_RIGHT_UPPER) ||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_XDISTANCE,200) ||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_YDISTANCE,5) ||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_XSIZE,180) ||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_YSIZE,28) ||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_COLOR,clrWhite) ||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_BGCOLOR,clrFireBrick) ||
+      !ObjectSetString(0,StudyStopButton,OBJPROP_TEXT,"Остановить и сохранить"))
+     {
+      ExtFailed=true;
+      ExtStage="Ошибка создания кнопки остановки";
+      StudyProgress(true);
+      return(INIT_FAILED);
+     }
+
    StudyProgress(true);
    if(StudyWorkBudgetMs<1 || !HabiStart(ExtModels,ExtHistory,0))
      {
@@ -106,6 +140,40 @@ int OnInit()
    StudyProgress(true);
    return(INIT_SUCCEEDED);
   }
+void StudyFinish(bool interrupted)
+  {
+   ExtFinished=true;
+   EventKillTimer();
+   ExtStage="Сохранение моделей";
+   StudyProgress(true);
+
+   if(!ExtModels.Save())
+     {
+      ExtStage="Ошибка сохранения моделей";
+      ObjectSetInteger(0,StudyStopButton,OBJPROP_STATE,false);
+      ObjectSetString(0,StudyStopButton,OBJPROP_TEXT,"Повторить сохранение");
+      StudyProgress(true);
+      Print("Habi Study: save failed, click the stop button to retry");
+      return;
+     }
+
+   PrintFormat("Habi Study %s: %s %s, FIT %s - %s, epochs=%d/%d, examples=%I64u skipped=%I64u elapsed_ms=%I64u | %s",
+               interrupted?"stopped":"complete",
+               _Symbol,EnumToString(TimeFrame==PERIOD_CURRENT?(ENUM_TIMEFRAMES)_Period:TimeFrame),
+               TimeToString(Start,TIME_DATE),TimeToString(End,TIME_DATE),
+               ExtPass,Epochs,ExtExamples,ExtSkipped,GetTickCount64()-ExtStartedMs,StudyMetrics());
+   ObjectDelete(0,StudyStopButton);
+   Comment("");
+   ChartRedraw();
+   ExpertRemove();
+  }
+
+void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
+  {
+   if(id==CHARTEVENT_OBJECT_CLICK && sparam==StudyStopButton && !ExtFailed && !IsStopped())
+      StudyFinish(ExtPass<Epochs);
+  }
+
 //+------------------------------------------------------------------+
 //| StudyStep - performs one training step on the current sample     |
 //+------------------------------------------------------------------+
@@ -117,25 +185,7 @@ bool StudyStep()
 
       if(ExtPass>=Epochs)
         {
-         ExtFinished=true;
-         EventKillTimer();
-         ExtStage="Сохранение моделей";
-         StudyProgress(true);
-
-         if(!ExtModels.Save())
-           {
-            ExtFailed=true;
-            ExtStage="Ошибка сохранения моделей";
-            StudyProgress(true);
-            HabiFatal("Study Save failed");
-           }
-         else
-           {
-            ExtStage="Завершено: модели сохранены";
-            StudyProgress(true);
-            PrintFormat("Habi Study complete: examples=%I64u skipped=%I64u",ExtExamples,ExtSkipped);
-           }
-
+         StudyFinish(false);
          return(false);
         }
 
@@ -160,7 +210,8 @@ bool StudyStep()
       return(true);
      }
 
-   if(!ExtModels.BC(observation,teacher))
+   double bc_mse=0,kl=0,beta=0;
+   if(!ExtModels.BC(observation,teacher,bc_mse,kl,beta))
      {
       ExtFailed=true;
       ExtStage="Ошибка обучения BC";
@@ -170,6 +221,11 @@ bool StudyStep()
 
       return(false);
      }
+
+   ExtBCUpdates++;
+   ExtBCSquaredError+=bc_mse;
+   ExtKLSum+=kl;
+   ExtBeta=beta;
 
    for(int k=0;k<6;k++)
       record.action[k]=teacher[k];
@@ -194,7 +250,8 @@ bool StudyStep()
       return(true);
      }
 
-   if(!ExtModels.LearnMC(distribution,actions,evaluation.target,id))
+   double mc_mse=0;
+   if(!ExtModels.LearnMC(distribution,actions,evaluation.target,id,mc_mse))
      {
       ExtFailed=true;
       ExtStage="Ошибка обучения Critic MC";
@@ -205,6 +262,7 @@ bool StudyStep()
       return(false);
      }
 
+   ExtMCSquaredError+=mc_mse;
    ExtExamples++;
 
    return(true);
@@ -229,7 +287,8 @@ void OnTimer()
    while(!ExtFinished && !ExtFailed && !IsStopped() && GetMicrosecondCount()-started<budget);
 
    ExtRunning=false;
-   StudyProgress();
+   if(!ExtFinished)
+      StudyProgress();
   }
 //+------------------------------------------------------------------+
 //| OnDeinit - stops the study timer                                 |
@@ -237,6 +296,8 @@ void OnTimer()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
+   ObjectDelete(0,StudyStopButton);
+   ChartRedraw();
    if(!ExtFinished && !ExtFailed)
      {
       ExtStage="Остановлено";

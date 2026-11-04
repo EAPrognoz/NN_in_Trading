@@ -655,6 +655,7 @@ public:
      }
    bool              Beta(bool use_adaptive,double value,double lr_beta,double k_target,
                           double r1,double r2,double epsilon);
+   double            LastKL() const { return(cached_K); }
    float             EffectiveBeta()
      {
       return((float)(adaptive?MathExp(b):beta_fixed));
