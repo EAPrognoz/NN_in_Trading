@@ -676,8 +676,21 @@ public:
          if(!posterior || !Role(posterior,posterior_file,1,true))
             return(false);
 
-         if((posterior_file=="" || ResetLoadedBeta) && !((CNeuronHabiGaussianOCL*)posterior.Layer(5)).Beta(AdaptiveBeta,BetaValue,BetaLearningRate,KTarget,BetaRho1,BetaRho2,BetaEpsilon))
+         CNeuronHabiGaussianOCL *head=(CNeuronHabiGaussianOCL*)posterior.Layer(5);
+         float loaded_beta=head.EffectiveBeta();
+         bool invalid_beta=!MathIsValidNumber(loaded_beta) || loaded_beta<=0;
+         if(posterior_file=="" || ResetLoadedBeta || invalid_beta || head.IsBetaAdaptive()!=AdaptiveBeta)
+           {
+            if(!head.Beta(AdaptiveBeta,BetaValue,BetaLearningRate,KTarget,BetaRho1,BetaRho2,BetaEpsilon))
+               return(false);
+            if(posterior_file!="")
+               PrintFormat("Habi Study: configured KL beta %.6g (adaptive=%s) for %s",head.EffectiveBeta(),AdaptiveBeta?"true":"false",posterior_file);
+           }
+         if(!MathIsValidNumber(head.EffectiveBeta()) || head.EffectiveBeta()<=0)
+           {
+            Print("Habi Study: BC requires a positive finite KL beta");
             return(false);
+           }
         }
 
       if(!HabiImport(prior,PriorImportFile,PriorImportLayers,0,g) || !HabiImport(decoder,DecoderImportFile,DecoderImportLayers,2,g) || !HabiImport(critic,CriticImportFile,CriticImportLayers,3,g) || (posterior && !HabiImport(posterior,PosteriorImportFile,PosteriorImportLayers,1,g)))
@@ -778,6 +791,10 @@ public:
    //+------------------------------------------------------------------+
    bool              BC(const float &o[],const float &teacher[],double &mse,double &kl,double &beta_used)
      {
+      float beta=((CNeuronHabiGaussianOCL*)posterior.Layer(5)).EffectiveBeta();
+      if(!MathIsValidNumber(beta) || beta<=0)
+         return(false);
+
       uint id=++serial;
       float empty[],qinput[],pv[],qv[],reconstruction[],payload[],prediction[];
 
@@ -790,8 +807,6 @@ public:
 
       if(!HabiForward(prior,o,1,id,empty,true) || !HabiForward(posterior,qinput,1,id,empty,true) || !HabiOutput(prior,5,2*g.L,pv) || !HabiOutput(posterior,5,2*g.L,qv))
          return(false);
-
-      float beta=((CNeuronHabiGaussianOCL*)posterior.Layer(5)).EffectiveBeta();
 
       if(!HabiForward(decoder,qv,21,id,empty,true) || !HabiOutput(decoder,5,g.N*g.A,prediction) || !HabiBackward(decoder,23,id,teacher) || !HabiGradient(decoder,reconstruction))
          return(false);

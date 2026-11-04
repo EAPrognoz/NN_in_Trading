@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                       Study.mq5  |
 //|                                 Copyright 2026, MetaQuotes Ltd.  |
 //|                                                    www.mql5.com  |
@@ -15,7 +15,7 @@
 input group    "---- Study ----"
 input datetime Start=D'2024.01.01';
 input datetime End=D'2026.01.01';
-input int      Epochs=1;
+input int      Epochs=100;
 input double   MinBalance=50;
 input double   MaxBalance=150;
 #include "Trajectory.mqh"
