@@ -12,6 +12,10 @@
 //--- Facade include for the logical NeuroNet blocks.
 #include "NeuroNet_Definitions.mqh"
 #include "NeuroNet_Declarations.mqh"
+#include "NeuroNet_AlphaGen.mqh"
+#include "NeuroNet_AlphaGenPool.mqh"
+#include "NeuroNet_AlphaGenPolicy.mqh"
+#include "NeuroNet_AlphaGenComposite.mqh"
 #include "NeuroNet_Core.mqh"
 #include "NeuroNet_RecurrentState.mqh"
 #include "NeuroNet_SpikeFlow.mqh"

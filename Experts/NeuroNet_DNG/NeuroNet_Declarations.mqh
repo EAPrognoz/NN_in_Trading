@@ -308,6 +308,21 @@ public:
    long              GetMaxLocalSize(const int dimension) const { return(uLocalDimension.data[dimension]); }
    long              GetMaxWorkGroupSize(void) const { return(uMaxWorkGroup.data[0]); }
    ulong             GetBufferSize(const int buffer_index) const;
+   bool              WaitAlphaGenKernel(const int kernel)
+     {
+      ulong started=GetTickCount64();
+      int status=ExecutionStatus(kernel);
+      while(status>CL_COMPLETE && !IsStopped() && GetTickCount64()-started<10000)
+        {
+         Sleep(1);
+         status=ExecutionStatus(kernel);
+        }
+      if(status==CL_COMPLETE && !IsStopped())
+         return(true);
+      PrintFormat("AlphaGen OpenCL kernel %s did not complete: status=%d error=%d",
+                  GetKernelName(kernel),status,GetLastError());
+      return(false);
+     }
   };
 //+------------------------------------------------------------------+
 //| Bayesian sampler adapter for posterior draws.                    |
@@ -17990,6 +18005,178 @@ bool NNQSelectedPolicyGradient(CNet *critic, CNet *market, CBufferFloat *account
                                CBufferFloat *action_gradient);
 
 #include "NeuroNet_Habi.mqh"
+
+//+------------------------------------------------------------------+
+//| AlphaGen evaluator: all historical arrays remain on the device.  |
+//+------------------------------------------------------------------+
+class CNeuronAlphaGenEvaluatorOCL : public CNeuronBaseOCL
+  {
+protected:
+   CBufferFloat      m_cConfig;
+   CBufferFloat      m_cMask;
+   CBufferFloat      m_cMaskWork;
+   CBufferFloat      m_cStack;
+   CBufferFloat      m_cValidity;
+   CBufferFloat      m_cRowStatus;
+   CBufferFloat      m_cFitWork;
+   CBufferFloat      m_cNumeric;
+   int               m_iWindow;
+   int               m_iMaxTokens;
+   int               m_iCapacity;
+
+public:
+                     CNeuronAlphaGenEvaluatorOCL(void):m_iWindow(0),m_iMaxTokens(0),m_iCapacity(0) {};
+   bool              Configure(COpenCLMy *context,const float &config[]);
+   bool              Mask(CBufferFloat *tokens,const int length);
+   bool              Evaluate(CBufferFloat *market,CBufferFloat *tokens,const int length);
+   bool              Standardize(CBufferFloat *source,CBufferFloat *validity,const int offset,
+                                const int count,CBufferFloat *normalized,CBufferFloat *statistics,
+                                const int stats_offset);
+   bool              Ridge(CBufferFloat *columns,CBufferFloat *target,const int count,
+                          const int factors,CBufferFloat *weights,CBufferFloat *metrics);
+   bool              GAE(CBufferFloat *rollout,const int count,const bool categorical);
+   bool              Numeric(CBufferFloat *source,const bool reset);
+   bool              NumericOK(void);
+   CBufferFloat      *NumericResult(void) { return(GetPointer(m_cNumeric)); }
+   CBufferFloat     *Config(void) { return(GetPointer(m_cConfig)); }
+   CBufferFloat     *MaskBuffer(void) { return(GetPointer(m_cMask)); }
+   CBufferFloat     *Validity(void) { return(GetPointer(m_cRowStatus)); }
+   virtual int       Type(void) const override { return(defNeuronAlphaGenEvaluatorOCL); }
+  };
+//+------------------------------------------------------------------+
+//| Full-tape descendant. Native LSTM matrices and Adam are reused.   |
+//+------------------------------------------------------------------+
+class CNeuronAlphaGenLSTMOCL : public CNeuronLSTMOCL
+  {
+protected:
+   CBufferFloat      m_cTape;
+   CBufferFloat      m_cAnchor;
+   CBufferFloat      m_cSequence;
+   CBufferFloat      m_cSequenceGradient;
+   CBufferFloat      m_cBPTTWork;
+   int               m_iLength;
+   int               m_iCapacity;
+
+public:
+                     CNeuronAlphaGenLSTMOCL(void):m_iLength(0),m_iCapacity(0) {};
+   bool              Configure(COpenCLMy *context,const int inputs,const int hidden,const int capacity);
+   bool              RestoreWorkspace(COpenCLMy *context,const int capacity);
+   bool              Sequence(CBufferFloat *source,const int length);
+   bool              Backward(CBufferFloat *source,CBufferFloat *input_gradient);
+   bool              Apply(void);
+   bool              ResetAnchor(void);
+   bool              SetAnchor(CBufferFloat *anchor);
+   bool              CommitAnchor(void);
+   CBufferFloat     *SequenceOutput(void) { return(GetPointer(m_cSequence)); }
+   CBufferFloat     *SequenceGradient(void) { return(GetPointer(m_cSequenceGradient)); }
+   CBufferFloat     *Anchor(void) { return(GetPointer(m_cAnchor)); }
+   CBufferFloat     *Tape(void) { return(GetPointer(m_cTape)); }
+   int               WeightGradient(void) const { return(m_iWeightsGradient); }
+  };
+
+#include "NeuroNet_AlphaGenPoolDeclarations.mqh"
+#include "NeuroNet_AlphaGenPolicyDeclarations.mqh"
+
+class CNeuronAlphaGenOCL : public CNeuronBaseOCL
+  {
+protected:
+   CNeuronAlphaGenEvaluatorOCL m_cEvaluator;
+   CAlphaGenPool              m_cPool;
+   CNeuronAlphaGenSearchPolicyOCL      m_cSearch;
+   CNeuronAlphaGenTradingPolicyOCL     m_cTrading;
+   float                     m_fConfig[];
+   CBufferFloat              m_cAccount,m_cWorkAnchor,m_cStageAnchor,m_cEvicted,m_cWorkMetadata,m_cTradeIdentifiers,m_cTradeContextMetadata;
+   CBufferFloat              m_cPrefix,m_cFormula,m_cSearchMarket;
+   CBufferFloat              m_cBatchCandidates,m_cBatchWorkspace,m_cBatchSummary;
+   CBufferFloat              m_cTokenPrefixes,m_cTokenMasks,m_cTokenSamples,m_cTokenMetadata,m_cTokenGAE;
+   CBufferFloat              m_cTradeContexts,m_cTradeAnchors,m_cTradeAccounts,m_cTradeSamples,m_cTradeActions,m_cTradeMetadata,m_cTradeGAE;
+   CBufferFloat              m_cReplayPrefix,m_cReplayMask,m_cReplayContext,m_cReplayAnchor,m_cReplayAccount;
+   CBufferFloat             *m_cService;
+   int                       m_iTokenLengths[];
+   ulong                     m_uTradeDecisions[];
+   float                     m_fTradeRewards[];
+   int                       m_iPhase,m_iStatus,m_iPrefixLength,m_iEpisodeStart;
+   int                       m_iTokenCount,m_iTradeCount,m_iTrainingKind,m_iPass,m_iExample;
+   int                       m_iTrials,m_iBudget,m_iPendingTrade;
+   int                       m_iBatchSize,m_iBatchGenerated,m_iBatchProcessed;
+   ulong                     m_uBoundary,m_uObserved,m_uActionBoundary,m_uEvent,m_uDecision;
+   ulong                     m_uTokenUpdates,m_uTradeUpdates,m_uSeed;
+   uint                      m_iFinanceRandom;
+   bool                      m_bConfigured,m_bFrame,m_bGradientReady,m_bRejected,m_bWarmBudget,m_bSearchBudgetPending;
+   bool                      m_bPublicationPermit,m_bPoolWarmup,m_bWorkReady,m_bCorrupted,m_bNextReady;
+   bool                      Allocate(CBufferFloat &buffer,const long count);
+   bool                      Workspace(void);
+   bool                      Slice(CBufferFloat *source,const int source_offset,
+                                   CBufferFloat *destination,const int destination_offset,const int count);
+   bool                      Scalar(CBufferFloat *buffer,const int index,const float value);
+   ulong                     Identifier(CBufferFloat *buffer,const int offset) const;
+   bool                      PoolControl(void);
+   void                      ProbeSearchQueue(const string stage, const float marker);
+   bool                      SearchBatch(CNeuronBaseOCL *source);
+   bool                      Metadata(const bool fresh);
+   bool                      Observe(CNeuronBaseOCL *source,const int flags,const ulong boundary);
+   bool                      SearchStep(CNeuronBaseOCL *source,const ulong boundary);
+   bool                      PoolWarmup(CNeuronBaseOCL *source,const int flags);
+   bool                      Flush(void);
+   bool                      Act(CNeuronBaseOCL *source,const ulong boundary);
+   bool                      Replay(void);
+   bool                      FinishUpdate(void);
+   bool                      BeginTraining(const int kind);
+   bool                      Rewarm(void);
+   bool                      ZeroOutput(void);
+   virtual bool              feedForward(CNeuronBaseOCL *source,CBufferFloat *context) override;
+   virtual bool              feedForward(CNeuronBaseOCL *source) override;
+   virtual bool              calcInputGradients(CNeuronBaseOCL *source) override { return(m_bFrame); }
+   virtual bool              updateInputWeights(CNeuronBaseOCL *source) override;
+public:
+                             CNeuronAlphaGenOCL(void);
+   virtual bool              Init(uint outputs,uint index,COpenCLMy *context,uint count,
+                                  ENUM_OPTIMIZATION method,uint batch) override;
+   bool                      Configure(const float &config[],const ulong seed);
+   void                      Phase(const int phase) { m_iPhase=phase; }
+   void                      SetContext(CBufferFloat *context) { m_cService=context; }
+   int                       Status(void) const { return(m_iStatus); }
+   bool                      HasTraining(void) const { return(m_iTrainingKind!=0); }
+   int                       TrainingTotal(void) const
+     {
+      int count=m_iTrainingKind==1?m_iTokenCount:m_iTradeCount;
+      return(HasTraining()?count*(int)m_fConfig[AG_CFG_PASSES]:0);
+     }
+   int                       TrainingCompleted(void) const
+     {
+      int count=m_iTrainingKind==1?m_iTokenCount:m_iTradeCount;
+      return(HasTraining()?m_iPass*count+m_iExample:0);
+     }
+   bool                      PrepareUpdate(void);
+   bool                      AdjustReward(const ulong decision,const float adjustment);
+   bool                      RestartPoolWarmup(void);
+   bool                      AbortPoolWarmup(void);
+   bool                      ResetWorking(void);
+   bool                      CancelTraining(void);
+   ulong                     InitialSeed(void) const { return(m_uSeed); }
+   bool                      NeedsPoolWarmup(void) const { return(m_bPoolWarmup); }
+   bool                      DiscardDecision(void) { m_iPendingTrade=-1;return(true); }
+   bool                      SafeToSave(void) const { return(m_bConfigured && !m_bCorrupted && !m_bFrame); }
+   float                     ConfigValue(const int slot) const { return(slot>=0 && slot<AG_CFG_SIZE?m_fConfig[slot]:0); }
+   ulong                     TokenUpdates(void) const { return(m_uTokenUpdates); }
+   bool                      EnableParallelSearch(void);
+   int                       BatchGenerated(void) const { return(m_iBatchGenerated); }
+   int                       BatchProcessed(void) const { return(m_iBatchProcessed); }
+   int                       SearchTrials(void) const { return(m_iTrials); }
+   int                       SearchBudget(void) const { return(m_iBudget); }
+   int                       SearchPrefixLength(void) const { return(m_iPrefixLength); }
+   int                       SearchTransitions(void) const { return(m_iTokenCount); }
+   int                       SearchRolloutTarget(void) const { return((int)m_fConfig[AG_CFG_TOKEN_ROLLOUT]); }
+   ulong                     TradeUpdates(void) const { return(m_uTradeUpdates); }
+   int                       PreparedCount(void);
+   int                       ActiveCount(void);
+   double                    FinancialUniform(void);
+   virtual bool              CanStartForward(void) const override { return(!m_bFrame && !m_bCorrupted); }
+   virtual bool              calcOutputGradients(CBufferFloat *target,float &error) override;
+   virtual bool              Save(const int handle) override;
+   virtual bool              Load(const int handle) override;
+   virtual int               Type(void) const override { return(defNeuronAlphaGenOCL); }
+  };
 
 #endif // NEURONET_DECLARATIONS_MQH
 

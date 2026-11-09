@@ -3988,6 +3988,11 @@ union UDPCCDoubleBits
 #define def_k_HabiGaussianBackward 400
 #define def_k_HabiCriticSeed 401
 
+#include "AlphaGen_Contract.mqh"
+#resource "AlphaGen_Contract.mqh" as string ag_contract
+#resource "AlphaGen.cl" as string ag_program
+#resource "AlphaGen_Pool.cl" as string ag_pool_program
+
 #endif // NEURONET_DEFINITIONS_MQH
 
 #ifndef NEURONET_BUILDING_FACADE

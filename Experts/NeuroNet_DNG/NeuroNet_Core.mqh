@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                                NeuroNet_Core.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -802,6 +802,14 @@ bool CLayer::CreateElement(int index)
                break;
             m_data[index] = ompb;
             return(true);
+         case defNeuronAlphaGenOCL:
+           {
+            CNeuronAlphaGenOCL *alphagen=new CNeuronAlphaGenOCL();
+            if(!alphagen || !alphagen.Init(0,index,OpenCL,AG_ACTIONS,ADAM,1))
+              {DeleteObj(alphagen);ReturnFalse;}
+            m_data[index]=alphagen;
+            return(true);
+           }
          case defNeuronLSTMOCL:
             if(!OpenCL)
                ReturnFalse;
@@ -5133,6 +5141,15 @@ bool CNet::Create(CArrayObj *Description)
                  }
                neuron_ocl = NULL;
                break;
+            case defNeuronAlphaGenOCL:
+              {
+               CNeuronAlphaGenOCL *alphagen=new CNeuronAlphaGenOCL();
+               if(!alphagen || !alphagen.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch))
+                 {DeleteObj(alphagen);DeleteObj(temp);ReturnFalse;}
+               if(!temp.Add(alphagen))
+                 {DeleteObj(alphagen);DeleteObj(temp);ReturnFalse;}
+               break;
+              }
             case defNeuronBaseSAMOCL:
                sam_base = new CNeuronBaseSAMOCL();
                if(CheckPointer(sam_base) == POINTER_INVALID)
@@ -11309,6 +11326,11 @@ bool CNet::backPropOCL(CBufferFloat *targetVals,
         }
       switch(temp.Type())
         {
+         case defNeuronAlphaGenOCL:
+            // The composite owns its parameters. Its native backward frame
+            // must be completed; there is no public projection to read back.
+            result = temp.CanStartForward();
+            break;
          case defNeuronDPCCActorOCL:
          case defNeuronConvOCL:
             conv = temp;
@@ -19433,18 +19455,69 @@ bool CNet::OpenCLInit(void)
          ReturnFalse;
       bOwnOpenCL = true;
      }
-   if(!opencl.Initialize(cl_program, true))
+   if(!opencl.Initialize(cl_program+"\n"+ag_contract+"\n"+ag_program+"\n"+ag_pool_program, true))
      {
       DeleteObj(opencl);
       bOwnOpenCL = false;
       ReturnFalse;
      }
 //--- create kernels
-   opencl.SetKernelsCount(402);
+   opencl.SetKernelsCount(AG_KERNEL_COUNT);
 #ifdef NN_HABI_INIT_DIAGNOSTICS
    ulong kernel_started=GetTickCount64();
-   PrintFormat("Habi Init [%s]: kernels BEGIN count=402",NNHabiInitModel);
+   PrintFormat("Habi Init [%s]: kernels BEGIN count=%d",NNHabiInitModel,AG_KERNEL_COUNT);
 #endif
+   CreateKernel(def_k_AGMask, "AGMask")
+   CreateKernel(def_k_AGEvaluate, "AGEvaluate")
+   CreateKernel(def_k_AGStandardize, "AGStandardize")
+   CreateKernel(def_k_AGRidge, "AGRidge")
+   CreateKernel(def_k_AGGAE, "AGGAE")
+   CreateKernel(def_k_AGEmbedding, "AGEmbedding")
+   CreateKernel(def_k_AGEmbeddingBackward, "AGEmbeddingBackward")
+   CreateKernel(def_k_AGLSTMForward, "AGLSTMForward")
+   CreateKernel(def_k_AGLSTMBackward, "AGLSTMBackward")
+   CreateKernel(def_k_AGSequence, "AGSequence")
+   CreateKernel(def_k_AGDistribution, "AGDistribution")
+   CreateKernel(def_k_AGNumeric, "AGNumeric")
+   CreateKernel(def_k_AGDenseGradient, "AGDenseGradient")
+   CreateKernel(def_k_AGReLU, "AGReLU")
+   CreateKernel(def_k_AGContextMetadata, "AGContextMetadata")
+   CreateKernel(def_k_AGCopySlice, "AGCopySlice")
+#ifdef ALPHAGEN_STUDY
+   // Probe before any model buffers or model kernels are prepared.
+   {
+    float probe_input[1]={13579.0f}, probe_output[1]={-1.0f};
+    ResetLastError();
+    int source=opencl.AddBufferFromArray(probe_input,0,1,CL_MEM_READ_WRITE);
+    int destination=opencl.AddBufferFromArray(probe_output,0,1,CL_MEM_READ_WRITE);
+    uint offset[1]={0}, global[1]={1};
+    bool queued=source>=0 && destination>=0 &&
+                opencl.SetArgumentBuffer(def_k_AGCopySlice,def_ag_AGCopySlice_source,source) &&
+                opencl.SetArgument(def_k_AGCopySlice,def_ag_AGCopySlice_source_offset,0) &&
+                opencl.SetArgumentBuffer(def_k_AGCopySlice,def_ag_AGCopySlice_destination,destination) &&
+                opencl.SetArgument(def_k_AGCopySlice,def_ag_AGCopySlice_destination_offset,0) &&
+                opencl.SetArgument(def_k_AGCopySlice,def_ag_AGCopySlice_count,1) &&
+                opencl.Execute(def_k_AGCopySlice,1,offset,global);
+    int enqueue_error=GetLastError();
+    bool complete=queued && opencl.WaitAlphaGenKernel(def_k_AGCopySlice);
+    ResetLastError();
+    bool read=queued && opencl.BufferRead(destination,probe_output,0,0,1);
+    int read_error=GetLastError();
+    int status=queued?(int)opencl.ExecutionStatus(def_k_AGCopySlice):-1;
+    PrintFormat("AlphaGen OpenCL probe before model: queued=%d enqueue_error=%d complete=%d status=%d read=%d read_error=%d marker=%.0f expected=13579",
+                (int)queued,enqueue_error,(int)complete,status,(int)read,read_error,probe_output[0]);
+    if(source>=0) opencl.BufferFree(source);
+    if(destination>=0) opencl.BufferFree(destination);
+    if(!complete || !read || probe_output[0]!=13579.0f)
+       ReturnFalse;
+   }
+#endif
+   CreateKernel(def_k_AGPoolTransaction, "AGPoolTransaction")
+   CreateKernel(def_k_AGPoolSignal, "AGPoolSignal")
+   CreateKernel(def_k_AGPoolCopy, "AGPoolCopy")
+   CreateKernel(def_k_AGSearchGenerate, "AGSearchGenerate")
+   CreateKernel(def_k_AGPoolCommitBatch, "AGPoolCommitBatch")
+   CreateKernel(def_k_AGPoolEvaluateBatch, "AGPoolEvaluateBatch")
    CreateKernel(def_k_HabiGaussianForward, "HabiGaussianForward")
    CreateKernel(def_k_HabiGaussianBackward, "HabiGaussianBackward")
    CreateKernel(def_k_HabiCriticSeed, "HabiCriticSeed")

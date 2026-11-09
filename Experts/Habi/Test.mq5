@@ -12,6 +12,9 @@
 #property strict
 #include "Trajectory.mqh"
 
+input group "---- Q filter ----"
+input double MinExpectedQ=0.0; // execute only when best Q is strictly above this threshold
+
 //+------------------------------------------------------------------+
 //| Глобальные переменные                                            |
 //+------------------------------------------------------------------+
@@ -26,6 +29,9 @@ bool            ExtFailed=false;   // fatal error flag
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   if(!MathIsValidNumber(MinExpectedQ))
+      return(INIT_PARAMETERS_INCORRECT);
+
    if(!HabiStart(ExtModels,ExtHistory,2) || !ExtExecution.Init(1,true))
       return(INIT_FAILED);
 
@@ -73,15 +79,20 @@ void OnTick()
       if(scores[n]>scores[best])
          best=(int)n;
 
+   bool accepted=scores[best]>MinExpectedQ;
    ulong elapsed=GetMicrosecondCount()-start;
 
-   PrintFormat("Habi Test decision_us=%I64u N=%u selected=%d Q=%.9g",elapsed,ExtModels.g.N,best,scores[best]);
+   PrintFormat("Habi Test decision_us=%I64u N=%u selected=%d Q=%.9g threshold=%.9g accepted=%s",
+               elapsed,ExtModels.g.N,best,scores[best],MinExpectedQ,accepted?"true":"false");
 
    float raw[];
 
    ArrayResize(raw,6);
 
-   ArrayCopy(raw,ExtModels.last_actions,0,best*6,6);
+   if(accepted)
+      ArrayCopy(raw,ExtModels.last_actions,0,best*6,6);
+   else
+      ArrayInitialize(raw,0); // HABI_FLAT cancels entries and closes the owned position
 
    ExtExecution.generation++;
 
