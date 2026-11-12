@@ -1,4 +1,4 @@
-﻿//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
 //|                                        NeuroNet_Declarations.mqh |
 //|                                              Copyright 2026, DNG |
 //|                                https://www.mql5.com/ru/users/dng |
@@ -287,14 +287,78 @@ class COpenCLMy   :  public COpenCL
   {
 protected:
    CNet                    *m_inference_owner;
+#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+   int                      m_ag_trace_file;
+   int                      m_ag_last_kernel;
+   ulong                    m_ag_write_sequence;
+#endif
    uaLongChar              uLocalDimension;
    uaLongChar              uMaxWorkGroup;
 
 public:
    /** Constructor */
-                     COpenCLMy(CNet *owner = NULL) : m_inference_owner(owner) {};
+                     COpenCLMy(CNet *owner = NULL) : m_inference_owner(owner)
+#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+                     ,m_ag_trace_file(INVALID_HANDLE),m_ag_last_kernel(-1),m_ag_write_sequence(0)
+#endif
+                     {};
    bool              InferenceRuntimeLoadActive(void) const;
-   /** Destructor */~COpenCLMy(void)   { for(int i = 0; i < m_kernels_total; i++) KernelFree(i); }
+   /** Destructor */~COpenCLMy(void)
+     {
+#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+      if(m_ag_trace_file!=INVALID_HANDLE)
+         FileClose(m_ag_trace_file);
+#endif
+      for(int i=0;i<m_kernels_total;i++) KernelFree(i);
+     }
+#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+// Persist the current host write before entering a potentially blocking driver call.
+   void TraceWrite(const string phase,const int buffer,const uint offset,const uint start,const uint count,const uint width,const int error)
+     {
+      if(m_ag_trace_file==INVALID_HANDLE)
+        {
+         static int context_id=0;
+         string name=StringFormat("AlphaGen_OpenCL_WriteTrace_%d.txt",context_id++);
+         m_ag_trace_file=FileOpen(name,FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_SHARE_READ);
+         if(m_ag_trace_file==INVALID_HANDLE)
+           {
+            PrintFormat("AlphaGen cannot open write trace: error=%d",GetLastError());
+            return;
+           }
+         PrintFormat("AlphaGen OpenCL write trace: %s",name);
+        }
+      string kernel=m_ag_last_kernel>=0?GetKernelName(m_ag_last_kernel):"none";
+      string line=StringFormat("%s seq=%I64u time=%s buffer=%d offset_bytes=%u array_start=%u count=%u element_bytes=%u last_enqueued=%s error=%d",
+                               phase,m_ag_write_sequence,TimeToString(TimeCurrent(),TIME_DATE|TIME_SECONDS),buffer,offset,start,count,width,kernel,error);
+      while(StringLen(line)<512) line+=" ";
+      FileSeek(m_ag_trace_file,0,SEEK_SET);
+      FileWriteString(m_ag_trace_file,line+"\r\n");
+      FileFlush(m_ag_trace_file);
+     }
+   template<typename T>
+   bool BufferWrite(const int buffer,T &data[],const uint offset,const uint start,const uint count)
+     {
+      m_ag_write_sequence++;
+      TraceWrite("BEGIN",buffer,offset,start,count,sizeof(T),0);
+      ResetLastError();
+      bool result=COpenCL::BufferWrite(buffer,data,offset,start,count);
+      int error=GetLastError();
+      TraceWrite(result?"END_OK":"END_FAIL",buffer,offset,start,count,sizeof(T),error);
+      return(result);
+     }
+   bool Execute(const int kernel,const int dimensions,const uint &offset[],const uint &global[])
+     {
+      bool result=COpenCL::Execute(kernel,dimensions,offset,global);
+      if(result) m_ag_last_kernel=kernel;
+      return(result);
+     }
+   bool Execute(const int kernel,const int dimensions,const uint &offset[],const uint &global[],const uint &local[])
+     {
+      bool result=COpenCL::Execute(kernel,dimensions,offset,global,local);
+      if(result) m_ag_last_kernel=kernel;
+      return(result);
+     }
+#endif
    bool              Initialize(const string program, const bool show_log = true);
    template<typename T>
    int               AddBufferFromArray(T &data[],
@@ -308,6 +372,20 @@ public:
    long              GetMaxLocalSize(const int dimension) const { return(uLocalDimension.data[dimension]); }
    long              GetMaxWorkGroupSize(void) const { return(uMaxWorkGroup.data[0]); }
    ulong             GetBufferSize(const int buffer_index) const;
+   // Return a power-of-two group within both runtime and kernel limits.
+   // Recurrent reductions need four lanes per row and at most 128 slots.
+   uint              AlphaGenGroupSize(const int kernel,const uint maximum,const uint minimum)
+     {
+      long limit=GetKernelInfoInteger(kernel,CL_KERNEL_WORK_GROUP_SIZE);
+      long device=GetMaxWorkGroupSize(),dimension=GetMaxLocalSize(0);
+      if(limit<1 || device<1 || dimension<1 || minimum<1 || maximum<minimum)
+         return(0);
+      limit=MathMin(limit,MathMin(device,dimension));
+      uint lanes=1;
+      while(lanes<=maximum/2 && (long)lanes*2<=limit)
+         lanes*=2;
+      return(lanes>=minimum && lanes<=limit?lanes:0);
+     }
    bool              WaitAlphaGenKernel(const int kernel)
      {
       ulong started=GetTickCount64();

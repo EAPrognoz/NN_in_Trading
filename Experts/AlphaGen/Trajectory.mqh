@@ -609,6 +609,10 @@ class CAlphaGenEnvironment
            }
          if(m>AccountInfoDouble(ACCOUNT_MARGIN_FREE))
            {
+#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+            PrintFormat("AlphaGen margin rejected volume=%.8f required=%.2f free=%.2f",
+                        delta,m,AccountInfoDouble(ACCOUNT_MARGIN_FREE));
+#endif
             a.invalid=true;
             SAlphaGenTarget flat;
             ZeroMemory(flat);
@@ -993,6 +997,7 @@ class CAlphaGenApplication
            }
          if(match>=0)
            {
+            PrintFormat("AlphaGen cash correction rejected: ambiguous owner; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
             return(false);
            }
          match=i;
@@ -1006,32 +1011,38 @@ class CAlphaGenApplication
            }
          if(open_decision && at<decision_start_msc)
            {
+            PrintFormat("AlphaGen cash correction rejected: cash precedes open decision; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
             return(false);
            }
          if(ArraySize(sealed)==0 || at>sealed[ArraySize(sealed)-1].end_msc)
            {
             return(true);
            }
+         PrintFormat("AlphaGen cash correction rejected: no matching interval; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
          return(false);
         }
       if(sealed[match].trained || sealed[match].reference<=0)
         {
+         PrintFormat("AlphaGen cash correction rejected: interval trained or invalid reference; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
          return(false);
         }
       int start_shift=iBarShift(_Symbol,TimeFrame,sealed[match].start_boundary,true);
       int cash_shift=iBarShift(_Symbol,TimeFrame,(datetime)((at-1)/1000),false);
       if(start_shift<0 || cash_shift<0)
         {
+         PrintFormat("AlphaGen cash correction rejected: history shift unavailable; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
          return(false);
         }
       int cash_step=MathMax(start_shift-cash_shift+1,1);
       if(cash_step>sealed[match].duration)
         {
+         PrintFormat("AlphaGen cash correction rejected: cash outside interval duration; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
          return(false);
         }
       double adjustment=MathPow(sealed[match].gamma,cash_step-1)*difference/sealed[match].reference;
       if(!MathIsValidNumber(adjustment) || !agent.AdjustReward(sealed[match].decision,(float)adjustment))
         {
+         PrintFormat("AlphaGen cash correction rejected: reward adjustment rejected; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
          return(false);
         }
 // The current confirmed equity already includes this cash correction.
@@ -1483,6 +1494,13 @@ class CAlphaGenApplication
         {
          return(true);
         }
+// Register execution cash while its decision is still mutable. Use the
+// current server time: boundary may be the beginning of the current bar.
+      if(!simulated && !ReconcileDeals(TimeCurrent()))
+        {
+         Fault("INCOMPLETE_DATA: pre-feedback cash reconciliation failed");
+         return(false);
+        }
       event_id++;
       context[AG_CTX_MONEY_CONFIRMED]=(!money.pending && !money.reconciling && !money.unknown_request)?1.0f:0.0f;
       context[AG_CTX_TERMINAL]=terminal?1.0f:0.0f;
@@ -1770,7 +1788,7 @@ class CAlphaGenApplication
          ReturnFalse;
         }
 #ifdef ALPHAGEN_TEST_DIAGNOSTICS
-      PrintFormat("AlphaGen Test decision %s status=%d active=%d prepared=%d",
+      PrintFormat("AlphaGen decision %s status=%d active=%d prepared=%d",
                   TimeToString(boundary),agent.Status(),agent.ActiveCount(),agent.PreparedCount());
 #endif
       if(agent.Status()!=AG_ACTION_READY)
@@ -1796,7 +1814,8 @@ class CAlphaGenApplication
          ReturnFalse;
         }
 #ifdef ALPHAGEN_TEST_DIAGNOSTICS
-      PrintFormat("AlphaGen Test action [%.9f %.9f %.9f %.9f %.9f %.9f] volume=%.8f invalid=%d sl=%.8f tp=%.8f",
+      if(ArraySize(action)==AG_OUTPUT_SIZE)
+      PrintFormat("AlphaGen action [%.9f %.9f %.9f %.9f %.9f %.9f] volume=%.8f invalid=%d sl=%.8f tp=%.8f",
                   action[0],action[1],action[2],action[3],action[4],action[5],
                   target.volume,(int)target.invalid,target.sl,target.tp);
 #endif
@@ -1811,6 +1830,11 @@ class CAlphaGenApplication
       ulong before_requests=money.successful_requests;
       bool executed=ExecuteTarget(target,bid,ask,boundary);
       invalid=target.invalid;
+#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+      PrintFormat("AlphaGen execution result=%d invalid=%d requested=%.8f actual=%.8f requests=%I64u pending=%d search_updates=%I64u trade_updates=%I64u",
+                  (int)executed,(int)invalid,target.volume,money.volume,money.successful_requests,
+                  (int)money.pending,agent.TokenUpdates(),agent.TradeUpdates());
+#endif
       if(!executed && !money.pending && before_volume==money.volume && before_requests==money.successful_requests)
         {
 // A rejected technical request is not a fictitious policy sample.
@@ -1875,6 +1899,12 @@ class CAlphaGenApplication
         {
 // Native loading is indivisible. No percentage is available here.
          CNet verify;
+         // Borrow the live program; verification owns only its loaded buffers.
+         if(!verify.UseOpenCLRuntime(model.GetOpenCL()))
+           {
+            Print("AlphaGen checkpoint verification could not borrow OpenCL runtime");
+            return(false);
+           }
          float a=0,b=0,c=0;
          datetime t=0;
          return(verify.Load(temp,a,b,c,t,true) && CheckPointer(verify.Layer(1))!=POINTER_INVALID &&
@@ -2203,6 +2233,29 @@ class CAlphaGenApplication
               {
                money.gross_loss-=cash;
               }
+           }
+        }
+// An executed request may precede publication of its deal in history.
+// Keep the decision open until every known deal has entered the ledger.
+      for(int i=0;i<ArraySize(request_owners);i++)
+        {
+         if(request_owners[i].deal==0)
+           {
+            continue;
+           }
+         bool recorded=false;
+         for(int j=0;j<ArraySize(ledger);j++)
+           {
+            if(ledger[j].ticket==request_owners[i].deal)
+              {
+               recorded=true;
+               break;
+              }
+           }
+         if(!recorded)
+           {
+            money.pending=true;
+            return(true);
            }
         }
       return(true);

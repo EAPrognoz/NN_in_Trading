@@ -12389,7 +12389,13 @@ bool CBufferFloat::BufferWrite(void)
    if(CheckPointer(OpenCL) == POINTER_INVALID || m_myIndex < 0)
       ReturnFalse;
 //---
+#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+   // BufferCreate already requires COpenCLMy. Preserve its diagnostic dispatch
+   // here: the base-class template otherwise bypasses the derived wrapper.
+   if(!((COpenCLMy*)OpenCL).BufferWrite(m_myIndex, m_data, 0, 0, m_data_total))
+#else
    if(!OpenCL.BufferWrite(m_myIndex, m_data, 0, 0, m_data_total))
+#endif
       ReturnFalse;
    return(true);
   }
@@ -19516,6 +19522,7 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_AGPoolSignal, "AGPoolSignal")
    CreateKernel(def_k_AGPoolCopy, "AGPoolCopy")
    CreateKernel(def_k_AGSearchGenerate, "AGSearchGenerate")
+   CreateKernel(def_k_AGSearchRecord, "AGSearchRecord")
    CreateKernel(def_k_AGPoolCommitBatch, "AGPoolCommitBatch")
    CreateKernel(def_k_AGPoolEvaluateBatch, "AGPoolEvaluateBatch")
    CreateKernel(def_k_HabiGaussianForward, "HabiGaussianForward")

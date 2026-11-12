@@ -147,12 +147,14 @@ inline void AGFormulaEvaluate(__global const float *market,
       (*syntax_state)=length>=2 && length<capacity;
       for(int k=0;k<length && (*syntax_state);k++)
         {
-         int token=(int)tokens[k*token_stride];
-         if(!isfinite(tokens[k*token_stride]) || tokens[k*token_stride]!=(float)token)
+         float raw_token=tokens[k*token_stride];
+         if(!isfinite(raw_token) || raw_token<0.0f || raw_token>=(float)AG_VOCABULARY ||
+            raw_token!=floor(raw_token))
            {
             (*syntax_state)=0;
             break;
            }
+         int token=(int)raw_token;
          if(k==length-1)
             (*syntax_state)=token==AG_STOP && depth==1 && types[0]==0 && dependent[0];
          else
@@ -577,7 +579,14 @@ __kernel void AGEmbedding(__global const float *tokens,const int length,
    int j=get_global_id(0),t=get_global_id(1);
    if(t>=length || j>=dimension)
       return;
-   int token=(int)tokens[t];
+   float raw_token=tokens[t];
+   if(!isfinite(raw_token) || raw_token<0.0f || raw_token>=(float)AG_VOCABULARY ||
+      raw_token!=floor(raw_token))
+     {
+      output[t*dimension+j]=NAN;
+      return;
+     }
+   int token=(int)raw_token;
    if(token==AG_PAD)
      {
       output[t*dimension+j]=0.0f;
@@ -597,10 +606,18 @@ __kernel void AGEmbeddingBackward(__global const float *tokens,const int length,
    if(j>=dimension || token>=AG_VOCABULARY)
       return;
    float sum=0.0f;
-   if(token!=AG_PAD)
-      for(int t=0;t<length;t++)
-         if((int)tokens[t]==token)
-            sum+=gradient[t*dimension+j];
+   for(int t=0;t<length;t++)
+     {
+      float raw_token=tokens[t];
+      if(!isfinite(raw_token) || raw_token<0.0f || raw_token>=(float)AG_VOCABULARY ||
+         raw_token!=floor(raw_token))
+        {
+         weights_gradient[token*dimension+j]=NAN;
+         return;
+        }
+      if(token!=AG_PAD && (int)raw_token==token)
+         sum+=gradient[t*dimension+j];
+     }
    weights_gradient[token*dimension+j]=sum;
   }
 //+------------------------------------------------------------------+
@@ -967,6 +984,9 @@ inline void AGSearchRecur(__global const float *input,const int inputs,
          float dot=partial[lane];
          if(parts==4)
             dot=(dot+partial[lane+1])+(partial[lane+2]+partial[lane+3]);
+         else
+            if(parts==2)
+               dot+=partial[lane+1];
          float a=weights[row*width+width-1]+dot;
          gates[row]=row/hidden==3?tanh(a):1.0f/(1.0f+exp(-a));
         }
@@ -1001,6 +1021,14 @@ __kernel void AGSearchGenerate(__global const float *cfg,
    const int dimension=(int)cfg[AG_CFG_EMBEDDING],stride=4+AG_VOCABULARY;
    const int work_stride=dimension+9*hidden+3*(maximum+1)*AG_VOCABULARY;
    __global float *result=results+candidate*(1+maximum*stride);
+   // Match GenerateBatch: power-of-two groups, bounded by partial[64].
+   // The rejection is uniform and precedes all barriers and scratch access.
+   if(lanes>64 || (lanes & (lanes-1))!=0)
+     {
+      if(lane==0)
+         result[0]=-1.0f;
+      return;
+     }
    __global float *embedded=workspace+candidate*work_stride;
    __global float *first=embedded+dimension,*second=first+2*hidden;
    __global float *gates=second+2*hidden,*sum=gates+4*hidden;
@@ -1104,3 +1132,56 @@ __kernel void AGSearchGenerate(__global const float *cfg,
      }
   }
 //+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| Validate and record one search transition without host roundtrips.|
+//+------------------------------------------------------------------+
+__kernel void AGSearchRecord(__global const float *sample,__global const float *metadata,
+                              __global const float *mask,__global float *prefix,
+                              __global float *formula,const int prefix_length,
+                              const int maximum,const int row,const int episode_start,
+                              const int capacity,__global float *prefixes,
+                              __global float *masks,__global float *samples,
+                              __global float *rollout_metadata,__global float *gae,
+                              __global float *result)
+  {
+   if(get_global_id(0)!=0)
+      return;
+   result[0]=AG_INVALID;
+   result[1]=sample[0];
+   if(maximum<1 || prefix_length<0 || prefix_length>=maximum || row<0 ||
+      row>=capacity || episode_start<0 || episode_start>row)
+      return;
+   float raw=sample[0];
+   if(!isfinite(raw) || raw<0.0f || raw>=(float)AG_VOCABULARY || raw!=floor(raw))
+      return;
+   int token=(int)raw;
+   if(mask[token]!=1.0f || (token==AG_STOP && prefix_length<1))
+      return;
+   for(int j=0;j<7;j++)
+      if(!isfinite(metadata[j]))
+         return;
+   // Host validates complete backing capacities. Use wide offsets here.
+   const size_t p=(size_t)row*((size_t)maximum+1);
+   const size_t m=(size_t)row*AG_VOCABULARY,g=(size_t)row*AG_GAE_FIELDS;
+   const size_t md=(size_t)row*7;
+   for(int j=0;j<=prefix_length;j++)
+      prefixes[p+j]=prefix[j];
+   for(int j=0;j<AG_VOCABULARY;j++)
+      masks[m+j]=mask[j];
+   samples[row]=raw;
+   for(int j=0;j<7;j++)
+      rollout_metadata[md+j]=metadata[j];
+   rollout_metadata[md+3]=metadata[0];
+   gae[g+AG_GAE_VALUE]=metadata[2];
+   gae[g+AG_GAE_REWARD]=0.0f;
+   gae[g+AG_GAE_DELTA]=1.0f;
+   gae[g+AG_GAE_BOOTSTRAP]=1.0f;
+   gae[g+AG_GAE_CONTINUE]=1.0f;
+   gae[g+AG_GAE_READY]=1.0f;
+   if(row>episode_start)
+      gae[(size_t)(row-1)*AG_GAE_FIELDS+AG_GAE_NEXT]=metadata[2];
+   formula[prefix_length]=raw;
+   prefix[prefix_length+1]=raw;
+   result[0]=AG_OK;
+  }

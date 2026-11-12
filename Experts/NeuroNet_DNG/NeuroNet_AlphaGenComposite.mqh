@@ -318,6 +318,7 @@ bool CNeuronAlphaGenOCL::Observe(CNeuronBaseOCL *source, const int flags, const 
 //+------------------------------------------------------------------+
 void CNeuronAlphaGenOCL::ProbeSearchQueue(const string stage, const float marker)
   {
+#ifdef ALPHAGEN_OPENCL_QUEUE_PROBES
    ResetLastError();
    bool queued=Scalar(GetPointer(m_cBatchWorkspace),0,marker) &&
                Scalar(GetPointer(m_cBatchSummary),0,-1.0f) &&
@@ -331,6 +332,7 @@ void CNeuronAlphaGenOCL::ProbeSearchQueue(const string stage, const float marker
    int status=queued?(int)OpenCL.ExecutionStatus(def_k_AGCopySlice):-1;
    PrintFormat("AlphaGen OpenCL probe %s: queued=%d enqueue_error=%d complete=%d status=%d read=%d read_error=%d marker=%.0f expected=%.0f",
                stage,(int)queued,enqueue_error,(int)complete,status,(int)read,read_error,result[0],marker);
+#endif
   }
 
 bool CNeuronAlphaGenOCL::EnableParallelSearch(void)
@@ -487,41 +489,66 @@ bool CNeuronAlphaGenOCL::SearchStep(CNeuronBaseOCL *source, const ulong boundary
       if(!Scalar(GetPointer(m_cPrefix), 0, AG_BOS) ||
          !Slice(source.getOutput(), 0, GetPointer(m_cSearchMarket), 0, m_cSearchMarket.Total()))
          ReturnFalse;
+#ifdef ALPHAGEN_OPENCL_QUEUE_PROBES
+      if(!OpenCL.WaitAlphaGenKernel(def_k_AGCopySlice))
+        {
+         PrintFormat("AlphaGen search market copy failed before mask probe: count=%d source=%d destination=%d",
+                     m_cSearchMarket.Total(),source.getOutputIndex(),m_cSearchMarket.GetIndex());
+         ReturnFalse;
+        }
+#endif
      }
    if(!m_cEvaluator.Mask(GetPointer(m_cFormula), m_iPrefixLength) ||
       !m_cSearch.ForwardPrefix(GetPointer(m_cPrefix), m_iPrefixLength + 1, m_cEvaluator.MaskBuffer(), 0))
       ReturnFalse;
-   CBufferFloat *result = m_cEvaluator.NumericResult();
-   if(!m_cEvaluator.Numeric(m_cSearch.Metadata(), true) ||
-      !Slice(m_cSearch.Sample(), 0, result, 1, 1) || !result.BufferRead() ||
-      result.At(0) != AG_OK)
+#ifdef ALPHAGEN_OPENCL_QUEUE_PROBES
+   if(!OpenCL.WaitAlphaGenKernel(def_k_AGDistribution))
+      ReturnFalse;
+#endif
+   // The terminal read fences mask, policy and the complete saved token record.
+   CBufferFloat *result=m_cEvaluator.NumericResult();
+   int row=m_iTokenCount,maximum=(int)m_fConfig[AG_CFG_MAX_TOKENS];
+   int capacity=m_cTokenSamples.Total();
+   if(row<0 || row>=capacity || row>=ArraySize(m_iTokenLengths) ||
+      m_iEpisodeStart<0 || m_iEpisodeStart>row || m_iPrefixLength<0 || m_iPrefixLength>=maximum ||
+      m_cPrefix.Total()<maximum+1 || m_cFormula.Total()<maximum ||
+      m_cSearch.Sample().Total()<1 || m_cSearch.Metadata().Total()<7 ||
+      m_cEvaluator.MaskBuffer().Total()<AG_VOCABULARY || result.Total()<2 ||
+      (long)m_cTokenPrefixes.Total()<(long)capacity*(maximum+1) ||
+      (long)m_cTokenMasks.Total()<(long)capacity*AG_VOCABULARY ||
+      (long)m_cTokenMetadata.Total()<(long)capacity*7 ||
+      (long)m_cTokenGAE.Total()<(long)capacity*AG_GAE_FIELDS)
+      ReturnFalse;
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_sample,m_cSearch.Sample().GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_metadata,m_cSearch.Metadata().GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_mask,m_cEvaluator.MaskBuffer().GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_prefix,m_cPrefix.GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_formula,m_cFormula.GetIndex())
+   setArgument(def_k_AGSearchRecord,def_ag_AGSearchRecord_prefix_length,m_iPrefixLength)
+   setArgument(def_k_AGSearchRecord,def_ag_AGSearchRecord_maximum,maximum)
+   setArgument(def_k_AGSearchRecord,def_ag_AGSearchRecord_row,row)
+   setArgument(def_k_AGSearchRecord,def_ag_AGSearchRecord_episode_start,m_iEpisodeStart)
+   setArgument(def_k_AGSearchRecord,def_ag_AGSearchRecord_capacity,capacity)
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_prefixes,m_cTokenPrefixes.GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_masks,m_cTokenMasks.GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_samples,m_cTokenSamples.GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_rollout_metadata,m_cTokenMetadata.GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_gae,m_cTokenGAE.GetIndex())
+   setBuffer(def_k_AGSearchRecord,def_ag_AGSearchRecord_result,result.GetIndex())
+   uint record_offset[]={0},record_global[]={1};
+   kernelExecute(def_k_AGSearchRecord,record_offset,record_global)
+#ifdef ALPHAGEN_OPENCL_QUEUE_PROBES
+   if(!OpenCL.WaitAlphaGenKernel(def_k_AGSearchRecord))
+      ReturnFalse;
+#endif
+   if(!result.BufferRead() || result.At(0)!=AG_OK)
      {
-      m_iStatus = AG_TECHNICAL;
+      PrintFormat("AlphaGen token record rejected: prefix=%d trial=%d row=%d",m_iPrefixLength,m_iTrials,row);
+      m_iStatus=AG_TECHNICAL;
       ReturnFalse;
      }
-   int token = (int)result.At(1);
-   int row = m_iTokenCount, maximum = (int)m_fConfig[AG_CFG_MAX_TOKENS];
-   if(row >= ArraySize(m_iTokenLengths))
-      ReturnFalse;
-   m_iTokenLengths[row] = m_iPrefixLength + 1;
-   if(!Slice(GetPointer(m_cPrefix), 0, GetPointer(m_cTokenPrefixes), row * (maximum + 1), m_iPrefixLength + 1) ||
-      !Slice(m_cEvaluator.MaskBuffer(), 0, GetPointer(m_cTokenMasks), row * AG_VOCABULARY, AG_VOCABULARY) ||
-      !Slice(m_cSearch.Sample(), 0, GetPointer(m_cTokenSamples), row, 1) ||
-      !Slice(m_cSearch.Metadata(), 0, GetPointer(m_cTokenMetadata), row * 7, 7) ||
-      !Slice(m_cSearch.Metadata(), 0, GetPointer(m_cTokenMetadata), row * 7 + 3, 1) ||
-      !Slice(m_cSearch.Metadata(), 2, GetPointer(m_cTokenGAE), row * AG_GAE_FIELDS + AG_GAE_VALUE, 1) ||
-      !Scalar(GetPointer(m_cTokenGAE), row * AG_GAE_FIELDS + AG_GAE_REWARD, 0) ||
-      !Scalar(GetPointer(m_cTokenGAE), row * AG_GAE_FIELDS + AG_GAE_DELTA, 1) ||
-      !Scalar(GetPointer(m_cTokenGAE), row * AG_GAE_FIELDS + AG_GAE_BOOTSTRAP, 1) ||
-      !Scalar(GetPointer(m_cTokenGAE), row * AG_GAE_FIELDS + AG_GAE_CONTINUE, 1) ||
-      !Scalar(GetPointer(m_cTokenGAE), row * AG_GAE_FIELDS + AG_GAE_READY, 1))
-      ReturnFalse;
-   if(row > m_iEpisodeStart &&
-      !Slice(m_cSearch.Metadata(), 2, GetPointer(m_cTokenGAE), (row - 1) * AG_GAE_FIELDS + AG_GAE_NEXT, 1))
-      ReturnFalse;
-   if(!Slice(m_cSearch.Sample(), 0, GetPointer(m_cFormula), m_iPrefixLength, 1) ||
-      !Slice(m_cSearch.Sample(), 0, GetPointer(m_cPrefix), m_iPrefixLength + 1, 1) )
-      ReturnFalse;
+   int token=(int)result.At(1);
+   m_iTokenLengths[row]=m_iPrefixLength+1;
    m_iTokenCount++;
    m_iPrefixLength++;
    if(token != AG_STOP)

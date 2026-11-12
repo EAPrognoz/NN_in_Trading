@@ -57,7 +57,13 @@ bool CAlphaGenPool::Transaction(CBufferFloat *market,CBufferFloat *tokens,const 
    if(!OpenCL || !market || !tokens || m_iWindow<1 ||
       ((mode==0 || mode==1) && market.Total()<5*m_iWindow) ||
       (mode==0 && (length<2 || length>m_iTokens || tokens.Total()<length)))
+     {
+      PrintFormat("AlphaGen pool input rejected: mode=%d length=%d max_tokens=%d window=%d context=%d market=%d tokens=%d",
+                  mode,length,m_iTokens,m_iWindow,(int)CheckPointer(OpenCL),
+                  CheckPointer(market)!=POINTER_INVALID?market.Total():-1,
+                  CheckPointer(tokens)!=POINTER_INVALID?tokens.Total():-1);
       ReturnFalse;
+     }
    setBuffer(def_k_AGPoolTransaction,def_ag_AGPoolTransaction_market,market.GetIndex())
    setBuffer(def_k_AGPoolTransaction,def_ag_AGPoolTransaction_tokens,tokens.GetIndex())
    setArgument(def_k_AGPoolTransaction,def_ag_AGPoolTransaction_length,length)
@@ -69,8 +75,16 @@ bool CAlphaGenPool::Transaction(CBufferFloat *market,CBufferFloat *tokens,const 
    setBuffer(def_k_AGPoolTransaction,def_ag_AGPoolTransaction_signal,m_cSignal.GetIndex())
    setBuffer(def_k_AGPoolTransaction,def_ag_AGPoolTransaction_context,m_cContext.GetIndex())
    setArgument(def_k_AGPoolTransaction,def_ag_AGPoolTransaction_mode,mode)
-   uint global_work_offset[]={0},global_work_size[]={1};
-   kernelExecute(def_k_AGPoolTransaction,global_work_offset,global_work_size)
+   long lane_limit=MathMin(OpenCL.GetMaxWorkGroupSize(),OpenCL.GetMaxLocalSize(0));
+   lane_limit=MathMin(lane_limit,OpenCL.GetKernelInfoInteger(def_k_AGPoolTransaction,CL_KERNEL_WORK_GROUP_SIZE));
+   if(lane_limit<1)
+      ReturnFalse;
+   uint lanes=1;
+   while(lanes<64 && 2*(long)lanes<=lane_limit)
+      lanes*=2;
+   uint global_work_offset[]={0},global_work_size[]={lanes},local_work_size[]={lanes};
+   if(!OpenCL.Execute(def_k_AGPoolTransaction,1,global_work_offset,global_work_size,local_work_size))
+      ReturnFalse;
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -81,8 +95,21 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat *market,CBufferFloat *candida
                                       CBufferFloat *samples,CBufferFloat *metadata,CBufferFloat *gae,
                                       CBufferFloat *summary)
   {
-   if(!OpenCL || !market || !candidates || !samples || !summary || count<1 ||
-      market.Total()<5*m_iWindow || (long)candidates.Total()<(long)count*(1+(long)m_iTokens*(4+AG_VOCABULARY)))
+   if(CheckPointer(OpenCL)==POINTER_INVALID || CheckPointer(market)==POINTER_INVALID ||
+      CheckPointer(candidates)==POINTER_INVALID || CheckPointer(samples)==POINTER_INVALID ||
+      CheckPointer(summary)==POINTER_INVALID || CheckPointer(prefixes)==POINTER_INVALID ||
+      CheckPointer(masks)==POINTER_INVALID || CheckPointer(metadata)==POINTER_INVALID ||
+      CheckPointer(gae)==POINTER_INVALID || count<1 || first_row<0 || m_iWindow<1 || m_iTokens<2)
+      ReturnFalse;
+   long capacity_check=samples.Total();
+   if(first_row>=capacity_check ||
+      (long)market.Total()<5*(long)m_iWindow ||
+      (long)candidates.Total()<(long)count*(1+(long)m_iTokens*(4+AG_VOCABULARY)) ||
+      (long)prefixes.Total()<capacity_check*(m_iTokens+1) ||
+      (long)masks.Total()<capacity_check*AG_VOCABULARY ||
+      (long)metadata.Total()<capacity_check*7 ||
+      (long)gae.Total()<capacity_check*AG_GAE_FIELDS ||
+      (long)summary.Total()<4+AG_POOL_CONTROL_SIZE+(long)count*m_iTokens)
       ReturnFalse;
    long stride=(long)m_iWindow*m_iTokens+MathMax((long)m_iWindow*m_iTokens,3*(long)(m_iTokens+1));
    long work_count=stride*count,cache_count=2*(long)m_iWindow*count;
@@ -106,6 +133,8 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat *market,CBufferFloat *candida
    uint lanes=1;
    while(lanes<64 && 2*(long)lanes<=lane_limit)
       lanes*=2;
+   if((long)count*lanes>UINT_MAX)
+      ReturnFalse;
    uint eval_offset[]={0},eval_global[]={(uint)count*lanes},eval_local[]={lanes};
 #ifdef ALPHAGEN_STUDY
    Comment(StringFormat("\n\nAlphaGen Study | GPU formula evaluation | %d parallel groups x %d lanes",count,lanes));
@@ -182,8 +211,23 @@ bool CAlphaGenPool::SignalStep(CBufferFloat *market,const int mode,const bool fi
    setArgument(def_k_AGPoolSignal,def_ag_AGPoolSignal_mode,mode)
    int start=first?(mode==2?m_iLookback:MathMax(m_iLookback,m_iWindow-m_iContext)):m_iWindow-1;
    setArgument(def_k_AGPoolSignal,def_ag_AGPoolSignal_start,start)
-   uint global_work_offset[]={0},global_work_size[]={1};
-   kernelExecute(def_k_AGPoolSignal,global_work_offset,global_work_size)
+   long lane_limit=MathMin(OpenCL.GetMaxWorkGroupSize(),OpenCL.GetMaxLocalSize(0));
+   lane_limit=MathMin(lane_limit,OpenCL.GetKernelInfoInteger(def_k_AGPoolSignal,CL_KERNEL_WORK_GROUP_SIZE));
+   if(lane_limit<1)
+      ReturnFalse;
+   uint lanes=1;
+   while(lanes<64 && 2*(long)lanes<=lane_limit)
+      lanes*=2;
+   uint global_work_offset[]={0},global_work_size[]={lanes},local_work_size[]={lanes};
+   if(!OpenCL.Execute(def_k_AGPoolSignal,1,global_work_offset,global_work_size,local_work_size))
+      ReturnFalse;
+#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+   if(!OpenCL.WaitAlphaGenKernel(def_k_AGPoolSignal))
+     {
+      PrintFormat("AlphaGen pool signal failed: mode=%d first=%d start=%d window=%d",mode,(int)first,start,m_iWindow);
+      ReturnFalse;
+     }
+#endif
    return(true);
   }
 //+------------------------------------------------------------------+

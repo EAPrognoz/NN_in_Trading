@@ -1,4 +1,5 @@
 #property strict
+#define ALPHAGEN_TEST_DIAGNOSTICS
 #include "Trajectory.mqh"
 CAlphaGenApplication App;
 //+------------------------------------------------------------------+

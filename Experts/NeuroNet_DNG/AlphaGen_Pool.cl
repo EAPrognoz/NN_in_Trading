@@ -18,12 +18,14 @@ inline void AGPoolEvaluate(__global const float *market,
    int syntax=length>=2 && length<capacity;
    for(int k=0;k<length && syntax;k++)
      {
-      int token=(int)tokens[k];
-      if(!isfinite(tokens[k]) || tokens[k]!=(float)token)
+      float raw_token=tokens[k];
+      if(!isfinite(raw_token) || raw_token<0.0f || raw_token>=(float)AG_VOCABULARY ||
+         raw_token!=floor(raw_token))
         {
          syntax=0;
          break;
         }
+      int token=(int)raw_token;
       if(k==length-1)
          syntax=token==AG_STOP && depth==1 && types[0]==0 && dependent[0];
       else
@@ -742,6 +744,75 @@ inline void AGPoolStandardizeGroup(__global const float *input,__global const fl
    barrier(CLK_GLOBAL_MEM_FENCE);
   }
 
+// Ring-only parallel sum variant; ridge normalization retains its addition order.
+inline void AGPoolStandardizeRingGroup(__global const float *input,__global const float *validity,
+                                   const int offset,const int count,__global const float *cfg,
+                                   __global float *normalized,__global float *statistics,
+                                   __local float *reduce)
+  {
+   int lane=get_local_id(0),lanes=get_local_size(0);
+   if(lane==0)
+     {
+      statistics[AG_STAT_STATUS]=AG_SKIP;
+      statistics[AG_STAT_VALID]=0.0f;
+     }
+   barrier(CLK_GLOBAL_MEM_FENCE);
+   if(count<1)
+      return;
+   float a=0.0f,bad=(float)count;
+   for(int i=lane;i<count;i+=lanes)
+     {
+      if(validity[offset+i]!=AG_OK || !isfinite(input[offset+i]))
+         bad=fmin(bad,(float)i);
+      a=fmax(a,fabs(input[offset+i]));
+     }
+   int first_bad=(int)AGPoolReduce(bad,reduce,2);
+   if(first_bad<count)
+     {
+      if(lane==0)
+         statistics[AG_STAT_STATUS]=validity[offset+first_bad]!=AG_OK?validity[offset+first_bad]:AG_INVALID;
+      barrier(CLK_GLOBAL_MEM_FENCE);
+      return;
+     }
+   a=AGPoolReduce(a,reduce,1);
+   if(!(a>0.0f))
+      return;
+   float origin=input[offset]/a,b=0.0f;
+   for(int i=lane;i<count;i+=lanes)
+      b=fmax(b,fabs(input[offset+i]/a-origin));
+   b=AGPoolReduce(b,reduce,1);
+   if(!(b>0.0f))
+      return;
+// Ring normalization has no ridge-system sensitivity: reduce sums locally.
+   float mean=0.0f;
+   for(int i=lane;i<count;i+=lanes)
+      mean+=(input[offset+i]/a-origin)/b/(float)count;
+   mean=AGPoolReduce(mean,reduce,0);
+   float variance=0.0f;
+   for(int i=lane;i<count;i+=lanes)
+     {
+      float d=(input[offset+i]/a-origin)/b-mean;
+      variance+=d*d/(float)count;
+     }
+   variance=AGPoolReduce(variance,reduce,0);
+   if(!isfinite(variance) || variance<=cfg[AG_CFG_EPS_VAR])
+      return;
+   float sd=sqrt(variance);
+   for(int i=lane;i<count;i+=lanes)
+      normalized[i]=((input[offset+i]/a-origin)/b-mean)/sd;
+   if(lane==0)
+     {
+      statistics[AG_STAT_SCALE]=a;
+      statistics[AG_STAT_ORIGIN]=origin;
+      statistics[AG_STAT_DIFF_SCALE]=b;
+      statistics[AG_STAT_MEAN]=mean;
+      statistics[AG_STAT_STD]=sd;
+      statistics[AG_STAT_STATUS]=AG_OK;
+      statistics[AG_STAT_VALID]=(float)count;
+     }
+   barrier(CLK_GLOBAL_MEM_FENCE);
+  }
+
 // The small triangular dependencies stay on the leader after parallel Gram/RHS construction.
 //+------------------------------------------------------------------+
 //| Resolve the small Cholesky dependencies on the group leader.     |
@@ -1250,68 +1321,94 @@ __kernel void AGPoolTransaction(__global const float *market,__global const floa
                                 __global float *rings,__global float *control,const int mode,
                                 __global float *signal,__global float *context)
   {
-   if(get_global_id(0)!=0)
+   if(get_group_id(0)!=0)
       return;
-   int size=AGPoolBankSize(cfg),rs=AGPoolRingSize(cfg);
-   __global float *prepared=banks,*active=banks+size,*scratch=banks+2*size,*pinned=banks+3*size;
-   control[6]=prepared[0];
-   control[7]=active[0];
-   control[0]=AG_SKIP;
-   control[2]=0.0f;
-   control[3]=0.0f;
-   control[4]=0.0f;
-   if(mode==1)
+   int lane=get_local_id(0);
+   __local float reduce[64];
+   __local int shared[4];
+   if(mode==0)
      {
-      pinned[9]=0.0f;
-      if(prepared[0]<1.0f || prepared[9]!=1.0f)
-         return;
-      AGPoolCopyValues(prepared,scratch,size);
-      int refresh=AGPoolFit(market,cfg,scratch,work);
-      if(refresh!=AG_OK)
-        {
-         AGPoolCopyValues(prepared,scratch,size);
-         control[0]=refresh==AG_INVALID?AG_TECHNICAL:refresh;
-         return;
-        }
-      AGPoolCopyValues(scratch,pinned,size);
-      AGPoolCopyValues(scratch,prepared,size);
-      for(int i=0;i<rs;i++)
-         rings[rs+i]=0.0f;
-      control[0]=AG_OK;
+      AGPoolCandidateGroup(market,tokens,length,1,cfg,banks,work,control,work,0,work,reduce,shared);
       return;
      }
+   int size=AGPoolBankSize(cfg),rs=AGPoolRingSize(cfg);
+   if(mode==1)
+     {
+      __global float *prepared=banks,*scratch=banks+2*size,*pinned=banks+3*size;
+      if(lane==0)
+        {
+         control[6]=prepared[0];control[7]=banks[size];control[0]=AG_SKIP;
+         control[2]=0.0f;control[3]=0.0f;control[4]=0.0f;pinned[9]=0.0f;
+        }
+      barrier(CLK_GLOBAL_MEM_FENCE);
+      if(prepared[0]<1.0f || prepared[9]!=1.0f)
+         return;
+      AGPoolCopyGroup(prepared,scratch,size);
+      int refresh=AGPoolFitGroup(market,cfg,scratch,work,work,0,work,reduce,shared);
+      if(refresh!=AG_OK)
+        {
+         AGPoolCopyGroup(prepared,scratch,size);
+         if(lane==0) control[0]=refresh==AG_INVALID?AG_TECHNICAL:refresh;
+         return;
+        }
+      AGPoolCopyGroup(scratch,pinned,size);
+      AGPoolCopyGroup(scratch,prepared,size);
+      for(int i=lane;i<rs;i+=get_local_size(0)) rings[rs+i]=0.0f;
+      if(lane==0) control[0]=AG_OK;
+      return;
+     }
+   __global float *prepared=banks,*active=banks+size,*pinned=banks+3*size;
+   if(lane==0)
+     {
+      control[6]=prepared[0];
+      control[7]=active[0];
+      control[0]=AG_SKIP;
+      control[2]=0.0f;
+      control[3]=0.0f;
+      control[4]=0.0f;
+     }
+   barrier(CLK_GLOBAL_MEM_FENCE);
    if(mode==2)
      {
       if(pinned[9]!=1.0f || rings[rs+2]<(float)((int)cfg[AG_CFG_CONTEXT]) || rings[rs+10]!=AG_OK)
          return;
-      AGPoolCopyValues(active+5,pinned+5,4);
-      if(!AGPoolIncrement(pinned+5))
+      if(lane==0)
         {
-         control[0]=AG_TECHNICAL;
-         return;
+         AGPoolCopyValues(active+5,pinned+5,4);
+         shared[0]=AGPoolIncrement(pinned+5);
+         if(!shared[0])
+            control[0]=AG_TECHNICAL;
         }
-      AGPoolCopyValues(pinned,active,size);
-      AGPoolCopyValues(rings+rs,rings,rs);
+      barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+      if(!shared[0])
+         return;
+      AGPoolCopyGroup(pinned,active,size);
+      AGPoolCopyGroup(rings+rs,rings,rs);
       int nw=(int)cfg[AG_CFG_NORM_WINDOW],nc=(int)cfg[AG_CFG_CONTEXT];
-      for(int i=0;i<nc;i++)
-         context[i]=rings[11+nw+i];
-      signal[0]=context[nc-1];
-      control[7]=active[0];
-      pinned[9]=0.0f;
-      control[0]=AG_PUBLISHED;
-      control[3]=1.0f;
-      control[5]=1.0f;
+      AGPoolCopyGroup(rings+11+nw,context,nc);
+      if(lane==0)
+        {
+         signal[0]=context[nc-1];
+         control[7]=active[0];
+         pinned[9]=0.0f;
+         control[0]=AG_PUBLISHED;
+         control[3]=1.0f;
+         control[5]=1.0f;
+        }
       return;
      }
    if(mode==AG_POOL_RESTART)
      {
       if(pinned[9]!=1.0f)
          return;
-      for(int i=0;i<rs;i++)
+      for(int i=lane;i<rs;i+=get_local_size(0))
          rings[rs+i]=0.0f;
-      control[0]=AG_OK;
+      if(lane==0)
+         control[0]=AG_OK;
       return;
      }
+   if(lane!=0)
+      return;
    if(mode==3)
      {
       pinned[9]=0.0f;
@@ -1324,7 +1421,7 @@ __kernel void AGPoolTransaction(__global const float *market,__global const floa
       control[0]=AG_OK;
       return;
      }
-   AGPoolCandidate(market,tokens,length,1,cfg,banks,work,control);
+   control[0]=AG_TECHNICAL;
   }
 // mode 0: advance active ring; 1: use frozen active statistics (warmup);
 // 2: append publication score and one causal g when its window is full.
@@ -1333,94 +1430,146 @@ __kernel void AGPoolSignal(__global const float *market,__global const float *cf
                            __global float *rings,__global float *control,
                            __global float *signal,__global float *context,const int mode,const int start)
   {
-   if(get_global_id(0)!=0)
+   if(get_group_id(0)!=0)
       return;
+   int lane=get_local_id(0),lanes=get_local_size(0);
+   __local int syntax;
+   __local float reduce[64];
+   __local float shifted[64];
    int size=AGPoolBankSize(cfg),rs=AGPoolRingSize(cfg),stride=AGPoolStride(cfg);
    int nw=(int)cfg[AG_CFG_NORM_WINDOW],nc=(int)cfg[AG_CFG_CONTEXT];
    int w=(int)cfg[AG_CFG_W],t=(int)cfg[AG_CFG_MAX_TOKENS];
    __global float *bank=banks+(mode==2?3:1)*size,*ring=rings+(mode==2?rs:0);
    __global float *stack=work,*valid=stack+w*t,*raw=valid+max(w*t,3*(t+1)),*status=raw+w;
    __global float *tmp=status+w,*tv=tmp+w;
-   control[6]=banks[0];
-   control[7]=banks[size];
-   control[0]=AG_SKIP;
-   control[4]=0.0f;
+   if(lane==0)
+     {
+      control[6]=banks[0];control[7]=banks[size];
+      control[0]=AG_SKIP;control[4]=0.0f;
+     }
+   barrier(CLK_GLOBAL_MEM_FENCE);
    if(bank[0]<1.0f || bank[9]!=1.0f)
       return;
    int cap=(int)cfg[AG_CFG_POOL]+1,n=(int)cfg[AG_CFG_IC_WINDOW];
    int base=w*t+max(w*t,3*(t+1))+4*w+n+7+cap*n+cap*(cap+1)+cap+3;
    __global float *scores=work+base;
-   for(int row=start;row<w;row++)
+   for(int row=start+lane;row<w;row+=lanes)
       scores[row]=0.0f;
+   barrier(CLK_GLOBAL_MEM_FENCE);
 // Evaluate each formula once for all rows of the first history window.
    for(int j=0;j<(int)bank[0];j++)
      {
       __global float *record=bank+10+j*stride;
-      AGPoolEvaluate(market,record+5,(int)record[0],cfg,stack,valid,raw,status);
-      for(int row=start;row<w;row++)
-        {
+      AGFormulaEvaluate(market,record+5,(int)record[0],cfg,stack,valid,raw,status,1,&syntax);
+      barrier(CLK_GLOBAL_MEM_FENCE);
+      float first_bad=(float)w;
+      for(int row=start+lane;row<w;row+=lanes)
          if(status[row]!=AG_OK)
+            first_bad=fmin(first_bad,(float)row);
+      int invalid=(int)AGPoolReduce(first_bad,reduce,2);
+      if(invalid<w)
+        {
+         if(lane==0)
            {
-            control[0]=status[row];
+            control[0]=status[invalid];
             if(mode==2)
                bank[9]=0.0f;
-            return;
            }
-         scores[row]+=record[12+t]*AGPoolAffine(raw[row],record+5+t);
+         return;
         }
+      for(int row=start+lane;row<w;row+=lanes)
+         scores[row]+=record[12+t]*AGPoolAffine(raw[row],record+5+t);
+      barrier(CLK_GLOBAL_MEM_FENCE);
      }
+   // Rows remain chronological; all lanes cooperate within each row.
    for(int row=start;row<w;row++)
      {
       float score=scores[row];
       if(!isfinite(score))
         {
-         control[0]=AG_SKIP;
-         if(mode==2)
-            bank[9]=0.0f;
+         if(lane==0)
+           {
+            control[0]=AG_SKIP;
+            if(mode==2)
+               bank[9]=0.0f;
+           }
          return;
         }
       if(mode!=1)
         {
-         int pos=(int)ring[1];
-         ring[11+pos]=score;
-         ring[1]=(float)((pos+1)%nw);
-         ring[0]=fmin((float)nw,ring[0]+1.0f);
-         if(ring[0]<(float)nw)
+         if(lane==0)
+           {
+            int pos=(int)ring[1];
+            ring[11+pos]=score;
+            ring[1]=(float)((pos+1)%nw);
+            ring[0]=fmin((float)nw,ring[0]+1.0f);
+           }
+         barrier(CLK_GLOBAL_MEM_FENCE);
+         int full=ring[0]>=(float)nw;
+         // Snapshot before any lane advances to the next row's write.
+         barrier(CLK_GLOBAL_MEM_FENCE);
+         if(!full)
             continue;
-         for(int i=0;i<nw;i++)
+         for(int i=lane;i<nw;i+=lanes)
             tv[i]=AG_OK;
-         AGPoolStandardize(ring+11,tv,0,nw,cfg,tmp,ring+3,0);
-         ring[10]=ring[8];
+         barrier(CLK_GLOBAL_MEM_FENCE);
+         AGPoolStandardizeRingGroup(ring+11,tv,0,nw,cfg,tmp,ring+3,reduce);
+         if(lane==0)
+            ring[10]=ring[8];
+         barrier(CLK_GLOBAL_MEM_FENCE);
         }
-      if(ring[0]<(float)nw || ring[10]!=AG_OK)
+      int ready=ring[0]>=(float)nw && ring[10]==AG_OK;
+      barrier(CLK_GLOBAL_MEM_FENCE);
+      if(!ready)
         {
-         control[6]=banks[0];
-         control[7]=banks[size];
-         control[0]=AG_SKIP;
-         control[4]=0.0f;
-         if(mode==2)
-            ring[2]=0.0f;
+         if(lane==0)
+           {
+            control[6]=banks[0];
+            control[7]=banks[size];
+            control[0]=AG_SKIP;
+            control[4]=0.0f;
+            if(mode==2)
+               ring[2]=0.0f;
+           }
+         barrier(CLK_GLOBAL_MEM_FENCE);
          continue;
         }
       float g=AGPoolAffine(score,ring+3),clip=cfg[AG_CFG_SIGNAL_CLIP];
       if(!isfinite(g) || !(clip>0.0f))
          return;
       g=clamp(g,-clip,clip)/clip;
-      signal[0]=g;
-      // Keep the chronological suffix directly consumable by the recurrent layer.
       int count=(int)ring[2];
+      barrier(CLK_GLOBAL_MEM_FENCE);
       if(count>=nc)
         {
-         for(int i=1;i<nc;i++)
-            ring[11+nw+i-1]=ring[11+nw+i];
+         // Read each source tile completely before overlapping destination writes.
+         // Tiling avoids any assumption that context length fits W or local memory.
+         for(int base=0;base<nc-1;base+=lanes)
+           {
+            int i=base+lane;
+            if(i<nc-1)
+               shifted[lane]=ring[11+nw+i+1];
+            barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);
+            if(i<nc-1)
+               ring[11+nw+i]=shifted[lane];
+            barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE);
+           }
          count=nc-1;
         }
-      ring[11+nw+count]=g;
-      ring[2]=(float)(count+1);
-      for(int i=0;i<=count;i++)
-         context[i]=ring[11+nw+i];
-      control[0]=AG_OK;
-      control[4]=(mode==2 && count+1<nc)?0.0f:1.0f;
+      if(lane==0)
+        {
+         signal[0]=g;
+         ring[11+nw+count]=g;
+         ring[2]=(float)(count+1);
+        }
+      barrier(CLK_GLOBAL_MEM_FENCE);
+      AGPoolCopyGroup(ring+11+nw,context,count+1);
+      if(lane==0)
+        {
+         control[0]=AG_OK;
+         control[4]=(mode==2 && count+1<nc)?0.0f:1.0f;
+        }
+      barrier(CLK_GLOBAL_MEM_FENCE);
      }
   }
 // Export exact selected tokens without host numerical processing.

@@ -545,7 +545,17 @@ bool CNeuronAlphaGenSearchPolicyOCL::GenerateBatch(const int count, CBufferFloat
    setArgument(def_k_AGSearchGenerate, def_ag_AGSearchGenerate_seed, m_iRandom)
    setBuffer(def_k_AGSearchGenerate, def_ag_AGSearchGenerate_results, results.GetIndex())
    setBuffer(def_k_AGSearchGenerate, def_ag_AGSearchGenerate_workspace, workspace.GetIndex())
-   uint offset[] = { 0 }, global[] = { (uint)count }, local[] = { 1 };
+   long kernel_limit=OpenCL.GetKernelInfoInteger(def_k_AGSearchGenerate,CL_KERNEL_WORK_GROUP_SIZE);
+   long lane_limit=MathMin(OpenCL.GetMaxWorkGroupSize(),OpenCL.GetMaxLocalSize(0));
+   lane_limit=MathMin(lane_limit,kernel_limit);
+   if(lane_limit<1)
+      ReturnFalse;
+   uint lanes=1;
+   while(lanes<64 && 2*(long)lanes<=lane_limit)
+      lanes*=2;
+   if((long)count*lanes>UINT_MAX)
+      ReturnFalse;
+   uint offset[] = { 0 }, global[] = { (uint)count*lanes }, local[] = { lanes };
    kernelExecuteLoc(def_k_AGSearchGenerate, offset, global, local)
    return(OpenCL.WaitAlphaGenKernel(def_k_AGSearchGenerate));
   }

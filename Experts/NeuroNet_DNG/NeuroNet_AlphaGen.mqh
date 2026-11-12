@@ -44,6 +44,31 @@ bool CNeuronAlphaGenEvaluatorOCL::Mask(CBufferFloat *tokens, const int length)
   {
    if(!tokens || length < 0 || length >= m_iMaxTokens || tokens.Total() < MathMax(length, 1))
       ReturnFalse;
+#ifdef ALPHAGEN_OPENCL_QUEUE_PROBES
+// A device copy fences earlier queue work without touching the formula.
+   setBuffer(def_k_AGCopySlice, def_ag_AGCopySlice_source, m_cConfig.GetIndex())
+   setArgument(def_k_AGCopySlice, def_ag_AGCopySlice_source_offset, AG_CFG_MAX_TOKENS)
+   setBuffer(def_k_AGCopySlice, def_ag_AGCopySlice_destination, m_cNumeric.GetIndex())
+   setArgument(def_k_AGCopySlice, def_ag_AGCopySlice_destination_offset, 1)
+   setArgument(def_k_AGCopySlice, def_ag_AGCopySlice_count, 1)
+   uint probe_offset[]={0},probe_global[]={1};
+   kernelExecute(def_k_AGCopySlice,probe_offset,probe_global)
+   if(!OpenCL.WaitAlphaGenKernel(def_k_AGCopySlice))
+     {
+      PrintFormat("AlphaGen PRE-MASK queue failed: AGMask not submitted; prefix=%d max=%d token_count=%d token_buffer=%d mask_count=%d work_count=%d",
+                  length,m_iMaxTokens,tokens.Total(),tokens.GetIndex(),m_cMask.Total(),m_cMaskWork.Total());
+      ReturnFalse;
+     }
+   float marker[1]={-1};
+   ResetLastError();
+   bool probe_read=OpenCL.BufferRead(m_cNumeric.GetIndex(),marker,sizeof(float),0,1);
+   if(!probe_read || marker[0]!=(float)m_iMaxTokens)
+     {
+      PrintFormat("AlphaGen PRE-MASK marker failed: AGMask not submitted; prefix=%d read=%d error=%d marker=%.9g expected=%d",
+                  length,(int)probe_read,GetLastError(),marker[0],m_iMaxTokens);
+      ReturnFalse;
+     }
+#endif
    setBuffer(def_k_AGMask, def_ag_AGMask_tokens, tokens.GetIndex())
    setArgument(def_k_AGMask, def_ag_AGMask_length, length)
    setBuffer(def_k_AGMask, def_ag_AGMask_cfg, m_cConfig.GetIndex())
@@ -51,6 +76,14 @@ bool CNeuronAlphaGenEvaluatorOCL::Mask(CBufferFloat *tokens, const int length)
    setBuffer(def_k_AGMask, def_ag_AGMask_workspace, m_cMaskWork.GetIndex())
    uint offset[] = { 0 }, global[] = { AG_VOCABULARY };
    kernelExecute(def_k_AGMask, offset, global)
+#ifdef ALPHAGEN_OPENCL_QUEUE_PROBES
+   if(!OpenCL.WaitAlphaGenKernel(def_k_AGMask))
+     {
+      PrintFormat("AlphaGen MASK failed after successful queue probe: prefix=%d max=%d token_count=%d token_buffer=%d mask_count=%d work_count=%d expected_work=%d",
+                  length,m_iMaxTokens,tokens.Total(),tokens.GetIndex(),m_cMask.Total(),m_cMaskWork.Total(),AG_VOCABULARY*(m_iMaxTokens+1)*3);
+      ReturnFalse;
+     }
+#endif
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -69,7 +102,10 @@ bool CNeuronAlphaGenEvaluatorOCL::Evaluate(CBufferFloat *market, CBufferFloat *t
    setBuffer(def_k_AGEvaluate, def_ag_AGEvaluate_validity, m_cValidity.GetIndex())
    setBuffer(def_k_AGEvaluate, def_ag_AGEvaluate_result, getOutputIndex())
    setBuffer(def_k_AGEvaluate, def_ag_AGEvaluate_status, m_cRowStatus.GetIndex())
-   uint offset[] = { 0 }, global[] = { 128 }, local[] = { 128 };
+   uint lanes=OpenCL.AlphaGenGroupSize(def_k_AGEvaluate,128,1);
+   if(lanes==0)
+      ReturnFalse;
+   uint offset[] = { 0 }, global[] = { lanes }, local[] = { lanes };
    kernelExecuteLoc(def_k_AGEvaluate, offset, global, local)
    return(true);
   }
@@ -203,7 +239,10 @@ bool CNeuronAlphaGenLSTMOCL::Sequence(CBufferFloat *source, const int length)
    setBuffer(def_k_AGLSTMForward, def_ag_AGLSTMForward_anchor, m_cAnchor.GetIndex())
    setBuffer(def_k_AGLSTMForward, def_ag_AGLSTMForward_tape, m_cTape.GetIndex())
    setBuffer(def_k_AGLSTMForward, def_ag_AGLSTMForward_output, m_cSequence.GetIndex())
-   uint offset[] = { 0 }, global[] = { 128 }, local[] = { 128 };
+   uint lanes=OpenCL.AlphaGenGroupSize(def_k_AGLSTMForward,128,4);
+   if(lanes==0)
+      ReturnFalse;
+   uint offset[] = { 0 }, global[] = { lanes }, local[] = { lanes };
    kernelExecuteLoc(def_k_AGLSTMForward, offset, global, local)
    return(true);
   }
@@ -226,7 +265,10 @@ bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat *source, CBufferFloat *input_
    setBuffer(def_k_AGLSTMBackward, def_ag_AGLSTMBackward_input_gradient, input_gradient.GetIndex())
    setBuffer(def_k_AGLSTMBackward, def_ag_AGLSTMBackward_weights_gradient, m_iWeightsGradient)
    setBuffer(def_k_AGLSTMBackward, def_ag_AGLSTMBackward_scratch, m_cBPTTWork.GetIndex())
-   uint offset[] = { 0 }, global[] = { 128 }, local[] = { 128 };
+   uint lanes=OpenCL.AlphaGenGroupSize(def_k_AGLSTMBackward,128,4);
+   if(lanes==0)
+      ReturnFalse;
+   uint offset[] = { 0 }, global[] = { lanes }, local[] = { lanes };
    kernelExecuteLoc(def_k_AGLSTMBackward, offset, global, local)
    return(true);
   }
