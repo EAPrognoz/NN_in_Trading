@@ -206,27 +206,78 @@ bool CNeuron::feedForward(CLayer *prevLayer)
 //+------------------------------------------------------------------+
 bool COpenCLMy::Initialize(const string program, const bool show_log = true)
   {
-#ifdef NN_HABI_INIT_DIAGNOSTICS
+   // Own the complete initialization transaction; do not use ProgramCreate,
+   // which frees a failed context without invalidating its stored handle.
+   Shutdown();
    ulong started=GetTickCount64();
-   PrintFormat("Habi Init [%s]: OpenCL context BEGIN source_chars=%d",NNHabiInitModel,StringLen(program));
-   if(!ContextCreate(CL_USE_ANY))
-      ReturnFalse;
-   PrintFormat("Habi Init [%s]: OpenCL context END elapsed_ms=%I64u; program BEGIN",NNHabiInitModel,GetTickCount64()-started);
-   started=GetTickCount64();
-   if(!ProgramCreate(program,show_log))
-      ReturnFalse;
-   PrintFormat("Habi Init [%s]: OpenCL program END elapsed_ms=%I64u",NNHabiInitModel,GetTickCount64()-started);
-#else
-   if(!COpenCL::Initialize(program, show_log))
-      ReturnFalse;
+   if(show_log)
+      PrintFormat("OpenCL context BEGIN source_chars=%d",StringLen(program));
+   ResetLastError();
+   int requested_device=CL_USE_ANY;
+#ifdef NN_OPENCL_DEVICE
+   requested_device=NN_OPENCL_DEVICE;
 #endif
+   if(!ContextCreate(requested_device))
+     {
+      int error=GetLastError();
+      Shutdown();
+      PrintFormat("OpenCL context FAILED error=%d elapsed_ms=%I64u",error,GetTickCount64()-started);
+      ReturnFalse;
+     }
+#ifdef NN_OPENCL_EXPECTED_DRIVER
+   string expected_driver_actual;
+   if(!CLGetInfoString(GetContext(),CL_DRIVER_VERSION,expected_driver_actual) ||
+      expected_driver_actual!=NN_OPENCL_EXPECTED_DRIVER)
+     {
+      PrintFormat("OpenCL runtime mismatch requested=%d actual=%s expected=%s",
+                  requested_device,expected_driver_actual,NN_OPENCL_EXPECTED_DRIVER);
+      Shutdown();
+      ReturnFalse;
+     }
+#endif
+   if(show_log)
+     {
+      string device_name="unknown",driver_version="unknown";
+      bool have_name=CLGetInfoString(GetContext(),CL_DEVICE_NAME,device_name);
+      bool have_driver=CLGetInfoString(GetContext(),CL_DRIVER_VERSION,driver_version);
+      PrintFormat("OpenCL selected requested=%d device=%s driver=%s info_ok=%d/%d",
+                  requested_device,device_name,driver_version,have_name,have_driver);
+      PrintFormat("OpenCL context END elapsed_ms=%I64u; program BEGIN",GetTickCount64()-started);
+     }
+   started=GetTickCount64();
+   string build_error_log;
+   ResetLastError();
+   m_program=CLProgramCreate(m_context,program,build_error_log);
+   int build_error=GetLastError();
+   if(m_program==INVALID_HANDLE)
+     {
+      PrintFormat("OpenCL program FAILED error=%d elapsed_ms=%I64u source_chars=%d",
+                  build_error,GetTickCount64()-started,StringLen(program));
+      if(show_log && StringLen(build_error_log)>0)
+         Print(build_error_log);
+      Shutdown();
+      ReturnFalse;
+     }
+   if(show_log)
+      PrintFormat("OpenCL program END elapsed_ms=%I64u",GetTickCount64()-started);
    uint size = 0;
+   ResetLastError();
    if(!CLGetDeviceInfo(GetContext(), CL_DEVICE_MAX_WORK_ITEM_SIZES, uLocalDimension.cdata, size))
+     {
+      int error=GetLastError();
+      Shutdown();
+      PrintFormat("OpenCL device limits FAILED field=work_item_sizes error=%d",error);
       ReturnFalse;
+     }
    size = 0;
+   ResetLastError();
    if(!CLGetDeviceInfo(GetContext(), CL_DEVICE_MAX_WORK_GROUP_SIZE, uMaxWorkGroup.cdata, size))
+     {
+      int error=GetLastError();
+      Shutdown();
+      PrintFormat("OpenCL device limits FAILED field=work_group_size error=%d",error);
       ReturnFalse;
-//---
+     }
    return(true);
   }
 //+------------------------------------------------------------------+
