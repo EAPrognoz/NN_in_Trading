@@ -1,5 +1,7 @@
 #property strict
 #define ALPHAGEN_STUDY
+input bool PPOProfile=false;
+#define ALPHAGEN_PPO_PROFILE PPOProfile
 #include "Trajectory.mqh"
 CAlphaGenApplication App;
 string StopButton="AlphaGenStop";

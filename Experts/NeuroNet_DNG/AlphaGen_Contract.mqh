@@ -1,6 +1,6 @@
 #ifndef ALPHAGEN_CONTRACT_MQH
 #define ALPHAGEN_CONTRACT_MQH
-// Shared MQL5/OpenCL identifiers. Algorithm settings arrive in the config buffer.
+//--- shared MQL5/OpenCL identifiers. Algorithm settings arrive in the config buffer.
 #define AG_BOS 0
 #define AG_PAD 1
 #define AG_STOP 2
@@ -51,7 +51,7 @@
 #define AG_FLUSH 5
 #define AG_EXIT_PENDING 6
 #define AG_FINALIZED 7
-// Config slots, one declaration shared by host and device.
+//--- config slots, one declaration shared by host and device.
 #define AG_CFG_W 0
 #define AG_CFG_LOOKBACK 1
 #define AG_CFG_HORIZON 2
@@ -93,7 +93,7 @@
 #define AG_FLAG_TRUNCATE 16
 #define AG_FLAG_DISCARD 32
 #define AG_FLAG_VALUE 64
-// Service header: ulong/datetime are four base-65536 limbs, never one float.
+//--- service header: ulong/datetime are four base-65536 limbs, never one float.
 #define AG_CTX_PHASE 0
 #define AG_CTX_FLAGS 1
 #define AG_CTX_DECISION 2
@@ -145,7 +145,11 @@
 #define def_k_AGReLU 418
 #define def_k_AGCopySlice 419
 #define def_k_AGContextMetadata 420
-#define AG_KERNEL_COUNT 425
+#define AG_KERNEL_COUNT 428
+#define def_k_AGLSTMWeightGradient 427
+#define def_k_AGNumericFinish 425
+#define def_k_AGReplayPrepare 426
+#define AG_NUMERIC_GROUPS 16
 #define def_k_AGSearchRecord 424
 #define def_ag_AGSearchRecord_sample 0
 #define def_ag_AGSearchRecord_metadata 1
@@ -249,6 +253,7 @@
 #define def_ag_AGLSTMForward_anchor 5
 #define def_ag_AGLSTMForward_tape 6
 #define def_ag_AGLSTMForward_output 7
+#define def_ag_AGLSTMForward_state 8
 #define def_ag_AGLSTMBackward_input 0
 #define def_ag_AGLSTMBackward_length 1
 #define def_ag_AGLSTMBackward_inputs 2
@@ -258,8 +263,9 @@
 #define def_ag_AGLSTMBackward_tape 6
 #define def_ag_AGLSTMBackward_gradient 7
 #define def_ag_AGLSTMBackward_input_gradient 8
-#define def_ag_AGLSTMBackward_weights_gradient 9
+#define def_ag_AGLSTMBackward_gate_gradient 9
 #define def_ag_AGLSTMBackward_scratch 10
+#define def_ag_AGLSTMBackward_tile_columns 11
 #define def_ag_AGSequence_input 0
 #define def_ag_AGSequence_output 1
 #define def_ag_AGSequence_length 2
@@ -329,13 +335,13 @@
 #define def_ag_AGPoolCopy_source 0
 #define def_ag_AGPoolCopy_destination 1
 #define def_ag_AGPoolCopy_count 2
-// Registration additions:
-// #resource "AlphaGen_Pool.cl" as string ag_pool_program
-// program_source += ag_pool_program;
-// CreateKernel(def_k_AGPoolTransaction,"AGPoolTransaction")
-// CreateKernel(def_k_AGPoolSignal,"AGPoolSignal")
-// CreateKernel(def_k_AGPoolCopy,"AGPoolCopy")
-// final AG_KERNEL_COUNT must be at least AG_POOL_KERNEL_COUNT (417).
+//--- registration additions:
+//--- #resource "AlphaGen_Pool.cl" as string ag_pool_program
+//--- program_source += ag_pool_program;
+//--- createKernel(def_k_AGPoolTransaction,"AGPoolTransaction")
+//--- createKernel(def_k_AGPoolSignal,"AGPoolSignal")
+//--- createKernel(def_k_AGPoolCopy,"AGPoolCopy")
+//--- final AG_KERNEL_COUNT must be at least AG_POOL_KERNEL_COUNT (417).
 #define def_ag_AGPoolTransaction_signal 9
 #define def_ag_AGPoolTransaction_context 10
 #define AG_POOL_PREPARED_COUNT 6

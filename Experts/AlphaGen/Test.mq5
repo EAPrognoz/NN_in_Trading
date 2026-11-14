@@ -1,5 +1,7 @@
 #property strict
 #define ALPHAGEN_TEST_DIAGNOSTICS
+input bool OpenCLWriteTrace=false;
+#define ALPHAGEN_TRACE_WRITES OpenCLWriteTrace
 #include "Trajectory.mqh"
 CAlphaGenApplication App;
 //+------------------------------------------------------------------+

@@ -1,7 +1,7 @@
-﻿//+------------------------------------------------------------------+
-//|                                         NeuroNet_Definitions.mqh |
-//|                                              Copyright 2026, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//+------------------------------------------------------------------+
+//| NeuroNet_Definitions.mqh                                         |
+//| Copyright 2026, DNG                                              |
+//| https://www.mql5.com/ru/users/dng                                |
 //+------------------------------------------------------------------+
 
 #ifndef NEURONET_DEFINITIONS_MQH
@@ -9,10 +9,10 @@
 #define NEURONET_OPENCL_CHECKED_API
 //--- \file
 //--- \brief NeuroNet.mqh
-//--- Library for creating Neural network for use in MQL5 experts
+//--- library for creating Neural network for use in MQL5 experts
 //--- \author [DNG](https://www.mql5.com/en/users/dng)
 //---\mainpage NeuronNet
-//--- Library for creating Neural network for use in MQL5 experts.
+//--- library for creating Neural network for use in MQL5 experts.
 //--- - \ref const
 //--- - \ref enums
 //--- - \ref ObjectTypes
@@ -44,14 +44,19 @@
 #define  b1                0.9f
 /** Second momentum multiplier of Adam optimization*/
 #define  b2                0.999f
-//--- Pseudo-random sequence generator
+//--- pseudo-random sequence generator
 #define  xor128            rnd_t=(rnd_x^(rnd_x<<11)); \
                            rnd_x=rnd_y; \
                            rnd_y=rnd_z; \
                            rnd_z=rnd_w; \
                            rnd_w=(rnd_w^(rnd_w>>19))^(rnd_t^(rnd_t>>8))
 //---
-uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRand(), rnd_t = 0;
+uint rnd_x=MathRand();
+uint rnd_y=MathRand();
+uint rnd_z=MathRand();
+uint rnd_w=MathRand();
+uint rnd_t=0;
+
 //---@}
 #define CreateKernel(id, name)    if(!opencl.KernelCreate(id, name)) { \
                                     PrintFormat("Error of create kernel %s: %d line %d", #name, GetLastError(), __LINE__); \
@@ -100,8 +105,8 @@ uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRan
 #define dFileReadUInt(file_handle, value)   if(FileIsEnding(file_handle)) ReturnFalse; value = (uint)FileReadInteger(file_handle);
 #define dFileWriteFloat(file_handle, value)  if(FileWriteFloat(file_handle, (float)value)<sizeof(float)) ReturnFalse;
 #define dFileReadUFloat(file_handle, value)   if(FileIsEnding(file_handle)) ReturnFalse; value = FileReadFloat(file_handle);
-//--- D2Skill shared MQL5 contract constants.  NeuroNet.cl is a separate
-//--- OpenCL program and keeps matching device-side constants in its source.
+//--- d2Skill shared MQL5 contract constants.  NeuroNet.cl is a separate
+//--- openCL program and keeps matching device-side constants in its source.
 #define D2SKILL_FORMAT                           8
 #define D2SKILL_LAYER_FORMAT                     1
 #define D2SKILL_ITEM_FORMAT                      1
@@ -117,19 +122,23 @@ uint rnd_x = MathRand(), rnd_y = MathRand(), rnd_z = MathRand(), rnd_w = MathRan
 //+------------------------------------------------------------------+
 //| Implements the pow helper function.                              |
 //+------------------------------------------------------------------+
-template<typename T1, typename T2>
-T1 pow(T2 a, T1 b)
+template<typename T1,typename T2>
+//+------------------------------------------------------------------+
+//| pow - Implement pow                                              |
+//+------------------------------------------------------------------+
+T1 pow(T2 a,T1 b)
   {
-   return(T1)MathPow((T1)a, (T1)b);
+   return(T1)MathPow((T1)a,(T1)b);
   }
 //+------------------------------------------------------------------+
 //| Declares the uaLongChar union.                                   |
 //+------------------------------------------------------------------+
 union uaLongChar
   {
-   long data[3];
+   long  data[3];
    uchar cdata[24];
   };
+
 //---\defgroup ObjectTypes  Defines Object types identified
 //---Used to identify classes in a library
 //---@{
@@ -537,14 +546,14 @@ union uaLongChar
 //---\}
 //---@}
 //---\defgroup group1 Defines for OpenCL kernels identified
-//--- Used as indexes when calling functions OpenCL.
+//--- used as indexes when calling functions OpenCL.
 //---@{
 //---\defgroup neuron_base Neuron Base
-//--- Describes the process for the Neuron Base.
+//--- describes the process for the Neuron Base.
 //---\details Detailed description on [the link.](https://www.mql5.com/ru/articles/8435#para4)
 //---@{
 //---\defgroup neuron_base_ff Feed Forward proccess kernel
-//--- Describes the forward path process for the Neuron Base.
+//--- describes the forward path process for the Neuron Base.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para41">the link.</A>
 //---@{
 /// Index of #FeedForward kernel
@@ -565,7 +574,7 @@ union uaLongChar
 #define  def_k_ff_flags_enabled  6
 //---@}
 //---\defgroup neuron_base_gr Gradients Calculation kernels
-//--- Describes the process of gradients calculation for the Neuron Base.
+//--- describes the process of gradients calculation for the Neuron Base.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para42">the link.</A>
 //---@{
 /// Index of Output gradients calculation kernel (#CalcOutputGradient)
@@ -597,9 +606,9 @@ union uaLongChar
 #define  def_k_chg_activation     5
 //---@}
 //---\defgroup neuron_base_opt Updating Weights Calculation kernel
-//--- Describes the process of optimization weights for the Neuron Base.
+//--- describes the process of optimization weights for the Neuron Base.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8435#para43">the link.</A>
-//--- For Adam optimization look <A HREF="https://www.mql5.com/ru/articles/8598#para31">the link.</A>
+//--- for Adam optimization look <A HREF="https://www.mql5.com/ru/articles/8598#para31">the link.</A>
 //---@{
 /// Index SGD optomization Update weights kernel (#UpdateWeightsMomentum)
 #define  def_k_UpdateWeightsMomentum      3
@@ -661,10 +670,10 @@ union uaLongChar
 //---@}
 //---
 //---\defgroup neuron_proof Pooling layer's neuron
-//--- Describes the process for the Neuron of pooling layer.
+//--- describes the process for the Neuron of pooling layer.
 //---@{
 //---\defgroup neuron_proof_ff Pooling layer's neuron Feed Forward
-//--- Describes the feed forward process for the Neuron of pooling layer.
+//--- describes the feed forward process for the Neuron of pooling layer.
 //---@{
 /// Index of the kernel of the Pooling neuron for Feed forward process (#FeedForwardProof)
 #define  def_k_FeedForwardProof    5
@@ -681,7 +690,7 @@ union uaLongChar
 //---@}
 //---
 //---\defgroup neuron_proof_gr Pooling layer's neuron Gradients Calculation kernels
-//--- Describes the gradient calculation process for the Neuron of pooling layer.
+//--- describes the gradient calculation process for the Neuron of pooling layer.
 //---@{
 /// Index of the kernel of the Pooling neuron to transfer gradient to previous layer (#CalcInputGradientProof)
 #define  def_k_CalcInputGradientProof 6
@@ -703,10 +712,10 @@ union uaLongChar
 //---@}
 //---
 //---\defgroup neuron_conv Convolution layer's neuron
-//--- Describes the process for the Neuron of convolution layer.
+//--- describes the process for the Neuron of convolution layer.
 //---@{
 //---\defgroup neuron_conv_ff Convolution layer's neuron Feed Forward
-//--- Describes the feed forward process for the Neuron of convolution layer.
+//--- describes the feed forward process for the Neuron of convolution layer.
 //---@{
 /// Index of the kernel of the convolution neuron for Feed forward process (#FeedForwardConv)
 #define  def_k_FeedForwardConv    7
@@ -729,7 +738,7 @@ union uaLongChar
 //---@}
 //---
 //---\defgroup neuron_conv_gr Convolution layer's neuron Gradients Calculation kernels
-//--- Describes the gradient calculation process for the Neuron of convolution layer.
+//--- describes the gradient calculation process for the Neuron of convolution layer.
 //---@{
 /// Index of the kernel of the convolution neuron to transfer gradient to previous layer (#CalcHiddenGradientConv)
 #define  def_k_CalcHiddenGradientConv 8
@@ -756,7 +765,7 @@ union uaLongChar
 //---@}
 //---
 //---\defgroup neuron_conv_opt Convolution layer's neuron Update weights kernels
-//--- Describes the optimization process for the Neuron of convolution layer.
+//--- describes the optimization process for the Neuron of convolution layer.
 //---@{
 /// Index of the kernel of the convolution neuron to update weights SGD (#UpdateWeightsConvMomentum)
 #define  def_k_UpdateWeightsConvMomentum      9
@@ -836,11 +845,11 @@ union uaLongChar
 //---@}
 //---
 //---\defgroup neuron_atten Attention layer's neuron
-//--- Describes the process for the Neuron of attention layer.
+//--- describes the process for the Neuron of attention layer.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para4">the link.</A>
 //---@{
 //---\defgroup neuron_atten_ff Attention layer's neuron Feed Forward
-//--- Describes the feed forward process for the Neuron of attention layer.
+//--- describes the feed forward process for the Neuron of attention layer.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para43">the link.</A>
 //---@{
 /// Index of the kernel of the attention neuron to calculate score matrix (#AttentionScore)
@@ -949,7 +958,7 @@ union uaLongChar
 //---@}
 //---
 //---\defgroup neuron_atten_gr Attention layer's neuron Gradients Calculation
-//--- Describes the gradients calculation process for the Neuron of attention layer.
+//--- describes the gradients calculation process for the Neuron of attention layer.
 //---\details Detailed description on <A HREF="https://www.mql5.com/ru/articles/8765#para44">the link.</A>
 //---@{
 /// Index of the kernel for gradients calculation process (#AttentionInsideGradients)
@@ -1017,7 +1026,7 @@ union uaLongChar
 //---@}
 //---
 //---\defgroup neuron_norm Kernels of matrix normalization process
-//--- Describes the process of matrix normalization.
+//--- describes the process of matrix normalization.
 //---\details Detailed description on <A HREF="https://arxiv.org/abs/1607.06450">the link.</A>
 //---@{
 /// Index of the kernel for matrix normalization (#Normalize)
@@ -1089,7 +1098,7 @@ union uaLongChar
 #define def_k_buoa_b2                     4
 //---@}
 //---\defgroup VAE neuron Kernels of Variant Aoutoencodre
-//--- Describes the process of Variant Aoutoencodre.
+//--- describes the process of Variant Aoutoencodre.
 //---@{
 #define def_k_VAEFeedForward             30
 #define def_k_vaeff_inputs                0
@@ -1106,7 +1115,7 @@ union uaLongChar
 #define def_k_vaehg_kld_mult              4
 //---@}
 //---\defgroup LSTM neuron Kernels of RNN unit
-//--- Describes the process of RNN.
+//--- describes the process of RNN.
 //---@{
 #define def_k_LSTM_FeedForward            32
 #define def_k_lstmff_inputs               0
@@ -1211,7 +1220,7 @@ union uaLongChar
 #define def_k_fqfsrm_risk_type                3
 #define def_k_fqfsrm_risk_parameter           4
 #define def_k_fqfsrm_mean_weight              5
-//--- Spectral Risk Measure types (FQF_SRMForward)
+//--- spectral Risk Measure types (FQF_SRMForward)
 #define defSRM_MEAN                           0
 /// lower-tail RETURN CVaR (risk_variable=return): E[R | R in the lower alpha tail]; the Actor maximizes it
 #define defSRM_CVAR                           1
@@ -1253,7 +1262,7 @@ union uaLongChar
 #define def_k_fqfrg_quantiles_gradient         3
 #define def_k_fqfrg_probabilities_gradient     4
 //---
-//--- FQF probability/numerical contract tolerances (MQL5 side)
+//--- fQF probability/numerical contract tolerances (MQL5 side)
 /// Max |sum(p)-1| before the SRM probability contract is violated
 #define defFQF_PROBABILITY_TOLERANCE      1.0e-3f
 /// Float tolerance for Phi(tau_high) >= Phi(tau_low) - eps
@@ -3224,10 +3233,10 @@ union uaLongChar
 #define def_k_sgn_responsibilities                5
 #define def_k_sgn_scenarios                       6
 #define def_k_sgn_horizon                         7
-//--- Generic RAG retrieval pipeline. All dimensions are runtime arguments.
+//--- generic RAG retrieval pipeline. All dimensions are runtime arguments.
 #define RAG_TOPK_LOCAL_WIDTH                      64
 #define RAG_TOPK_MAX                              (RAG_TOPK_LOCAL_WIDTH / 2)
-//--- ScenarioID is transported in float2.x by the GPU TopK pipeline.
+//--- scenarioID is transported in float2.x by the GPU TopK pipeline.
 #define RAG_FLOAT_INDEX_LIMIT                     16777216
 #define def_k_RAGScore                           287
 #define def_k_rags_embedding                       0
@@ -3293,7 +3302,7 @@ union uaLongChar
 #define def_k_sgn_variables                      11
 #define def_k_sgn_batch_control                  12
 #define def_k_sgn_normalize_gradients            13
-//--- D2Skill GPU retrieval, update and hindsight utility kernels.
+//--- d2Skill GPU retrieval, update and hindsight utility kernels.
 #define def_k_D2SkillScoreSlots                  294
 #define def_k_d2ss_query                           0
 #define def_k_d2ss_keys                            1
@@ -3353,7 +3362,7 @@ union uaLongChar
 #define def_k_d2gc_alpha                          12
 #define def_k_d2gc_retrieved                      13
 #define def_k_d2gc_mark_retrieved                 14
-//--- D2Skill staged bank update.  Scratch is device-only and is never saved.
+//--- d2Skill staged bank update.  Scratch is device-only and is never saved.
 #define def_k_D2SkillAgeLifecycle                295
 #define def_k_d2al_used                            0
 #define def_k_d2al_state                           1
@@ -3477,7 +3486,7 @@ union uaLongChar
 #define def_k_copy_raw_source                       0
 #define def_k_copy_raw_destination                  1
 #define def_k_copy_raw_total                        2
-//--- D2Skill terminal hindsight kernels.
+//--- d2Skill terminal hindsight kernels.
 #define def_k_D2SkillInfluenceTotal               309
 #define def_k_d2it_influence                        0
 #define def_k_d2it_used                             1
@@ -3503,7 +3512,7 @@ union uaLongChar
 #define def_k_d2dnp_partials                        1
 #define def_k_d2dnp_slots                           2
 #define def_k_d2dnp_dimension                       3
-//--- Gradient-to-correction influence is reduced entirely on the device.
+//--- gradient-to-correction influence is reduced entirely on the device.
 #define def_k_D2SkillInfluencePartial             313
 #define def_k_d2sip_gradient                        0
 #define def_k_d2sip_correction                      1
@@ -3536,7 +3545,7 @@ union uaLongChar
 #define def_k_d2nd_slots                              6
 #define def_k_d2nd_dimension                          7
 #define def_k_d2nd_phase                              8
-//--- OMPB owns exactly these three device kernels.  All affine, gate and
+//--- oMPB owns exactly these three device kernels.  All affine, gate and
 //--- history operations deliberately reuse the generic library primitives.
 #define def_k_OMPBDisagreement                        317
 #define def_k_ompbd_reference                           0
@@ -3589,33 +3598,33 @@ union uaLongChar
 
 enum ENUM_DPCC_MODE
   {
-   DPCC_P0 = 0,
-   DPCC_P1 = 1,
-   DPCC_P2 = 2
+   DPCC_P0=0,
+   DPCC_P1=1,
+   DPCC_P2=2
   };
 //+------------------------------------------------------------------+
 //| DPCC public completion statuses                                  |
 //+------------------------------------------------------------------+
 enum ENUM_DPCC_STATUS
   {
-   DPCC_OK                   = 0,
-   DPCC_NO_FEASIBLE_CANDIDATE = 1,
-   DPCC_SEARCH_EXHAUSTED     = 2,
-   DPCC_INVALID_INPUT        = 3,
-   DPCC_CONTRACT_MISMATCH    = 4,
-   DPCC_NUMERIC_ERROR        = 5,
-   DPCC_OPENCL_ERROR         = 6,
-   DPCC_BACKWARD_UNSUPPORTED = 7
+   DPCC_OK=0,
+   DPCC_NO_FEASIBLE_CANDIDATE=1,
+   DPCC_SEARCH_EXHAUSTED=2,
+   DPCC_INVALID_INPUT=3,
+   DPCC_CONTRACT_MISMATCH=4,
+   DPCC_NUMERIC_ERROR=5,
+   DPCC_OPENCL_ERROR=6,
+   DPCC_BACKWARD_UNSUPPORTED=7
   };
 //+------------------------------------------------------------------+
 //| DPCC internal account evaluation phases                          |
 //+------------------------------------------------------------------+
 enum ENUM_DPCC_PHASE
   {
-   PRE_ACTION   = 0,
-   AFTER_ACTION = 1,
-   INTRABAR     = 2,
-   BAR_END      = 3
+   PRE_ACTION=0,
+   AFTER_ACTION=1,
+   INTRABAR=2,
+   BAR_END=3
   };
 //+------------------------------------------------------------------+
 //| OMPB runtime mode                                                |
@@ -3624,7 +3633,7 @@ enum ENUM_DPCC_PHASE
 //+------------------------------------------------------------------+
 enum ENUM_OMPB_MODE
   {
-   OMPB_BYPASS = 0,
+   OMPB_BYPASS=0,
    OMPB_REFERENCE,
    OMPB_CALIBRATE,
    OMPB_INFERENCE
@@ -3632,37 +3641,48 @@ enum ENUM_OMPB_MODE
 //+------------------------------------------------------------------+
 //| Enum of activation formula used                                  |
 //+------------------------------------------------------------------+
-//--- OpenCL program resource.
+//--- openCL program resource.
+#ifdef NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
+const string cl_program="";
+#else
 #resource "..\\NeuroNet_DNG\\NeuroNet.cl" as string cl_program
+#endif // NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
 enum ENUM_ACTIVATION
   {
-   //--- Without activation formula
-   None = -1,
-   //--- Use \f$tanh(x)\f$ for activation neuron
-   TANH = 0,
-   //--- Use \f$\frac{1}{1+e^x}\f$ for activation neuron
-   SIGMOID = 1,
-   //--- For activation neuron use LReLU \f[\left\{ \begin{array} a x>=0, \ x \\x<0, \ 0.01*x \end{array} \right.\f]
-   LReLU = 2,
-   SoftPlus = 3,
-   GELU = 4,
-   MinusSoftPlus = 5,
-   ELU = 6,
+   //--- without activation formula
+   None=-1,
+
+   //--- use \f$tanh(x)\f$ for activation neuron
+   TANH=0,
+
+   //--- use \f$\frac{1}{1+e^x}\f$ for activation neuron
+   SIGMOID=1,
+
+   //--- for activation neuron use LReLU \f[\left\{ \begin{array} a x>=0, \ x \\x<0, \ 0.01*x \end{array} \right.\f]
+   LReLU=2,
+   SoftPlus=3,
+   GELU=4,
+   MinusSoftPlus=5,
+   ELU=6,
   };
 //+------------------------------------------------------------------+
 //| Enum of optimization method used                                 |
 //+------------------------------------------------------------------+
 enum ENUM_OPTIMIZATION
   {
-   //--- Stochastic gradient descent
-   SGD = 0,
-   //--- Adam
-   ADAM = 1,
-   //--- Least Squares
-   LS = 2,
-   //--- Adam-mini
-   ADAM_MINI = 3
+   //--- stochastic gradient descent
+   SGD=0,
+
+   //--- adam
+   ADAM=1,
+
+   //--- least Squares
+   LS=2,
+
+   //--- adam-mini
+   ADAM_MINI=3
   };
+
 //---@}
 //---\class CConnection
 //---\brief Class of connection to anothe neuron
@@ -3730,8 +3750,8 @@ enum ENUM_OPTIMIZATION
 #define DPCC_PROJECTION_DIAGNOSTIC_STRIDE       12
 union UDPCCDoubleBits
   {
-   double            value;
-   ulong             bits;
+   double value;
+   ulong  bits;
   };
 //+------------------------------------------------------------------+
 //| DPCC shared exact-chain kernel identifiers and argument order    |
@@ -3950,7 +3970,7 @@ union UDPCCDoubleBits
 #define def_k_DPCCDenoiserEpsilonMSE 365
 #define def_k_DPCCDenoiserPrepare 366
 #define def_k_DPCCDecoderNativeTarget 367
-//--- Read-only AC-SRM candidate-row operations.
+//--- read-only AC-SRM candidate-row operations.
 #define def_k_DPCCQRowsDense 380
 #define def_k_DPCCQRowsConv 381
 #define def_k_DPCCQRowsMultiWindow 382
@@ -3967,7 +3987,7 @@ union UDPCCDoubleBits
 #define def_k_DPCCAction6InitialNoise 393
 #define def_k_DPCCAction6Reverse 394
 #define def_k_DPCCAction6CandidateMask 395
-//--- ABI3-only physical Action6 backward: selected seed and exact unroll arithmetic.
+//--- aBI3-only physical Action6 backward: selected seed and exact unroll arithmetic.
 #define def_k_DPCCAction6GradientSeed 396
 #define def_k_DPCCAction6GradientStep 397
 #define def_k_DPCCFullPlanGradientSeed 398
@@ -3977,7 +3997,7 @@ union UDPCCDoubleBits
 #define def_k_DPCCAction6GradientStep_branch_sum             3
 #define def_k_DPCCAction6GradientStep_sigmoid_pullback        4
 #define def_k_DPCCAction6GradientStep_final_roundtrip_pullback 5
-// Habi IDs are appended; existing serialized IDs and kernel slots stay stable.
+//--- habi IDs are appended; existing serialized IDs and kernel slots stay stable.
 #define defNeuronHabiObservationOCL 0x7A01
 #define defNeuronHabiGaussianOCL    0x7A02
 #define defNeuronHabiVAEOCL         0x7A03
@@ -3989,13 +4009,27 @@ union UDPCCDoubleBits
 #define def_k_HabiCriticSeed 401
 
 #include "AlphaGen_Contract.mqh"
+#ifdef NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
+const string ag_contract="";
+#else
 #resource "AlphaGen_Contract.mqh" as string ag_contract
+#endif // NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
+#ifdef NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
+const string ag_program="";
+#else
 #resource "AlphaGen.cl" as string ag_program
+#endif // NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
+#ifdef NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
+const string ag_pool_program="";
+#else
 #resource "AlphaGen_Pool.cl" as string ag_pool_program
+#endif // NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
 
 #endif // NEURONET_DEFINITIONS_MQH
+//+------------------------------------------------------------------+
 
 #ifndef NEURONET_BUILDING_FACADE
+#ifndef NEURONET_DECLARATIONS_MQH
 #include "NeuroNet.mqh"
+#endif // NEURONET_DECLARATIONS_MQH
 #endif // NEURONET_BUILDING_FACADE
-//+------------------------------------------------------------------+

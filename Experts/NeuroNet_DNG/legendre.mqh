@@ -1,13 +1,12 @@
 //+------------------------------------------------------------------+
-//|                                                     legendre.mqh |
-//|                                              Copyright 2026, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//| legendre.mqh                                                     |
+//| Copyright 2026, DNG                                              |
+//| https://www.mql5.com/ru/users/dng                                |
 //+------------------------------------------------------------------+
 #ifndef LEGENDRE_MQH
 #define LEGENDRE_MQH
-
 //+------------------------------------------------------------------+
-//| Legendre - evaluate the Legendre polynomial of the given order   |
+//| Legendre - Evaluate the Legendre polynomial of the given order   |
 //+------------------------------------------------------------------+
 double Legendre(uint poly,double x)
   {
@@ -42,5 +41,4 @@ double Legendre(uint poly,double x)
 #define Legendre18(x)   Legendre(18,2*x-1)
 #define Legendre20(x)   Legendre(20,2*x-1)
 #endif
-
 //+------------------------------------------------------------------+
