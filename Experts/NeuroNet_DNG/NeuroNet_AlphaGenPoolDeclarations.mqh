@@ -21,6 +21,9 @@ protected:
    CBufferFloat m_cPreparedSignal;
    CBufferFloat m_cPreparedContext;
    CBufferFloat m_cDummy;
+   CBufferFloat m_cHistory;
+   CBufferFloat m_cHistoryValues;
+   int          m_iHistoryCount;
    int          m_iWindow;
    int          m_iTokens;
    int          m_iCapacity;
@@ -42,9 +45,9 @@ protected:
       return(true);
      }
    bool Transaction(CBufferFloat*market,CBufferFloat*tokens,const int length,const int mode);
-   bool SignalStep(CBufferFloat*market,const int mode,const bool first=false);
+   bool SignalStep(CBufferFloat*market,const int mode,const bool first=false,const int count=0);
 public:
-                     CAlphaGenPool(void){OpenCL=NULL;m_iWindow=0;}
+                     CAlphaGenPool(void){OpenCL=NULL;m_iWindow=0;m_iHistoryCount=0;}
    bool Configure(COpenCLMy*context,const float&config[]);
    //+------------------------------------------------------------------+
    //| Candidate - Implement Candidate                                  |
@@ -60,7 +63,17 @@ public:
    //+------------------------------------------------------------------+
    bool Prepare(CBufferFloat*market)
      {return(Transaction(market,GetPointer(m_cDummy),0,1));}
-   bool PrepareAppend(CBufferFloat*market,const bool first=false){return(SignalStep(market,2,first));}
+   bool SetWarmupHistory(const float&history[],const int count);
+   bool PrepareAppend(CBufferFloat*market,const bool first=false)
+     {
+      if(first&&m_iHistoryCount>0)
+        {
+         int count=m_iHistoryCount;
+         m_iHistoryCount=0;
+         return(SignalStep(GetPointer(m_cHistory),2,true,count));
+        }
+      return(SignalStep(market,2,first));
+     }
    //+------------------------------------------------------------------+
    //| Commit - Implement Commit                                        |
    //+------------------------------------------------------------------+

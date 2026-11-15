@@ -1578,3 +1578,356 @@ __kernel void AGSearchRecord(__global const float*sample,__global const float*me
    result[0]=AG_OK;
   }
 //+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| Local formula helpers - Bound scratch to one history tile         |
+//+------------------------------------------------------------------+
+int AGApplyTokenLocal(const int token,__global const float*cfg,
+                        __local int *types,__local int*lookback,
+                        __local int *dependent,int depth)
+  {
+   const int limit=(int)cfg[AG_CFG_LOOKBACK];
+
+   if(token>=AG_OPEN&&token<=AG_VOLUME)
+     {
+      if(depth>0&&types[depth-1]!=0)
+         return(-1);
+
+      types[depth]=0;
+      lookback[depth]=0;
+      dependent[depth]=1;
+
+      return(depth+1);
+     }
+
+   if(token>=AG_CONSTANT_FIRST&&token<AG_INTERVAL_FIRST)
+     {
+      if(depth>0&&types[depth-1]!=0)
+         return(-1);
+
+      types[depth]=0;
+      lookback[depth]=0;
+      dependent[depth]=0;
+
+      return(depth+1);
+     }
+
+   if(token>=AG_INTERVAL_FIRST&&token<AG_ABS)
+     {
+      if(depth<1||types[depth-1]!=0)
+         return(-1);
+
+      int n=(int)cfg[AG_CFG_INTERVALS+token-AG_INTERVAL_FIRST];
+
+      if(n<=0||lookback[depth-1]+n-1>limit)
+         return(-1);
+
+      types[depth]=n;
+      lookback[depth]=0;
+      dependent[depth]=0;
+
+      return(depth+1);
+     }
+
+   if(token>=AG_ABS&&token<=AG_LOG)
+      return(depth>0&&types[depth-1]==0?depth:-1);
+
+   if(token>=AG_ADD&&token<=AG_DIV)
+     {
+      if(depth<2||types[depth-1]!=0||types[depth-2]!=0)
+         return(-1);
+
+      lookback[depth-2]=max(lookback[depth-1],lookback[depth-2]);
+      dependent[depth-2]|=dependent[depth-1];
+
+      return(depth-1);
+     }
+
+   if(token>=AG_REF&&token<=AG_MAX)
+     {
+      if(depth<2||types[depth-1]<=0||types[depth-2]!=0)
+         return(-1);
+
+      int n=types[depth-1];
+      int lb=lookback[depth-2]+n-((token==AG_REF||token==AG_DELTA)?0:1);
+
+      if(lb>limit)
+         return(-1);
+
+      lookback[depth-2]=lb;
+
+      return(depth-1);
+     }
+
+   if(token==AG_CORR||token==AG_COV)
+     {
+      if(depth<3||types[depth-1]<=0||types[depth-2]!=0||types[depth-3]!=0)
+         return(-1);
+
+      int lb=max(lookback[depth-2],lookback[depth-3])+types[depth-1]-1;
+
+      if(lb>limit)
+         return(-1);
+
+      lookback[depth-3]=lb;
+      dependent[depth-3]|=dependent[depth-2];
+
+      return(depth-2);
+     }
+
+   return(-1);
+  }
+void AGFormulaEvaluateLocal(__global const float*market,
+                              __global const float *tokens,const int length,
+                              __global const float *cfg,__local float*stack,
+                              __local float        *validity,__global float*result,
+                              __global float       *status,const int token_stride,__local int*syntax_state,
+                              const int market_count,const int offset,const int count,const int first)
+  {
+   int lane=get_local_id(0);
+   int lanes=get_local_size(0);
+   int w=count;
+   int depth=0;
+   int capacity=(int)cfg[AG_CFG_MAX_TOKENS]+1;
+
+   if(lane==0)
+     {
+      __local int *types=(__local int*)validity;
+      __local int *lookback=types+capacity;
+      __local int *dependent=lookback+capacity;
+      (*syntax_state)=length>=2&&length<capacity;
+
+      for(int k=0;k<length&&(*syntax_state);k++)
+        {
+         float raw_token=tokens[k*token_stride];
+
+         if(!isfinite(raw_token)||raw_token<0.0f||raw_token>=(float)AG_VOCABULARY||
+            raw_token!=floor(raw_token))
+           {
+            (*syntax_state)=0;
+            break;
+           }
+         int token=(int)raw_token;
+
+         if(k==length-1)
+            (*syntax_state)=token==AG_STOP&&depth==1&&types[0]==0&&dependent[0];
+         else
+           {
+            depth=AGApplyTokenLocal(token,cfg,types,lookback,dependent,depth);
+
+            if(depth<0)
+               (*syntax_state)=0;
+           }
+        }
+     }
+   barrier(CLK_LOCAL_MEM_FENCE);
+
+   if(!(*syntax_state))
+     {
+      for(int i=first+lane;i<w;i+=lanes)
+        {
+         result[i]=0.0f;
+         status[i]=AG_TECHNICAL;
+        }
+      return;
+     }
+   depth=0;
+
+   for(int k=0;k<length;k++)
+     {
+      int token=(int)tokens[k*token_stride];
+
+      if(token==AG_STOP)
+         break;
+
+      if(token>=AG_OPEN&&token<AG_ABS)
+        {
+         for(int i=lane;i<w;i+=lanes)
+           {
+            float x=token<=AG_VOLUME?market[(token-AG_OPEN)*market_count+offset+i]:
+                    token<AG_INTERVAL_FIRST?cfg[AG_CFG_CONSTANTS+token-AG_CONSTANT_FIRST]:
+                    cfg[AG_CFG_INTERVALS+token-AG_INTERVAL_FIRST];
+            stack[depth*w+i]=x;
+            validity[depth*w+i]=isfinite(x)?AG_OK:AG_INVALID;
+           }
+         depth++;
+         barrier(CLK_LOCAL_MEM_FENCE);
+         continue;
+        }
+
+      if(token>=AG_ABS&&token<=AG_LOG)
+        {
+         for(int i=lane;i<w;i+=lanes)
+           {
+            int   p=(depth-1)*w+i;
+            float x=stack[p];
+
+            if(validity[p]!=AG_OK)
+               continue;
+
+            if(token==AG_LOG&&!(x>0.0f))
+               validity[p]=AG_INVALID;
+            else
+               stack[p]=token==AG_ABS?fabs(x):token==AG_SIGN?sign(x):log(x);
+
+            if(!isfinite(stack[p]))
+               validity[p]=AG_INVALID;
+           }
+         barrier(CLK_LOCAL_MEM_FENCE);
+         continue;
+        }
+
+      if(token>=AG_ADD&&token<=AG_DIV)
+        {
+         for(int i=lane;i<w;i+=lanes)
+           {
+            int   l=(depth-2)*w+i;
+            int   r=(depth-1)*w+i;
+            int   s=max((int)validity[l],(int)validity[r]);
+            float a=stack[l];
+            float b=stack[r];
+            float x=0.0f;
+
+            if(s==AG_OK)
+              {
+               if(token==AG_DIV&&b==0.0f)
+                  s=AG_INVALID;
+               else
+                  x=token==AG_ADD?a+b:token==AG_SUB?a-b:token==AG_MUL?a*b:a/b;
+
+               if(!isfinite(x))
+                  s=AG_INVALID;
+              }
+            stack[l]=x;
+            validity[l]=(float)s;
+           }
+         depth--;
+         barrier(CLK_LOCAL_MEM_FENCE);
+         continue;
+        }
+      int pair=(token==AG_CORR||token==AG_COV);
+      int slot=depth-(pair?3:2);
+      int n=(int)stack[(depth-1)*w];
+
+      //--- reuse the interval row after every lane has read its value.
+      int staged=(depth-1)*w;
+
+      barrier(CLK_LOCAL_MEM_FENCE);
+
+      for(int i=lane;i<w;i+=lanes)
+        {
+         int   begin=i-n+((token==AG_REF||token==AG_DELTA)?0:1);
+         int   p=slot*w+i;
+         int   s=AG_OK;
+         float x=0.0f;
+
+         if(begin<0)
+           {
+            validity[staged+i]=AG_SKIP;
+            stack[staged+i]=x;
+            continue;
+           }
+
+         if(token==AG_REF||token==AG_DELTA)
+           {
+            s=(int)validity[slot*w+begin];
+
+            if(token==AG_DELTA)
+               s=max(s,(int)validity[p]);
+            x=token==AG_REF?stack[slot*w+begin]:stack[p]-stack[slot*w+begin];
+           }
+         else
+           {
+            float a=0.0f;
+            float b=0.0f;
+            float mx=0.0f;
+            float my=0.0f;
+            float xx=0.0f;
+            float yy=0.0f;
+            float xy=0.0f;
+            float lo=stack[slot*w+begin];
+            float hi=lo;
+
+            for(int j=begin;j<=i;j++)
+              {
+               s=max(s,(int)validity[slot*w+j]);
+               a=fmax(a,fabs(stack[slot*w+j]));
+
+               if(pair)
+                 {
+                  s=max(s,(int)validity[(slot+1)*w+j]);
+                  b=fmax(b,fabs(stack[(slot+1)*w+j]));
+                 }
+               lo=fmin(lo,stack[slot*w+j]);
+               hi=fmax(hi,stack[slot*w+j]);
+              }
+
+            if(token==AG_MIN)
+               x=lo;
+            else
+               if(token==AG_MAX)
+                  x=hi;
+               else
+                 {
+                  if(a==0.0f)
+                     a=1.0f;
+
+                  if(b==0.0f)
+                     b=1.0f;
+
+                  for(int j=begin;j<=i;j++)
+                    {
+                     mx+=stack[slot*w+j]/a/(float)n;
+
+                     if(pair)
+                        my+=stack[(slot+1)*w+j]/b/(float)n;
+                    }
+
+                  for(int j=begin;j<=i;j++)
+                    {
+                     float dx=stack[slot*w+j]/a-mx;
+                     float dy=pair?stack[(slot+1)*w+j]/b-my:0.0f;
+
+                     xx+=dx*dx/(float)n;
+                     yy+=dy*dy/(float)n;
+                     xy+=dx*dy/(float)n;
+                    }
+
+                  if(token==AG_MEAN)
+                     x=mx*a;
+                  else
+                     if(token==AG_STD)
+                        x=sqrt(xx)*a;
+                     else
+                        if(token==AG_COV)
+                           x=(xy*a)*b;
+                        else
+                           if(xx>0.0f&&yy>0.0f)
+                              x=xy/sqrt(xx)/sqrt(yy);
+                           else
+                              s=max(s,AG_SKIP);
+                 }
+           }
+
+         if(s==AG_OK&&!isfinite(x))
+            s=AG_INVALID;
+         stack[staged+i]=x;
+         validity[staged+i]=(float)s;
+        }
+      barrier(CLK_LOCAL_MEM_FENCE);
+
+      for(int i=lane;i<w;i+=lanes)
+        {
+         stack[slot*w+i]=stack[staged+i];
+         validity[slot*w+i]=validity[staged+i];
+        }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      depth-=pair?2:1;
+     }
+
+   for(int i=first+lane;i<w;i+=lanes)
+     {
+      result[i]=stack[i];
+      status[i]=validity[i];
+     }
+  }

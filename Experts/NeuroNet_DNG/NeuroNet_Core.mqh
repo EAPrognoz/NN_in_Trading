@@ -23242,6 +23242,7 @@ bool CNet::OpenCLInit(void)
 #endif
    CreateKernel(def_k_AGPoolTransaction,"AGPoolTransaction")
    CreateKernel(def_k_AGPoolSignal,"AGPoolSignal")
+   CreateKernel(def_k_AGPoolEvaluateHistory,"AGPoolEvaluateHistory")
    CreateKernel(def_k_AGPoolCopy,"AGPoolCopy")
    CreateKernel(def_k_AGSearchGenerate,"AGSearchGenerate")
    CreateKernel(def_k_AGSearchRecord,"AGSearchRecord")

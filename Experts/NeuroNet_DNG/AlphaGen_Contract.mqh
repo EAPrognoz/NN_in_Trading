@@ -145,7 +145,8 @@
 #define def_k_AGReLU 418
 #define def_k_AGCopySlice 419
 #define def_k_AGContextMetadata 420
-#define AG_KERNEL_COUNT 428
+#define AG_KERNEL_COUNT 429
+#define def_k_AGPoolEvaluateHistory 428
 #define def_k_AGLSTMWeightGradient 427
 #define def_k_AGNumericFinish 425
 #define def_k_AGReplayPrepare 426

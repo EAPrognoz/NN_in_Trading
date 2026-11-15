@@ -910,9 +910,9 @@ inline void AGPoolStandardizeGroup(__global const float*input,__global const flo
 //+------------------------------------------------------------------+
 //| AGPoolStandardizeRingGroup - Implement AGPoolStandardizeRingGroup|
 //+------------------------------------------------------------------+
-inline void AGPoolStandardizeRingGroup(__global const float*input,__global const float*validity,
+inline void AGPoolStandardizeRingGroup(__global const float*input,
                                        const int      offset,const int count,__global const float*cfg,
-                                       __global float *normalized,__global float*statistics,
+                                       __global float *statistics,
                                        __local float  *reduce)
   {
    int lane=get_local_id(0);
@@ -933,7 +933,7 @@ inline void AGPoolStandardizeRingGroup(__global const float*input,__global const
 
    for(int i=lane;i<count;i+=lanes)
      {
-      if(validity[offset+i]!=AG_OK||!isfinite(input[offset+i]))
+      if(!isfinite(input[offset+i]))
          bad=fmin(bad,(float)i);
       a=fmax(a,fabs(input[offset+i]));
      }
@@ -942,7 +942,7 @@ inline void AGPoolStandardizeRingGroup(__global const float*input,__global const
    if(first_bad<count)
      {
       if(lane==0)
-         statistics[AG_STAT_STATUS]=validity[offset+first_bad]!=AG_OK?validity[offset+first_bad]:AG_INVALID;
+         statistics[AG_STAT_STATUS]=AG_INVALID;
       barrier(CLK_GLOBAL_MEM_FENCE);
       return;
      }
@@ -981,8 +981,6 @@ inline void AGPoolStandardizeRingGroup(__global const float*input,__global const
 
    float sd=sqrt(variance);
 
-   for(int i=lane;i<count;i+=lanes)
-      normalized[i]=((input[offset+i]/a-origin)/b-mean)/sd;
 
    if(lane==0)
      {
@@ -1754,10 +1752,42 @@ __kernel void AGPoolTransaction(__global const float*market,__global const float
 //+------------------------------------------------------------------+
 //| AGPoolSignal - Implement AGPoolSignal                            |
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| AGPoolEvaluateHistory - One formula per group, bars per lane       |
+//+------------------------------------------------------------------+
+__kernel void AGPoolEvaluateHistory(__global const float*market,__global const float*cfg,
+                                    __global const float*banks,__global float*evaluated,
+                                    const int mode,const int count,const int start,
+                                    const int tile,__local float*scratch)
+  {
+   const int formula=get_group_id(0);
+   const int size=AGPoolBankSize(cfg);
+   __global const float*bank=banks+(mode==2?3:1)*size;
+   if(formula>=(int)bank[0]||bank[9]!=1.0f)
+      return;
+   const int tokens=(int)cfg[AG_CFG_MAX_TOKENS];
+   const int halo=(int)cfg[AG_CFG_LOOKBACK];
+   const int step=tile-halo;
+   __local int syntax;
+   __local float*valid=scratch+tokens*tile;
+   __global const float*record=bank+10+formula*AGPoolStride(cfg);
+   __global float*raw=evaluated+(size_t)formula*count*2;
+   __global float*status=raw+count;
+   for(int first=start;first<count;first+=step)
+     {
+      const int offset=max(0,first-halo);
+      const int end=min(count,first+step);
+      AGFormulaEvaluateLocal(market,record+5,(int)record[0],cfg,scratch,valid,
+                             raw+offset,status+offset,1,&syntax,count,offset,end-offset,first-offset);
+      barrier(CLK_LOCAL_MEM_FENCE);
+     }
+  }
+
 __kernel void AGPoolSignal(__global const float*market,__global const float*cfg,
                            __global float *banks,__global float*work,
                            __global float *rings,__global float*control,
-                           __global float *signal,__global float*context,const int mode,const int start)
+                           __global float *signal,__global float*context,const int mode,const int start,
+                           __global const float*evaluated,const int count)
   {
    if(get_group_id(0)!=0)
       return;
@@ -1772,17 +1802,10 @@ __kernel void AGPoolSignal(__global const float*market,__global const float*cfg,
    int            stride=AGPoolStride(cfg);
    int            nw=(int)cfg[AG_CFG_NORM_WINDOW];
    int            nc=(int)cfg[AG_CFG_CONTEXT];
-   int            w=(int)cfg[AG_CFG_W];
+   int            w=count;
    int            t=(int)cfg[AG_CFG_MAX_TOKENS];
    __global float *bank=banks+(mode==2?3:1)*size;
    __global float *ring=rings+(mode==2?rs:0);
-   __global float *stack=work;
-   __global float *valid=stack+w*t;
-   __global float *raw=valid+max(w*t,3*(t+1));
-   __global float *status=raw+w;
-   __global float *tmp=status+w;
-   __global float *tv=tmp+w;
-
    if(lane==0)
      {
       control[6]=banks[0];control[7]=banks[size];
@@ -1793,49 +1816,43 @@ __kernel void AGPoolSignal(__global const float*market,__global const float*cfg,
    if(bank[0]<1.0f||bank[9]!=1.0f)
       return;
 
-   int            cap=(int)cfg[AG_CFG_POOL]+1;
-   int            n=(int)cfg[AG_CFG_IC_WINDOW];
-   int            base=w*t+max(w*t,3*(t+1))+4*w+n+7+cap*n+cap*(cap+1)+cap+3;
-   __global float *scores=work+base;
-
-   for(int row=start+lane;row<w;row+=lanes)
-      scores[row]=0.0f;
-   barrier(CLK_GLOBAL_MEM_FENCE);
-
-//--- evaluate each formula once for all rows of the first history window.
+   //--- validate all formula rows before publishing any ring changes.
    for(int j=0;j<(int)bank[0];j++)
      {
-      __global float *record=bank+10+j*stride;
-      AGFormulaEvaluate(market,record+5,(int)record[0],cfg,stack,valid,raw,status,1,&syntax);
-      barrier(CLK_GLOBAL_MEM_FENCE);
+      __global const float*row_status=evaluated+(size_t)j*w*2+w;
       float first_bad=(float)w;
-
       for(int row=start+lane;row<w;row+=lanes)
-         if(status[row]!=AG_OK)
+         if(row_status[row]!=AG_OK)
             first_bad=fmin(first_bad,(float)row);
       int invalid=(int)AGPoolReduce(first_bad,reduce,2);
-
       if(invalid<w)
         {
          if(lane==0)
            {
-            control[0]=status[invalid];
-
+            control[0]=row_status[invalid];
             if(mode==2)
                bank[9]=0.0f;
            }
          return;
         }
-
-      for(int row=start+lane;row<w;row+=lanes)
-         scores[row]+=record[12+t]*AGPoolAffine(raw[row],record+5+t);
-      barrier(CLK_GLOBAL_MEM_FENCE);
      }
 
    //--- rows remain chronological; all lanes cooperate within each row.
    for(int row=start;row<w;row++)
      {
-      float score=scores[row];
+      if(lane==0)
+        {
+         float sum=0.0f;
+         for(int j=0;j<(int)bank[0];j++)
+           {
+            __global float*record=bank+10+j*stride;
+            sum+=record[12+t]*AGPoolAffine(evaluated[(size_t)j*w*2+row],record+5+t);
+           }
+         shifted[0]=sum;
+        }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      float score=shifted[0];
+      barrier(CLK_LOCAL_MEM_FENCE);
 
       if(!isfinite(score))
         {
@@ -1867,10 +1884,9 @@ __kernel void AGPoolSignal(__global const float*market,__global const float*cfg,
          if(!full)
             continue;
 
-         for(int i=lane;i<nw;i+=lanes)
-            tv[i]=AG_OK;
+
          barrier(CLK_GLOBAL_MEM_FENCE);
-         AGPoolStandardizeRingGroup(ring+11,tv,0,nw,cfg,tmp,ring+3,reduce);
+         AGPoolStandardizeRingGroup(ring+11,0,nw,cfg,ring+3,reduce);
 
          if(lane==0)
             ring[10]=ring[8];

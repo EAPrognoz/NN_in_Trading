@@ -1538,21 +1538,32 @@ class CAlphaGenApplication
          Fault("invalid pinned pool warmup cursor");
          ReturnFalse;
         }
-      int flags=AG_FLAG_WARMUP;
-      if(pool_warmup_end==end-warmup_bars+window)
+      float warmup_history[];
+      if(warmup_bars<=0 || warmup_bars>INT_MAX/5 || end<warmup_bars || ArrayResize(warmup_history,5*warmup_bars)!=5*warmup_bars)
         {
-         flags|=AG_FLAG_RESET_WORK;
+         ReturnFalse;
         }
-      if(pool_warmup_end==end)
+      for(int i=0;i<warmup_bars;i++)
         {
-         flags|=AG_FLAG_END;
+         MqlRates bar=pool_warmup_rates[end-warmup_bars+i];
+         if(!MathIsValidNumber(bar.open+bar.high+bar.low+bar.close) || bar.open<=0 || bar.high<bar.low || bar.close<=0 || bar.spread<0)
+           {
+            Fault("invalid pinned history bar");
+            ReturnFalse;
+           }
+         warmup_history[i]=(float)bar.open;
+         warmup_history[warmup_bars+i]=(float)bar.high;
+         warmup_history[2*warmup_bars+i]=(float)bar.low;
+         warmup_history[3*warmup_bars+i]=(float)bar.close;
+         warmup_history[4*warmup_bars+i]=(float)bar.tick_volume;
         }
-      if(!Pack(pool_warmup_rates,pool_warmup_end,pool_warmup_boundary,false) ||
+      int flags=AG_FLAG_WARMUP|AG_FLAG_RESET_WORK|AG_FLAG_END;
+      if(!agent.SetPoolWarmupHistory(warmup_history,warmup_bars) ||
+         !Pack(pool_warmup_rates,end,pool_warmup_boundary,false) ||
          !Forward(AG_PREPARE,flags,pool_warmup_boundary))
         {
          ReturnFalse;
         }
-      pool_warmup_end++;
       if(agent.NeedsPoolWarmup())
         {
          return(true);

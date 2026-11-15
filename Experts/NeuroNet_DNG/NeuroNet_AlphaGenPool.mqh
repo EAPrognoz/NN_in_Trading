@@ -18,6 +18,9 @@ bool CAlphaGenPool::Configure(COpenCLMy*context,const float&config[])
    //--- reconfiguration must not retain indices belonging to an earlier context.
    m_cEvaluationWork.Clear();
    m_cEvaluated.Clear();
+   m_cHistory.Clear();
+   m_cHistoryValues.Clear();
+   m_iHistoryCount=0;
 
    if(!m_cEvaluationWork.BufferCreate(context)||!m_cEvaluated.BufferCreate(context))
       ReturnFalse;
@@ -234,12 +237,77 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
    return(true);
   }
 //+------------------------------------------------------------------+
-//| SignalStep - Implement SignalStep                                |
+//| SetWarmupHistory - Upload the pinned history once.                |
 //+------------------------------------------------------------------+
-bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool first)
+bool CAlphaGenPool::SetWarmupHistory(const float&history[],const int count)
   {
-   if(!OpenCL||!market||market.Total()<5*m_iWindow)
+   if(!OpenCL||count<m_iWindow||(long)count*5!=ArraySize(history))
       ReturnFalse;
+   if(!m_cHistory.AssignArray(history)||!m_cHistory.BufferCreate(OpenCL))
+      ReturnFalse;
+   m_iHistoryCount=count;
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| SignalStep - Evaluate history in groups and advance the ring      |
+//+------------------------------------------------------------------+
+bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool first,const int count)
+  {
+   int span=count>0?count:m_iWindow;
+   if(!OpenCL||!market||span<m_iWindow||(long)market.Total()<5*(long)span)
+      ReturnFalse;
+   int start=first?(mode==2?m_iLookback:MathMax(m_iLookback,span-m_iContext)):span-1;
+   long required=2*(long)m_iCapacity*span;
+   long available=0;
+   if(required>INT_MAX||!OpenCL.GetLocalMemorySize(available))
+      ReturnFalse;
+   int tile=(int)MathMin(span,(available-512)/(8*(long)m_iTokens));
+   long local_bytes=0;
+   long kernel_local_bytes=0;
+   //--- the driver may pad local allocations beyond the requested byte count.
+   while(tile>m_iLookback)
+     {
+      long slots=(long)m_iTokens*tile;
+      local_bytes=4*(slots+MathMax(slots,3*(long)(m_iTokens+1)));
+      if(local_bytes>INT_MAX||!OpenCL.SetArgumentLocalMemory(def_k_AGPoolEvaluateHistory,8,(int)local_bytes))
+         ReturnFalse;
+      kernel_local_bytes=OpenCL.GetKernelInfoInteger(def_k_AGPoolEvaluateHistory,CL_KERNEL_LOCAL_MEM_SIZE);
+      if(kernel_local_bytes<0)
+         ReturnFalse;
+      if(kernel_local_bytes<=available)
+         break;
+      long bytes_per_bar=8*(long)m_iTokens;
+      tile-=(int)MathMax(1,(kernel_local_bytes-available+bytes_per_bar-1)/bytes_per_bar);
+     }
+   if(tile<=m_iLookback)
+     {
+      PrintFormat("AlphaGen history local memory insufficient: device=%I64d kernel=%I64d lookback=%d tokens=%d",
+                  available,kernel_local_bytes,m_iLookback,m_iTokens);
+      ReturnFalse;
+     }
+   if(m_cHistoryValues.Total()!=required&& !Allocate(m_cHistoryValues,(int)required))
+      ReturnFalse;
+   setBuffer(def_k_AGPoolEvaluateHistory,0,market.GetIndex())
+   setBuffer(def_k_AGPoolEvaluateHistory,1,m_cConfig.GetIndex())
+   setBuffer(def_k_AGPoolEvaluateHistory,2,m_cBanks.GetIndex())
+   setBuffer(def_k_AGPoolEvaluateHistory,3,m_cHistoryValues.GetIndex())
+   setArgument(def_k_AGPoolEvaluateHistory,4,mode)
+   setArgument(def_k_AGPoolEvaluateHistory,5,span)
+   setArgument(def_k_AGPoolEvaluateHistory,6,start)
+   setArgument(def_k_AGPoolEvaluateHistory,7,tile)
+   uint evaluation_lanes=OpenCL.AlphaGenGroupSize(def_k_AGPoolEvaluateHistory,64,1);
+   if(evaluation_lanes==0)
+      ReturnFalse;
+   uint evaluation_offset[]={0};
+   uint evaluation_global[]={evaluation_lanes*(uint)m_iCapacity};
+   uint evaluation_local[]={evaluation_lanes};
+   if(!OpenCL.Execute(def_k_AGPoolEvaluateHistory,1,evaluation_offset,evaluation_global,evaluation_local))
+     {
+      int error=GetLastError();
+      PrintFormat("AlphaGen history launch failed: error=%d span=%d tile=%d lanes=%u local_requested=%I64d local_kernel=%I64d local_device=%I64d",
+                  error,span,tile,evaluation_lanes,local_bytes,kernel_local_bytes,available);
+      ReturnFalse;
+     }
 
    setBuffer(def_k_AGPoolSignal,def_ag_AGPoolSignal_market,market.GetIndex())
    setBuffer(def_k_AGPoolSignal,def_ag_AGPoolSignal_cfg,m_cConfig.GetIndex())
@@ -252,8 +320,9 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
    setBuffer(def_k_AGPoolSignal,def_ag_AGPoolSignal_signal,signal_index)
    setBuffer(def_k_AGPoolSignal,def_ag_AGPoolSignal_context,context_index)
    setArgument(def_k_AGPoolSignal,def_ag_AGPoolSignal_mode,mode)
-   int start=first?(mode==2?m_iLookback:MathMax(m_iLookback,m_iWindow-m_iContext)):m_iWindow-1;
    setArgument(def_k_AGPoolSignal,def_ag_AGPoolSignal_start,start)
+   setBuffer(def_k_AGPoolSignal,10,m_cHistoryValues.GetIndex())
+   setArgument(def_k_AGPoolSignal,11,span)
    long lane_limit=MathMin(OpenCL.GetMaxWorkGroupSize(),OpenCL.GetMaxLocalSize(0));
    lane_limit=MathMin(lane_limit,OpenCL.GetKernelInfoInteger(def_k_AGPoolSignal,CL_KERNEL_WORK_GROUP_SIZE));
 

@@ -21016,6 +21016,9 @@ protected:
    virtual bool calcInputGradients(CNeuronBaseOCL*source)override{return(m_bFrame);}
    virtual bool updateInputWeights(CNeuronBaseOCL*source)override;
 public:
+   bool SetPoolWarmupHistory(const float&history[],const int count)
+     {return(m_bPoolWarmup&&m_cPool.SetWarmupHistory(history,count));}
+
                              CNeuronAlphaGenOCL(void);
    virtual bool Init(uint outputs,uint index,COpenCLMy*context,uint count,
                      ENUM_OPTIMIZATION method,uint batch)override;
