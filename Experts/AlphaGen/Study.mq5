@@ -2,6 +2,8 @@
 #define ALPHAGEN_STUDY
 input bool PPOProfile=false;
 #define ALPHAGEN_PPO_PROFILE PPOProfile
+input int TradeBackwardBars=64; // Trading LSTM backpropagation bars (0 = full context)
+#define ALPHAGEN_TRADE_BACKWARD_BARS TradeBackwardBars
 #include "Trajectory.mqh"
 CAlphaGenApplication App;
 string StopButton="AlphaGenStop";
@@ -10,6 +12,8 @@ string StopButton="AlphaGenStop";
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   if(TradeBackwardBars<0)
+      return(INIT_PARAMETERS_INCORRECT);
    Comment("AlphaGen Study | initialization");
    ChartRedraw();
    if(!App.Init(true,true))

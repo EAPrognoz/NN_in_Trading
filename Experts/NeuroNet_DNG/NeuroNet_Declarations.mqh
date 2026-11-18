@@ -20897,7 +20897,7 @@ public:
    bool         Configure(COpenCLMy*context,const int inputs,const int hidden,const int capacity);
    bool         RestoreWorkspace(COpenCLMy*context,const int capacity);
    bool         Sequence(CBufferFloat*source,const int length);
-   bool         Backward(CBufferFloat*source,CBufferFloat*input_gradient);
+   bool         Backward(CBufferFloat*source,CBufferFloat*input_gradient,const int horizon=0);
    bool         Apply(void);
    bool         ResetAnchor(void);
    bool         SetAnchor(CBufferFloat*anchor);

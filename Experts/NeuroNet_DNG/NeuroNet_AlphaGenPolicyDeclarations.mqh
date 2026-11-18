@@ -107,7 +107,6 @@ protected:
    CNeuronAlphaGenPolicyLSTMOCL m_cSecond;
    CBufferFloat                 m_cEmbedded;
    CBufferFloat                 m_cEmbeddedGradient;
-   CBufferFloat                 m_cFirstGradient;
    CBufferFloat                 *m_cTokens;
    int                          m_iLength;
    bool                         Workspace(void);

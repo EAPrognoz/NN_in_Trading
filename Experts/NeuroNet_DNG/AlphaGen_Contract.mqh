@@ -267,6 +267,7 @@
 #define def_ag_AGLSTMBackward_gate_gradient 9
 #define def_ag_AGLSTMBackward_scratch 10
 #define def_ag_AGLSTMBackward_tile_columns 11
+#define def_ag_AGLSTMBackward_first 12
 #define def_ag_AGSequence_input 0
 #define def_ag_AGSequence_output 1
 #define def_ag_AGSequence_length 2

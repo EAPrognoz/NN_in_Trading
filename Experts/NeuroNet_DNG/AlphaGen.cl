@@ -868,18 +868,20 @@ __kernel void AGLSTMBackward(__global const float*input,const int length,
                              __global const float *gradient,
                              __global float       *input_gradient,
                              __global float       *gate_gradient,
-                             __local float        *scratch,const int tile_columns)
+                             __local float        *scratch,const int tile_columns,const int first)
   {
    int           lane=get_local_id(0);
    int           lanes=get_local_size(0);
    int           width=inputs+hidden+1;
    __local float *partial=scratch+6*hidden;
+   for(int i=lane;i<first*inputs;i+=lanes)
+      input_gradient[i]=0.0f;
 
    for(int i=lane;i<hidden*6;i+=lanes)
       scratch[i]=0.0f;
    barrier(CLK_LOCAL_MEM_FENCE);
 
-   for(int t=length-1;t>=0;t--)
+   for(int t=length-1;t>=first;t--)
      {
       int base=t*hidden*6;
 
@@ -945,7 +947,7 @@ __kernel void AGLSTMBackward(__global const float*input,const int length,
 __kernel void AGLSTMWeightGradient(__global const float*input,const int length,
                                    const int            inputs,const int hidden,
                                    __global const float *anchor,__global const float*tape,
-                                   __global const float *gate_gradient,__global float*weights_gradient)
+                                   __global const float *gate_gradient,__global float*weights_gradient,const int first)
   {
    const size_t index=get_global_id(0);
    const int    width=inputs+hidden+1;
@@ -957,7 +959,7 @@ __kernel void AGLSTMWeightGradient(__global const float*input,const int length,
    const int row=index/width;
    float     sum=0.0f;
 
-   for(int t=length-1;t>=0;t--)
+   for(int t=length-1;t>=first;t--)
      {
       float x=k<inputs?input[(size_t)t*inputs+k]:k==width-1?1.0f:
               t>0?tape[(size_t)(t-1)*hidden*6+k-inputs]:anchor[k-inputs];

@@ -3,6 +3,9 @@
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAGEN_POLICY_MQH
 #define NEURONET_ALPHAGEN_POLICY_MQH
+#ifndef ALPHAGEN_TRADE_BACKWARD_BARS
+#define ALPHAGEN_TRADE_BACKWARD_BARS 0
+#endif
 //+------------------------------------------------------------------+
 //| Bind - Bind a non-owning view of a device tensor.                |
 //+------------------------------------------------------------------+
@@ -500,8 +503,7 @@ bool CNeuronAlphaGenSearchPolicyOCL::Workspace(void)
    int capacity=(int)m_cConfig.At(AG_CFG_MAX_TOKENS);
 
    return(Allocate(m_cEmbedded,capacity*EmbeddingDim())&&
-           Allocate(m_cEmbeddedGradient,capacity*EmbeddingDim())&&
-           Allocate(m_cFirstGradient,capacity*SearchHidden()));
+           Allocate(m_cEmbeddedGradient,capacity*EmbeddingDim()));
   }
 //+------------------------------------------------------------------+
 //| CNeuronAlphaGenSearchPolicyOCL - Initialize or release this...   |
@@ -600,7 +602,8 @@ bool CNeuronAlphaGenSearchPolicyOCL::ForwardPrefix(CBufferFloat*tokens,const int
    uint global_work_size[]={(uint)EmbeddingDim(),(uint)length};
    kernelExecute(def_k_AGEmbedding,global_work_offset,global_work_size)
 
-   if(!m_cFirst.ResetAnchor()||!m_cSecond.ResetAnchor()||!m_cFirst.Sequence(GetPointer(m_cEmbedded),length)||
+   //--- search anchors stay zero after workspace initialization.
+   if(!m_cFirst.Sequence(GetPointer(m_cEmbedded),length)||
       !m_cSecond.Sequence(m_cFirst.SequenceOutput(),length)||
       !SequenceMap(m_cSecond.SequenceOutput(),m_cMean.getOutput(),length,SearchHidden(),0,mask)||
       !m_cHead.ForwardDense(GetPointer(m_cMean)))
@@ -619,8 +622,7 @@ bool CNeuronAlphaGenSearchPolicyOCL::Backward(CNeuronAlphaGenEvaluatorOCL*evalua
       !m_cMean.Outer(GetPointer(m_cHead))||
       !SequenceMap(m_cMean.getGradient(),m_cSecond.SequenceGradient(),m_iLength,SearchHidden(),1,
                    GetPointer(m_cNoise))||
-      !m_cSecond.Backward(m_cFirst.SequenceOutput(),GetPointer(m_cFirstGradient))||
-      !CopyBufferRaw(GetPointer(m_cFirstGradient),m_cFirst.SequenceGradient(),m_cFirstGradient.Total())||
+      !m_cSecond.Backward(m_cFirst.SequenceOutput(),m_cFirst.SequenceGradient())||
       !m_cFirst.Backward(GetPointer(m_cEmbedded),GetPointer(m_cEmbeddedGradient)))
       ReturnFalse;
 
@@ -640,7 +642,7 @@ bool CNeuronAlphaGenSearchPolicyOCL::Backward(CNeuronAlphaGenEvaluatorOCL*evalua
    if(!evaluator.Numeric(GetPointer(m_cMetadata),true)||!evaluator.Numeric(m_cHead.getOutput(),false)||
       !evaluator.Numeric(m_cHead.getGradient(),false)||!evaluator.Numeric(m_cMean.getGradient(),false)||
       !NumericSpan(evaluator,GetPointer(m_cEmbeddedGradient),m_iLength*EmbeddingDim())||
-      !NumericSpan(evaluator,GetPointer(m_cFirstGradient),m_iLength*SearchHidden())||!m_cMean.Check(evaluator)||
+      !NumericSpan(evaluator,m_cFirst.SequenceGradient(),m_iLength*SearchHidden())||!m_cMean.Check(evaluator)||
       !m_cEmbedding.Check(evaluator)||!m_cFirst.Check(evaluator)||!m_cSecond.Check(evaluator))
       ReturnFalse;
 
@@ -764,7 +766,7 @@ bool CNeuronAlphaGenTradingPolicyOCL::Backward(CNeuronAlphaGenEvaluatorOCL*evalu
       !m_cHidden2.Outer(GetPointer(m_cHead))||
       !SequenceMap(m_cInput.getGradient(),m_cRecurrent.SequenceGradient(),m_iLength,TradeHidden(),3,
                    GetPointer(m_cNoise))||
-      !m_cRecurrent.Backward(m_cSignal,GetPointer(m_cSignalGradient)))
+      !m_cRecurrent.Backward(m_cSignal,GetPointer(m_cSignalGradient),ALPHAGEN_TRADE_BACKWARD_BARS))
       ReturnFalse;
 
    if(!OpenCL.Profile().Mark(3))

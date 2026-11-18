@@ -4,6 +4,8 @@ input bool OpenCLWriteTrace=false;
 #define ALPHAGEN_TRACE_WRITES OpenCLWriteTrace
 input bool PPOProfile=false;
 #define ALPHAGEN_PPO_PROFILE PPOProfile
+input int TradeBackwardBars=64; // Trading LSTM backpropagation bars (0 = full context)
+#define ALPHAGEN_TRADE_BACKWARD_BARS TradeBackwardBars
 #include "Trajectory.mqh"
 CAlphaGenApplication App;
 //+------------------------------------------------------------------+
@@ -11,6 +13,8 @@ CAlphaGenApplication App;
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   if(TradeBackwardBars<0)
+      return(INIT_PARAMETERS_INCORRECT);
    if(!App.Init(true,false) || !EventSetTimer(1))
      {
       return(INIT_FAILED);
@@ -57,5 +61,4 @@ double OnTester()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
-   Print("AlphaGen StudyOnline unloaded, finalized=",App.Finalized," failed=",App.failed);
   }

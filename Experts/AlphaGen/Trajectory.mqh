@@ -2,6 +2,7 @@
 #define ALPHAGEN_TRAJECTORY_MQH
 #include "../NeuroNet_DNG/NeuroNet.mqh"
 #include <Trade/Trade.mqh>
+#include <Generic/HashMap.mqh>
 //+------------------------------------------------------------------+
 //| Defines: the single source of AlphaGen algorithm settings.       |
 //+------------------------------------------------------------------+
@@ -774,11 +775,14 @@ struct SAlphaGenRequestOwner
   {
    ulong deal,order,decision;
   };
+
 class CAlphaGenApplication
   {
    public:
    CNet model;
    SAlphaGenDeal ledger[];
+   CHashMap<ulong,int> ledger_index;
+   int confirmed_requests;
    SAlphaGenInterval sealed[];
    SAlphaGenRequestOwner request_owners[];
    long snapshot_msc,decision_start_msc;
@@ -809,7 +813,8 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
 //| Initialize owned runtime state and diagnostic counters.          |
 //+------------------------------------------------------------------+
-   CAlphaGenApplication():trained_money_msc(0),
+   CAlphaGenApplication():confirmed_requests(0),
+    trained_money_msc(0),
    confirmed_boundary(0),
    snapshot_msc(0),
    decision_start_msc(0),
@@ -1798,7 +1803,7 @@ class CAlphaGenApplication
         {
          ReturnFalse;
         }
-#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+#ifdef ALPHAGEN_DECISION_TRACE
       PrintFormat("AlphaGen decision %s status=%d active=%d prepared=%d",
                   TimeToString(boundary),agent.Status(),agent.ActiveCount(),agent.PreparedCount());
 #endif
@@ -1824,7 +1829,7 @@ class CAlphaGenApplication
         {
          ReturnFalse;
         }
-#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+#ifdef ALPHAGEN_DECISION_TRACE
       if(ArraySize(action)==AG_OUTPUT_SIZE)
       PrintFormat("AlphaGen action [%.9f %.9f %.9f %.9f %.9f %.9f] volume=%.8f invalid=%d sl=%.8f tp=%.8f",
                   action[0],action[1],action[2],action[3],action[4],action[5],
@@ -1841,7 +1846,7 @@ class CAlphaGenApplication
       ulong before_requests=money.successful_requests;
       bool executed=ExecuteTarget(target,bid,ask,boundary);
       invalid=target.invalid;
-#ifdef ALPHAGEN_TEST_DIAGNOSTICS
+#ifdef ALPHAGEN_DECISION_TRACE
       PrintFormat("AlphaGen execution result=%d invalid=%d requested=%.8f actual=%.8f requests=%I64u pending=%d search_updates=%I64u trade_updates=%I64u",
                   (int)executed,(int)invalid,target.volume,money.volume,money.successful_requests,
                   (int)money.pending,agent.TokenUpdates(),agent.TradeUpdates());
@@ -2174,15 +2179,7 @@ class CAlphaGenApplication
          DEAL_COMMISSION)+HistoryDealGetDouble(ticket,DEAL_SWAP)+HistoryDealGetDouble(ticket,DEAL_FEE);
          long at=HistoryDealGetInteger(ticket,DEAL_TIME_MSC);
          int found=-1;
-         for(int j=0;j<ArraySize(ledger);j++)
-           {
-            if(ledger[j].ticket==ticket)
-              {
-               found=j;
-               break;
-              }
-           }
-         if(found>=0)
+         if(ledger_index.TryGetValue(ticket,found))
            {
             if(ledger[found].cash==cash)
               {
@@ -2226,12 +2223,20 @@ class CAlphaGenApplication
               {
                owner=decision_id;
               }
-            if(!CorrectSealedCash(owner,at,cash))
+            int n=ArraySize(ledger);
+            if(ArrayResize(ledger,n+1,256)!=n+1)
+               return(false);
+            if(!ledger_index.Add(ticket,n))
               {
+               ArrayResize(ledger,n);
                return(false);
               }
-            int n=ArraySize(ledger);
-            ArrayResize(ledger,n+1);
+            if(!CorrectSealedCash(owner,at,cash))
+              {
+               ledger_index.Remove(ticket);
+               ArrayResize(ledger,n);
+               return(false);
+              }
             ledger[n].ticket=ticket;
             ledger[n].cash=cash;
             ledger[n].milliseconds=at;
@@ -2246,24 +2251,15 @@ class CAlphaGenApplication
               }
            }
         }
-// An executed request may precede publication of its deal in history.
-// Keep the decision open until every known deal has entered the ledger.
-      for(int i=0;i<ArraySize(request_owners);i++)
+// The ledger is append-only. Once confirmed, a request stays confirmed.
+      int requests=ArraySize(request_owners);
+      for(;confirmed_requests<requests;confirmed_requests++)
         {
-         if(request_owners[i].deal==0)
-           {
+         ulong deal=request_owners[confirmed_requests].deal;
+         if(deal==0)
             continue;
-           }
-         bool recorded=false;
-         for(int j=0;j<ArraySize(ledger);j++)
-           {
-            if(ledger[j].ticket==request_owners[i].deal)
-              {
-               recorded=true;
-               break;
-              }
-           }
-         if(!recorded)
+         int row=-1;
+         if(!ledger_index.TryGetValue(deal,row))
            {
             money.pending=true;
             return(true);

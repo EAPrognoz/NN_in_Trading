@@ -349,12 +349,14 @@ bool CNeuronAlphaGenLSTMOCL::Sequence(CBufferFloat*source,const int length)
 //+------------------------------------------------------------------+
 //| Backward - Compute sequence gradients                            |
 //+------------------------------------------------------------------+
-bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat*source,CBufferFloat*input_gradient)
+bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat*source,CBufferFloat*input_gradient,const int horizon)
   {
    if(!source||!input_gradient||m_iLength<1||(long)m_iLength*m_iInputs>source.Total()||
       (long)m_iLength*m_iInputs>input_gradient.Total())
       ReturnFalse;
 
+   const int first=horizon>0 && horizon<m_iLength?m_iLength-horizon:0;
+   setArgument(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_first,first)
    setBuffer(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_input,source.GetIndex())
    setArgument(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_length,m_iLength)
    setArgument(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_inputs,m_iInputs)
@@ -399,6 +401,7 @@ bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat*source,CBufferFloat*input_gra
    setBuffer(def_k_AGLSTMWeightGradient,5,m_cTape.GetIndex())
    setBuffer(def_k_AGLSTMWeightGradient,6,m_cBPTTWork.GetIndex())
    setBuffer(def_k_AGLSTMWeightGradient,7,m_iWeightsGradient)
+   setArgument(def_k_AGLSTMWeightGradient,8,first)
    lanes=OpenCL.AlphaGenGroupSize(def_k_AGLSTMWeightGradient,64,1);
 
    if(lanes==0)
