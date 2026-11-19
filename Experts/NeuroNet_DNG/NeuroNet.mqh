@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet.mqh                                                     |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                                     NeuroNet.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 
 #ifndef NEURONET_MQH

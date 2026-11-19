@@ -1,19 +1,30 @@
-#property strict
+//+------------------------------------------------------------------+
+//|                                                        Study.mq5 |
+//|                                                         AlphaGen |
+//|                           https://www.mql5.com/ru/articles/25997 |
+//+------------------------------------------------------------------+
 #define ALPHAGEN_STUDY
+//+------------------------------------------------------------------+
+//| Input parameters                                                 |
+//+------------------------------------------------------------------+
 input bool PPOProfile=false;
 #define ALPHAGEN_PPO_PROFILE PPOProfile
-input int TradeBackwardBars=64; // Trading LSTM backpropagation bars (0 = full context)
+input int TradeBackwardBars=64;   // Trading LSTM backpropagation bars (0 = full context)
 #define ALPHAGEN_TRADE_BACKWARD_BARS TradeBackwardBars
 #include "Trajectory.mqh"
-CAlphaGenApplication App;
-string StopButton="AlphaGenStop";
 //+------------------------------------------------------------------+
-//| Initialize the EA and its event resources.                       |
+//| Global variables                                                 |
+//+------------------------------------------------------------------+
+CAlphaGenApplication App;
+string               StopButton="AlphaGenStop";
+//+------------------------------------------------------------------+
+//| OnInit - initialize the EA and its event resources.              |
 //+------------------------------------------------------------------+
 int OnInit()
   {
    if(TradeBackwardBars<0)
       return(INIT_PARAMETERS_INCORRECT);
+
    Comment("AlphaGen Study | initialization");
    ChartRedraw();
    if(!App.Init(true,true))
@@ -21,19 +32,23 @@ int OnInit()
       return(INIT_FAILED);
      }
    ObjectCreate(0,StopButton,OBJ_BUTTON,0,0,0);
-   ObjectSetString(0,StopButton,OBJPROP_TEXT,"Остановить и сохранить");
+   ObjectSetString(0,StopButton,OBJPROP_TEXT,"Stop and save");
    ObjectSetInteger(0,StopButton,OBJPROP_XSIZE,220);
    ObjectSetInteger(0,StopButton,OBJPROP_YSIZE,30);
+   ObjectSetInteger(0,StopButton,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
+   ObjectSetInteger(0,StopButton,OBJPROP_XDISTANCE,230);
+   ObjectSetInteger(0,StopButton,OBJPROP_YDISTANCE,50);
    Comment("AlphaGen Study | preparing the first historical bar");
    ChartRedraw();
    if(!EventSetMillisecondTimer(AG_TIMER_MS))
      {
       return(INIT_FAILED);
      }
+
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Run one bounded training or historical operation.                |
+//| OnTimer - run one bounded training or historical operation.      |
 //+------------------------------------------------------------------+
 void OnTimer()
   {
@@ -52,7 +67,7 @@ void OnTimer()
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
   {
-   if(id==CHARTEVENT_OBJECT_CLICK && sparam==StopButton)
+   if(id==CHARTEVENT_OBJECT_CLICK&&sparam==StopButton)
      {
       if(!App.stop_requested)
         {
@@ -66,7 +81,7 @@ void OnChartEvent(const int id,const long &lparam,const double &dparam,const str
      }
   }
 //+------------------------------------------------------------------+
-//| Release event resources without trading or saving.               |
+//| OnDeinit - release event resources without trading or saving.    |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
@@ -75,3 +90,4 @@ void OnDeinit(const int reason)
    Comment("");
    Print("AlphaGen Study unloaded, finalized=",App.Finalized);
   }
+//+------------------------------------------------------------------+

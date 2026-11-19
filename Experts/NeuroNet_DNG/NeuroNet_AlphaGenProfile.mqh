@@ -1,32 +1,34 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_AlphaGenProfile.mqh                                      |
+//|                                     NeuroNet_AlphaGenProfile.mqh |
+//|                                                     NeuroNet_DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAGENPROFILE_MQH
 #define NEURONET_ALPHAGENPROFILE_MQH
 #include <OpenCL/OpenCL.mqh>
 //+------------------------------------------------------------------+
-//| CAlphaGenPPOProfile - Measure synchronized PPO stage boundaries    |
+//| CAlphaGenPPOProfile - Measure synchronized PPO stage boundaries  |
 //+------------------------------------------------------------------+
 class CAlphaGenPPOProfile
   {
 private:
    COpenCL *m_pContext;
-   int      m_iBuffer;
-   int      m_iKind;
-   int      m_iStage;
-   int      m_iPass;
-   int      m_iExample;
-   ulong    m_uStart;
-   ulong    m_uBegin;
-   ulong    m_uBody[14];
-   ulong    m_uWait[14];
-   ulong    m_uMax[14];
-   ulong    m_uCount[14];
-   int      m_iMaxPass[14];
-   int      m_iMaxExample[14];
-   ulong    m_uExamples[2];
-   ulong    m_uTotal[2];
-   ulong    m_uEntry[2];
+   int     m_iBuffer;
+   int     m_iKind;
+   int     m_iStage;
+   int     m_iPass;
+   int     m_iExample;
+   ulong   m_uStart;
+   ulong   m_uBegin;
+   ulong   m_uBody[14];
+   ulong   m_uWait[14];
+   ulong   m_uMax[14];
+   ulong   m_uCount[14];
+   int     m_iMaxPass[14];
+   int     m_iMaxExample[14];
+   ulong   m_uExamples[2];
+   ulong   m_uTotal[2];
+   ulong   m_uEntry[2];
 
    //+------------------------------------------------------------------+
    //| Enabled - Read the optional diagnostic input                     |
@@ -51,13 +53,15 @@ private:
         {
          PrintFormat("AlphaGen PPO profile fence failed: kind=%d stage=%d error=%d",
                      m_iKind+1,m_iStage,GetLastError());
+
          return(false);
         }
+
       return(true);
      }
 public:
    //+------------------------------------------------------------------+
-   //| CAlphaGenPPOProfile - Initialize transient diagnostic counters    |
+   //| CAlphaGenPPOProfile - Initialize transient diagnostic counters   |
    //+------------------------------------------------------------------+
                      CAlphaGenPPOProfile(void):m_pContext(NULL),m_iBuffer(-1),m_iKind(0),m_iStage(-1),
                                                m_iPass(0),m_iExample(0),m_uStart(0),m_uBegin(0)
@@ -73,7 +77,7 @@ public:
       ArrayInitialize(m_uEntry,0);
      }
    //+------------------------------------------------------------------+
-   //| ~CAlphaGenPPOProfile - Report accumulated diagnostic samples      |
+   //| ~CAlphaGenPPOProfile - Report accumulated diagnostic samples     |
    //+------------------------------------------------------------------+
                     ~CAlphaGenPPOProfile(void)
      {
@@ -102,6 +106,7 @@ public:
 
       m_uStart=GetMicrosecondCount();
       m_uEntry[m_iKind]+=m_uStart-m_uBegin;
+
       return(true);
      }
    //+------------------------------------------------------------------+
@@ -134,6 +139,7 @@ public:
         }
       m_iStage=next<7?next:-1;
       m_uStart=done;
+
       return(true);
      }
    //+------------------------------------------------------------------+

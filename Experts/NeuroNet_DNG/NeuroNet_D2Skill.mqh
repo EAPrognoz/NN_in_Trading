@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_D2Skill.mqh                                             |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                             NeuroNet_D2Skill.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_D2SKILL_MQH
 #define NEURONET_D2SKILL_MQH
@@ -71,7 +72,7 @@ bool CD2SkillItem::SetCorrectionBuffer(CBufferFloat*correction)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the attached correction buffer.                          |
+//| GetCorrectionBuffer - returns the attached correction buffer.    |
 //+------------------------------------------------------------------+
 CBufferFloat*CD2SkillItem::GetCorrectionBuffer(void)const
   {
@@ -123,35 +124,35 @@ float CD2SkillItem::BetaMagnitude(void)const
    return(m_beta_magnitude);
   }
 //+------------------------------------------------------------------+
-//| Returns the item correction buffer pointer.                      |
+//| Correction - returns the item correction buffer pointer.         |
 //+------------------------------------------------------------------+
 CBufferFloat*CD2SkillItem::Correction(void)
   {
    return(m_correction);
   }
 //+------------------------------------------------------------------+
-//| Returns the item direction buffer.                               |
+//| Direction - returns the item direction buffer.                   |
 //+------------------------------------------------------------------+
 CBufferFloat*CD2SkillItem::Direction(void)
   {
    return(GetPointer(m_item_direction));
   }
 //+------------------------------------------------------------------+
-//| Returns the item scale buffer.                                   |
+//| Scale - returns the item scale buffer.                           |
 //+------------------------------------------------------------------+
 CBufferFloat*CD2SkillItem::Scale(void)
   {
    return(GetPointer(m_item_scale));
   }
 //+------------------------------------------------------------------+
-//| Returns the item observation counter buffer.                     |
+//| Observations - returns the item observation counter buffer.      |
 //+------------------------------------------------------------------+
 CBufferFloat*CD2SkillItem::Observations(void)
   {
    return(GetPointer(m_item_observations));
   }
 //+------------------------------------------------------------------+
-//| Returns the item mass buffer.                                    |
+//| Mass - returns the item mass buffer.                             |
 //+------------------------------------------------------------------+
 CBufferFloat*CD2SkillItem::Mass(void)
   {
@@ -396,83 +397,143 @@ uint CD2SkillBank::ActiveSlot(void)const
 //+------------------------------------------------------------------+
 //| Returns the buffer holding the selected slot correction.         |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::SelectedCorrection(void){return(GetPointer(m_selected_correction));}
+CBufferFloat*CD2SkillBank::SelectedCorrection(void)
+  {
+   return(GetPointer(m_selected_correction));
+  }
 //+------------------------------------------------------------------+
 //| Returns the buffer holding the selected slot index.              |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::SelectedSlot(void){return(GetPointer(m_selected_slot));}
+CBufferFloat*CD2SkillBank::SelectedSlot(void)
+  {
+   return(GetPointer(m_selected_slot));
+  }
 //+------------------------------------------------------------------+
 //| Returns the buffer holding the selected slot score.              |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::SelectedScore(void){return(GetPointer(m_selected_score));}
+CBufferFloat*CD2SkillBank::SelectedScore(void)
+  {
+   return(GetPointer(m_selected_score));
+  }
 //+------------------------------------------------------------------+
-//| Returns the slot key buffer.                                     |
+//| Keys - returns the slot key buffer.                              |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Keys(void){return(GetPointer(m_keys));}
+CBufferFloat*CD2SkillBank::Keys(void)
+  {
+   return(GetPointer(m_keys));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot correction buffer.                          |
+//| Corrections - returns the per-slot correction buffer.            |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Corrections(void){return(GetPointer(m_corrections));}
+CBufferFloat*CD2SkillBank::Corrections(void)
+  {
+   return(GetPointer(m_corrections));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot direction buffer.                           |
+//| Directions - returns the per-slot direction buffer.              |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Directions(void){return(GetPointer(m_directions));}
+CBufferFloat*CD2SkillBank::Directions(void)
+  {
+   return(GetPointer(m_directions));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot scale buffer.                               |
+//| Scales - returns the per-slot scale buffer.                      |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Scales(void){return(GetPointer(m_scales));}
+CBufferFloat*CD2SkillBank::Scales(void)
+  {
+   return(GetPointer(m_scales));
+  }
 //+------------------------------------------------------------------+
 //| Returns the per-slot observation counter buffer.                 |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::ObservationsBank(void){return(GetPointer(m_observations));}
+CBufferFloat*CD2SkillBank::ObservationsBank(void)
+  {
+   return(GetPointer(m_observations));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot use counter buffer.                         |
+//| Uses - returns the per-slot use counter buffer.                  |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Uses(void){return(GetPointer(m_uses));}
+CBufferFloat*CD2SkillBank::Uses(void)
+  {
+   return(GetPointer(m_uses));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot mass buffer.                                |
+//| MassBank - returns the per-slot mass buffer.                     |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::MassBank(void){return(GetPointer(m_mass));}
+CBufferFloat*CD2SkillBank::MassBank(void)
+  {
+   return(GetPointer(m_mass));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot utility buffer.                             |
+//| Utility - returns the per-slot utility buffer.                   |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Utility(void){return(GetPointer(m_utility));}
+CBufferFloat*CD2SkillBank::Utility(void)
+  {
+   return(GetPointer(m_utility));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot used flag buffer.                           |
+//| Used - returns the per-slot used flag buffer.                    |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Used(void){return(GetPointer(m_used));}
+CBufferFloat*CD2SkillBank::Used(void)
+  {
+   return(GetPointer(m_used));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot state buffer.                               |
+//| State - returns the per-slot state buffer.                       |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::State(void){return(GetPointer(m_state));}
+CBufferFloat*CD2SkillBank::State(void)
+  {
+   return(GetPointer(m_state));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot age buffer.                                 |
+//| Ages - returns the per-slot age buffer.                          |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Ages(void){return(GetPointer(m_age));}
+CBufferFloat*CD2SkillBank::Ages(void)
+  {
+   return(GetPointer(m_age));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot protection counter buffer.                  |
+//| Protection - returns the per-slot protection counter buffer.     |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Protection(void){return(GetPointer(m_protection));}
+CBufferFloat*CD2SkillBank::Protection(void)
+  {
+   return(GetPointer(m_protection));
+  }
 //+------------------------------------------------------------------+
-//| Returns the bank diagnostics buffer.                             |
+//| Diagnostics - returns the bank diagnostics buffer.               |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Diagnostics(void){return(GetPointer(m_diagnostics));}
+CBufferFloat*CD2SkillBank::Diagnostics(void)
+  {
+   return(GetPointer(m_diagnostics));
+  }
 //+------------------------------------------------------------------+
 //| Returns the utility distribution histogram buffer.               |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::UtilityDistribution(void){return(GetPointer(m_utility_distribution));}
+CBufferFloat*CD2SkillBank::UtilityDistribution(void)
+  {
+   return(GetPointer(m_utility_distribution));
+  }
 //+------------------------------------------------------------------+
 //| Returns the usage distribution histogram buffer.                 |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::UsageDistribution(void){return(GetPointer(m_usage_distribution));}
+CBufferFloat*CD2SkillBank::UsageDistribution(void)
+  {
+   return(GetPointer(m_usage_distribution));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot influence buffer.                           |
+//| Influence - returns the per-slot influence buffer.               |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Influence(void){return(GetPointer(m_influence));}
+CBufferFloat*CD2SkillBank::Influence(void)
+  {
+   return(GetPointer(m_influence));
+  }
 //+------------------------------------------------------------------+
-//| Returns the per-slot retrieved flag buffer.                      |
+//| Retrieved - returns the per-slot retrieved flag buffer.          |
 //+------------------------------------------------------------------+
-CBufferFloat*CD2SkillBank::Retrieved(void){return(GetPointer(m_retrieved));}
+CBufferFloat*CD2SkillBank::Retrieved(void)
+  {
+   return(GetPointer(m_retrieved));
+  }
 //+------------------------------------------------------------------+
 //| CD2Skill - Constructor: starts unmaterialized with both banks... |
 //+------------------------------------------------------------------+
@@ -1070,8 +1131,8 @@ bool CD2Skill::calcInputGradientsSecond(CNeuronBaseOCL*NeuronOCL,
 
    if(TaskSkillEnabled())
      {
-      //--- attention owns the two-input gradient dispatcher.  Passing the Bank as
-      //--- its query input writes dL/d(Bank output) to the Bank without weights.
+   //--- attention owns the two-input gradient dispatcher.  Passing the Bank as
+   //--- its query input writes dL/d(Bank output) to the Bank without weights.
       if(!m_task_bank.CalcHiddenGradients(cAttention.AsObject(),cKV.getOutput(),
                                           cKV.getGradient(),None))
          ReturnFalse;
@@ -1108,8 +1169,8 @@ bool CD2Skill::calcInputGradientsSecond(CNeuronBaseOCL*NeuronOCL,
 
    if(StepSkillEnabled())
      {
-      //--- as for Task, Step has no weights.  Its output is the corrected cWz,
-      //--- therefore the token-sum gradient is passed through unchanged to cWz.
+   //--- as for Task, Step has no weights.  Its output is the corrected cWz,
+   //--- therefore the token-sum gradient is passed through unchanged to cWz.
       if(!CopyBufferRaw(cTokenSum.getGradient(),m_step_bank.getGradient(),
                         m_step_bank.Neurons())||
          !m_step_bank.calcInputGradients(cWz.AsObject()))
@@ -1477,12 +1538,14 @@ bool CD2SkillItem::PrepareItemOwnedCheckedState(void)
       (Gradient.GetIndex()>=0&&CheckPointer(Gradient.GetOpenCL())==POINTER_INVALID))
 
       return(false);
+
    uint local_size=0;
    uint groups=0;
    uint partial_count=0;
 
    if(!ItemLaunchLayout(local_size,groups,partial_count))
       return(false);
+
    CBufferFloat *buffers[7];
    int          totals[7];
    string       slots[7]={"correction","direction","scale","observations",

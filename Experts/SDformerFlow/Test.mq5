@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| Research.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                         Test.mq5 |
+//|                                                     SDformerFlow |
+//|                                                   Copyright DNG® |
+//|                           https://www.mql5.com/ru/articles/20352 |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -17,107 +18,116 @@
 //+------------------------------------------------------------------+
 //| Input parameters                                                 |
 //+------------------------------------------------------------------+
-input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_CURRENT;
+input ENUM_TIMEFRAMES TimeFrame=PERIOD_CURRENT;
 //---
-input group                "---- RSI ----"
-input int                  RSIPeriod   =  14;            //Period
-input ENUM_APPLIED_PRICE   RSIPrice    =  PRICE_CLOSE;   //Applied price
+input group "---- RSI ----"
+input int                RSIPeriod=14;           //Period
+input ENUM_APPLIED_PRICE RSIPrice=PRICE_CLOSE;   //Applied price
 //---
-input group                "---- CCI ----"
-input int                  CCIPeriod   =  14;            //Period
-input ENUM_APPLIED_PRICE   CCIPrice    =  PRICE_TYPICAL; //Applied price
+input group "---- CCI ----"
+input int                CCIPeriod=14;             //Period
+input ENUM_APPLIED_PRICE CCIPrice=PRICE_TYPICAL;   //Applied price
 //---
-input group                "---- ATR ----"
-input int                  ATRPeriod   =  14;            //Period
+input group "---- ATR ----"
+input int ATRPeriod=14;   //Period
 //---
-input group                "---- MACD ----"
-input int                  FastPeriod  =  12;            //Fast
-input int                  SlowPeriod  =  26;            //Slow
-input int                  SignalPeriod =  9;            //Signal
-input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
-input int                  Agent = 1;
+input group "---- MACD ----"
+input int                FastPeriod=12;           //Fast
+input int                SlowPeriod=26;           //Slow
+input int                SignalPeriod=9;          //Signal
+input ENUM_APPLIED_PRICE MACDPrice=PRICE_CLOSE;   //Applied price
+input int                Agent=1;
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
-SState               sState;
-CNet                 Encoder;
-CNet                 Actor;
-//---
-float                dError;
-datetime             dtStudied;
-//---
-CSymbolInfo          Symb;
-CTrade               Trade;
-//---
-MqlRates             Rates[];
-CiRSI                RSI;
-CiCCI                CCI;
-CiATR                ATR;
-CiMACD               MACD;
-//---
-CBufferFloat         bState;
-CBufferFloat         bTime;
-CBufferFloat         bAccount;
-CBufferFloat         *Result;
-vector<float>        check;
-double               PrevBalance = 0;
-double               PrevEquity = 0;
 //+------------------------------------------------------------------+
-//| Expert initialization function                                   |
+//| Global variables                                                 |
+//+------------------------------------------------------------------+
+SState sState;
+CNet   Encoder;
+CNet   Actor;
+//---
+float    dError;
+datetime dtStudied;
+//---
+CSymbolInfo Symb;
+CTrade      Trade;
+//---
+MqlRates Rates[];
+CiRSI    RSI;
+CiCCI    CCI;
+CiATR    ATR;
+CiMACD   MACD;
+//---
+CBufferFloat bState;
+CBufferFloat bTime;
+CBufferFloat bAccount;
+CBufferFloat *Result;
+vector<float>check;
+double PrevBalance=0;
+double PrevEquity=0;
+//+------------------------------------------------------------------+
+//| OnInit - expert initialization function                          |
 //+------------------------------------------------------------------+
 int OnInit()
   {
 //---
    if(!Symb.Name(_Symbol))
-      return INIT_FAILED;
+      return(INIT_FAILED);
    Symb.Refresh();
 //---
-   if(!RSI.Create(Symb.Name(), TimeFrame, RSIPeriod, RSIPrice))
-      return INIT_FAILED;
+   if(!RSI.Create(Symb.Name(),TimeFrame,RSIPeriod,RSIPrice))
+      return(INIT_FAILED);
 //---
-   if(!CCI.Create(Symb.Name(), TimeFrame, CCIPeriod, CCIPrice))
-      return INIT_FAILED;
+   if(!CCI.Create(Symb.Name(),TimeFrame,CCIPeriod,CCIPrice))
+      return(INIT_FAILED);
 //---
-   if(!ATR.Create(Symb.Name(), TimeFrame, ATRPeriod))
-      return INIT_FAILED;
+   if(!ATR.Create(Symb.Name(),TimeFrame,ATRPeriod))
+      return(INIT_FAILED);
 //---
-   if(!MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice))
-      return INIT_FAILED;
-   if(!RSI.BufferResize(HistoryBars) || !CCI.BufferResize(HistoryBars) ||
-      !ATR.BufferResize(HistoryBars) || !MACD.BufferResize(HistoryBars))
+   if(!MACD.Create(Symb.Name(),TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice))
+      return(INIT_FAILED);
+
+   if(!RSI.BufferResize(HistoryBars)||!CCI.BufferResize(HistoryBars)||
+      !ATR.BufferResize(HistoryBars)||!MACD.BufferResize(HistoryBars))
      {
-      PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
-      return INIT_FAILED;
+      PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
+
+      return(INIT_FAILED);
      }
 //---
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
-      return INIT_FAILED;
+      return(INIT_FAILED);
+
 //--- load models
    float temp;
-   if(!Encoder.Load(FileName + "Enc.nnw", temp, temp, temp, dtStudied, true) ||
-      !Actor.Load(FileName + "Act.nnw", temp, temp, temp, dtStudied, true) ||
+   if(!Encoder.Load(FileName+"Enc.nnw",temp,temp,temp,dtStudied,true)||
+      !Actor.Load(FileName+"Act.nnw",temp,temp,temp,dtStudied,true)||
       !Encoder.Clear())
      {
       Print("Cann't load pretrained models");
-      return INIT_FAILED;
+
+      return(INIT_FAILED);
      }
 //---
    Actor.getResults(Result);
-   if(Result.Total() != NActions)
+   if(Result.Total()!=NActions)
      {
-      PrintFormat("The scope of the actor does not match the actions count (%d <> %d)", NActions, Result.Total());
-      return INIT_FAILED;
+      PrintFormat("The scope of the actor does not match the actions count (%d <> %d)",NActions,Result.Total());
+
+      return(INIT_FAILED);
      }
 //---
-   Encoder.GetLayerOutput(0, Result);
-   if(Result.Total() != (HistoryBars * BarDescr))
+   Encoder.GetLayerOutput(0,Result);
+   if(Result.Total()!=(HistoryBars * BarDescr))
      {
-      PrintFormat("Input size of Encoder doesn't match state description (%d <> %d)", Result.Total(), (HistoryBars * BarDescr));
-      return INIT_FAILED;
+      PrintFormat("Input size of Encoder doesn't match state description (%d <> %d)",Result.Total(),(HistoryBars * BarDescr));
+
+      return(INIT_FAILED);
      }
 //---
-   PrevBalance = AccountInfoDouble(ACCOUNT_BALANCE);
-   PrevEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   PrevBalance=AccountInfoDouble(ACCOUNT_BALANCE);
+   PrevEquity=AccountInfoDouble(ACCOUNT_EQUITY);
    Encoder.Clear();
    Actor.Clear();
    Encoder.TrainMode(false);
@@ -127,7 +137,7 @@ int OnInit()
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| OnDeinit - expert deinitialization function                      |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
@@ -135,7 +145,7 @@ void OnDeinit(const int reason)
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                             |
+//| OnTick - expert tick function                                    |
 //+------------------------------------------------------------------+
 void OnTick()
   {
@@ -143,8 +153,8 @@ void OnTick()
    if(!IsNewBar())
       return;
 //---
-   int bars = CopyRates(Symb.Name(), TimeFrame, iTime(Symb.Name(), TimeFrame, 1), HistoryBars, Rates);
-   if(!ArraySetAsSeries(Rates, true))
+   int bars=CopyRates(Symb.Name(),TimeFrame,iTime(Symb.Name(),TimeFrame,1),HistoryBars,Rates);
+   if(!ArraySetAsSeries(Rates,true))
       return;
 //---
    RSI.Refresh();
@@ -156,48 +166,48 @@ void OnTick()
    bTime.Clear();
    bTime.Reserve(HistoryBars);
 //---
-   float atr = 0;
-   for(int b = 0; b < (int)HistoryBars; b++)
+   float atr=0;
+   for(int b=0; b<(int)HistoryBars; b++)
      {
-      float open = (float)Rates[b].open;
-      float rsi = (float)RSI.Main(b);
-      float cci = (float)CCI.Main(b);
-      atr = (float)ATR.Main(b);
-      float macd = (float)MACD.Main(b);
-      float sign = (float)MACD.Signal(b);
-      if(rsi == EMPTY_VALUE || cci == EMPTY_VALUE || atr == EMPTY_VALUE || macd == EMPTY_VALUE || sign == EMPTY_VALUE)
+      float open=(float)Rates[b].open;
+      float rsi=(float)RSI.Main(b);
+      float cci=(float)CCI.Main(b);
+      atr=(float)ATR.Main(b);
+      float macd=(float)MACD.Main(b);
+      float sign=(float)MACD.Signal(b);
+      if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
          continue;
       //---
-      int shift = b * BarDescr;
-      sState.state[shift] = (float)(Rates[b].close - open);
-      sState.state[shift + 1] = (float)(Rates[b].high - open);
-      sState.state[shift + 2] = (float)(Rates[b].low - open);
-      sState.state[shift + 3] = (float)(Rates[b].tick_volume / 1000.0f);
-      sState.state[shift + 4] = rsi;
-      sState.state[shift + 5] = cci;
-      sState.state[shift + 6] = atr;
-      sState.state[shift + 7] = macd;
-      sState.state[shift + 8] = sign;
+      int shift=b * BarDescr;
+      sState.state[shift]=(float)(Rates[b].close-open);
+      sState.state[shift+1]=(float)(Rates[b].high-open);
+      sState.state[shift+2]=(float)(Rates[b].low-open);
+      sState.state[shift+3]=(float)(Rates[b].tick_volume / 1000.0f);
+      sState.state[shift+4]=rsi;
+      sState.state[shift+5]=cci;
+      sState.state[shift+6]=atr;
+      sState.state[shift+7]=macd;
+      sState.state[shift+8]=sign;
       if(!bTime.Add(float(Rates[b].time)))
          return;
      }
 //---
-   if(bTime.GetIndex() >= 0)
+   if(bTime.GetIndex()>=0)
       bTime.BufferWrite();
 //---
-   sState.account[0] = (float)AccountInfoDouble(ACCOUNT_BALANCE);
-   sState.account[1] = (float)AccountInfoDouble(ACCOUNT_EQUITY);
+   sState.account[0]=(float)AccountInfoDouble(ACCOUNT_BALANCE);
+   sState.account[1]=(float)AccountInfoDouble(ACCOUNT_EQUITY);
 //---
-   double buy_value = 0, sell_value = 0, buy_profit = 0, sell_profit = 0;
-   double position_discount = 0;
-   double multiplyer = 1.0 / (60.0 * 60.0 * 10.0);
-   int total = PositionsTotal();
-   datetime current = TimeCurrent();
-   for(int i = 0; i < total; i++)
+   double   buy_value=0,sell_value=0,buy_profit=0,sell_profit=0;
+   double   position_discount=0;
+   double   multiplyer=1.0 / (60.0 * 60.0 * 10.0);
+   int      total=PositionsTotal();
+   datetime current=TimeCurrent();
+   for(int i=0; i<total; i++)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
-      double profit = PositionGetDouble(POSITION_PROFIT);
+      double profit=PositionGetDouble(POSITION_PROFIT);
       switch((int)PositionGetInteger(POSITION_TYPE))
         {
          case POSITION_TYPE_BUY:
@@ -209,110 +219,112 @@ void OnTick()
             sell_profit += profit;
             break;
         }
-      position_discount += (current - PositionGetInteger(POSITION_TIME)) * multiplyer * MathAbs(profit);
+      position_discount += (current-PositionGetInteger(POSITION_TIME)) * multiplyer * MathAbs(profit);
      }
-   sState.account[2] = (float)buy_value;
-   sState.account[3] = (float)sell_value;
-   sState.account[4] = (float)buy_profit;
-   sState.account[5] = (float)sell_profit;
-   sState.account[6] = (float)position_discount;
-   sState.account[7] = (float)Rates[0].time;
+   sState.account[2]=(float)buy_value;
+   sState.account[3]=(float)sell_value;
+   sState.account[4]=(float)buy_profit;
+   sState.account[5]=(float)sell_profit;
+   sState.account[6]=(float)position_discount;
+   sState.account[7]=(float)Rates[0].time;
 //---
    bAccount.Clear();
    bAccount.Add((float)(sState.account[0] / EtalonBalance));
-   bAccount.Add((float)((sState.account[0] - PrevBalance) / PrevBalance));
+   bAccount.Add((float)((sState.account[0]-PrevBalance) / PrevBalance));
    bAccount.Add((float)(sState.account[1] / PrevBalance));
-   bAccount.Add((float)((sState.account[1] - PrevEquity) / PrevEquity));
+   bAccount.Add((float)((sState.account[1]-PrevEquity) / PrevEquity));
    bAccount.Add(sState.account[2]);
    bAccount.Add(sState.account[3]);
    bAccount.Add((float)(sState.account[4] / PrevBalance));
    bAccount.Add((float)(sState.account[5] / PrevBalance));
    bAccount.Add((float)(sState.account[6] / PrevBalance));
-   double time = (double)Rates[0].time;
-   double x = time / (double)(D'2024.01.01' - D'2023.01.01');
-   bAccount.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
-   x = time / (double)PeriodSeconds(PERIOD_MN1);
-   bAccount.Add((float)MathCos(x != 0 ? 2.0 * M_PI * x : 0));
-   x = time / (double)PeriodSeconds(PERIOD_W1);
-   bAccount.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
-   x = time / (double)PeriodSeconds(PERIOD_D1);
-   bAccount.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
+   double time=(double)Rates[0].time;
+   double x=time / (double)(D'2024.01.01'-D'2023.01.01');
+   bAccount.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
+   x=time / (double)PeriodSeconds(PERIOD_MN1);
+   bAccount.Add((float)MathCos(x!=0 ? 2.0 * M_PI * x : 0));
+   x=time / (double)PeriodSeconds(PERIOD_W1);
+   bAccount.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
+   x=time / (double)PeriodSeconds(PERIOD_D1);
+   bAccount.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
 //---
-   if(bAccount.GetIndex() >= 0)
+   if(bAccount.GetIndex()>=0)
       if(!bAccount.BufferWrite())
          return;
 //---
    bState.AssignArray(sState.state);
-   if(!Encoder.feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CBufferFloat*)GetPointer(bTime))
-      || !Actor.feedForward((CBufferFloat*)GetPointer(bAccount), 1, false, GetPointer(Encoder), LatentLayer)
+   if(!Encoder.feedForward((CBufferFloat*)GetPointer(bState),1,false,(CBufferFloat*)GetPointer(bTime))
+      ||!Actor.feedForward((CBufferFloat*)GetPointer(bAccount),1,false,GetPointer(Encoder),LatentLayer)
      )
      {
-      PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
+      PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
       return;
      }
 //---
-   PrevBalance = sState.account[0];
-   PrevEquity = sState.account[1];
+   PrevBalance=sState.account[0];
+   PrevEquity=sState.account[1];
 //---
-   vector<float> temp;
+   vector<float>temp;
    Actor.getResults(temp);
 //---
-   if(temp.Size() < NActions)
-      temp = vector<float>::Zeros(NActions);
+   if(temp.Size()<NActions)
+      temp=vector<float>::Zeros(NActions);
 //---
-   double min_lot = Symb.LotsMin();
-   double step_lot = Symb.LotsStep();
-   double stops = (MathMax(Symb.StopsLevel(), 1) + Symb.Spread()) * Symb.Point();
-   if(temp[0] >= temp[3])
+   double min_lot=Symb.LotsMin();
+   double step_lot=Symb.LotsStep();
+   double stops=(MathMax(Symb.StopsLevel(),1)+Symb.Spread()) * Symb.Point();
+   if(temp[0]>=temp[3])
      {
       temp[0] -= temp[3];
-      temp[3] = 0;
+      temp[3]=0;
      }
    else
      {
       temp[3] -= temp[0];
-      temp[0] = 0;
+      temp[0]=0;
      }
+
 //--- buy control
-   if(temp[0] < min_lot || (temp[1] * MaxTP * Symb.Point()) <= 2 * stops || (temp[2] * MaxSL * Symb.Point()) <= stops)
+   if(temp[0]<min_lot||(temp[1] * MaxTP * Symb.Point())<=2 * stops||(temp[2] * MaxSL * Symb.Point())<=stops)
      {
-      if(buy_value > 0)
+      if(buy_value>0)
          CloseByDirection(POSITION_TYPE_BUY);
      }
    else
      {
-      double buy_lot = min_lot + MathRound((double)(temp[0] - min_lot) / step_lot) * step_lot;
-      double buy_tp = NormalizeDouble(Symb.Ask() + temp[1] * MaxTP * Symb.Point(), Symb.Digits());
-      double buy_sl = NormalizeDouble(Symb.Ask() - temp[2] * MaxSL * Symb.Point(), Symb.Digits());
-      if(buy_value > 0)
-         TrailPosition(POSITION_TYPE_BUY, buy_sl, buy_tp);
-      if(MathAbs(buy_value - buy_lot) >= min_lot && 0.98f * temp[1] > temp[2])
+      double buy_lot=min_lot+MathRound((double)(temp[0]-min_lot) / step_lot) * step_lot;
+      double buy_tp=NormalizeDouble(Symb.Ask()+temp[1] * MaxTP * Symb.Point(),Symb.Digits());
+      double buy_sl=NormalizeDouble(Symb.Ask()-temp[2] * MaxSL * Symb.Point(),Symb.Digits());
+      if(buy_value>0)
+         TrailPosition(POSITION_TYPE_BUY,buy_sl,buy_tp);
+      if(MathAbs(buy_value-buy_lot)>=min_lot&&0.98f * temp[1]>temp[2])
         {
-         if(buy_value > buy_lot)
-            ClosePartial(POSITION_TYPE_BUY, buy_value - buy_lot);
+         if(buy_value>buy_lot)
+            ClosePartial(POSITION_TYPE_BUY,buy_value-buy_lot);
          else
-            Trade.Buy(buy_lot - buy_value, Symb.Name(), Symb.Ask(), buy_sl, buy_tp);
+            Trade.Buy(buy_lot-buy_value,Symb.Name(),Symb.Ask(),buy_sl,buy_tp);
         }
      }
+
 //--- sell control
-   if(temp[3] < min_lot || (temp[4] * MaxTP * Symb.Point()) <= 2 * stops || (temp[5] * MaxSL * Symb.Point()) <= stops)
+   if(temp[3]<min_lot||(temp[4] * MaxTP * Symb.Point())<=2 * stops||(temp[5] * MaxSL * Symb.Point())<=stops)
      {
-      if(sell_value > 0)
+      if(sell_value>0)
          CloseByDirection(POSITION_TYPE_SELL);
      }
    else
      {
-      double sell_lot = min_lot + MathRound((double)(temp[3] - min_lot) / step_lot) * step_lot;;
-      double sell_tp = NormalizeDouble(Symb.Bid() - temp[4] * MaxTP * Symb.Point(), Symb.Digits());
-      double sell_sl = NormalizeDouble(Symb.Bid() + temp[5] * MaxSL * Symb.Point(), Symb.Digits());
-      if(sell_value > 0)
-         TrailPosition(POSITION_TYPE_SELL, sell_sl, sell_tp);
-      if(MathAbs(sell_value - sell_lot) >= min_lot && 0.98f * temp[4] > temp[5])
+      double sell_lot=min_lot+MathRound((double)(temp[3]-min_lot) / step_lot) * step_lot;;
+      double sell_tp=NormalizeDouble(Symb.Bid()-temp[4] * MaxTP * Symb.Point(),Symb.Digits());
+      double sell_sl=NormalizeDouble(Symb.Bid()+temp[5] * MaxSL * Symb.Point(),Symb.Digits());
+      if(sell_value>0)
+         TrailPosition(POSITION_TYPE_SELL,sell_sl,sell_tp);
+      if(MathAbs(sell_value-sell_lot)>=min_lot&&0.98f * temp[4]>temp[5])
         {
-         if(sell_value > sell_lot)
-            ClosePartial(POSITION_TYPE_SELL, sell_value - sell_lot);
+         if(sell_value>sell_lot)
+            ClosePartial(POSITION_TYPE_SELL,sell_value-sell_lot);
          else
-            Trade.Sell(sell_lot - sell_value, Symb.Name(), Symb.Bid(), sell_sl, sell_tp);
+            Trade.Sell(sell_lot-sell_value,Symb.Name(),Symb.Bid(),sell_sl,sell_tp);
         }
      }
   }

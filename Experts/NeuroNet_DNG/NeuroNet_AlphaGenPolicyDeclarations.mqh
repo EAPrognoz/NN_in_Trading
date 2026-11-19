@@ -1,5 +1,7 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_AlphaGenPolicyDeclarations.mqh                          |
+//|                          NeuroNet_AlphaGenPolicyDeclarations.mqh |
+//|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/25997 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAGEN_POLICY_DECLARATIONS_MQH
 #define NEURONET_ALPHAGEN_POLICY_DECLARATIONS_MQH
@@ -18,12 +20,12 @@ public:
 class CNeuronAlphaGenDenseOCL:public CNeuronBaseOCL
   {
 protected:
-   uint          m_iRandom;
-   CBufferFloat  m_cWeightGradient;
-   CBufferFloat  m_cFlags;
-   CBufferFloat  m_cOnes;
-   CBufferFloat  m_cScalar;
-   int           m_iRows;
+   uint         m_iRandom;
+   CBufferFloat m_cWeightGradient;
+   CBufferFloat m_cFlags;
+   CBufferFloat m_cOnes;
+   CBufferFloat m_cScalar;
+   int          m_iRows;
    virtual float GenerateWeight(void)override;
 
 public:
@@ -47,13 +49,19 @@ public:
 class CNeuronAlphaGenPolicyLSTMOCL:public CNeuronAlphaGenLSTMOCL
   {
 protected:
-   uint          m_iRandom;
+   uint m_iRandom;
    virtual float GenerateWeight(void)override;
 
 public:
    CNeuronAlphaGenPolicyLSTMOCL(void);
    void Seed(const uint seed);
-   int  RecurrentWeightsIndex(void){return(m_cWeightsLSTM.GetIndex());}
+//+------------------------------------------------------------------+
+//| RecurrentWeightsIndex                                            |
+//+------------------------------------------------------------------+
+   int  RecurrentWeightsIndex(void)
+     {
+      return(m_cWeightsLSTM.GetIndex());
+     }
    bool Geometry(const int inputs,const int hidden,const int capacity);
    bool Check(CNeuronAlphaGenEvaluatorOCL*evaluator);
    bool SaveState(const int handle);

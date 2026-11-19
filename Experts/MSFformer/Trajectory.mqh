@@ -1,16 +1,17 @@
 //+------------------------------------------------------------------+
-//| Trajectory.mqh |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                   Trajectory.mqh |
+//|                                                        MSFformer |
+//|                                                   Copyright DNG® |
+//|                           https://www.mql5.com/ru/articles/15156 |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
 //| Rewards structure                                                |
-//| 0     -  Delta Balance                                         |
-//| 1     -  Delta Equity ( "-" Drawdown / "+" Profit)             |
-//| 2     -  Penalty for no open positions                         |
+//| 0     -  Delta Balance                                           |
+//| 1     -  Delta Equity ( "-" Drawdown / "+" Profit)               |
+//| 2     -  Penalty for no open positions                           |
 //+------------------------------------------------------------------+
 #include "..\NeuroNet_DNG\NeuroNet.mqh"
 //---
@@ -33,146 +34,152 @@
 #define        StartTargetIteration    200000
 #define        STE_Multiplier          1.0f/2
 //+------------------------------------------------------------------+
-//| |
+//| SState                                                           |
 //+------------------------------------------------------------------+
 struct SState
   {
-   float             state[HistoryBars * BarDescr];
-   float             account[AccountDescr - 4];
-   float             action[NActions];
-   float             rewards[NRewards];
+   float state[HistoryBars * BarDescr];
+   float account[AccountDescr-4];
+   float action[NActions];
+   float rewards[NRewards];
    //---
                      SState(void);
    //---
    bool              Save(int file_handle);
    bool              Load(int file_handle);
-   //--- overloading
+
+//--- overloading
    void              operator=(const SState &obj)
      {
-      ArrayCopy(state, obj.state);
-      ArrayCopy(account, obj.account);
-      ArrayCopy(action, obj.action);
-      ArrayCopy(rewards, obj.rewards);
+      ArrayCopy(state,obj.state);
+      ArrayCopy(account,obj.account);
+      ArrayCopy(action,obj.action);
+      ArrayCopy(rewards,obj.rewards);
      }
   };
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | S St at e implementation.                                      |
+//| SState - | S St at e implementation.                             |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
-   ArrayInitialize(state, 0);
-   ArrayInitialize(account, 0);
-   ArrayInitialize(action, 0);
-   ArrayInitialize(rewards, 0);
+   ArrayInitialize(state,0);
+   ArrayInitialize(account,0);
+   ArrayInitialize(action,0);
+   ArrayInitialize(rewards,0);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | S av e implementation.                                         |
+//| Save - | S av e implementation.                                  |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
-   if(file_handle == INVALID_HANDLE)
-      return false;
+   if(file_handle==INVALID_HANDLE)
+      return(false);
 //---
-   int total = ArraySize(state);
-   if(FileWriteInteger(file_handle, total) < sizeof(int))
-      return false;
-   for(int i = 0; i < total; i++)
-      if(FileWriteFloat(file_handle, state[i]) < sizeof(float))
-         return false;
+   int total=ArraySize(state);
+   if(FileWriteInteger(file_handle,total)<sizeof(int))
+      return(false);
+
+   for(int i=0; i<total; i++)
+      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
+         return(false);
 //---
-   total = ArraySize(account);
-   if(FileWriteInteger(file_handle, total) < sizeof(int))
-      return false;
-   for(int i = 0; i < total; i++)
-      if(FileWriteFloat(file_handle, account[i]) < sizeof(float))
-         return false;
+   total=ArraySize(account);
+   if(FileWriteInteger(file_handle,total)<sizeof(int))
+      return(false);
+
+   for(int i=0; i<total; i++)
+      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
+         return(false);
 //---
-   total = ArraySize(action);
-   if(FileWriteInteger(file_handle, total) < sizeof(int))
-      return false;
-   for(int i = 0; i < total; i++)
-      if(FileWriteFloat(file_handle, action[i]) < sizeof(float))
-         return false;
-   total = ArraySize(rewards);
-   if(FileWriteInteger(file_handle, total) < sizeof(int))
-      return false;
-   for(int i = 0; i < total; i++)
-      if(FileWriteFloat(file_handle, rewards[i]) < sizeof(float))
-         return false;
+   total=ArraySize(action);
+   if(FileWriteInteger(file_handle,total)<sizeof(int))
+      return(false);
+
+   for(int i=0; i<total; i++)
+      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
+         return(false);
+
+   total=ArraySize(rewards);
+   if(FileWriteInteger(file_handle,total)<sizeof(int))
+      return(false);
+
+   for(int i=0; i<total; i++)
+      if(FileWriteFloat(file_handle,rewards[i])<sizeof(float))
+         return(false);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | L oa d implementation.                                         |
+//| Load - | L oa d implementation.                                  |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
-   if(file_handle == INVALID_HANDLE)
-      return false;
+   if(file_handle==INVALID_HANDLE)
+      return(false);
    if(FileIsEnding(file_handle))
-      return false;
+      return(false);
 //---
-   int total = FileReadInteger(file_handle);
-   if(total != ArraySize(state))
-      return false;
+   int total=FileReadInteger(file_handle);
+   if(total!=ArraySize(state))
+      return(false);
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         return false;
-      state[i] = FileReadFloat(file_handle);
+         return(false);
+      state[i]=FileReadFloat(file_handle);
      }
 //---
-   total = FileReadInteger(file_handle);
-   if(total != ArraySize(account))
-      return false;
+   total=FileReadInteger(file_handle);
+   if(total!=ArraySize(account))
+      return(false);
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         return false;
-      account[i] = FileReadFloat(file_handle);
+         return(false);
+      account[i]=FileReadFloat(file_handle);
      }
 //---
-   total = FileReadInteger(file_handle);
-   if(total != ArraySize(action))
-      return false;
+   total=FileReadInteger(file_handle);
+   if(total!=ArraySize(action))
+      return(false);
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         return false;
-      action[i] = FileReadFloat(file_handle);
+         return(false);
+      action[i]=FileReadFloat(file_handle);
      }
 //---
-   total = FileReadInteger(file_handle);
-   if(total != ArraySize(rewards))
-      return false;
+   total=FileReadInteger(file_handle);
+   if(total!=ArraySize(rewards))
+      return(false);
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         return false;
-      rewards[i] = FileReadFloat(file_handle);
+         return(false);
+      rewards[i]=FileReadFloat(file_handle);
      }
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| |
+//| STrajectory                                                      |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
-   SState            States[Buffer_Size];
-   int               Total;
-   float             DiscountFactor;
-   bool              CumCounted;
+   SState States[Buffer_Size];
+   int    Total;
+   float  DiscountFactor;
+   bool   CumCounted;
    //---
                      STrajectory(void);
    //---
@@ -183,399 +190,459 @@ struct STrajectory
    bool              Load(int file_handle);
   };
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Function implementation for STrajectory.                       |
+//| STrajectory - | Function implementation for STrajectory.         |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
    // Function implementation for DiscountFactor.
    DiscountFactor(DiscFactor),
-//| Implements CumCounted                                        |
+//| Implements CumCounted                                            |
    CumCounted(false)
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | S av e implementation.                                         |
+//| Save - | S av e implementation.                                  |
 //+------------------------------------------------------------------+
 bool STrajectory::Save(int file_handle)
   {
-   if(file_handle == INVALID_HANDLE)
-      return false;
+   if(file_handle==INVALID_HANDLE)
+      return(false);
 //---
    if(!CumCounted)
       CumRevards();
-   if(FileWriteInteger(file_handle, Total) < sizeof(int))
-      return false;
-   if(FileWriteFloat(file_handle, DiscountFactor) < sizeof(float))
-      return false;
-   for(int i = 0; i < Total; i++)
+   if(FileWriteInteger(file_handle,Total)<sizeof(int))
+      return(false);
+
+   if(FileWriteFloat(file_handle,DiscountFactor)<sizeof(float))
+      return(false);
+
+   for(int i=0; i<Total; i++)
       if(!States[i].Save(file_handle))
-         return false;
+         return(false);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | L oa d implementation.                                         |
+//| Load - | L oa d implementation.                                  |
 //+------------------------------------------------------------------+
 bool STrajectory::Load(int file_handle)
   {
-   if(file_handle == INVALID_HANDLE)
-      return false;
+   if(file_handle==INVALID_HANDLE)
+      return(false);
 //---
-   Total = FileReadInteger(file_handle);
-   if(FileIsEnding(file_handle) || Total >= ArraySize(States))
-      return false;
-   DiscountFactor = FileReadFloat(file_handle);
-   CumCounted = true;
+   Total=FileReadInteger(file_handle);
+   if(FileIsEnding(file_handle)||Total>=ArraySize(States))
+      return(false);
+   DiscountFactor=FileReadFloat(file_handle);
+   CumCounted=true;
 //---
-   for(int i = 0; i < Total; i++)
+   for(int i=0; i<Total; i++)
       if(!States[i].Load(file_handle))
-         return false;
+         return(false);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| |
+//| CumRevards                                                       |
 //+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {
    if(CumCounted)
       return;
 //---
-   for(int i = Total - 2; i >= 0; i--)
-      for(int r = 0; r < NRewards; r++)
-         States[i].rewards[r] += States[i + 1].rewards[r] * DiscountFactor;
-   CumCounted = true;
+   for(int i=Total-2; i>=0; i--)
+      for(int r=0; r<NRewards; r++)
+         States[i].rewards[r] += States[i+1].rewards[r] * DiscountFactor;
+   CumCounted=true;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | A dd implementation.                                           |
+//| Add - | A dd implementation.                                     |
 //+------------------------------------------------------------------+
 bool STrajectory::Add(SState &state)
   {
-   if(Total + 1 >= ArraySize(States))
-      return false;
-   States[Total] = state;
+   if(Total+1>=ArraySize(States))
+      return(false);
+   States[Total]=state;
    Total++;
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| |
+//| SaveTotalBase                                                    |
 //+------------------------------------------------------------------+
 bool SaveTotalBase(void)
   {
-   int total = ArraySize(Buffer);
-   if(total < 0)
-      return true;
-   int handle = FileOpen(FileName + ".bd", FILE_WRITE | FILE_BIN | FILE_COMMON);
-   if(handle < 0)
-      return false;
-   int start = MathMax(total - MaxReplayBuffer, 0);
-   if(FileWriteInteger(handle, total - start) < INT_VALUE)
+   int total=ArraySize(Buffer);
+   if(total<0)
+      return(true);
+
+   int handle=FileOpen(FileName+".bd",FILE_WRITE | FILE_BIN | FILE_COMMON);
+   if(handle<0)
+      return(false);
+
+   int start=MathMax(total-MaxReplayBuffer,0);
+   if(FileWriteInteger(handle,total-start)<INT_VALUE)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   for(int i = start; i < total; i++)
+   for(int i=start; i<total; i++)
       if(!Buffer[i].Save(handle))
         {
          FileClose(handle);
-         return false;
+
+         return(false);
         }
    FileFlush(handle);
    FileClose(handle);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| |
+//| LoadTotalBase                                                    |
 //+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
-   int handle = FileOpen(FileName + ".bd", FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
-   if(handle < 0)
-      return false;
-   int total = FileReadInteger(handle);
-   if(total <= 0)
+   int handle=FileOpen(FileName+".bd",FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
+   if(handle<0)
+      return(false);
+
+   int total=FileReadInteger(handle);
+   if(total<=0)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   if(ArrayResize(Buffer, total) < total)
+   if(ArrayResize(Buffer,total)<total)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
       if(!Buffer[i].Load(handle))
         {
          FileClose(handle);
-         return false;
+
+         return(false);
         }
    FileClose(handle);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| |
+//| CreateDescriptions                                               |
 //+------------------------------------------------------------------+
-bool CreateDescriptions(CArrayObj *actor, CArrayObj *critic)
+bool CreateDescriptions(CArrayObj *actor,CArrayObj *critic)
   {
 //---
    CLayerDescription *descr;
 //---
    if(!actor)
      {
-      actor = new CArrayObj();
+      actor=new CArrayObj();
       if(!actor)
-         return false;
+         return(false);
      }
    if(!critic)
      {
-      critic = new CArrayObj();
+      critic=new CArrayObj();
       if(!critic)
-         return false;
+         return(false);
      }
-//--- Actor
+
+//--- actor
    actor.Clear();
-//--- Input layer
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   uint prev_count = descr.count = AccountDescr;
-   descr.activation = None;
-   descr.optimization = ADAM;
+
+//--- input layer
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   uint prev_count=descr.count=AccountDescr;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 1
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   prev_count = descr.count = EmbeddingSize;
-   descr.activation = SIGMOID;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   prev_count=descr.count=EmbeddingSize;
+   descr.activation=SIGMOID;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 2
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronMLCrossAttentionMLKV;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronMLCrossAttentionMLKV;
      {
-      int temp[] = {1, BarDescr};
-      ArrayCopy(descr.units, temp);
+      int temp[]={1,BarDescr};
+      ArrayCopy(descr.units,temp);
      }
      {
-      int temp[] = {EmbeddingSize, NForecast};
-      ArrayCopy(descr.windows, temp);
+      int temp[]={EmbeddingSize,NForecast};
+      ArrayCopy(descr.windows,temp);
      }
      {
-      int temp[] = {8, 4};
-      ArrayCopy(descr.heads, temp);
+      int temp[]={8,4};
+      ArrayCopy(descr.heads,temp);
      }
-   descr.layers = 9;
-   descr.step = 1;
-   descr.window_out = 32;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   descr.layers=9;
+   descr.step=1;
+   descr.window_out=32;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 3
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = LatentCount;
-   descr.activation = SIGMOID;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=LatentCount;
+   descr.activation=SIGMOID;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 4
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = LatentCount;
-   descr.activation = SIGMOID;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=LatentCount;
+   descr.activation=SIGMOID;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 5
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = 2 * NActions;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=2 * NActions;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 6
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronVAEOCL;
-   descr.count = NActions;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronVAEOCL;
+   descr.count=NActions;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 7
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronFreDFOCL;
-   descr.window = NActions;
-   descr.count =  1;
-   descr.step = int(false);
-   descr.probability = 0.7f;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronFreDFOCL;
+   descr.window=NActions;
+   descr.count=1;
+   descr.step=int(false);
+   descr.probability=0.7f;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
-//--- Critic
+
+//--- critic
    critic.Clear();
-//--- Input layer
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   prev_count = descr.count = NActions;
-   descr.activation = None;
-   descr.optimization = ADAM;
+
+//--- input layer
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   prev_count=descr.count=NActions;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 1
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   prev_count = descr.count = EmbeddingSize;
-   descr.activation = SIGMOID;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   prev_count=descr.count=EmbeddingSize;
+   descr.activation=SIGMOID;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 2
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronMLCrossAttentionMLKV;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronMLCrossAttentionMLKV;
      {
-      int temp[] = {1, BarDescr};
-      ArrayCopy(descr.units, temp);
+      int temp[]={1,BarDescr};
+      ArrayCopy(descr.units,temp);
      }
      {
-      int temp[] = {EmbeddingSize, NForecast};
-      ArrayCopy(descr.windows, temp);
+      int temp[]={EmbeddingSize,NForecast};
+      ArrayCopy(descr.windows,temp);
      }
      {
-      int temp[] = {8, 4};
-      ArrayCopy(descr.heads, temp);
+      int temp[]={8,4};
+      ArrayCopy(descr.heads,temp);
      }
-   descr.window_out = 32;
-   descr.step = 1;
-   descr.layers = 9;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   descr.window_out=32;
+   descr.step=1;
+   descr.layers=9;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 3
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = LatentCount;
-   descr.activation = SIGMOID;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=LatentCount;
+   descr.activation=SIGMOID;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 4
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = LatentCount;
-   descr.activation = SIGMOID;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=LatentCount;
+   descr.activation=SIGMOID;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 5
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = LatentCount;
-   descr.activation = SIGMOID;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=LatentCount;
+   descr.activation=SIGMOID;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 6
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = NRewards;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=NRewards;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 7
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronFreDFOCL;
-   descr.window = NRewards;
-   descr.count =  1;
-   descr.step = int(false);
-   descr.probability = 0.7f;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronFreDFOCL;
+   descr.window=NRewards;
+   descr.count=1;
+   descr.step=int(false);
+   descr.probability=0.7f;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| |
+//| CreateEncoderDescriptions                                        |
 //+------------------------------------------------------------------+
 bool CreateEncoderDescriptions(CArrayObj *encoder)
   {
@@ -584,260 +651,292 @@ bool CreateEncoderDescriptions(CArrayObj *encoder)
 //---
    if(!encoder)
      {
-      encoder = new CArrayObj();
+      encoder=new CArrayObj();
       if(!encoder)
-         return false;
+         return(false);
      }
-//--- Encoder
+
+//--- encoder
    encoder.Clear();
-//--- Input layer
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   uint prev_count = descr.count = (HistoryBars * BarDescr);
-   descr.activation = None;
-   descr.optimization = ADAM;
+
+//--- input layer
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   uint prev_count=descr.count=(HistoryBars * BarDescr);
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 1
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBatchNormOCL;
-   descr.count = prev_count;
-   descr.batch = 1e4;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBatchNormOCL;
+   descr.count=prev_count;
+   descr.batch=1e4;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 2
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronCSCMOCL;
-   descr.count = HistoryBars;
-   descr.window = BarDescr;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronCSCMOCL;
+   descr.count=HistoryBars;
+   descr.window=BarDescr;
      {
-      int temp[] = {6, 5, 4};
-      if(!ArrayCopy(descr.windows, temp))
-         return false;
+      int temp[]={6,5,4};
+      if(!ArrayCopy(descr.windows,temp))
+         return(false);
      }
-   descr.step = int(true);
-   descr.activation = None;
-   descr.optimization = ADAM;
+   descr.step=int(true);
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 3 - 5
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronSPyrAttentionMLKV;
-   descr.count = HistoryBars;
-   descr.window = BarDescr;
-   descr.window_out = 32;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronSPyrAttentionMLKV;
+   descr.count=HistoryBars;
+   descr.window=BarDescr;
+   descr.window_out=32;
      {
-      int temp[] = {8, 4};
-      if(!ArrayCopy(descr.heads, temp))
-         return false;
+      int temp[]={8,4};
+      if(!ArrayCopy(descr.heads,temp))
+         return(false);
      }
-   descr.layers = 3;
-   descr.activation = None;
-   descr.optimization = ADAM;
-   for(int l = 0; l < 3; l++)
+   descr.layers=3;
+   descr.activation=None;
+   descr.optimization=ADAM;
+   for(int l=0; l<3; l++)
       if(!encoder.Add(descr))
         {
          delete descr;
-         return false;
+
+         return(false);
         }
+
 //--- layer 6
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronTransposeOCL;
-   descr.count = HistoryBars;
-   descr.window = BarDescr;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronTransposeOCL;
+   descr.count=HistoryBars;
+   descr.window=BarDescr;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 7
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronConvOCL;
-   descr.count = BarDescr;
-   descr.window = HistoryBars;
-   descr.step = HistoryBars;
-   descr.window_out = LatentCount;
-   descr.activation = LReLU;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronConvOCL;
+   descr.count=BarDescr;
+   descr.window=HistoryBars;
+   descr.step=HistoryBars;
+   descr.window_out=LatentCount;
+   descr.activation=LReLU;
+   descr.optimization=ADAM;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 8
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronConvOCL;
-   descr.count = BarDescr;
-   descr.window = LatentCount;
-   descr.step = LatentCount;
-   descr.window_out = NForecast;
-   descr.optimization = ADAM;
-   descr.activation = TANH;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronConvOCL;
+   descr.count=BarDescr;
+   descr.window=LatentCount;
+   descr.step=LatentCount;
+   descr.window_out=NForecast;
+   descr.optimization=ADAM;
+   descr.activation=TANH;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 9
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronTransposeOCL;
-   descr.count = BarDescr;
-   descr.window = NForecast;
-   descr.activation = None;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronTransposeOCL;
+   descr.count=BarDescr;
+   descr.window=NForecast;
+   descr.activation=None;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 10
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronRevInDenormOCL;
-   descr.count = BarDescr*NForecast;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronRevInDenormOCL;
+   descr.count=BarDescr*NForecast;
+   descr.activation=None;
+   descr.optimization=ADAM;
    descr.layers=1;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 11
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronFreDFOCL;
-   descr.window = BarDescr;
-   descr.count =  NForecast;
-   descr.step = int(true);
-   descr.probability = 0.7f;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronFreDFOCL;
+   descr.window=BarDescr;
+   descr.count=NForecast;
+   descr.step=int(true);
+   descr.probability=0.7f;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!encoder.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
 //---
-   return true;
+   return(true);
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | I sN ew Ba r implementation.                                   |
+//| IsNewBar - | I sN ew Ba r implementation.                        |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
-   static datetime last_bar = 0;
-   if(last_bar >= iTime(Symb.Name(), TimeFrame, 0))
-      return false;
+   static datetime last_bar=0;
+   if(last_bar>=iTime(Symb.Name(),TimeFrame,0))
+      return(false);
 //---
-   last_bar = iTime(Symb.Name(), TimeFrame, 0);
-   return true;
+   last_bar=iTime(Symb.Name(),TimeFrame,0);
+
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| |
+//| CloseByDirection                                                 |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
-   int total = PositionsTotal();
-   bool result = true;
-   for(int i = total - 1; i >= 0; i--)
+   int  total=PositionsTotal();
+   bool result=true;
+   for(int i=total-1; i>=0; i--)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
-      if(PositionGetInteger(POSITION_TYPE) != type)
+      if(PositionGetInteger(POSITION_TYPE)!=type)
          continue;
-      result = (Trade.PositionClose(PositionGetInteger(POSITION_TICKET)) && result);
+      result=(Trade.PositionClose(PositionGetInteger(POSITION_TICKET))&&result);
      }
 //---
-   return result;
+   return(result);
   }
 //+------------------------------------------------------------------+
-//| |
+//| TrailPosition                                                    |
 //+------------------------------------------------------------------+
-bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
+bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
   {
-   int total = PositionsTotal();
-   bool result = true;
+   int  total=PositionsTotal();
+   bool result=true;
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
-      if(PositionGetInteger(POSITION_TYPE) != type)
+      if(PositionGetInteger(POSITION_TYPE)!=type)
          continue;
-      bool modify = false;
-      double psl = PositionGetDouble(POSITION_SL);
-      double ptp = PositionGetDouble(POSITION_TP);
+      bool   modify=false;
+      double psl=PositionGetDouble(POSITION_SL);
+      double ptp=PositionGetDouble(POSITION_TP);
       switch(type)
         {
          case POSITION_TYPE_BUY:
-            if((sl - psl) >= Symb.Point())
+            if((sl-psl)>=Symb.Point())
               {
-               psl = sl;
-               modify = true;
+               psl=sl;
+               modify=true;
               }
-            if(MathAbs(tp - ptp) >= Symb.Point())
+            if(MathAbs(tp-ptp)>=Symb.Point())
               {
-               ptp = tp;
-               modify = true;
+               ptp=tp;
+               modify=true;
               }
             break;
          case POSITION_TYPE_SELL:
-            if((psl - sl) >= Symb.Point())
+            if((psl-sl)>=Symb.Point())
               {
-               psl = sl;
-               modify = true;
+               psl=sl;
+               modify=true;
               }
-            if(MathAbs(tp - ptp) >= Symb.Point())
+            if(MathAbs(tp-ptp)>=Symb.Point())
               {
-               ptp = tp;
-               modify = true;
+               ptp=tp;
+               modify=true;
               }
             break;
         }
       if(modify)
-         result = (Trade.PositionModify(PositionGetInteger(POSITION_TICKET), psl, ptp) && result);
+         result=(Trade.PositionModify(PositionGetInteger(POSITION_TICKET),psl,ptp)&&result);
      }
 //---
-   return result;
+   return(result);
   }
 //+------------------------------------------------------------------+
-//| |
+//| ClosePartial                                                     |
 //+------------------------------------------------------------------+
-bool ClosePartial(ENUM_POSITION_TYPE type, double value)
+bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {
-   if(value <= 0)
-      return true;
+   if(value<=0)
+      return(true);
 //---
-   for(int i = 0; (i < PositionsTotal() && value > 0); i++)
+   for(int i=0; (i<PositionsTotal()&&value>0); i++)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
-      if(PositionGetInteger(POSITION_TYPE) != type)
+      if(PositionGetInteger(POSITION_TYPE)!=type)
          continue;
-      double pvalue = PositionGetDouble(POSITION_VOLUME);
-      if(pvalue <= value)
+      double pvalue=PositionGetDouble(POSITION_VOLUME);
+      if(pvalue<=value)
         {
          if(Trade.PositionClose(PositionGetInteger(POSITION_TICKET)))
            {
@@ -847,120 +946,125 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
         }
       else
         {
-         if(Trade.PositionClosePartial(PositionGetInteger(POSITION_TICKET), value))
-            value = 0;
+         if(Trade.PositionClosePartial(PositionGetInteger(POSITION_TICKET),value))
+            value=0;
         }
      }
 //---
-   return (value <= 0);
+   return(value<=0);
   }
 #endif
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
 //| | Function implementation for GetProbTrajectories.               |
 //+------------------------------------------------------------------+
-vector<float> GetProbTrajectories(STrajectory &buffer[], double lambda)
+vector<float>GetProbTrajectories(STrajectory &buffer[],double lambda)
   {
-   ulong total = buffer.Size();
-   vector<float> result = vector<float>::Zeros(total);
-   vector<float> temp;
-   for(ulong i = 0; i < total; i++)
+   ulong total=buffer.Size();
+   vector<float>result=vector<float>::Zeros(total);
+   vector<float>temp;
+   for(ulong i=0; i<total; i++)
      {
       temp.Assign(buffer[i].States[0].rewards);
-      result[i] = temp.Sum();
+      result[i]=temp.Sum();
       if(!MathIsValidNumber(result[i]))
-         result[i] = -FLT_MAX;
+         result[i]=-FLT_MAX;
      }
-   float max_reward = result.Max();
+   float max_reward=result.Max();
 //---
-   vector<float> sorted = result;
-   bool sort = true;
-   int iter = 0;
+   vector<float>sorted=result;
+   bool sort=true;
+   int  iter=0;
    while(sort)
      {
-      sort = false;
-      for(ulong i = 0; i < sorted.Size() - 1; i++)
-         if(sorted[i] > sorted[i + 1])
+      sort=false;
+      for(ulong i=0; i<sorted.Size()-1; i++)
+         if(sorted[i]>sorted[i+1])
            {
-            float temp = sorted[i];
-            sorted[i] = sorted[i + 1];
-            sorted[i + 1] = temp;
-            sort = true;
+            float temp=sorted[i];
+            sorted[i]=sorted[i+1];
+            sorted[i+1]=temp;
+            sort=true;
            }
       iter++;
      }
 //---
-   float min = result.Min() - 0.1f * MathAbs(max_reward);
-   if(max_reward > min)
+   float min=result.Min()-0.1f * MathAbs(max_reward);
+   if(max_reward>min)
      {
-      float k = sorted.Percentile(80) - max_reward;
-      vector<float> multipl = MathExp(MathAbs(result - max_reward) / (k == 0 ? -1 : k));
-      result = (result - min) / (max_reward - min);
-      result = result / (result + lambda) * multipl;
+      float k=sorted.Percentile(80)-max_reward;
+      vector<float>multipl=MathExp(MathAbs(result-max_reward) / (k==0 ?-1 : k));
+      result=(result-min) / (max_reward-min);
+      result=result / (result+lambda) * multipl;
       result.ReplaceNan(0);
      }
    else
       result.Fill(1);
-   result = result / result.Sum();
-   result = result.CumSum();
+   result=result / result.Sum();
+   result=result.CumSum();
 //---
-   return result;
+   return(result);
   }
 //+------------------------------------------------------------------+
-//| |
+//| SampleTrajectory                                                 |
 //+------------------------------------------------------------------+
-int SampleTrajectory(vector<float> &probability)
+int SampleTrajectory(vector<float>&probability)
   {
 //--- check
-   ulong total = probability.Size();
-   if(total <= 0)
-      return -1;
+   ulong total=probability.Size();
+   if(total<=0)
+      return(-1);
+
 //--- randomize
-   float rnd = float(MathRand() / 32767.0);
+   float rnd=float(MathRand() / 32767.0);
+
 //--- search
-   if(rnd <= probability[0] || total == 1)
-      return 0;
-   if(rnd > probability[total - 2])
-      return int(total - 1);
-   int result = int(rnd * total);
-   if(probability[result] < rnd)
-      while(probability[result] < rnd)
+   if(rnd<=probability[0]||total==1)
+      return(0);
+
+   if(rnd>probability[total-2])
+      return(int(total-1));
+
+   int result=int(rnd * total);
+   if(probability[result]<rnd)
+      while(probability[result]<rnd)
          result++;
    else
      {
-      if(result <= 0)
+      if(result<=0)
          Sleep(0);
-      while(probability[result - 1] >= rnd)
+      while(probability[result-1]>=rnd)
          result--;
      }
+
 //--- return result
-   return result;
+   return(result);
   }
 //+------------------------------------------------------------------+
-//| |
+//| CDeal                                                            |
 //+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
 public:
-   datetime             OpenTime;
-   datetime             CloseTime;
-   ENUM_POSITION_TYPE   Type;
-   double               Volume;
-   double               OpenPrice;
-   double               StopLos;
-   double               TakeProfit;
-   double               point;
+   datetime           OpenTime;
+   datetime           CloseTime;
+   ENUM_POSITION_TYPE Type;
+   double             Volume;
+   double             OpenPrice;
+   double             StopLos;
+   double             TakeProfit;
+   double             point;
    //---
                      CDeal(void);
                     ~CDeal(void) {};
    //---
-   vector<float>        Action(datetime current, double ask, double bid, int period_seconds);
+   vector<float>Action(datetime current,double ask,double bid,int period_seconds);
   };
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Function implementation for CDeal.                             |
+//| CDeal - | Function implementation for CDeal.                     |
 //+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
    // Function implementation for CloseTime.
@@ -975,174 +1079,178 @@ void CDeal::CDeal(void) :  OpenTime(0),
    StopLos(0),
    // Function implementation for TakeProfit.
    TakeProfit(0),
-//| Implements point                                             |
+//| Implements point                                                 |
    point(1e-5)
   {
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Function implementation for Action.                            |
+//| Action - | Function implementation for Action.                   |
 //+------------------------------------------------------------------+
-vector<float> CDeal::Action(datetime current, double ask, double bid, int period_seconds)
+vector<float>CDeal::Action(datetime current,double ask,double bid,int period_seconds)
   {
-   vector<float> result = vector<float>::Zeros(NActions);
-   if((OpenTime - period_seconds) > current || CloseTime <= current)
-      return result;
+   vector<float>result=vector<float>::Zeros(NActions);
+   if((OpenTime-period_seconds)>current||CloseTime<=current)
+      return(result);
 //---
    switch(Type)
      {
       case POSITION_TYPE_BUY:
-         result[0] = float(Volume);
-         if(TakeProfit > 0)
-            result[1] = float((TakeProfit - ask) / (MaxTP * point));
-         if(StopLos > 0)
-            result[2] = float((ask - StopLos) / (MaxSL * point));
+         result[0]=float(Volume);
+         if(TakeProfit>0)
+            result[1]=float((TakeProfit-ask) / (MaxTP * point));
+         if(StopLos>0)
+            result[2]=float((ask-StopLos) / (MaxSL * point));
          break;
       case POSITION_TYPE_SELL:
-         result[3] = float(Volume);
-         if(TakeProfit > 0)
-            result[4] = float((bid - TakeProfit) / (MaxTP * point));
-         if(StopLos > 0)
-            result[5] = float((StopLos - bid) / (MaxSL * point));
+         result[3]=float(Volume);
+         if(TakeProfit>0)
+            result[4]=float((bid-TakeProfit) / (MaxTP * point));
+         if(StopLos>0)
+            result[5]=float((StopLos-bid) / (MaxSL * point));
          break;
      }
 //---
-   return result;
+   return(result);
   }
 //+------------------------------------------------------------------+
-//| |
+//| CDeals                                                           |
 //+------------------------------------------------------------------+
 class CDeals
   {
 protected:
-   CArrayObj         Deals;
+   CArrayObj Deals;
 public:
                      CDeals(void) { Deals.Clear(); }
                     ~CDeals(void) { Deals.Clear(); }
    //---
-   bool              LoadDeals(string file_name, string symbol, double point);
-   vector<float>     Action(datetime current, double ask, double bid, int period_seconds);
+   bool              LoadDeals(string file_name,string symbol,double point);
+   vector<float>Action(datetime current,double ask,double bid,int period_seconds);
   };
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | L oa dD ea ls implementation.                                  |
+//| LoadDeals - | L oa dD ea ls implementation.                      |
 //+------------------------------------------------------------------+
-bool CDeals::LoadDeals(string file_name, string symbol, double point)
+bool CDeals::LoadDeals(string file_name,string symbol,double point)
   {
-   if(file_name == NULL || !FileIsExist(file_name, FILE_COMMON))
+   if(file_name==NULL||!FileIsExist(file_name,FILE_COMMON))
      {
-      PrintFormat("File %s not exist", file_name);
-      return false;
+      PrintFormat("File %s not exist",file_name);
+
+      return(false);
      }
-   if(symbol == NULL)
+   if(symbol==NULL)
      {
-      symbol = _Symbol;
-      point = _Point;
+      symbol=_Symbol;
+      point=_Point;
      }
 //---
    ResetLastError();
-   int handle = FileOpen(file_name, FILE_READ | FILE_ANSI | FILE_CSV | FILE_COMMON, short(';'), CP_ACP);
-   if(handle == INVALID_HANDLE)
+   int handle=FileOpen(file_name,FILE_READ | FILE_ANSI | FILE_CSV | FILE_COMMON,short(';'),CP_ACP);
+   if(handle==INVALID_HANDLE)
      {
-      PrintFormat("Error of open file %s: %d", file_name, GetLastError());
-      return false;
+      PrintFormat("Error of open file %s: %d",file_name,GetLastError());
+
+      return(false);
      }
-   FileSeek(handle, 0, SEEK_SET);
+   FileSeek(handle,0,SEEK_SET);
    while(!FileIsEnding(handle))
      {
-      string s = FileReadString(handle);
-      datetime open_time = StringToTime(s);
-      string type = FileReadString(handle);
-      double volume = StringToDouble(FileReadString(handle));
-      string deal_symbol = FileReadString(handle);
-      double open_price = StringToDouble(FileReadString(handle));
-      volume = MathMin(volume, StringToDouble(FileReadString(handle)));
-      datetime close_time = StringToTime(FileReadString(handle));
-      double close_price = StringToDouble(FileReadString(handle));
-      s = FileReadString(handle);
-      s = FileReadString(handle);
-      s = FileReadString(handle);
-      if(StringFind(deal_symbol, symbol, 0) < 0)
+      string   s=FileReadString(handle);
+      datetime open_time=StringToTime(s);
+      string   type=FileReadString(handle);
+      double   volume=StringToDouble(FileReadString(handle));
+      string   deal_symbol=FileReadString(handle);
+      double   open_price=StringToDouble(FileReadString(handle));
+      volume=MathMin(volume,StringToDouble(FileReadString(handle)));
+      datetime close_time=StringToTime(FileReadString(handle));
+      double   close_price=StringToDouble(FileReadString(handle));
+      s=FileReadString(handle);
+      s=FileReadString(handle);
+      s=FileReadString(handle);
+      if(StringFind(deal_symbol,symbol,0)<0)
          continue;
       //---
       ResetLastError();
-      CDeal *deal = new CDeal();
+      CDeal *deal=new CDeal();
       if(!deal)
         {
-         PrintFormat("Error of create new deal object: %d", GetLastError());
-         return false;
+         PrintFormat("Error of create new deal object: %d",GetLastError());
+
+         return(false);
         }
-      deal.OpenTime = open_time;
-      deal.CloseTime = close_time;
-      deal.OpenPrice = open_price;
-      deal.Volume = volume;
-      deal.point = point;
-      if(type == "Sell")
+      deal.OpenTime=open_time;
+      deal.CloseTime=close_time;
+      deal.OpenPrice=open_price;
+      deal.Volume=volume;
+      deal.point=point;
+      if(type=="Sell")
         {
-         deal.Type = POSITION_TYPE_SELL;
-         if(close_price < open_price)
+         deal.Type=POSITION_TYPE_SELL;
+         if(close_price<open_price)
            {
-            deal.TakeProfit = close_price;
-            deal.StopLos = 0;
+            deal.TakeProfit=close_price;
+            deal.StopLos=0;
            }
          else
            {
-            deal.TakeProfit = 0;
-            deal.StopLos = close_price;
+            deal.TakeProfit=0;
+            deal.StopLos=close_price;
            }
         }
       else
         {
-         deal.Type = POSITION_TYPE_BUY;
-         if(close_price > open_price)
+         deal.Type=POSITION_TYPE_BUY;
+         if(close_price>open_price)
            {
-            deal.TakeProfit = close_price;
-            deal.StopLos = 0;
+            deal.TakeProfit=close_price;
+            deal.StopLos=0;
            }
          else
            {
-            deal.TakeProfit = 0;
-            deal.StopLos = close_price;
+            deal.TakeProfit=0;
+            deal.StopLos=close_price;
            }
         }
       //---
       ResetLastError();
       if(!Deals.Add(deal))
         {
-         PrintFormat("Error of add new deal: %d", GetLastError());
-         return false;
+         PrintFormat("Error of add new deal: %d",GetLastError());
+
+         return(false);
         }
      }
 //---
    FileClose(handle);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Function implementation for Action.                            |
+//| Action - | Function implementation for Action.                   |
 //+------------------------------------------------------------------+
-vector<float> CDeals::Action(datetime current, double ask, double bid, int period_seconds)
+vector<float>CDeals::Action(datetime current,double ask,double bid,int period_seconds)
   {
-   vector<float> result = vector<float>::Zeros(NActions);
-   for(int i = 0; i < Deals.Total(); i++)
+   vector<float>result=vector<float>::Zeros(NActions);
+   for(int i=0; i<Deals.Total(); i++)
      {
-      CDeal *deal = Deals.At(i);
+      CDeal *deal=Deals.At(i);
       if(!deal)
          continue;
-      vector<float> action = deal.Action(current, ask, bid, period_seconds);
+      vector<float>action=deal.Action(current,ask,bid,period_seconds);
       result[0] += action[0];
       result[3] += action[3];
-      result[1] = MathMax(result[1], action[1]);
-      result[2] = MathMax(result[2], action[2]);
-      result[4] = MathMax(result[4], action[4]);
-      result[5] = MathMax(result[5], action[5]);
+      result[1]=MathMax(result[1],action[1]);
+      result[2]=MathMax(result[2],action[2]);
+      result[4]=MathMax(result[4],action[4]);
+      result[5]=MathMax(result[5],action[5]);
      }
 //---
-   return result;
+   return(result);
   }
 //+------------------------------------------------------------------+
 

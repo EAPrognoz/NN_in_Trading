@@ -1,36 +1,40 @@
 //+------------------------------------------------------------------+
-//| Study.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                 StudyEncoder.mq5 |
+//|                                                             MLKV |
+//|                                                   Copyright DNG® |
+//|                           https://www.mql5.com/ru/articles/15117 |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 #define Study
 #include "Trajectory.mqh"
 //+------------------------------------------------------------------+
 //| Input parameters                                                 |
 //+------------------------------------------------------------------+
-input int                  Iterations     = 100000;
+input int Iterations=100000;
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
-STrajectory          Buffer[];
-CNet                 Encoder;
+//+------------------------------------------------------------------+
+//| Global variables                                                 |
+//+------------------------------------------------------------------+
+STrajectory Buffer[];
+CNet        Encoder;
 //---
-float                dError;
-datetime             dtStudied;
+float    dError;
+datetime dtStudied;
 //---
-CBufferFloat         bState;
-CBufferFloat         bTime;
-CBufferFloat         bTimeGradient;
-CBufferFloat         *Result;
-vector<float>        check;
+CBufferFloat bState;
+CBufferFloat bTime;
+CBufferFloat bTimeGradient;
+CBufferFloat *Result;
+vector<float>check;
 //+------------------------------------------------------------------+
-//| Expert initialization function                                   |
+//| OnInit - expert initialization function                          |
 //+------------------------------------------------------------------+
 int OnInit()
   {
@@ -38,69 +42,77 @@ int OnInit()
    ResetLastError();
    if(!LoadTotalBase())
      {
-      PrintFormat("Error of load study data: %d", GetLastError());
-      return INIT_FAILED;
+      PrintFormat("Error of load study data: %d",GetLastError());
+
+      return(INIT_FAILED);
      }
+
 //--- load models
    float temp;
-   if(!Encoder.Load(FileName + "Enc.nnw", temp, temp, temp, dtStudied, true))
+   if(!Encoder.Load(FileName+"Enc.nnw",temp,temp,temp,dtStudied,true))
      {
       Print("Create new model");
-      CArrayObj *encoder = new CArrayObj();
+      CArrayObj *encoder=new CArrayObj();
       if(!CreateEncoderDescriptions(encoder))
         {
          delete encoder;
-         return INIT_FAILED;
+
+         return(INIT_FAILED);
         }
       if(!Encoder.Create(encoder))
         {
          delete encoder;
-         return INIT_FAILED;
+
+         return(INIT_FAILED);
         }
       delete encoder;
      }
 //---
    Encoder.getResults(Result);
-   if(Result.Total() != NForecast * BarDescr)
+   if(Result.Total()!=NForecast * BarDescr)
      {
-      PrintFormat("The scope of the Encoder does not match the forecast state count (%d <> %d)", NForecast * BarDescr, Result.Total());
-      return INIT_FAILED;
+      PrintFormat("The scope of the Encoder does not match the forecast state count (%d <> %d)",NForecast * BarDescr,Result.Total());
+
+      return(INIT_FAILED);
      }
 //---
-   Encoder.GetLayerOutput(0, Result);
-   if(Result.Total() != (HistoryBars * BarDescr))
+   Encoder.GetLayerOutput(0,Result);
+   if(Result.Total()!=(HistoryBars * BarDescr))
      {
-      PrintFormat("Input size of Encoder doesn't match state description (%d <> %d)", Result.Total(), (HistoryBars * BarDescr));
-      return INIT_FAILED;
+      PrintFormat("Input size of Encoder doesn't match state description (%d <> %d)",Result.Total(),(HistoryBars * BarDescr));
+
+      return(INIT_FAILED);
      }
 //---
-   if(!bTimeGradient.BufferInit(4, 0) ||
+   if(!bTimeGradient.BufferInit(4,0)||
       !bTimeGradient.BufferCreate(Encoder.GetOpenCL()))
      {
-      PrintFormat("Error of create buffers: %d", GetLastError());
-      return INIT_FAILED;
+      PrintFormat("Error of create buffers: %d",GetLastError());
+
+      return(INIT_FAILED);
      }
 //---
-   if(!EventChartCustom(ChartID(), 1, 0, 0, "Init"))
+   if(!EventChartCustom(ChartID(),1,0,0,"Init"))
      {
-      PrintFormat("Error of create study event: %d", GetLastError());
-      return INIT_FAILED;
+      PrintFormat("Error of create study event: %d",GetLastError());
+
+      return(INIT_FAILED);
      }
 //---
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| OnDeinit - expert deinitialization function                      |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
 //---
-   if(!(reason == REASON_INITFAILED || reason == REASON_RECOMPILE))
-      Encoder.Save(FileName + "Enc.nnw", 0, 0, 0, TimeCurrent(), true);
+   if(!(reason==REASON_INITFAILED||reason==REASON_RECOMPILE))
+      Encoder.Save(FileName+"Enc.nnw",0,0,0,TimeCurrent(),true);
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| ChartEvent function                                              |
+//| OnChartEvent - chartEvent function                               |
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id,
                   const long &lparam,
@@ -108,27 +120,27 @@ void OnChartEvent(const int id,
                   const string &sparam)
   {
 //---
-   if(id == 1001)
+   if(id==1001)
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train function                                                   |
+//| Train - train function                                           |
 //+------------------------------------------------------------------+
 void Train(void)
   {
 //---
-   vector<float> probability = GetProbTrajectories(Buffer, 0.9);
+   vector<float>probability=GetProbTrajectories(Buffer,0.9);
 //---
-   vector<float> result, target, state;
-   bool Stop = false;
+   vector<float>result,target,state;
+   bool Stop=false;
 //---
-   uint ticks = GetTickCount();
+   uint ticks=GetTickCount();
 //---
-   for(int iter = 0; (iter < Iterations && !IsStopped() && !Stop); iter ++)
+   for(int iter=0; (iter<Iterations&&!IsStopped()&&!Stop); iter ++)
      {
-      int tr = SampleTrajectory(probability);
-      int i = (int)((MathRand() * MathRand() / MathPow(32767, 2)) * (Buffer[tr].Total - 2 - NForecast));
-      if(i <= 0)
+      int tr=SampleTrajectory(probability);
+      int i=(int)((MathRand() * MathRand() / MathPow(32767,2)) * (Buffer[tr].Total-2-NForecast));
+      if(i<=0)
         {
          iter--;
          continue;
@@ -142,47 +154,49 @@ void Train(void)
       bState.AssignArray(Buffer[tr].States[i].state);
       //---
       bTime.Clear();
-      double time = (double)Buffer[tr].States[i].account[7];
-      double x = time / (double)(D'2024.01.01' - D'2023.01.01');
-      bTime.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
-      x = time / (double)PeriodSeconds(PERIOD_MN1);
-      bTime.Add((float)MathCos(x != 0 ? 2.0 * M_PI * x : 0));
-      x = time / (double)PeriodSeconds(PERIOD_W1);
-      bTime.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
-      x = time / (double)PeriodSeconds(PERIOD_D1);
-      bTime.Add((float)MathSin(x != 0 ? 2.0 * M_PI * x : 0));
-      if(bTime.GetIndex() >= 0)
+      double time=(double)Buffer[tr].States[i].account[7];
+      double x=time / (double)(D'2024.01.01'-D'2023.01.01');
+      bTime.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
+      x=time / (double)PeriodSeconds(PERIOD_MN1);
+      bTime.Add((float)MathCos(x!=0 ? 2.0 * M_PI * x : 0));
+      x=time / (double)PeriodSeconds(PERIOD_W1);
+      bTime.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
+      x=time / (double)PeriodSeconds(PERIOD_D1);
+      bTime.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
+      if(bTime.GetIndex()>=0)
          bTime.BufferWrite();
-      //--- State Encoder
-      if(!Encoder.feedForward((CBufferFloat*)GetPointer(bState), 1, false, (CBufferFloat*)GetPointer(bTime)))
+
+   //--- state Encoder
+      if(!Encoder.feedForward((CBufferFloat*)GetPointer(bState),1,false,(CBufferFloat*)GetPointer(bTime)))
         {
-         PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
-         Stop = true;
+         PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
+         Stop=true;
          break;
         }
-      //--- Collect target data
-      if(!Result.AssignArray(Buffer[tr].States[i + NForecast].state))
+
+   //--- collect target data
+      if(!Result.AssignArray(Buffer[tr].States[i+NForecast].state))
          continue;
       if(!Result.Resize(BarDescr * NForecast))
          continue;
-      if(!Encoder.backProp(Result, GetPointer(bTime),GetPointer(bTimeGradient)))
+      if(!Encoder.backProp(Result,GetPointer(bTime),GetPointer(bTimeGradient)))
         {
-         PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
-         Stop = true;
+         PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
+         Stop=true;
          break;
         }
       //---
-      if(GetTickCount() - ticks > 500)
+      if(GetTickCount()-ticks>500)
         {
-         double percent = double(iter) * 100.0 / (Iterations);
-         string str = StringFormat("%-14s %6.2f%% -> Error %15.8f\n", "Encoder", percent, Encoder.getRecentAverageError());
+         double percent=double(iter) * 100.0 / (Iterations);
+         string str=StringFormat("%-14s %6.2f%% -> Error %15.8f\n","Encoder",percent,Encoder.getRecentAverageError());
          Comment(str);
-         ticks = GetTickCount();
+         ticks=GetTickCount();
         }
      }
    Comment("");
 //---
-   PrintFormat("%s -> %d -> %-15s %10.7f", __FUNCTION__, __LINE__, "Encoder", Encoder.getRecentAverageError());
+   PrintFormat("%s -> %d -> %-15s %10.7f",__FUNCTION__,__LINE__,"Encoder",Encoder.getRecentAverageError());
    ExpertRemove();
 //---
   }

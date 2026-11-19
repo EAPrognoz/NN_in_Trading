@@ -1,13 +1,14 @@
 //+------------------------------------------------------------------+
-//| Test.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                         Test.mq5 |
+//|                                                              EDL |
+//|                                                   Copyright DNG® |
+//|                           https://www.mql5.com/ru/articles/12783 |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 #include "Trajectory.mqh"
 #include <Trade\Trade.mqh>
@@ -16,139 +17,151 @@
 //+------------------------------------------------------------------+
 //| Input parameters                                                 |
 //+------------------------------------------------------------------+
-input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_H1;
-input int                  LatentLayer    =  9;
-input string               ActorFile      =  "Act";
+input ENUM_TIMEFRAMES TimeFrame=PERIOD_H1;
+input int             LatentLayer=9;
+input string          ActorFile="Act";
 //---
-input group                "---- RSI ----"
-input int                  RSIPeriod   =  14;            //Period
-input ENUM_APPLIED_PRICE   RSIPrice    =  PRICE_CLOSE;   //Applied price
+input group "---- RSI ----"
+input int                RSIPeriod=14;           //Period
+input ENUM_APPLIED_PRICE RSIPrice=PRICE_CLOSE;   //Applied price
 //---
-input group                "---- CCI ----"
-input int                  CCIPeriod   =  14;            //Period
-input ENUM_APPLIED_PRICE   CCIPrice    =  PRICE_TYPICAL; //Applied price
+input group "---- CCI ----"
+input int                CCIPeriod=14;             //Period
+input ENUM_APPLIED_PRICE CCIPrice=PRICE_TYPICAL;   //Applied price
 //---
-input group                "---- ATR ----"
-input int                  ATRPeriod   =  14;            //Period
+input group "---- ATR ----"
+input int ATRPeriod=14;   //Period
 //---
-input group                "---- MACD ----"
-input int                  FastPeriod  =  12;            //Fast
-input int                  SlowPeriod  =  26;            //Slow
-input int                  SignalPeriod =  9;            //Signal
-input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
-input int                  Agent = 1;
-bool                 TrainMode = true;
+input group "---- MACD ----"
+input int                FastPeriod=12;           //Fast
+input int                SlowPeriod=26;           //Slow
+input int                SignalPeriod=9;          //Signal
+input ENUM_APPLIED_PRICE MACDPrice=PRICE_CLOSE;   //Applied price
+input int                Agent=1;
 //+------------------------------------------------------------------+
-//| |
+//| Global variables                                                 |
 //+------------------------------------------------------------------+
-SState               sState;
-STrajectory          Base;
-STrajectory          Buffer[];
-CNet                 Scheduler;
-CFQF                 Actor;
-//---
-float                dError;
-datetime             dtStudied;
-bool                 bEventStudy;
-//---
-CBufferFloat         State1;
-CBufferFloat         *Result;
-//---
-CSymbolInfo          Symb;
-CTrade               Trade;
-//---
-MqlRates             Rates[];
-CiRSI                RSI;
-CiCCI                CCI;
-CiATR                ATR;
-CiMACD               MACD;
-vector<float>        prev_scheduler;
-vector<float>        prev_actor;
-vector<float>        skills_count;
-float                prev_balance;
-float                prev_equity;
+bool TrainMode=true;
 //+------------------------------------------------------------------+
-//| Expert initialization function                                   |
+//|                                                                  |
+//+------------------------------------------------------------------+
+SState      sState;
+STrajectory Base;
+STrajectory Buffer[];
+CNet        Scheduler;
+CFQF        Actor;
+//---
+float    dError;
+datetime dtStudied;
+bool     bEventStudy;
+//---
+CBufferFloat State1;
+CBufferFloat *Result;
+//---
+CSymbolInfo Symb;
+CTrade      Trade;
+//---
+MqlRates Rates[];
+CiRSI    RSI;
+CiCCI    CCI;
+CiATR    ATR;
+CiMACD   MACD;
+vector<float>prev_scheduler;
+vector<float>prev_actor;
+vector<float>skills_count;
+float prev_balance;
+float prev_equity;
+//+------------------------------------------------------------------+
+//| OnInit - expert initialization function                          |
 //+------------------------------------------------------------------+
 int OnInit()
   {
 //---
    if(!Symb.Name(_Symbol))
-      return INIT_FAILED;
+      return(INIT_FAILED);
    Symb.Refresh();
 //---
-   if(!RSI.Create(Symb.Name(), TimeFrame, RSIPeriod, RSIPrice))
-      return INIT_FAILED;
+   if(!RSI.Create(Symb.Name(),TimeFrame,RSIPeriod,RSIPrice))
+      return(INIT_FAILED);
 //---
-   if(!CCI.Create(Symb.Name(), TimeFrame, CCIPeriod, CCIPrice))
-      return INIT_FAILED;
+   if(!CCI.Create(Symb.Name(),TimeFrame,CCIPeriod,CCIPrice))
+      return(INIT_FAILED);
 //---
-   if(!ATR.Create(Symb.Name(), TimeFrame, ATRPeriod))
-      return INIT_FAILED;
+   if(!ATR.Create(Symb.Name(),TimeFrame,ATRPeriod))
+      return(INIT_FAILED);
 //---
-   if(!MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice))
-      return INIT_FAILED;
-   if(!RSI.BufferResize(HistoryBars) || !CCI.BufferResize(HistoryBars) ||
-      !ATR.BufferResize(HistoryBars) || !MACD.BufferResize(HistoryBars))
+   if(!MACD.Create(Symb.Name(),TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice))
+      return(INIT_FAILED);
+
+   if(!RSI.BufferResize(HistoryBars)||!CCI.BufferResize(HistoryBars)||
+      !ATR.BufferResize(HistoryBars)||!MACD.BufferResize(HistoryBars))
      {
-      PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
-      return INIT_FAILED;
+      PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
+
+      return(INIT_FAILED);
      }
 //---
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
-      return INIT_FAILED;
+      return(INIT_FAILED);
+
 //--- load models
    ResetLastError();
    float temp;
-   if(!Actor.Load(FileName + ActorFile+".nnw", dtStudied, true))
+   if(!Actor.Load(FileName+ActorFile+".nnw",dtStudied,true))
      {
-      PrintFormat("Error of load Actor: %5d", GetLastError());
-      return INIT_FAILED;
+      PrintFormat("Error of load Actor: %5d",GetLastError());
+
+      return(INIT_FAILED);
      }
-   if(!Scheduler.Load(FileName + "Sch.nnw", temp, temp, temp, dtStudied, true))
+   if(!Scheduler.Load(FileName+"Sch.nnw",temp,temp,temp,dtStudied,true))
      {
-      PrintFormat("Error of load Scheduler: %5d", GetLastError());
-      return INIT_FAILED;
+      PrintFormat("Error of load Scheduler: %5d",GetLastError());
+
+      return(INIT_FAILED);
      }
 //---
    Actor.getResults(Result);
-   if(Result.Total() != NActions)
+   if(Result.Total()!=NActions)
      {
-      PrintFormat("The scope of the actor does not match the actions count (%d <> %d)", NActions, Result.Total());
-      return INIT_FAILED;
+      PrintFormat("The scope of the actor does not match the actions count (%d <> %d)",NActions,Result.Total());
+
+      return(INIT_FAILED);
      }
    Actor.SetOpenCL(Scheduler.GetOpenCL());
 //---
    Scheduler.getResults(Result);
-   if(Result.Total() != AccountDescr)
+   if(Result.Total()!=AccountDescr)
      {
-      PrintFormat("The scope of the scheduler does not match the account description (%d <> %d)", AccountDescr, Result.Total());
-      return INIT_FAILED;
+      PrintFormat("The scope of the scheduler does not match the account description (%d <> %d)",AccountDescr,Result.Total());
+
+      return(INIT_FAILED);
      }
 //---
-   Actor.GetLayerOutput(0, Result);
-   int inputs = Result.Total();
-   if(!Scheduler.GetLayerOutput(LatentLayer, Result))
+   Actor.GetLayerOutput(0,Result);
+   int inputs=Result.Total();
+   if(!Scheduler.GetLayerOutput(LatentLayer,Result))
      {
-      PrintFormat("Error of load latent layer %d", LatentLayer);
-      return INIT_FAILED;
+      PrintFormat("Error of load latent layer %d",LatentLayer);
+
+      return(INIT_FAILED);
      }
-   if(inputs != Result.Total())
+   if(inputs!=Result.Total())
      {
-      PrintFormat("Size of latent layer does not match input size of Actor (%d <> %d)", Result.Total(), inputs);
-      return INIT_FAILED;
+      PrintFormat("Size of latent layer does not match input size of Actor (%d <> %d)",Result.Total(),inputs);
+
+      return(INIT_FAILED);
      }
 //---
    prev_scheduler.Init(inputs);
    prev_actor.Init(NActions);
-   skills_count = vector<float>::Zeros(NSkills);
-   prev_balance = (float)AccountInfoDouble(ACCOUNT_BALANCE);
-   prev_equity = (float)AccountInfoDouble(ACCOUNT_EQUITY);
+   skills_count=vector<float>::Zeros(NSkills);
+   prev_balance=(float)AccountInfoDouble(ACCOUNT_BALANCE);
+   prev_equity=(float)AccountInfoDouble(ACCOUNT_EQUITY);
 //---
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| OnDeinit - expert deinitialization function                      |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
@@ -157,7 +170,7 @@ void OnDeinit(const int reason)
    Print(skills_count);
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                             |
+//| OnTick - expert tick function                                    |
 //+------------------------------------------------------------------+
 void OnTick()
   {
@@ -165,8 +178,8 @@ void OnTick()
    if(!IsNewBar())
       return;
 //---
-   int bars = CopyRates(Symb.Name(), TimeFrame, iTime(Symb.Name(), TimeFrame, 1), HistoryBars, Rates);
-   if(!ArraySetAsSeries(Rates, true))
+   int bars=CopyRates(Symb.Name(),TimeFrame,iTime(Symb.Name(),TimeFrame,1),HistoryBars,Rates);
+   if(!ArraySetAsSeries(Rates,true))
       return;
 //---
    RSI.Refresh();
@@ -175,43 +188,43 @@ void OnTick()
    MACD.Refresh();
 //---
    MqlDateTime sTime;
-   for(int b = 0; b < (int)HistoryBars; b++)
+   for(int b=0; b<(int)HistoryBars; b++)
      {
-      float open = (float)Rates[b].open;
-      TimeToStruct(Rates[b].time, sTime);
-      float rsi = (float)RSI.Main(b);
-      float cci = (float)CCI.Main(b);
-      float atr = (float)ATR.Main(b);
-      float macd = (float)MACD.Main(b);
-      float sign = (float)MACD.Signal(b);
-      if(rsi == EMPTY_VALUE || cci == EMPTY_VALUE || atr == EMPTY_VALUE || macd == EMPTY_VALUE || sign == EMPTY_VALUE)
+      float open=(float)Rates[b].open;
+      TimeToStruct(Rates[b].time,sTime);
+      float rsi=(float)RSI.Main(b);
+      float cci=(float)CCI.Main(b);
+      float atr=(float)ATR.Main(b);
+      float macd=(float)MACD.Main(b);
+      float sign=(float)MACD.Signal(b);
+      if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
          continue;
       //---
-      sState.state[b * 12] = (float)Rates[b].close - open;
-      sState.state[b * 12 + 1] = (float)Rates[b].high - open;
-      sState.state[b * 12 + 2] = (float)Rates[b].low - open;
-      sState.state[b * 12 + 3] = (float)Rates[b].tick_volume / 1000.0f;
-      sState.state[b * 12 + 4] = (float)sTime.hour;
-      sState.state[b * 12 + 5] = (float)sTime.day_of_week;
-      sState.state[b * 12 + 6] = (float)sTime.mon;
-      sState.state[b * 12 + 7] = rsi;
-      sState.state[b * 12 + 8] = cci;
-      sState.state[b * 12 + 9] = atr;
-      sState.state[b * 12 + 10] = macd;
-      sState.state[b * 12 + 11] = sign;
+      sState.state[b * 12]=(float)Rates[b].close-open;
+      sState.state[b * 12+1]=(float)Rates[b].high-open;
+      sState.state[b * 12+2]=(float)Rates[b].low-open;
+      sState.state[b * 12+3]=(float)Rates[b].tick_volume / 1000.0f;
+      sState.state[b * 12+4]=(float)sTime.hour;
+      sState.state[b * 12+5]=(float)sTime.day_of_week;
+      sState.state[b * 12+6]=(float)sTime.mon;
+      sState.state[b * 12+7]=rsi;
+      sState.state[b * 12+8]=cci;
+      sState.state[b * 12+9]=atr;
+      sState.state[b * 12+10]=macd;
+      sState.state[b * 12+11]=sign;
      }
 //---
-   sState.account[0] = (float)AccountInfoDouble(ACCOUNT_BALANCE);
-   sState.account[1] = (float)AccountInfoDouble(ACCOUNT_EQUITY);
-   sState.account[2] = (float)AccountInfoDouble(ACCOUNT_MARGIN_FREE);
-   sState.account[3] = (float)AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
-   sState.account[4] = (float)AccountInfoDouble(ACCOUNT_PROFIT);
+   sState.account[0]=(float)AccountInfoDouble(ACCOUNT_BALANCE);
+   sState.account[1]=(float)AccountInfoDouble(ACCOUNT_EQUITY);
+   sState.account[2]=(float)AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   sState.account[3]=(float)AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
+   sState.account[4]=(float)AccountInfoDouble(ACCOUNT_PROFIT);
 //---
-   double buy_value = 0, sell_value = 0, buy_profit = 0, sell_profit = 0;
-   int total = PositionsTotal();
-   for(int i = 0; i < total; i++)
+   double buy_value=0,sell_value=0,buy_profit=0,sell_profit=0;
+   int    total=PositionsTotal();
+   for(int i=0; i<total; i++)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
       switch((int)PositionGetInteger(POSITION_TYPE))
         {
@@ -225,207 +238,219 @@ void OnTick()
             break;
         }
      }
-   sState.account[5] = (float)buy_value;
-   sState.account[6] = (float)sell_value;
-   sState.account[7] = (float)buy_profit;
-   sState.account[8] = (float)sell_profit;
+   sState.account[5]=(float)buy_value;
+   sState.account[6]=(float)sell_value;
+   sState.account[7]=(float)buy_profit;
+   sState.account[8]=(float)sell_profit;
 //---
    State1.AssignArray(sState.state);
-   State1.Add((sState.account[0] - prev_balance) / prev_balance);
+   State1.Add((sState.account[0]-prev_balance) / prev_balance);
    State1.Add(sState.account[1] / prev_balance);
-   State1.Add((sState.account[1] - prev_equity) / prev_equity);
+   State1.Add((sState.account[1]-prev_equity) / prev_equity);
    State1.Add(sState.account[2] / prev_balance);
    State1.Add(sState.account[4] / prev_balance);
    State1.Add(sState.account[5]);
    State1.Add(sState.account[6]);
    State1.Add(sState.account[7] / prev_balance);
    State1.Add(sState.account[8] / prev_balance);
-   prev_balance = sState.account[0];
-   prev_equity = sState.account[1];
+   prev_balance=sState.account[0];
+   prev_equity=sState.account[1];
 //---
-   if(!Scheduler.feedForward(GetPointer(State1), 1, false,(CBufferFloat*)NULL))
+   if(!Scheduler.feedForward(GetPointer(State1),1,false,(CBufferFloat*)NULL))
       return;
-   if(!Scheduler.GetLayerOutput(LatentLayer, Result))
+
+   if(!Scheduler.GetLayerOutput(LatentLayer,Result))
       return;
-   vector<float> temp;
+
+   vector<float>temp;
    Result.GetData(temp);
-   float delta = MathAbs(prev_scheduler - temp).Sum();
-   prev_scheduler = temp;
+   float delta=MathAbs(prev_scheduler-temp).Sum();
+   prev_scheduler=temp;
    temp.Resize(NSkills);
-   int skill = (int)temp.ArgMax();
+   int skill=(int)temp.ArgMax();
    skills_count[skill]++;
 //---
-   if(!Actor.feedForward(Result, 1, false))
+   if(!Actor.feedForward(Result,1,false))
       return;
+
    Actor.getResults(Result);
    Result.GetData(temp);
-   delta = MathAbs(prev_actor - temp).Sum();
-   prev_actor = temp;
-   int act = Actor.getAction();
+   delta=MathAbs(prev_actor-temp).Sum();
+   prev_actor=temp;
+   int act=Actor.getAction();
    switch(act)
      {
       case 0:
-         if(!Trade.Buy(Symb.LotsMin(), Symb.Name()))
-            act = 3;
+         if(!Trade.Buy(Symb.LotsMin(),Symb.Name()))
+            act=3;
          break;
       case 1:
-         if(!Trade.Sell(Symb.LotsMin(), Symb.Name()))
-            act = 3;
+         if(!Trade.Sell(Symb.LotsMin(),Symb.Name()))
+            act=3;
          break;
       case 2:
-         for(int i = PositionsTotal() - 1; i >= 0; i--)
-            if(PositionGetSymbol(i) == Symb.Name())
+         for(int i=PositionsTotal()-1; i>=0; i--)
+            if(PositionGetSymbol(i)==Symb.Name())
                if(!Trade.PositionClose(PositionGetInteger(POSITION_IDENTIFIER)))
                  {
-                  act = 3;
+                  act=3;
                   break;
                  }
          break;
      }
 //---
-   float reward = 0;
-   if(Base.Total > 0)
-      reward = (sState.account[0] - Base.States[Base.Total - 1].account[0]) / 10;
-   if(!Base.Add(sState, act, reward))
+   float reward=0;
+   if(Base.Total>0)
+      reward=(sState.account[0]-Base.States[Base.Total-1].account[0]) / 10;
+   if(!Base.Add(sState,act,reward))
       ExpertRemove();
 //---
   }
 //+------------------------------------------------------------------+
-//| Tester function                                                |
+//| Tester function                                                  |
 //+------------------------------------------------------------------+
-//| | Strategy tester callback.                                      |
+//| OnTester - | Strategy tester callback.                           |
 //+------------------------------------------------------------------+
 double OnTester()
   {
 //---
-   double ret = 0.0;
+   double ret=0.0;
 //---
    LoadTotalBase();
-   double profit = TesterStatistics(STAT_PROFIT);
-   int total = ArraySize(Buffer);
-   if(ArrayResize(Buffer, total + 1, 0) < 0)
+   double profit=TesterStatistics(STAT_PROFIT);
+   int    total=ArraySize(Buffer);
+   if(ArrayResize(Buffer,total+1,0)<0)
       return(ret);
-   Buffer[total] = Base;
+   Buffer[total]=Base;
    SaveTotalBase();
 //---
    return(ret);
   }
 //+------------------------------------------------------------------+
-//| TesterInit function                                            |
+//| TesterInit function                                              |
 //+------------------------------------------------------------------+
-//| | Tester initialization handler.                                 |
+//| OnTesterInit - | Tester initialization handler.                  |
 //+------------------------------------------------------------------+
 void OnTesterInit()
   {
 //---
   }
 //+------------------------------------------------------------------+
-//| TesterPass function                                            |
+//| TesterPass function                                              |
 //+------------------------------------------------------------------+
-//| | Tester pass callback.                                          |
+//| OnTesterPass - | Tester pass callback.                           |
 //+------------------------------------------------------------------+
 void OnTesterPass()
   {
 //---
-   ulong pass;
-   string name;
-   long id;
-   double value;
+   ulong       pass;
+   string      name;
+   long        id;
+   double      value;
    STrajectory array[];
-   while(FrameNext(pass, name, id, value, array))
+   while(FrameNext(pass,name,id,value,array))
      {
-      int total = ArraySize(Buffer);
-      if(name != MQLInfoString(MQL_PROGRAM_NAME))
+      int total=ArraySize(Buffer);
+      if(name!=MQLInfoString(MQL_PROGRAM_NAME))
          continue;
-      if(id <= 0)
+      if(id<=0)
          continue;
      }
   }
 //+------------------------------------------------------------------+
-//| TesterDeinit function                                            |
+//| OnTesterDeinit - testerDeinit function                           |
 //+------------------------------------------------------------------+
 void OnTesterDeinit()
   {
 //---
-   int total = ArraySize(Buffer);
-   printf("total %d", total);
+   int total=ArraySize(Buffer);
+   printf("total %d",total);
    Print("Saving...");
    SaveTotalBase();
    Print("Saved");
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Checks NewBar.                                                 |
+//| IsNewBar - | Checks NewBar.                                      |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
-   static datetime last_bar = 0;
-   if(last_bar >= iTime(Symb.Name(), TimeFrame, 0))
-      return false;
+   static datetime last_bar=0;
+   if(last_bar>=iTime(Symb.Name(),TimeFrame,0))
+      return(false);
 //---
-   last_bar = iTime(Symb.Name(), TimeFrame, 0);
-   return true;
+   last_bar=iTime(Symb.Name(),TimeFrame,0);
+
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Saves TotalBase.                                               |
+//| SaveTotalBase - | Saves TotalBase.                               |
 //+------------------------------------------------------------------+
 bool SaveTotalBase(void)
   {
-   int total = ArraySize(Buffer);
-   if(total < 0)
-      return true;
-   int handle = FileOpen(FileName + ".bd", FILE_WRITE | FILE_BIN | FILE_COMMON);
-   if(handle < 0)
-      return false;
-   if(FileWriteInteger(handle, total) < INT_VALUE)
+   int total=ArraySize(Buffer);
+   if(total<0)
+      return(true);
+
+   int handle=FileOpen(FileName+".bd",FILE_WRITE | FILE_BIN | FILE_COMMON);
+   if(handle<0)
+      return(false);
+
+   if(FileWriteInteger(handle,total)<INT_VALUE)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
       if(!Buffer[i].Save(handle))
         {
          FileClose(handle);
-         return false;
+
+         return(false);
         }
    FileFlush(handle);
    FileClose(handle);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Loads TotalBase.                                               |
+//| LoadTotalBase - | Loads TotalBase.                               |
 //+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
-   int handle = FileOpen(FileName + ".bd", FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
-   if(handle < 0)
-      return false;
-   int total = FileReadInteger(handle);
-   if(total <= 0)
+   int handle=FileOpen(FileName+".bd",FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
+   if(handle<0)
+      return(false);
+
+   int total=FileReadInteger(handle);
+   if(total<=0)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   if(ArrayResize(Buffer, total) < total)
+   if(ArrayResize(Buffer,total)<total)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
       if(!Buffer[i].Load(handle))
         {
          FileClose(handle);
-         return false;
+
+         return(false);
         }
    FileClose(handle);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
 

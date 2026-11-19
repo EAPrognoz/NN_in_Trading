@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_RecurrentState.mqh                                      |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                      NeuroNet_RecurrentState.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| Logical method implementations generated from NeuroNet.mqh:      |
@@ -373,7 +374,7 @@ bool CNeuronLSTM::calcHiddenGradients(CLayer*&nextLayer)
         }
       gate.setGradient(gate.getOutputVal()!=0&&temp.getGradient()!=0?temp.getGradient()*temp.getOutputVal()*SigmoidFunctionDerivative(gate.getOutputVal())/gate.getOutputVal():0);
 
-      //--- calcculated gates and new content gradients
+   //--- calcculated gates and new content gradients
       gate=ForgetGate.At(i);
 
       if(CheckPointer(gate)==POINTER_INVALID)
@@ -459,7 +460,7 @@ bool CNeuronLSTM::calcHiddenGradients(CLayer*&nextLayer)
 
       gate.setGradient(gate.getGradient()+(gate.getPrevVal()!=0&&temp.getGradient()!=0?temp.getGradient()*temp.getPrevVal()*SigmoidFunctionDerivative(gate.getPrevVal())/gate.getPrevVal():0));
 
-      //--- calcculated gates and new content gradients
+   //--- calcculated gates and new content gradients
       gate=ForgetGate.At(i);
 
       if(CheckPointer(gate)==POINTER_INVALID)
@@ -654,7 +655,8 @@ CNeuronLSTMOCL::CNeuronLSTMOCL(void):m_iMemory(-1),
    m_iWeightsGradient(-1),
    m_iInputs(-1),
    m_iVariables(1)
-  {}
+  {
+  }
 //+------------------------------------------------------------------+
 //| ~CNeuronLSTMOCL - Destructor: releases the CNeuronLSTMOCL GPU... |
 //+------------------------------------------------------------------+
@@ -1263,10 +1265,7 @@ bool CNeuronSSMOCL::Load(const int file_handle)
    if(!CNeuronBaseOCL::Load(file_handle))
       ReturnFalse;
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iWindowHidden=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iWindowHidden)
 
 //---
    if(!LoadInsideLayer(file_handle,cA.AsObject()))
@@ -1708,10 +1707,7 @@ bool CNeuronMambaBlockOCL::Load(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iWindow=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iWindow)
 
 //---
    if(!LoadInsideLayer(file_handle,cMamba.AsObject()))

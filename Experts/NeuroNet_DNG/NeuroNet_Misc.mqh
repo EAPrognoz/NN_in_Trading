@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_Misc.mqh                                                |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                                NeuroNet_Misc.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| Logical method implementations generated from NeuroNet.mqh:      |
@@ -3005,15 +3006,9 @@ bool CNeuronTempEmbedding::Load(const int file_handle)
          ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
+   dFileReadUInt(file_handle,iWindow)
 
-   iWindow=(uint)FileReadInteger(file_handle);
-
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iUnits=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iUnits)
 
    for(uint i=0;i<caEmbeddings.Size();i++)
      {
@@ -4292,7 +4287,7 @@ bool CNeuronBayesianLinearOCL::BackwardSamplesBatch(CBufferFloat*batch_input,
                            rows_per_group))
          ReturnFalseEx("Bayesian batch backward: bias gradient");
 
-      //--- restore the affine bias sum without scaling the per-row matrix gradient.
+   //--- restore the affine bias sum without scaling the per-row matrix gradient.
       if(rows_per_group>1&&
          !SumAndNormalize(cSampleBias.getGradient(),cSampleBias.getGradient(),
                           cSampleBias.getGradient(),iOutputs,false,0,0,0,
@@ -4314,7 +4309,7 @@ bool CNeuronBayesianLinearOCL::BackwardSamplesBatch(CBufferFloat*batch_input,
       if(!cPosterior.CalcHiddenGradients(sample))
          ReturnFalseEx("Bayesian batch backward: random sampler gradient");
 
-      //--- preserve exact affine mean gradients while retaining the VAE log-variance path.
+   //--- preserve exact affine mean gradients while retaining the VAE log-variance path.
       if(!DeConcat(cSampleWeights.getGradient(),cSampleBias.getGradient(),
                    cSampleWeights.getOutput(),cSampleBias.getOutput(),
                    cPosterior.getGradient(),w,b,w,b,1))

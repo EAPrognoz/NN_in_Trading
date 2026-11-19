@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
 //|                                            NeuroNet_AgentsRL.mqh |
-//|                                             мCopyright 2026, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| Logical method implementations generated from NeuroNet.mqh:      |
@@ -467,7 +468,7 @@ bool CNeuronFQF::Load(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the layer info of the CNeuronFQF.                        |
+//| GetLayerInfo - returns the layer info of the CNeuronFQF.         |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronFQF::GetLayerInfo(void)
   {
@@ -707,8 +708,8 @@ bool CNeuronACSRM::propagateACSRMGradients(CNeuronBaseOCL*NeuronOCL)
       uint global_work_size[2];
       global_work_size[0]=inputs;
 
-      //--- spec 16: FQF_FractionGradient local_size[0] == 1 (reduction
-      //--- strictly along dimension 1) and local_size[1] <= LOCAL_ARRAY_SIZE
+   //--- spec 16: FQF_FractionGradient local_size[0] == 1 (reduction
+   //--- strictly along dimension 1) and local_size[1] <= LOCAL_ARRAY_SIZE
       global_work_size[1]=(uint)MathMin(MathMin((outputs+3)/4,OpenCL.GetMaxLocalSize(1)),
                                         defFQF_LOCAL_ARRAY_SIZE);
       uint local_work_size[2]={1,global_work_size[1]};
@@ -718,7 +719,7 @@ bool CNeuronACSRM::propagateACSRMGradients(CNeuronBaseOCL*NeuronOCL)
       setArgument(def_k_FQF_FractionGradient,def_k_fqffg_outputs,(int)outputs);
       kernelExecuteLoc(def_k_FQF_FractionGradient,global_work_offset,global_work_size,local_work_size)
 
-      //--- neuronOCL.Gradient = value_path + fraction_branch
+   //--- neuronOCL.Gradient = value_path + fraction_branch
         {
          uint sum_work_offset[1]={0};
          uint sum_work_size[1]={inputs};
@@ -3284,25 +3285,13 @@ bool CNeuronPortfolioGenerator::Load(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
+   dFileReadUInt(file_handle,iAssets)
 
-   iAssets=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iTimePoints)
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
+   dFileReadUInt(file_handle,iAgents)
 
-   iTimePoints=(uint)FileReadInteger(file_handle);
-
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iAgents=(uint)FileReadInteger(file_handle);
-
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iDimension=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iDimension)
 
 //---
    return(true);
@@ -7127,15 +7116,9 @@ bool CNeuronHiSSDLowLevelControler::Load(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
+   dFileReadUInt(file_handle,iTaskSkills)
 
-   iTaskSkills=(uint)FileReadInteger(file_handle);
-
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iCommonSkills=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iCommonSkills)
 
 //---
    if(!LoadInsideLayer(file_handle,cTaskSpecificSkillsEncoder.AsObject()))
@@ -7220,6 +7203,7 @@ bool DPCCBuildRolloutLayout(const SDPCCShape&shape,SDPCCLayout&layout)
 
    if(shape.K>64||shape.J>64||shape.NActions!=6||shape.StateSize!=13||shape.Depth!=0)
       return(false);
+
    ulong kh;
    ulong mk;
    ulong width;
@@ -7253,6 +7237,7 @@ bool DPCCBuildRolloutLayout(const SDPCCShape&shape,SDPCCLayout&layout)
 
    if(!DPCCRolloutProduct(kh,4,layout.lengths[0]))
       return(false);
+
    layout.lengths[1]=24;
    layout.lengths[2]=48;
    layout.lengths[3]=24;
@@ -7298,6 +7283,7 @@ bool DPCCReadFinancialDescriptor(CLayerDescription*desc,SDPCCShape&shape,const i
       desc.batch==0||(desc.optimization!=SGD&&desc.optimization!=ADAM&&desc.optimization!=ADAM_MINI))
 
       return(false);
+
    shape.K=desc.windows[1];
    shape.V=desc.windows[2];
    shape.H=desc.windows[3];
@@ -7342,6 +7328,7 @@ bool DPCCValidateFixedConfig(const SDPCCShape&shape,const SDPCCConfig&config)
       config.loss_coordinates!=DPCC_LOSS_NORMALIZED||config.randomness_version!=DPCC_RANDOM_INDEXED_NORMAL_V1)
 
       return(false);
+
    const double nonnegative[]={config.projection_improvement_atol,config.projection_distance_tie_atol,
                                  config.max_quote_age_seconds,config.max_last_age_seconds
                                 };
@@ -7389,7 +7376,7 @@ bool DPCCValidateFixedConfig(const SDPCCShape&shape,const SDPCCConfig&config)
 //+------------------------------------------------------------------+
 ulong DPCCFixedSignature(const SDPCCConfig&config,const uint type)
   {
-   ulong      hash=ulong(14695981039346656037);
+   ulong hash=ulong(14695981039346656037);
    const uint integers[]={type,config.contract_version,config.binary_layer_version,
                             config.shape.K,config.shape.V,config.shape.H,config.shape.D,
                             config.shape.M,config.shape.J,config.shape.E,config.shape.PlanBatch,
@@ -7593,6 +7580,7 @@ bool CNeuronScenarioRolloutOCL::Init(uint numOutputs,uint myIndex,COpenCLMy*open
 //--- numOutputs represents graph connections, not financial-layer parameters.
    if(!CNeuronBaseOCL::Init(0,myIndex,open_cl,desc.count,desc.optimization,desc.batch))
       return(Fail(DPCC_OPENCL_ERROR,true));
+
    m_myIndex=(int)myIndex;
    activation=None;
    bTrain=false;
@@ -7614,6 +7602,7 @@ bool CNeuronScenarioRolloutOCL::Init(uint numOutputs,uint myIndex,COpenCLMy*open
 
    if(!EnsureBuffer(m_slice_active,1,1))
       return(Fail(m_status,true));
+
    SDPCCShape phase_shape=m_shape;
    phase_shape.H=1;
    phase_shape.M=1;
@@ -7655,6 +7644,7 @@ bool CNeuronScenarioRolloutOCL::Configure(const SDPCCConfig&config)
 
    if(m_fixed&&ConfigSignature(config)!=ConfigSignature(m_config))
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_config=config;
    m_configured=true;
    m_phase=DPCC_LAYER_CONFIGURED;
@@ -7777,7 +7767,7 @@ bool CNeuronScenarioRolloutOCL::RolloutPlans(CBufferFloat*plans,const uint plan_
                                              uint         episode_horizon,float training_floor,
                                              CBufferFloat *step_rewards,CBufferFloat*executed_mask)
   {
-   const int    kernel=def_k_DPCCRollout;
+   const int kernel=def_k_DPCCRollout;
    CBufferFloat *buffers[]={plans,context,active,returns_out,states_out,violations_out,
                               m_system,diagnostics_out
                              };
@@ -7785,6 +7775,7 @@ bool CNeuronScenarioRolloutOCL::RolloutPlans(CBufferFloat*plans,const uint plan_
    for(uint arg=0;arg<8;arg++)
       if(!OpenCL.SetArgumentBuffer(kernel,arg,buffers[arg].GetIndex()))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const uint integers[]={plan_offset,slots,m_shape.K,m_shape.H,m_shape.E,m_shape.M,
                             (uint)m_layout.offsets[1],(uint)m_layout.offsets[2],
                             (uint)m_layout.offsets[3],(uint)m_layout.offsets[4],
@@ -7795,6 +7786,7 @@ bool CNeuronScenarioRolloutOCL::RolloutPlans(CBufferFloat*plans,const uint plan_
    for(uint arg=0;arg<(uint)ArraySize(integers);arg++)
       if(!OpenCL.SetArgument(kernel,arg+8,integers[arg]))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const float reals[]={m_config.gamma,(float)m_config.volume_scale,(float)m_config.price_scale,
                           (float)m_config.max_quote_age_seconds,(float)m_config.max_last_age_seconds
                          };
@@ -8112,6 +8104,7 @@ bool CNeuronScenarioRolloutOCL::EvaluateOneBar(CBufferFloat*plans,const uint pla
       !ValidateBuffer(status_out,m_shape.K,true)||!ValidateBuffer(diagnostics_out,diagnostic_count,true))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *inputs[]={plans,rollout_context,state_in};
    CBufferFloat *outputs[]={state_out,rewards_out,status_out,diagnostics_out};
    CBufferFloat *owned[]={Output,PrevOutput,Gradient,m_states,m_validity,m_violations,
@@ -8142,6 +8135,7 @@ bool CNeuronScenarioRolloutOCL::EvaluateOneBar(CBufferFloat*plans,const uint pla
 
    if(!ValidateInputAliases(plans,state_in,rollout_context))
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const int    kernel=def_k_DPCCRolloutStep;
    CBufferFloat *state_source=(initialize?rollout_context:state_in);
    CBufferFloat *buffers[]={plans,rollout_context,state_source,state_out,rewards_out,
@@ -8151,6 +8145,7 @@ bool CNeuronScenarioRolloutOCL::EvaluateOneBar(CBufferFloat*plans,const uint pla
    for(uint argument=0;argument<(uint)ArraySize(buffers);argument++)
       if(!OpenCL.SetArgumentBuffer(kernel,argument,buffers[argument].GetIndex()))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const uint integers[]={plan_offset,m_shape.K,m_shape.E,step_shape.M,
                             (uint)step_layout.offsets[1],(uint)step_layout.offsets[2],
                             (uint)step_layout.offsets[3],(uint)step_layout.offsets[4],
@@ -8162,6 +8157,7 @@ bool CNeuronScenarioRolloutOCL::EvaluateOneBar(CBufferFloat*plans,const uint pla
    for(uint argument=0;argument<(uint)ArraySize(integers);argument++)
       if(!OpenCL.SetArgument(kernel,argument+7,integers[argument]))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const float reals[]={(float)m_config.gamma,(float)m_config.volume_scale,
                           (float)m_config.price_scale,(float)m_config.max_quote_age_seconds,
                           (float)m_config.max_last_age_seconds,(float)m_config.money_scale
@@ -8324,6 +8320,7 @@ bool CNeuronScenarioRolloutOCL::PrepareOpenInternal(CBufferFloat*rollout_context
 
    if(m_open_pending)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    SDPCCShape step_shape=m_shape;
    step_shape.H=1;
    step_shape.M=1;
@@ -8345,6 +8342,7 @@ bool CNeuronScenarioRolloutOCL::PrepareOpenInternal(CBufferFloat*rollout_context
       !ValidateBuffer(m_open_state,state_count,true)||!ValidateBuffer(m_open_risk,risk_count,true))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *inputs[]={rollout_context,state_in};
    CBufferFloat *outputs[]={prepared_state_out,prep_rewards_out,status_out,diagnostics_out};
    CBufferFloat *owned[]={Output,PrevOutput,Gradient,m_states,m_validity,m_violations,
@@ -8385,6 +8383,7 @@ bool CNeuronScenarioRolloutOCL::PrepareOpenInternal(CBufferFloat*rollout_context
 
    if(!CopyBufferRaw(rollout_context,m_open_context,(uint)step_layout.total))
       return(Fail(DPCC_OPENCL_ERROR));
+
    const int    kernel=def_k_DPCCRolloutPrepareOpen;
    CBufferFloat *state_source=(initialize?m_open_context:state_in);
    CBufferFloat *buffers[]={m_open_context,state_source,prepared_state_out,m_open_risk,
@@ -8394,6 +8393,7 @@ bool CNeuronScenarioRolloutOCL::PrepareOpenInternal(CBufferFloat*rollout_context
    for(uint argument=0;argument<(uint)ArraySize(buffers);argument++)
       if(!OpenCL.SetArgumentBuffer(kernel,argument,buffers[argument].GetIndex()))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const uint integers[]={m_shape.K,m_shape.E,step_shape.M,
                             (uint)step_layout.offsets[1],(uint)step_layout.offsets[2],
                             (uint)step_layout.offsets[3],(uint)step_layout.offsets[4],
@@ -8405,6 +8405,7 @@ bool CNeuronScenarioRolloutOCL::PrepareOpenInternal(CBufferFloat*rollout_context
    for(uint argument=0;argument<(uint)ArraySize(integers);argument++)
       if(!OpenCL.SetArgument(kernel,argument+7,integers[argument]))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const float reals[]={(float)m_config.gamma,(float)m_config.volume_scale,
                           (float)m_config.price_scale,(float)m_config.max_quote_age_seconds,
                           (float)m_config.max_last_age_seconds,(float)m_config.money_scale
@@ -8515,6 +8516,7 @@ bool CNeuronScenarioRolloutOCL::CommitPreparedActionInternal(CBufferFloat*plans,
       observed_commit!=m_open_observed)
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const ulong state_count=(ulong)m_shape.K*DPCC_CONTINUATION_FLOATS;
    const ulong risk_count=(ulong)m_shape.K*DPCC_NATIVE_PENDING_PHASE_FLOATS;
    const ulong diagnostic_count=(ulong)m_shape.K*4;
@@ -8539,6 +8541,7 @@ bool CNeuronScenarioRolloutOCL::CommitPreparedActionInternal(CBufferFloat*plans,
       (!observed_commit&&factual_context!=m_open_context))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *inputs[]={plans,m_open_context,m_open_state,m_open_risk,factual_context};
    CBufferFloat *outputs[]={close_state_out,suffix_rewards_out,status_out,diagnostics_out};
    CBufferFloat *owned[]={Output,PrevOutput,Gradient,m_states,m_validity,m_violations,
@@ -8577,7 +8580,7 @@ bool CNeuronScenarioRolloutOCL::CommitPreparedActionInternal(CBufferFloat*plans,
          if(SharesDevice(outputs[i],owned[j]))
             return(Fail(DPCC_CONTRACT_MISMATCH));
      }
-   const int    kernel=def_k_DPCCRolloutCommitAction;
+   const int kernel=def_k_DPCCRolloutCommitAction;
    CBufferFloat *buffers[]={(apply_action?plans:m_open_state),m_open_context,m_open_state,m_open_risk,factual_context,
                               close_state_out,suffix_rewards_out,status_out,diagnostics_out
                              };
@@ -8585,6 +8588,7 @@ bool CNeuronScenarioRolloutOCL::CommitPreparedActionInternal(CBufferFloat*plans,
    for(uint argument=0;argument<(uint)ArraySize(buffers);argument++)
       if(!OpenCL.SetArgumentBuffer(kernel,argument,buffers[argument].GetIndex()))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const uint integers[]={plan_offset,m_shape.K,m_shape.E,step_shape.M,
                             (uint)step_layout.offsets[1],(uint)step_layout.offsets[2],
                             (uint)step_layout.offsets[3],(uint)step_layout.offsets[4],
@@ -8596,6 +8600,7 @@ bool CNeuronScenarioRolloutOCL::CommitPreparedActionInternal(CBufferFloat*plans,
    for(uint argument=0;argument<(uint)ArraySize(integers);argument++)
       if(!OpenCL.SetArgument(kernel,argument+9,integers[argument]))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const float reals[]={(float)m_config.gamma,(float)m_config.volume_scale,
                           (float)m_config.price_scale,(float)m_config.max_quote_age_seconds,
                           (float)m_config.max_last_age_seconds,(float)m_config.money_scale
@@ -8810,6 +8815,7 @@ bool CNeuronScenarioRolloutOCL::Save(const int file_handle)
       !ValidateConfig(m_config))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const uint header[]={defNeuronScenarioRolloutOCL,(m_config.margin_fx_profile==DPCC_MARGIN_HISTORICAL_CLOSE_V1?DPCC_HISTORICAL_FX_ENVELOPE_VERSION:
                           (m_config.margin_fx_profile==DPCC_MARGIN_EXTERNAL_V2?DPCC_BINARY_LAYER_VERSION:DPCC_FINANCIAL_ENVELOPE_VERSION)),DPCC_CONTRACT_VERSION,
                           m_shape.K,m_shape.V,m_shape.H,m_shape.D,m_shape.M,m_shape.J,m_shape.E,
@@ -8821,6 +8827,7 @@ bool CNeuronScenarioRolloutOCL::Save(const int file_handle)
    for(uint i=0;i<(uint)ArraySize(header);i++)
       if(FileWriteInteger(file_handle,(int)header[i],INT_VALUE)!=INT_VALUE)
          return(Fail(DPCC_INVALID_INPUT));
+
    const uint integers[]={(uint)m_config.mode,m_config.projection_max_iterations,
                             m_config.projection_max_evaluations,m_config.projection_lookback_steps,
                             m_config.price_basis,m_config.quote_adapter,m_config.event_model,
@@ -8837,6 +8844,7 @@ bool CNeuronScenarioRolloutOCL::Save(const int file_handle)
        FileWriteInteger(file_handle,(int)m_config.account_currency_digits,INT_VALUE)!=INT_VALUE))
 
       return(Fail(DPCC_INVALID_INPUT));
+
    const double reals[]={m_config.projection_improvement_atol,m_config.projection_distance_tie_atol,
                            m_config.volume_scale,m_config.price_scale,m_config.money_scale,
                            m_config.max_quote_age_seconds,m_config.max_last_age_seconds
@@ -8845,6 +8853,7 @@ bool CNeuronScenarioRolloutOCL::Save(const int file_handle)
    for(uint i=0;i<(uint)ArraySize(reals);i++)
       if(FileWriteDouble(file_handle,reals[i])!=sizeof(double))
          return(Fail(DPCC_INVALID_INPUT));
+
    const float scalars[]={m_config.risk_parameter,m_config.mean_weight,m_config.gamma,
                             m_config.probability_tolerance
                            };
@@ -8893,6 +8902,7 @@ bool CNeuronScenarioRolloutOCL::Load(const int file_handle)
        FileSize(file_handle)-FileTell(file_handle)<248-19*INT_VALUE+2*INT_VALUE))
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    CLayerDescription desc;
    desc.type=defNeuronScenarioRolloutOCL;
    desc.window=6;
@@ -8920,12 +8930,14 @@ bool CNeuronScenarioRolloutOCL::Load(const int file_handle)
 
    if(count>INT_MAX)
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    desc.count=(uint)count;
    SDPCCConfig candidate;
    ZeroMemory(candidate);
 
    if(!ReadDescriptor(GetPointer(desc),candidate.shape))
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    candidate.contract_version=DPCC_CONTRACT_VERSION;
    candidate.binary_layer_version=DPCC_BINARY_LAYER_VERSION;
    candidate.mode=(ENUM_DPCC_MODE)FileReadInteger(file_handle);
@@ -8995,6 +9007,7 @@ bool CNeuronScenarioRolloutOCL::Clear(void)
 
    if(m_phase==DPCC_LAYER_CONSTRUCTED||m_phase==DPCC_LAYER_FAILED)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={Output,PrevOutput,Gradient,m_states,m_validity,m_violations,
                               m_diagnostics,m_return_scratch,m_state_scratch,m_violation_scratch,
                               m_validity_scratch,m_diagnostic_scratch,m_system,m_aggregate,
@@ -9028,6 +9041,7 @@ bool CNeuronScenarioRolloutOCL::SetOpenCLChecked(COpenCLMy*obj)
 
    if(!obj||!SupportsOpenCLChecked()||m_phase==DPCC_LAYER_CONSTRUCTED||m_phase==DPCC_LAYER_FAILED)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={m_states,m_validity,m_violations,m_diagnostics,m_return_scratch,
                               m_state_scratch,m_violation_scratch,m_validity_scratch,
                               m_diagnostic_scratch,m_system,m_aggregate,m_slice_active,
@@ -9068,6 +9082,7 @@ CLayerDescription*CNeuronScenarioRolloutOCL::GetLayerInfo(void)
 
    if(!desc)
       return(NULL);
+
    desc.type=Type();
    desc.count=m_shape.M*m_shape.K;
    desc.window=6;
@@ -9165,6 +9180,7 @@ bool CNeuronPlanProjectionOCL::WorkspaceSizes(ulong&counts[])const
 
    if(!DPCCBuildRolloutLayout(m_shape,checked)||ArrayResize(counts,DPCC_PW_COUNT)!=DPCC_PW_COUNT)
       return(false);
+
    const ulong mh6=(ulong)m_shape.M*m_shape.H*6;
    const ulong mk=(ulong)m_shape.M*m_shape.K;
    const ulong mp=(ulong)m_shape.M*9;
@@ -9217,6 +9233,7 @@ bool CNeuronPlanProjectionOCL::ValidateWorkspace(CBufferFloat*plans,CBufferFloat
 
    if(ArrayResize(owned,DPCC_PW_COUNT+3)!=DPCC_PW_COUNT+3)
       return(false);
+
    owned[0]=Output;
    owned[1]=PrevOutput;
    owned[2]=Gradient;
@@ -9293,6 +9310,7 @@ bool CNeuronPlanProjectionOCL::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
       !CNeuronBaseOCL::Init(0,myIndex,open_cl,desc.count,desc.optimization,desc.batch))
 
       return(Fail(DPCC_OPENCL_ERROR,true));
+
    m_myIndex=(int)myIndex;
    activation=None;
    bTrain=false;
@@ -9316,6 +9334,7 @@ bool CNeuronPlanProjectionOCL::Configure(const SDPCCConfig&config)
       (m_fixed&&ConfigSignature(config)!=ConfigSignature(m_config)))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_config=config;
    m_configured=true;
    m_rollout=NULL;
@@ -9338,6 +9357,7 @@ bool CNeuronPlanProjectionOCL::BindRollout(CNeuronScenarioRolloutOCL*rollout)
       !rollout.MatchesProjectionContract(m_shape,m_config,OpenCL)||!ValidateWorkspace())
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_rollout=rollout;
    m_phase=DPCC_LAYER_READY;
    m_status=DPCC_OK;
@@ -9408,6 +9428,7 @@ bool CNeuronPlanProjectionOCL::ExecuteRows(const int kernel,const uint rows)
 
    if(OpenCL.Execute(kernel,1,offset,global))
       return(true);
+
    string error="";
    CLGetInfoString(OpenCL.GetContext(),CL_ERROR_DESCRIPTION,error);
    PrintFormat("DPCC_PROJECTION_FAIL operation=execute_kernel kernel=%s rows=%u error=%s",
@@ -9452,7 +9473,7 @@ bool CNeuronPlanProjectionOCL::ReadCommon(const uint mode,uint&verdict)
 //+------------------------------------------------------------------+
 bool CNeuronPlanProjectionOCL::ValidatePlans(CBufferFloat*plans,CBufferFloat*context)
   {
-   const int    kernel=def_k_DPCCProjectionInit;
+   const int kernel=def_k_DPCCProjectionInit;
    CBufferFloat *buffers[]={plans,context,m_work[DPCC_PW_ORIGINAL],m_work[DPCC_PW_CURRENT],
                               m_work[DPCC_PW_BASE_ACTIVE],m_work[DPCC_PW_FINAL_ACTIVE],
                               m_work[DPCC_PW_CONTROL]
@@ -9468,7 +9489,7 @@ bool CNeuronPlanProjectionOCL::ValidatePlans(CBufferFloat*plans,CBufferFloat*con
 //+------------------------------------------------------------------+
 bool CNeuronPlanProjectionOCL::Summarize(const bool proposals,CBufferFloat*plans,CBufferFloat*active)
   {
-   const int    kernel=def_k_DPCCProjectionSummary;
+   const int kernel=def_k_DPCCProjectionSummary;
    CBufferFloat *buffers[]={plans,m_work[DPCC_PW_ORIGINAL],active,
                               m_work[proposals?DPCC_PW_PROPOSAL_RETURN:DPCC_PW_BASE_RETURN],
                               m_work[proposals?DPCC_PW_PROPOSAL_STATE:DPCC_PW_BASE_STATE],
@@ -9486,7 +9507,7 @@ bool CNeuronPlanProjectionOCL::Summarize(const bool proposals,CBufferFloat*plans
 //+------------------------------------------------------------------+
 bool CNeuronPlanProjectionOCL::BuildRepairIndexOrder(CBufferFloat*context,const uint stage)
   {
-   const int    kernel=def_k_DPCCProjectionPrepare;
+   const int kernel=def_k_DPCCProjectionPrepare;
    CBufferFloat *buffers[]={m_work[DPCC_PW_CURRENT],context,m_work[DPCC_PW_BASE_SUMMARY],
                               m_work[DPCC_PW_CONTROL],m_work[DPCC_PW_BASE_ACTIVE],
                               m_work[DPCC_PW_FINAL_ACTIVE],m_work[DPCC_PW_ORDER]
@@ -9504,7 +9525,7 @@ bool CNeuronPlanProjectionOCL::BuildRepairIndexOrder(CBufferFloat*context,const 
 //+------------------------------------------------------------------+
 bool CNeuronPlanProjectionOCL::BuildLocalProposals(CBufferFloat*context)
   {
-   const int    kernel=def_k_DPCCProjectionProposals;
+   const int kernel=def_k_DPCCProjectionProposals;
    CBufferFloat *buffers[]={m_work[DPCC_PW_CURRENT],context,m_work[DPCC_PW_CONTROL],
                               m_work[DPCC_PW_ORDER],m_work[DPCC_PW_PROPOSAL],
                               m_work[DPCC_PW_PROPOSAL_ACTIVE]
@@ -9535,7 +9556,7 @@ bool CNeuronPlanProjectionOCL::EvaluateProposals(CBufferFloat*context)
 //+------------------------------------------------------------------+
 bool CNeuronPlanProjectionOCL::SelectImprovement(void)
   {
-   const int    kernel=def_k_DPCCProjectionSelect;
+   const int kernel=def_k_DPCCProjectionSelect;
    CBufferFloat *buffers[]={m_work[DPCC_PW_PROPOSAL],m_work[DPCC_PW_PROPOSAL_ACTIVE],
                               m_work[DPCC_PW_PROPOSAL_SUMMARY],m_work[DPCC_PW_CURRENT],
                               m_work[DPCC_PW_CONTROL],m_work[DPCC_PW_ORDER],
@@ -9567,7 +9588,8 @@ bool CNeuronPlanProjectionOCL::VerifyProjection(CBufferFloat*context)
 
    if(!Summarize(false,m_work[DPCC_PW_CURRENT],m_work[DPCC_PW_FINAL_ACTIVE]))
       return(false);
-   const int    kernel=def_k_DPCCProjectionPublish;
+
+   const int kernel=def_k_DPCCProjectionPublish;
    CBufferFloat *buffers[]={m_work[DPCC_PW_ORIGINAL],m_work[DPCC_PW_CURRENT],
                               m_work[DPCC_PW_BASE_SUMMARY],m_work[DPCC_PW_CONTROL],
                               m_work[DPCC_PW_RESULT],m_work[DPCC_PW_COST_TEMP],
@@ -9831,6 +9853,7 @@ bool CNeuronPlanProjectionOCL::Save(const int file_handle)
       !ValidateConfig(m_config))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const uint header[]={defNeuronPlanProjectionOCL,(m_config.margin_fx_profile==DPCC_MARGIN_HISTORICAL_CLOSE_V1?DPCC_HISTORICAL_FX_ENVELOPE_VERSION:
                           (m_config.margin_fx_profile==DPCC_MARGIN_EXTERNAL_V2?DPCC_BINARY_LAYER_VERSION:DPCC_FINANCIAL_ENVELOPE_VERSION)),DPCC_CONTRACT_VERSION,
                           m_shape.K,m_shape.V,m_shape.H,m_shape.D,m_shape.M,m_shape.J,m_shape.E,
@@ -9842,6 +9865,7 @@ bool CNeuronPlanProjectionOCL::Save(const int file_handle)
    for(uint i=0;i<(uint)ArraySize(header);i++)
       if(FileWriteInteger(file_handle,(int)header[i],INT_VALUE)!=INT_VALUE)
          return(Fail(DPCC_INVALID_INPUT));
+
    const uint integers[]={(uint)m_config.mode,m_config.projection_max_iterations,
                             m_config.projection_max_evaluations,m_config.projection_lookback_steps,
                             m_config.price_basis,m_config.quote_adapter,m_config.event_model,
@@ -9858,6 +9882,7 @@ bool CNeuronPlanProjectionOCL::Save(const int file_handle)
        FileWriteInteger(file_handle,(int)m_config.account_currency_digits,INT_VALUE)!=INT_VALUE))
 
       return(Fail(DPCC_INVALID_INPUT));
+
    const double reals[]={m_config.projection_improvement_atol,m_config.projection_distance_tie_atol,
                            m_config.volume_scale,m_config.price_scale,m_config.money_scale,
                            m_config.max_quote_age_seconds,m_config.max_last_age_seconds
@@ -9866,6 +9891,7 @@ bool CNeuronPlanProjectionOCL::Save(const int file_handle)
    for(uint i=0;i<(uint)ArraySize(reals);i++)
       if(FileWriteDouble(file_handle,reals[i])!=sizeof(double))
          return(Fail(DPCC_INVALID_INPUT));
+
    const float scalars[]={m_config.risk_parameter,m_config.mean_weight,m_config.gamma,
                             m_config.probability_tolerance
                            };
@@ -9914,6 +9940,7 @@ bool CNeuronPlanProjectionOCL::Load(const int file_handle)
        FileSize(file_handle)-FileTell(file_handle)<248-19*INT_VALUE+2*INT_VALUE))
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    CLayerDescription desc;
    desc.type=defNeuronPlanProjectionOCL;
    desc.window=6;
@@ -9941,12 +9968,14 @@ bool CNeuronPlanProjectionOCL::Load(const int file_handle)
 
    if(count>INT_MAX)
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    desc.count=(uint)count;
    SDPCCConfig candidate;
    ZeroMemory(candidate);
 
    if(!ReadDescriptor(GetPointer(desc),candidate.shape))
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    candidate.contract_version=DPCC_CONTRACT_VERSION;
    candidate.binary_layer_version=DPCC_BINARY_LAYER_VERSION;
    candidate.mode=(ENUM_DPCC_MODE)FileReadInteger(file_handle);
@@ -10007,7 +10036,7 @@ bool CNeuronPlanProjectionOCL::Load(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Projection GetLayerInfo contract                                 |
+//| GetLayerInfo - projection GetLayerInfo contract                  |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronPlanProjectionOCL::GetLayerInfo(void)
   {
@@ -10017,6 +10046,7 @@ CLayerDescription*CNeuronPlanProjectionOCL::GetLayerInfo(void)
 
    if(!desc)
       return(NULL);
+
    desc.type=Type();
    desc.count=m_shape.M*m_shape.H*6;
    desc.window=6;
@@ -10321,6 +10351,7 @@ bool DPCCIndexedNormalV1(const ulong seed,const long decision_time,
 
    if(ArrayResize(bytes,36)!=36)
       return(false);
+
    bytes[0]=68;
    bytes[1]=80;
    bytes[2]=67;
@@ -10540,6 +10571,7 @@ bool CNeuronPlanProjectionTraceOCL::TraceSizes(ulong&counts[])const
 
    if(scalars==0||scalars>(ulong)INT_MAX/2/m_trace_capacity)
       return(false);
+
    const ulong sizes[]={scalars*2,scalars*2,(ulong)m_shape.M*9*6*2,
                           (ulong)m_shape.M*9*6*2,scalars*2*m_trace_capacity,
                           scalars*2*m_trace_capacity,(ulong)m_shape.M*2,scalars,1
@@ -10585,6 +10617,7 @@ bool CNeuronPlanProjectionTraceOCL::ValidateTrace(CBufferFloat*first,CBufferFloa
       ArraySize(m_trace_slots)!=(int)m_trace_capacity)
 
       return(false);
+
    CBufferFloat *base[]={Output,PrevOutput,Gradient,Weights,
                            DeltaWeights,FirstMomentum,SecondMomentum
                           };
@@ -10664,6 +10697,7 @@ bool CNeuronPlanProjectionTraceOCL::InitTrace(uint index,COpenCLMy*open_cl,
 //--- parent Init calls virtual Clear before the trace buffers exist.
    if(!FreeTraceBuffers())
       return(false);
+
    m_trace_capacity=max_frames;
    m_trace_constructing=true;
    const bool initialized=CNeuronPlanProjectionOCL::Init(0,index,open_cl,GetPointer(parent));
@@ -10755,6 +10789,7 @@ bool CNeuronPlanProjectionTraceOCL::BeginTrace(const ulong decision_id,const uin
 
    if(!m_trace[DPCC_TW_ERROR].Fill(0))
       return(TraceFail(DPCC_OPENCL_ERROR));
+
    m_trace_decision=decision_id;
    m_trace_frames=frames;
    m_trace_next=0;
@@ -10768,7 +10803,7 @@ bool CNeuronPlanProjectionTraceOCL::BeginTrace(const ulong decision_id,const uin
 //+------------------------------------------------------------------+
 bool CNeuronPlanProjectionTraceOCL::TraceStage(const uint stage,CBufferFloat*context)
   {
-   const int    kernel=def_k_DPCCProjectionTrace;
+   const int kernel=def_k_DPCCProjectionTrace;
    CBufferFloat *buffers[]={m_trace[DPCC_TW_CURRENT_INDEX],m_trace[DPCC_TW_CURRENT_COEFFICIENT],
                               m_trace[DPCC_TW_PROPOSAL_INDEX],m_trace[DPCC_TW_PROPOSAL_COEFFICIENT],
                               m_trace[DPCC_TW_FRAME_INDEX],m_trace[DPCC_TW_FRAME_COEFFICIENT],
@@ -10827,6 +10862,7 @@ bool CNeuronPlanProjectionTraceOCL::ForwardFrame(const uint slot,CNeuronBaseOCL*
       !ValidateTrace(plans.getOutput(),context))
 
       return(TraceFail(DPCC_TRACE_CONTRACT_MISMATCH));
+
    m_trace_slot=slot;
    m_trace_record=record_gradient;
    m_trace_executing=true;
@@ -10949,8 +10985,9 @@ bool CNeuronPlanProjectionTraceOCL::BackwardFrame(const uint slot,CBufferFloat*g
       !ValidateWorkspace(gradient_out,gradient_in)||!ValidateTrace(gradient_out,gradient_in))
 
       return(TraceFail(DPCC_TRACE_CONTRACT_MISMATCH));
+
    m_trace_slot=slot;
-   const int    kernel=def_k_DPCCProjectionTraceVJP;
+   const int kernel=def_k_DPCCProjectionTraceVJP;
    CBufferFloat *buffers[]={m_trace[DPCC_TW_FRAME_INDEX],m_trace[DPCC_TW_FRAME_COEFFICIENT],
                               gradient_out,gradient_in,m_trace[DPCC_TW_ERROR]
                              };
@@ -10978,6 +11015,7 @@ bool CNeuronPlanProjectionTraceOCL::ReleaseTrace(void)
   {
    if(m_trace_executing)
       return(TraceFail(DPCC_TRACE_CONTRACT_MISMATCH));
+
    ArrayInitialize(m_trace_slots,0);
    m_trace_decision=0;
    m_trace_frames=0;
@@ -11003,6 +11041,7 @@ bool CNeuronPlanProjectionTraceOCL::Clear(void)
 
    if(!ValidateTrace())
       return(TraceFail(DPCC_TRACE_CONTRACT_MISMATCH));
+
    const bool rollout_ready=(m_configured&&m_phase==DPCC_LAYER_READY&&
                                CheckPointer(m_rollout)!=POINTER_INVALID&&
                                m_rollout.MatchesProjectionContract(m_shape,m_config,OpenCL));
@@ -11134,6 +11173,7 @@ bool CNeuronPlanProjectionTraceOCL::Load(const int file_handle)
 
    if(!FreeTraceBuffers())
       return(false);
+
    m_trace_capacity=frames;
    m_trace_constructing=true;
    const bool loaded=CNeuronPlanProjectionOCL::Load(file_handle);
@@ -11244,6 +11284,7 @@ bool CNeuronDPCCOCL::OwnsBufferOrDeviceSlot(CBufferFloat*candidate)
    for(uint i=0;i<DPCC_CW_COUNT;i++)
       if(BufferAliases(candidate,m_work[i]))
          return(true);
+
    CBufferFloat *action_buffers[]={m_action_context,m_action_condition,m_action_noise,m_action_current,
                                      m_action_next,m_action_physical,m_action_epsilon,m_action_probability_frames,
                                      m_action_projected_frames,m_action_flags,m_action_scalar,m_action_status,
@@ -11313,6 +11354,7 @@ bool DPCCCompositeLayouts(const SDPCCShape&shape,SDPCCLayout&c_layout,
 
    if(shape.K>64||shape.J>64||shape.NActions!=6||shape.StateSize!=13)
       return(false);
+
    ulong kvh;
    ulong kh;
    ulong z;
@@ -11329,6 +11371,7 @@ bool DPCCCompositeLayouts(const SDPCCShape&shape,SDPCCLayout&c_layout,
       count>(ulong)INT_MAX-61)
 
       return(false);
+
    tokens=(uint)count;
    c_layout.version=DPCC_CONTRACT_VERSION;
    const ulong sizes[]={z,kvh,shape.K,16,24,48,24,kh*24,shape.H,calendar,noise};
@@ -11340,6 +11383,7 @@ bool DPCCCompositeLayouts(const SDPCCShape&shape,SDPCCLayout&c_layout,
 
       if(sizes[i]>(ulong)INT_MAX-c_layout.total)
          return(false);
+
       c_layout.total+=sizes[i];
      }
    SDPCCShape financial=shape;
@@ -11417,6 +11461,7 @@ bool CNeuronDPCCOCL::CompositeReduce(CBufferFloat*flags,CBufferFloat*scalar,cons
       scalar.GetIndex()<0||flags.GetIndex()<0||flags.GetIndex()==scalar.GetIndex())
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={flags,scalar};
    const uint   integers[]={count};
    float        reals[];
@@ -11470,6 +11515,7 @@ bool CNeuronDPCCOCL::PrepareCompositeNorm(CBufferFloat*context,CNeuronBaseOCL*de
       !decoder||!denorm||!denorm.OwnedReady()||decoder.Activation()!=None)
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const uint   count=(uint)checked_r.lengths[0];
    CBufferFloat *buffers[]={context,decoder.getOutput(),denorm.getBatchOptions(),flags};
    const ulong  sizes[]={checked_c.total,count,(ulong)count*9,count};
@@ -11511,6 +11557,7 @@ bool CNeuronDPCCOCL::PackCompositeR(CBufferFloat*context,CBufferFloat*native,
 
    if(!CompositeBuffers(buffers,sizes))
       return(false);
+
    const uint integers[]={config.shape.K,config.shape.H,config.shape.M,
                             (uint)c.offsets[4],(uint)c.offsets[7],(uint)r.offsets[7],
                             (uint)r.total,config.price_basis,config.quote_adapter
@@ -11648,6 +11695,7 @@ ulong CNeuronDPCCOCL::ProfileSignature(const SDPCCConfig&c,const SDPCCDecoderCom
       ArraySize(schedule_alpha)!=ArraySize(beta)||ArraySize(sigma)!=ArraySize(beta))
 
       return(0);
+
    ulong                           hash=DPCCFixedSignature(c,defNeuronDPCCOCL);
    const SDPCCDenoiserArchitecture g=n.graph;
    const SDPCCParallelExecution    p=n.parallel;
@@ -11676,6 +11724,7 @@ ulong CNeuronDPCCOCL::ProfileSignature(const SDPCCConfig&c,const SDPCCDecoderCom
      {
       if(!MathIsValidNumber(beta[j])||!MathIsValidNumber(schedule_alpha[j])||!MathIsValidNumber(sigma[j]))
          return(0);
+
       DPCCRolloutHashDouble(beta[j],hash);
       DPCCRolloutHashDouble(schedule_alpha[j],hash);
       DPCCRolloutHashDouble(sigma[j],hash);
@@ -11703,6 +11752,7 @@ bool CNeuronDPCCOCL::DescribeAction6(CLayerDescription&desc)const
       ArrayResize(desc.units,8)!=8)
 
       return(false);
+
    const uint units[]={m_shape.H,m_shape.M,m_shape.Heads,m_shape.K,m_shape.V,
                          m_actor_market_horizon,m_actor_latent_dimension,3
                         };
@@ -11753,6 +11803,7 @@ bool CNeuronDPCCOCL::InitAction6(uint index,COpenCLMy*context,CLayerDescription*
 
    if(!CNeuronBaseOCL::Init(0,index,context,6,ADAM,1))
       return(Fail(DPCC_OPENCL_ERROR,true));
+
    activation=None;
    bTrain=false;
    m_denoiser=new CNeuronPlanDenoiserOCL();
@@ -12055,6 +12106,7 @@ bool CNeuronDPCCOCL::AllocateAction6Workspace(void)
       CheckPointer(m_plan_source)!=POINTER_INVALID)
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    ulong tokens=0;
    ulong condition_count=0;
    ulong noise_count=0;
@@ -12074,6 +12126,7 @@ bool CNeuronDPCCOCL::AllocateAction6Workspace(void)
       !DPCCRolloutProduct(m_shape.M,m_shape.K,returns_count))
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    condition_count+=109+m_shape.K;
    const ulong flag_count=MathMax(condition_count,MathMax(noise_count,plan_count));
    const ulong limit=(ulong)UINT_MAX/sizeof(float);
@@ -12148,6 +12201,7 @@ bool CNeuronDPCCOCL::ValidateAction6Workspace(void)const
       m_plan_source.GetOpenCL()!=OpenCL||m_plan_source.TrainMode())
 
       return(false);
+
    ulong tokens=0;
    ulong condition_count=0;
    ulong noise_count=0;
@@ -12245,6 +12299,7 @@ bool CNeuronDPCCOCL::BindPolicyNetworks(CNet*market,CNet*q1,CNet*q2)
       !ValidateAction6Workspace()||!ValidatePolicyNetworks(market,q1,q2))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    ClearPolicyState();
    ClearPolicyWorkspace();
    m_policy_market=market;
@@ -12272,6 +12327,7 @@ bool CNeuronDPCCOCL::UnbindPolicyNetworks(void)
   {
    if(m_busy||m_transfer_pending||m_action_unroll_live||m_action_trace_live)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    ClearPolicyState();
    ClearPolicyWorkspace();
    m_policy_market=NULL;
@@ -12301,6 +12357,7 @@ bool CNeuronDPCCOCL::BindDecisionContext(CBufferFloat*context,const SDPCCDecisio
   {
    if(m_action_unroll_live||m_action_trace_live)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_public_valid=false;
    m_action_candidates_valid=false;
    m_action_context_bound=false;
@@ -12324,6 +12381,7 @@ bool CNeuronDPCCOCL::BindDecisionContext(CBufferFloat*context,const SDPCCDecisio
 
    if(!CopyBufferRaw(context,m_action_context,(uint)m_action_context_layout.total))
       return(Fail(DPCC_OPENCL_ERROR));
+
    m_action_meta=meta;
    m_action_market_generation=0;
    m_action_context_bound=true;
@@ -12390,6 +12448,7 @@ bool CNeuronDPCCOCL::GetOracleCandidateMask(uchar&mask[],uint&horizon)const
       active_offset+(ulong)m_shape.M>(ulong)m_action_context.Total())
 
       return(false);
+
    float projection_status[];
    float active[];
    float candidate_flags[];
@@ -12427,8 +12486,8 @@ bool CNeuronDPCCOCL::GetOracleCandidateMask(uchar&mask[],uint&horizon)const
            }
         }
 
-      //--- ordinary Actor updates stay on financially valid rollouts; the explicit
-      //--- no-feasible fallback may use any projectable candidate for Oracle fit.
+   //--- ordinary Actor updates stay on financially valid rollouts; the explicit
+   //--- no-feasible fallback may use any projectable candidate for Oracle fit.
       mask[i]=(projection_status[i]==0.0f&&active[i]==1.0f&&
                  (oracle_fallback||candidate_flags[i]==0.0f)?1:0);
      }
@@ -12601,6 +12660,7 @@ bool CNeuronDPCCOCL::PackAction6Condition(CNeuronBaseOCL*account,
       m_action_flags.GetOpenCL()!=OpenCL||m_action_flags.GetIndex()<0||m_action_flags.Total()<(int)count)
 
       return(Fail(DPCC_INVALID_INPUT));
+
    CBufferFloat *buffers[]={account.getOutput(),m_action_context,market.GetZ(),market.GetLogU(),
                               market.GetPi(),m_action_condition,m_action_flags
                              };
@@ -12619,6 +12679,7 @@ bool CNeuronDPCCOCL::PackAction6Condition(CNeuronBaseOCL*account,
 
    if(!CopyBufferRaw(account.getOutput(),m_action_account13,13))
       return(Fail(DPCC_OPENCL_ERROR));
+
    const uint args[]={m_shape.K,m_shape.V,m_actor_market_horizon,m_actor_latent_dimension,
                         (uint)m_action_context_layout.offsets[1],(uint)m_action_context_layout.offsets[2],
                         (uint)m_action_context_layout.offsets[3],(uint)count
@@ -12664,6 +12725,7 @@ bool CNeuronDPCCOCL::InitializeAction6Noise(void)
       !m_action_status.Fill(0)||!m_action_candidate_status.Fill(0))
 
       return(Fail(DPCC_OPENCL_ERROR));
+
    CBufferFloat *buffers[]={m_action_noise,m_action_context,m_action_current,m_action_status,
                               m_action_candidate_status,m_action_flags
                              };
@@ -12682,8 +12744,9 @@ bool CNeuronDPCCOCL::InitializeAction6Noise(void)
    const uint offset[]={0};
    const uint global[]={(uint)(m_shape.M*m_shape.H*6)};
 
-   return(OpenCL.Execute(kernel,1,offset,global)&&
-          CompositeReduce(m_action_flags,m_action_scalar,global[0]));
+   kernelExecute(kernel,offset,global)
+
+   return(CompositeReduce(m_action_flags,m_action_scalar,global[0]));
   }
 //+------------------------------------------------------------------+
 //| ReverseAction6Step - Runs one reverse diffusion update on the... |
@@ -12692,6 +12755,7 @@ bool CNeuronDPCCOCL::ReverseAction6Step(const uint j)
   {
    if(j==0||j>m_shape.J)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={m_action_current,m_denoiser.getOutput(),m_action_noise,m_action_context,
                               m_action_next,m_action_status,m_action_flags
                              };
@@ -12715,7 +12779,9 @@ bool CNeuronDPCCOCL::ReverseAction6Step(const uint j)
    const uint offset[]={0};
    const uint global[]={(uint)(m_shape.M*m_shape.H*6)};
 
-   return(OpenCL.Execute(kernel,1,offset,global)&&CompositeReduce(m_action_flags,m_action_scalar,global[0]));
+   kernelExecute(kernel,offset,global)
+
+   return(CompositeReduce(m_action_flags,m_action_scalar,global[0]));
   }
 //+------------------------------------------------------------------+
 //| ProjectAction6Current - Applies the one configured native...     |
@@ -12774,6 +12840,7 @@ bool CNeuronDPCCOCL::Action6Affine(CBufferFloat*source,CBufferFloat*destination,
         probability_offset_wide+count>(ulong)m_action_projected_frames.Total())))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const uint probability_offset=(uint)probability_offset_wide;
    const uint active_offset=(uint)m_action_context_layout.offsets[7];
    const uint sigmoid_output=1;
@@ -12788,7 +12855,7 @@ bool CNeuronDPCCOCL::Action6Affine(CBufferFloat*source,CBufferFloat*destination,
       if(!MathIsValidNumber(bias[c])||!MathIsValidNumber(scale[c])||scale[c]<=0)
          return(Fail(DPCC_INVALID_INPUT));
      }
-   const int    kernel=def_k_DPCCCompositeActionAffine;
+   const int kernel=def_k_DPCCCompositeActionAffine;
    CBufferFloat *buffers[]={source,destination,m_action_context,m_action_flags,
                               m_action_probability_frames,m_action_projected_frames};
 
@@ -12842,6 +12909,7 @@ bool CNeuronDPCCOCL::MergeAction6ProjectionMask(CBufferFloat*corrected)
   {
    if(!m_actor_projector.GetCandidateStatus()||!ValidBuffer(corrected,(ulong)m_shape.M*m_shape.H*6,OpenCL))
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={m_action_context,m_action_candidate_status,m_actor_projector.GetCandidateStatus(),
                               corrected,m_action_flags
                              };
@@ -12858,7 +12926,9 @@ bool CNeuronDPCCOCL::MergeAction6ProjectionMask(CBufferFloat*corrected)
    const uint offset[]={0};
    const uint global[]={m_shape.M};
 
-   return(OpenCL.Execute(kernel,1,offset,global)&&CompositeReduce(m_action_flags,m_action_scalar,m_shape.M));
+   kernelExecute(kernel,offset,global)
+
+   return(CompositeReduce(m_action_flags,m_action_scalar,m_shape.M));
   }
 //+------------------------------------------------------------------+
 //| FinalizeAction6Plans - Executes the checked native batch...      |
@@ -12874,6 +12944,7 @@ bool CNeuronDPCCOCL::FinalizeAction6Plans(void)
       (bTrain?!CopyBufferRaw(m_rollout.GetValidity(),m_action_status,m_shape.M):!m_action_status.Fill(0)))
 
       return(Fail(m_rollout.LastStatus()==DPCC_OK?DPCC_OPENCL_ERROR:m_rollout.LastStatus()));
+
    CBufferFloat *buffers[]={m_action_candidate_status,m_action_status,m_action_flags};
    uint         integers[]={m_shape.M,(uint)(bTrain?1:0)};
    float        reals[];
@@ -13124,6 +13195,7 @@ bool CNeuronDPCCOCL::AbortAction6Unroll(void)
 
    if(!success)
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    m_action_unroll_live=false;
    m_action_trace_live=false;
    m_action_gradient_bound=false;
@@ -13308,6 +13380,7 @@ bool CNeuronDPCCOCL::Action6GradientStep(const uint mode,CBufferFloat*source,
 
    if(other_offset>UINT_MAX-count)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const uint integers[]={count,mode,other_offset};
    float      reals[8];
    reals[0]=(mode==def_k_DPCCAction6GradientStep_ddpm_split?(float)m_beta[j]:0.0f);
@@ -13353,7 +13426,7 @@ bool CNeuronDPCCOCL::BackwardAction6(CNeuronBaseOCL*account)
      {
       failure_frame=j;
 
-      //--- the first upstream is physical A_checked; later P2 maps include N.
+   //--- the first upstream is physical A_checked; later P2 maps include N.
       const bool project=(m_action_meta.mode==DPCC_P2||
                             (m_action_meta.mode==DPCC_P1&&j==1));
 
@@ -13395,7 +13468,7 @@ bool CNeuronDPCCOCL::BackwardAction6(CNeuronBaseOCL*account)
       if(!success)
          break;
 
-      //--- saved frame inputs own the condition; its external buffer is now the gradient sink.
+   //--- saved frame inputs own the condition; its external buffer is now the gradient sink.
       failure_stage=6;
       success=Action6GradientStep(def_k_DPCCAction6GradientStep_ddpm_split,m_action_current,m_action_physical,
                                   m_action_next,m_action_epsilon,j);
@@ -13419,7 +13492,7 @@ bool CNeuronDPCCOCL::BackwardAction6(CNeuronBaseOCL*account)
      {
       failure_stage=9;
 
-      //--- account13 occupies the first 13 coordinates of the accumulated condition VJP.
+   //--- account13 occupies the first 13 coordinates of the accumulated condition VJP.
       CBufferFloat *buffers[]={m_action_condition,account.getGradient(),m_action_flags};
       const uint   integers[]={uint(None),13};
       float        reals[];
@@ -13486,7 +13559,7 @@ bool CNeuronDPCCOCL::UpdateInputWeights(CObject*source,CBufferFloat*second)
       const ENUM_DPCC_STATUS reason=m_denoiser.LastStatus();
       m_busy=false;
 
-      //--- abort succeeds only before the child's first shared parameter write.
+   //--- abort succeeds only before the child's first shared parameter write.
       AbortAction6Unroll();
 
       return(Fail(reason==DPCC_OK?DPCC_CONTRACT_MISMATCH:reason,m_failed));
@@ -13508,6 +13581,7 @@ bool CNeuronDPCCOCL::UpdateInputWeights(CObject*source,CBufferFloat*second)
 
    if(!success)
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    m_action_update_started=false;
    m_action_gradient_bound=false;
    m_action_backward_ready=false;
@@ -13569,6 +13643,7 @@ bool CNeuronDPCCOCL::feedForwardSecond(CNeuronBaseOCL*source,CNeuronBaseOCL*seco
 
    if(!m_policy_networks_bound||!ValidatePolicyNetworks(m_policy_market,m_policy_q1,m_policy_q2))
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_busy=true;
    m_status=DPCC_OK;
    bool success=RunAction6Forward(source,(CNeuronScenarioForecastPriceOCL*)second);
@@ -13588,8 +13663,8 @@ bool CNeuronDPCCOCL::feedForwardSecond(CNeuronBaseOCL*source,CNeuronBaseOCL*seco
      {
       const ENUM_DPCC_STATUS reason=(m_status==DPCC_OK?DPCC_OPENCL_ERROR:m_status);
 
-      //--- treat no feasible plan as a valid no-trade outcome.
-      //--- training preserves Oracle plans; inference publishes no action.
+   //--- treat no feasible plan as a valid no-trade outcome.
+   //--- training preserves Oracle plans; inference publishes no action.
       if(reason==DPCC_NO_FEASIBLE_CANDIDATE&&m_action_candidates_valid&&
          m_action_market_generation==m_action_meta.market_state_id&&
          m_action_selected==UINT_MAX&&
@@ -13637,6 +13712,7 @@ bool CNeuronDPCCOCL::Action6Profile(const int f,const bool restore,SDPCCConfig&c
      {
       if(FileReadArray(f,n,0,29)!=29||FileReadArray(f,r,0,11)!=11||n[5]==0||n[5]>64)
          return(false);
+
       c.shape.K=n[0];
       c.shape.V=n[1];
       c.shape.H=n[2];
@@ -13725,6 +13801,7 @@ bool CNeuronDPCCOCL::SaveAction6(const int f)
 
    if(state==0||contract==0)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const uint envelope=m_config.margin_fx_profile==DPCC_MARGIN_HISTORICAL_CLOSE_V1?
                          DPCC_HISTORICAL_FX_ENVELOPE_VERSION:(m_config.margin_fx_profile==DPCC_MARGIN_EXTERNAL_V2?
                                DPCC_BINARY_LAYER_VERSION:DPCC_FINANCIAL_ENVELOPE_VERSION);
@@ -13750,6 +13827,7 @@ bool CNeuronDPCCOCL::LoadAction6(const int f,const uint envelope,const uint inde
   {
    if(batch!=1||(m_admitted&&m_actor_abi!=3)||FileTell(f)+2*INT_VALUE+2*sizeof(long)>FileSize(f))
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    const uint         market_horizon=(uint)FileReadInteger(f,INT_VALUE);
    const uint         latent_dimension=(uint)FileReadInteger(f,INT_VALUE);
    const ulong        expected_contract=(ulong)FileReadLong(f);
@@ -13762,12 +13840,14 @@ bool CNeuronDPCCOCL::LoadAction6(const int f,const uint envelope,const uint inde
                       runtime.condition_scale,runtime.condition_bias))
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    const uint expected_envelope=runtime.financial.margin_fx_profile==DPCC_MARGIN_HISTORICAL_CLOSE_V1?
                                   DPCC_HISTORICAL_FX_ENVELOPE_VERSION:(runtime.financial.margin_fx_profile==DPCC_MARGIN_EXTERNAL_V2?
                                         DPCC_BINARY_LAYER_VERSION:DPCC_FINANCIAL_ENVELOPE_VERSION);
 
    if(envelope!=expected_envelope||(m_admitted&&m_admitted_profile!=expected_contract))
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    ReleaseOwned();
    m_failed=false;
    m_transfer_pending=false;
@@ -13794,6 +13874,7 @@ bool CNeuronDPCCOCL::LoadAction6(const int f,const uint envelope,const uint inde
       ContractSignature()!=expected_contract||WeightSignature()!=expected_state)
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    m_imported=false;
    m_decision_serial=0;
    m_bar_identity_valid=false;
@@ -13904,9 +13985,12 @@ CNeuronDPCCOCL::CNeuronDPCCOCL(void)
    bTrain=false;
   }
 //+------------------------------------------------------------------+
-//| Function ~CNeuronDPCCOCL                                         |
+//| ~CNeuronDPCCOCL - function ~CNeuronDPCCOCL                       |
 //+------------------------------------------------------------------+
-CNeuronDPCCOCL::~CNeuronDPCCOCL(void){ReleaseOwned();}
+CNeuronDPCCOCL::~CNeuronDPCCOCL(void)
+  {
+   ReleaseOwned();
+  }
 //+------------------------------------------------------------------+
 //| Invalidate - Invalidate cached DPCC state                        |
 //+------------------------------------------------------------------+
@@ -14052,12 +14136,14 @@ bool CNeuronDPCCOCL::Geometry(void)
       !DPCCCompositeLayouts(m_shape,m_c_layout,m_r_layout,m_tokens))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_padK=1;
    while(m_padK<m_shape.K)
       m_padK<<=1;
 
    if(m_padK>defFQF_LOCAL_ARRAY_SIZE)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const ulong mh6=(ulong)m_shape.M*m_shape.H*6;
    const ulong mn=(ulong)m_shape.M*m_padK;
    ulong       flags=m_c_layout.total;
@@ -14139,6 +14225,7 @@ bool CNeuronDPCCOCL::AllocateOwned(void)
       !m_plan_source.Init(0,0,OpenCL,m_shape.M*m_shape.H*6,ADAM,1))
 
       return(Fail(DPCC_OPENCL_ERROR,true));
+
    m_decoder_source.SetActivationFunction(None);
    m_plan_source.SetActivationFunction(None);
    m_decoder_source.TrainMode(false);
@@ -14215,6 +14302,7 @@ bool CNeuronDPCCOCL::ValidateOwned(void)const
                        m_projector.ContractSignature()!=DPCCFixedSignature(m_config,defNeuronPlanProjectionOCL)))
 
       return(false);
+
    CBufferFloat *base[]={Output,PrevOutput,Gradient,m_decoder_source.getOutput(),
                            m_decoder_source.getPrevOutput(),m_decoder_source.getGradient(),
                            m_plan_source.getOutput(),m_plan_source.getPrevOutput(),m_plan_source.getGradient(),
@@ -14264,6 +14352,7 @@ bool CNeuronDPCCOCL::Init(uint outputs,uint index,COpenCLMy*context,CLayerDescri
       ArraySize(desc.windows)!=9||ArraySize(desc.units)!=5||ArraySize(desc.heads)!=1||desc.windows[0]!=2)
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_shape.K=desc.windows[1];
    m_shape.V=desc.windows[2];
    m_shape.H=desc.windows[3];
@@ -14289,6 +14378,7 @@ bool CNeuronDPCCOCL::Init(uint outputs,uint index,COpenCLMy*context,CLayerDescri
 
    if(!AllocateOwned()||!InitializeChildren())
       return(Fail(m_status,true));
+
    m_shaped=true;
    m_failed=false;
    m_status=DPCC_OK;
@@ -14371,6 +14461,7 @@ bool CNeuronDPCCOCL::Configure(const SDPCCConfig&config,const SDPCCDecoderCompos
       !m_rollout.Configure(config)||!m_projector.Configure(config)||!m_projector.BindRollout(m_rollout))
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    m_config=config;
    m_decoder_composition=decoder;
    m_denoiser_composition=model;
@@ -14391,6 +14482,7 @@ bool CNeuronDPCCOCL::Configure(const SDPCCConfig&config,const SDPCCDecoderCompos
 
       if(profile==0||(m_admitted&&profile!=m_admitted_profile))
          return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
       m_admitted_profile=profile;
       m_admitted=true;
      }
@@ -14458,6 +14550,7 @@ bool CNeuronDPCCOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
       m_admitted_profile!=target_contract||actor.m_admitted_profile!=source_contract)
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_busy=true;
    const bool updated=m_denoiser.UpdateFrameWeightsFrom(actor.m_denoiser,tau);
    m_busy=false;
@@ -14491,6 +14584,7 @@ bool CNeuronDPCCOCL::Clear(void)
 
       if(m_failed||m_busy||m_transfer_pending||!m_configured||!ValidateAction6())
          return(Fail(DPCC_CONTRACT_MISMATCH));
+
       CBufferFloat *buffers[]={Output,PrevOutput,Gradient,m_action_context,m_action_condition,
                                  m_action_noise,m_action_current,m_action_next,m_action_physical,
                                  m_action_epsilon,m_action_probability_frames,m_action_projected_frames,
@@ -14575,6 +14669,7 @@ bool CNeuronDPCCOCL::SetProjectionMode(const ENUM_DPCC_MODE mode)
       m_action_trace_live||mode<DPCC_P0||mode>DPCC_P2)
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    Invalidate();
    m_config.mode=mode;
    m_status=DPCC_OK;
@@ -14595,6 +14690,7 @@ bool CNeuronDPCCOCL::SetSnapshotMeta(const SDPCCSnapshotMeta&meta)
       meta.timeframe<=0)
 
       return(Fail(DPCC_INVALID_INPUT));
+
    m_snapshot=meta;
    m_snapshot_valid=true;
    m_snapshot_staged=true;
@@ -14614,6 +14710,7 @@ bool CNeuronDPCCOCL::DonorDescriptor(CNeuronBaseOCL*donor,const uint type,const 
 
    if(!desc)
       return(false);
+
    const bool result=ArraySize(desc.windows)==9&&ArraySize(desc.units)==5&&
                        desc.windows[0]==2&&desc.windows[1]==m_shape.K&&desc.windows[2]==m_shape.V&&
                        desc.windows[3]==m_shape.H&&desc.windows[4]==m_shape.D&&
@@ -14653,7 +14750,7 @@ bool CNeuronDPCCOCL::ReadNormalizer(CNeuronBatchNormOCL*source,float&prepared[])
       if(options.At(s+1)<=0||options.At(s+3)!=1.0f||options.At(s+4)!=0.0f)
          return(false);
 
-      //--- fixed normalization values only; no donor moments/normalized input.
+   //--- fixed normalization values only; no donor moments/normalized input.
       for(uint i=0;i<9;i++)
          prepared[s+i]=0;
       prepared[s]=options.At(s);
@@ -14714,6 +14811,7 @@ bool CNeuronDPCCOCL::ReadNormalizationSnapshot(float&price_norm[])
 
       if(!MathIsValidNumber(deviation)||deviation<=0)
          return(false);
+
       snapshot[target]=prepared[source];
       snapshot[target+1]=deviation;
       snapshot[target+2]=prepared[source+3];
@@ -14757,6 +14855,7 @@ bool CNeuronDPCCOCL::ImportPreparedComponents(CNeuronScenarioDecoderOCL*decoder,
 
    if(!m_decoder.CanImportPreparedParameters(decoder)||!m_denoiser.CanImportPreparedParameters(denoiser))
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const ulong decoder_before=decoder.TrainableStateFingerprint();
    const ulong denoiser_before=denoiser.TrainableStateFingerprint();
    ulong       norm_before=1469598103934665603;
@@ -14881,6 +14980,7 @@ bool CNeuronDPCCOCL::SetOpenCLChecked(COpenCLMy*target)
 
    if(!ValidateOwned())
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_transfer_pending=false;
    m_transfer_source=NULL;
    m_transfer_target=NULL;
@@ -14890,7 +14990,7 @@ bool CNeuronDPCCOCL::SetOpenCLChecked(COpenCLMy*target)
    return(Clear());
   }
 //+------------------------------------------------------------------+
-//| Function CNeuronDPCCOCL::GetLayerInfo                            |
+//| GetLayerInfo - function CNeuronDPCCOCL::GetLayerInfo             |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronDPCCOCL::GetLayerInfo(void)
   {
@@ -14912,6 +15012,7 @@ ulong CNeuronDPCCOCL::ContractSignature(void)const
      {
       if(m_failed||!m_configured||!ValidateAction6())
          return(0);
+
       ulong hash=DPCCFixedSignature(m_config,Type());
       DPCCRolloutHashWord(3,hash);
       DPCCRolloutHashWord(m_actor_market_horizon,hash);
@@ -14940,6 +15041,7 @@ ulong CNeuronDPCCOCL::ContractSignature(void)const
 
    if(decoder_contract==0||denoiser_contract==0)
       return(0);
+
    ulong hash=DPCCFixedSignature(m_config,defNeuronDPCCOCL);
    DPCCRolloutHashWord(decoder_contract,hash);
    DPCCRolloutHashWord(denoiser_contract,hash);
@@ -14948,6 +15050,7 @@ ulong CNeuronDPCCOCL::ContractSignature(void)const
       m_projector.ContractSignature()!=DPCCFixedSignature(m_config,defNeuronPlanProjectionOCL))
 
       return(0);
+
    DPCCRolloutHashWord(m_rollout.ContractSignature(),hash);
    DPCCRolloutHashWord(m_projector.ContractSignature(),hash);
    DPCCRolloutHashWord(m_padK,hash);
@@ -14984,6 +15087,7 @@ ulong CNeuronDPCCOCL::WeightSignature(void)
 
    if(first==0||second==0)
       return(0);
+
    ulong hash=1469598103934665603;
    DPCCRolloutHashWord(first,hash);
    DPCCRolloutHashWord(second,hash);
@@ -15104,6 +15208,7 @@ bool CNeuronDPCCOCL::WriteProfile(const int f)
 
    if(FileWriteInteger(f,(int)m_decoder_composition.embedding,INT_VALUE)!=INT_VALUE)
       return(false);
+
    const uint graph[]={g.embedding,g.heads,g.key_dimension,g.depth,(uint)g.padding_mask,(uint)g.temporal_mask,
                          p.version,p.training_plan_batch,p.deployment_plan_batch,p.proposal_slots,p.logical_heads,p.key_dimension,
                          (uint)p.shared_projection_weights,p.binary_layer_version
@@ -15111,6 +15216,7 @@ bool CNeuronDPCCOCL::WriteProfile(const int f)
 
    if(FileWriteArray(f,graph)!=ArraySize(graph))
       return(false);
+
    const double reals[]={c.projection_improvement_atol,c.projection_distance_tie_atol,c.volume_scale,c.price_scale,
                            c.money_scale,c.max_quote_age_seconds,c.max_last_age_seconds,(double)c.risk_parameter,(double)c.mean_weight,(double)c.gamma,(double)c.probability_tolerance
                           };
@@ -15126,6 +15232,7 @@ bool CNeuronDPCCOCL::WriteProfile(const int f)
       FileWriteArray(f,m_sigma)!=ArraySize(m_sigma))
 
       return(false);
+
    const string texts[]={m_decoder_composition.architecture,m_decoder_composition.activation_profile,
                            m_decoder_composition.backward_profile,m_decoder_composition.optimizer_profile,m_decoder_composition.graph_digest,
                            g.architecture,g.graph_id,g.graph_sha256,g.normalization,g.feedforward_activation,g.attention_backward,
@@ -15161,6 +15268,7 @@ bool CNeuronDPCCOCL::ReadProfile(const int f,
 
    if(FileReadArray(f,n,0,27)!=27||n[5]==0||n[5]>64)
       return(false);
+
    c.shape.K=n[0];
    c.shape.V=n[1];
    c.shape.H=n[2];
@@ -15212,6 +15320,7 @@ bool CNeuronDPCCOCL::ReadProfile(const int f,
 
    if(FileReadArray(f,g,0,14)!=14||g[4]>1||g[5]>1||g[12]>1||FileReadArray(f,r,0,11)!=11)
       return(false);
+
    denoiser.graph.embedding=g[0];
    denoiser.graph.heads=g[1];
    denoiser.graph.key_dimension=g[2];
@@ -15257,6 +15366,7 @@ bool CNeuronDPCCOCL::ReadProfile(const int f,
    for(uint i=0;i<19;i++)
       if(!ReadText(f,texts[i]))
          return(false);
+
    decoder.architecture=texts[0];
    decoder.activation_profile=texts[1];
    decoder.backward_profile=texts[2];
@@ -15288,12 +15398,14 @@ bool CNeuronDPCCOCL::Save(const int f)
 
    if(f==INVALID_HANDLE||m_failed||!m_configured||!m_imported||m_busy||m_transfer_pending||!ValidateOwned())
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const ulong weights=WeightSignature();
    const ulong state=TrainableStateFingerprint();
    const ulong contract=ContractSignature();
 
    if(weights==0||state==0||contract==0)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const uint header[]={(uint)Type(),0x44504343,(m_config.margin_fx_profile==DPCC_MARGIN_HISTORICAL_CLOSE_V1?DPCC_HISTORICAL_FX_ENVELOPE_VERSION:
                           (m_config.margin_fx_profile==DPCC_MARGIN_EXTERNAL_V2?DPCC_BINARY_LAYER_VERSION:DPCC_FINANCIAL_ENVELOPE_VERSION)),2,(uint)m_myIndex,iBatch,1
                          };
@@ -15353,6 +15465,7 @@ bool CNeuronDPCCOCL::Load(const int f)
       (serial!=0||StringLen(bar_symbol)!=0||bar_timeframe!=0||bar_time!=0))
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    SDPCCConfig              config;
    SDPCCDecoderComposition  decoder;
    SDPCCDenoiserComposition denoiser;
@@ -15366,6 +15479,7 @@ bool CNeuronDPCCOCL::Load(const int f)
 
    if(candidate_profile==0||(m_admitted&&candidate_profile!=m_admitted_profile))
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    ReleaseOwned();
    m_transfer_pending=false;
    m_transfer_source=NULL;
@@ -15395,6 +15509,7 @@ bool CNeuronDPCCOCL::Load(const int f)
       FileTell(f)+3*sizeof(long)+INT_VALUE>FileSize(f))
 
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
+
    const ulong weights=(ulong)FileReadLong(f);
    const ulong state=(ulong)FileReadLong(f);
    const ulong contract=(ulong)FileReadLong(f);
@@ -15418,6 +15533,7 @@ bool CNeuronDPCCOCL::Load(const int f)
 
    if(!Clear())
       return(Fail(m_status,true));
+
    m_decision_serial=serial;
    m_bar_identity_valid=(bar_valid==1);
    m_bar_symbol=bar_symbol;
@@ -15507,6 +15623,7 @@ bool CNeuronDPCCOCL::InitializeCompositeNoise(CBufferFloat*normalized)
 
    if(!CompositeArithmeticLayout(c,r,count))
       return(false);
+
    CBufferFloat *flags=m_work[DPCC_CW_FLAGS];
    CBufferFloat *buffers[]={m_work[DPCC_CW_CONTEXT],m_work[DPCC_CW_ROLLOUT_CONTEXT],normalized,
                               m_work[DPCC_CW_STATUS],m_work[DPCC_CW_VALIDITY],flags
@@ -15536,6 +15653,7 @@ bool CNeuronDPCCOCL::CompositeReverseArithmetic(CBufferFloat*normalized,CBufferF
       ArraySize(m_sigma)!=(int)m_shape.J+1)
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    const float beta=(float)m_beta[j];
    const float schedule_alpha=(float)m_alpha_bar[j];
    const float sigma=(float)m_sigma[j];
@@ -15544,6 +15662,7 @@ bool CNeuronDPCCOCL::CompositeReverseArithmetic(CBufferFloat*normalized,CBufferF
       beta<=0||beta>=1||schedule_alpha<=0||schedule_alpha>=1||sigma<0||(j==1&&sigma!=0))
 
       return(Fail(DPCC_INVALID_INPUT));
+
    CBufferFloat *flags=m_work[DPCC_CW_FLAGS];
    CBufferFloat *buffers[]={normalized,epsilon,m_work[DPCC_CW_CONTEXT],
                               m_work[DPCC_CW_ROLLOUT_CONTEXT],proposal,flags
@@ -15608,6 +15727,7 @@ bool CNeuronDPCCOCL::MergeCompositeProjectionMask(CBufferFloat*normalized_correc
       !m_projector.GetCandidateStatus())
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *flags=m_work[DPCC_CW_FLAGS];
    CBufferFloat *buffers[]={m_work[DPCC_CW_ROLLOUT_CONTEXT],m_work[DPCC_CW_STATUS],
                               m_projector.GetCandidateStatus(),normalized_corrected,flags
@@ -15680,7 +15800,7 @@ bool CNeuronDPCCOCL::BindSnapshotTimes(void)
 
    for(uint h=0;h<m_shape.H;h++)
      {
-      //--- positive ordered int64 metadata makes these differences nonoverflowing.
+   //--- positive ordered int64 metadata makes these differences nonoverflowing.
       relative[2*h]=m_snapshot.bar_close_times[h]-m_snapshot.bar_open_times[h];
       relative[2*h+1]=h==0?0:m_snapshot.bar_open_times[h]-m_snapshot.bar_close_times[h-1];
 
@@ -15696,6 +15816,7 @@ bool CNeuronDPCCOCL::BindSnapshotTimes(void)
 
    if(!CompositeBuffers(buffers,counts))
       return(false);
+
    const uint integers[]={m_shape.K,m_shape.H,m_shape.E,(uint)m_c_layout.offsets[7],
                             (uint)m_c_layout.offsets[8],(uint)m_c_layout.offsets[9],
                             uint(m_snapshot.previous_mark_time==m_snapshot.bar_open_times[0])
@@ -15716,6 +15837,7 @@ bool CNeuronDPCCOCL::CaptureSnapshotIdentity(void)
       !OpenCL.SetArgument(def_k_DPCCCompositeSnapshotIdentity,3,(uint)m_c_layout.total))
 
       return(Fail(DPCC_OPENCL_ERROR));
+
    const uint offset[]={0};
    const uint global[]={1};
    ulong      value[1];
@@ -15739,6 +15861,7 @@ ulong CNeuronDPCCOCL::SnapshotFingerprint(void)
   {
    if(!m_snapshot_valid||m_failed||m_transfer_pending||m_snapshot_device_hash==0)
       return(0);
+
    ulong hash=1469598103934665603;
    DPCCRolloutHashWord(m_snapshot_device_hash,hash);
    DPCCRolloutHashWord(m_snapshot.decision_key,hash);
@@ -15776,6 +15899,7 @@ bool CNeuronDPCCOCL::UpdateProjectionSummary(const uint stage)
 
    if(!projection||(stage==1&&!ValidBuffer(projection,(ulong)m_shape.M*12,OpenCL)))
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={projection,m_work[DPCC_CW_ROLLOUT_CONTEXT],m_work[DPCC_CW_VALIDITY],
                               m_work[DPCC_CW_DIAGNOSTICS],m_work[DPCC_CW_FLAGS]
                              };
@@ -15806,6 +15930,7 @@ bool CNeuronDPCCOCL::PadAndValidateDistributions(void)
       !ValidBuffer(m_rollout.GetValidity(),m_shape.M,OpenCL))
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={m_work[DPCC_CW_RETURNS],m_work[DPCC_CW_CONTEXT],
                               m_work[DPCC_CW_ROLLOUT_CONTEXT],m_work[DPCC_CW_STATUS],m_rollout.GetValidity(),
                               m_work[DPCC_CW_VALIDITY],m_work[DPCC_CW_SUPPORT],m_work[DPCC_CW_MASS],m_work[DPCC_CW_FLAGS]
@@ -15837,6 +15962,7 @@ bool CNeuronDPCCOCL::RankExternalDistributions(void)
 
    if(!OpenCL.GetLocalMemorySize(local_memory)||local_memory<1024)
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={m_work[DPCC_CW_SUPPORT],m_work[DPCC_CW_MASS],m_work[DPCC_CW_SORTED_SUPPORT],
                               m_work[DPCC_CW_SORTED_MASS],m_work[DPCC_CW_ORDER],m_work[DPCC_CW_SRM_DIAGNOSTICS]
                              };
@@ -15850,6 +15976,7 @@ bool CNeuronDPCCOCL::RankExternalDistributions(void)
    for(uint i=0;i<6;i++)
       if(!OpenCL.SetArgumentBuffer(def_k_FQF_MonotoneRearrange,i,buffers[i].GetIndex()))
          return(Fail(DPCC_OPENCL_ERROR));
+
    const uint offset[]={0,0};
    const uint global[]={m_padK,m_shape.M};
    const uint local[]={m_padK,1};
@@ -15878,6 +16005,7 @@ bool CNeuronDPCCOCL::PublishDecision(void)
 
    if(m_failed||!ValidateOwned())
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={m_plan_source.getOutput(),m_work[DPCC_CW_VALIDITY],m_work[DPCC_CW_SCORES],
                               m_work[DPCC_CW_SORTED_SUPPORT],m_work[DPCC_CW_SORTED_MASS],m_work[DPCC_CW_ORDER],
                               m_work[DPCC_CW_SRM_DIAGNOSTICS],m_work[DPCC_CW_SELECTED],Output,m_work[DPCC_CW_FLAGS]
@@ -15958,6 +16086,7 @@ bool CNeuronDPCCOCL::CopyFinitePrefix(CBufferFloat*source,CBufferFloat*destinati
       source.GetIndex()==scalar.GetIndex()||destination.GetIndex()==scalar.GetIndex())
 
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    CBufferFloat *buffers[]={source,destination,flags};
    const uint   integers[]={uint(None),count};
    float        reals[];
@@ -16111,9 +16240,12 @@ bool CNeuronDPCCOCL::FinalRollout(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Function CNeuronDPCCOCL::feedForward                             |
+//| feedForward - function CNeuronDPCCOCL::feedForward               |
 //+------------------------------------------------------------------+
-bool CNeuronDPCCOCL::feedForward(CNeuronBaseOCL*source){return(Fail(DPCC_CONTRACT_MISMATCH));}
+bool CNeuronDPCCOCL::feedForward(CNeuronBaseOCL*source)
+  {
+   return(Fail(DPCC_CONTRACT_MISMATCH));
+  }
 //+------------------------------------------------------------------+
 //| feedForward - Generate a DPCC decision from the current context  |
 //+------------------------------------------------------------------+
@@ -16125,6 +16257,7 @@ bool CNeuronDPCCOCL::feedForward(CNeuronBaseOCL*source,CBufferFloat*context)
 
    if(m_failed||m_busy||m_transfer_pending||!m_configured||!m_imported||!ValidateOwned())
       return(Fail(DPCC_CONTRACT_MISMATCH));
+
    m_busy=true;
    m_status=DPCC_OK;
    bool       success=PrepareDecision(source,context)&&InitializeNoise();
@@ -16467,6 +16600,7 @@ bool CNeuronDPCCActorOCL::ValidateTrainingOwners(void)const
       (CheckPointer(DeltaWeights)!=POINTER_INVALID&&DeltaWeights.Total()>0))
 
       return(false);
+
    const int weights=(CheckPointer(Weights)==POINTER_INVALID?-1:Weights.Total());
    const int first=(CheckPointer(FirstMomentum)==POINTER_INVALID?-1:FirstMomentum.Total());
    const int second=(CheckPointer(SecondMomentum)==POINTER_INVALID?-1:SecondMomentum.Total());
@@ -16504,6 +16638,7 @@ bool CNeuronDPCCActorOCL::SaveActorState(const int handle,const bool training)
                    !SaveDPCCParameterBufferOnly(handle,SecondMomentum)))
 
       return(false);
+
    const int geometry[]={(int)GetWindow(),(int)GetInputStride(),(int)GetFilters(),
                            (int)GetVariables(),(int)GetUnits()
                           };
@@ -16554,6 +16689,7 @@ bool CNeuronDPCCActorOCL::LoadActorState(const int handle,const bool training,co
                    !LoadDPCCParameterBufferOnly(handle,SecondMomentum,apply)))
 
       return(false);
+
    const int geometry[]={(int)GetWindow(),(int)GetInputStride(),(int)GetFilters(),
                            (int)GetVariables(),(int)GetUnits()
                           };
@@ -16582,6 +16718,7 @@ bool CNeuronDPCCActorOCL::AppendDPCCPolicyTrainingFingerprint(ulong&fingerprint)
   {
    if(!ValidateTrainingOwners()||!AppendDPCCPolicyTrainingBaseFingerprint(fingerprint))
       return(false);
+
    const ulong geometry[]={ulong(GetWindow()),ulong(GetInputStride()),ulong(GetFilters()),
                              ulong(GetVariables()),ulong(GetUnits())
                             };
@@ -16718,6 +16855,7 @@ bool CNeuronFQF::ForwardRowsReadOnly(CNeuronBaseOCL*input_owner,
       !NNQValid(OpenCL,quantiles,(ulong)rows*n)||!NNQValid(OpenCL,fractions,(ulong)rows*n))
 
       return(false);
+
    CBufferFloat *logits=work.Take(rows*n);
    CBufferFloat *cosine=work.Take(rows*n);
    CBufferFloat *embedding=work.Take(rows*width);
@@ -16729,6 +16867,7 @@ bool CNeuronFQF::ForwardRowsReadOnly(CNeuronBaseOCL*input_owner,
 
    if(!NNQDense(OpenCL,input_owner.getWeights(),source,logits,flags,rows,width,n,None))
       return(false);
+
    CBufferFloat *soft_buffers[]={logits,fractions,flags};
    uint         soft_values[]={n};
    uint         soft_global[]={n,rows};
@@ -16761,6 +16900,7 @@ bool CNeuronACSRM::CaptureEvaluationState(SLayerReadState&state)
       !state.PutInt(m_last_spectral_break)||!state.PutInt((long)m_last_srm_invalid))
 
       return(false);
+
    CBufferFloat *buffers[]={GetPointer(m_input_gradient_scratch),GetPointer(m_ordered_quantiles),
                               GetPointer(m_ordered_probabilities),GetPointer(m_rearrange_order),GetPointer(m_ordered_quantiles_gradient),
                               GetPointer(m_ordered_probabilities_gradient),GetPointer(m_rearrange_diagnostics)
@@ -16784,6 +16924,7 @@ bool CNeuronACSRM::RestoreEvaluationState(SLayerReadState&state)
    for(int i=0;i<7;i++)
       if(!state.GetInt(values[i]))
          return(false);
+
    m_distribution_gradient_ready=(values[0]!=0);
    m_rearrangement_ready=(values[1]!=0);
    m_last_invalid_quantile=(int)values[2];
@@ -16826,6 +16967,7 @@ bool CNeuronACSRM::SRMRowsReadOnly(CBufferFloat*quantiles,
       !NNQValid(OpenCL,scores,rows)||!NNQValid(OpenCL,flags,rows))
 
       return(false);
+
    CBufferFloat *validate[]={quantiles,fractions,flags};
    uint         counts[]={n};
    uint         global_rows[]={rows};
@@ -16840,6 +16982,7 @@ bool CNeuronACSRM::SRMRowsReadOnly(CBufferFloat*quantiles,
      {
       if((n&(n-1))!=0||OpenCL.GetMaxWorkGroupSize()<(long)n||OpenCL.GetMaxLocalSize(0)<n)
          return(false);
+
       q=work.Take(rows*n);
       p=work.Take(rows*n);
       CBufferFloat *order=work.Take(rows*n);
@@ -16850,14 +16993,15 @@ bool CNeuronACSRM::SRMRowsReadOnly(CBufferFloat*quantiles,
       CBufferFloat *buffers[]={quantiles,fractions,q,p,order,diagnostics};
 
       for(uint i=0;i<6;i++)
-         if(!OpenCL.SetArgumentBuffer(def_k_FQF_MonotoneRearrange,i,buffers[i].GetIndex()))
-            return(false);
+        {
+         setBuffer(def_k_FQF_MonotoneRearrange,i,buffers[i].GetIndex())
+        }
+
       uint offset[]={0,0};
       uint global[]={n,rows};
       uint local[]={n,1};
 
-      if(!OpenCL.Execute(def_k_FQF_MonotoneRearrange,2,offset,global,local))
-         return(false);
+      kernelExecuteLoc(def_k_FQF_MonotoneRearrange,offset,global,local)
      }
 
    if(!OpenCL.SetArgumentBuffer(def_k_FQF_SRMForward,0,q.GetIndex())||
@@ -16868,6 +17012,7 @@ bool CNeuronACSRM::SRMRowsReadOnly(CBufferFloat*quantiles,
       !OpenCL.SetArgument(def_k_FQF_SRMForward,5,mean_weight))
 
       return(false);
+
    uint offset[]={0,0};
    uint global[]={n,rows};
    uint local[]={n,1};
@@ -16875,7 +17020,9 @@ bool CNeuronACSRM::SRMRowsReadOnly(CBufferFloat*quantiles,
    if(OpenCL.GetMaxWorkGroupSize()<(long)n||OpenCL.GetMaxLocalSize(0)<n)
       return(false);
 
-   return(OpenCL.Execute(def_k_FQF_SRMForward,2,offset,global,local));
+   kernelExecuteLoc(def_k_FQF_SRMForward,offset,global,local)
+
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| NNQCriticGraph - Capture/restore all five native Q layers...     |
@@ -17010,6 +17157,7 @@ bool NNQEvaluateCriticRows(CNet*critic,
 
    if(!query)
       return(false);
+
    CBufferFloat *buffers[]={account13,plans,query,numeric_flags};
    uint         values[]={horizon};
    uint         global[]={19,rows};
@@ -17017,6 +17165,7 @@ bool NNQEvaluateCriticRows(CNet*critic,
 
    if(!NNQLaunch(context,def_k_DPCCQRowsJoin,buffers,values,reals,global))
       return(false);
+
    CNeuronScenarioCrossAttention *cross=dynamic_cast<CNeuronScenarioCrossAttention*>(critic.Layer(1));
    CNeuronConvOCL                *conv=dynamic_cast<CNeuronConvOCL*>(critic.Layer(2));
    CNeuronACSRM                  *head=dynamic_cast<CNeuronACSRM*>(critic.Layer(4));
@@ -17027,6 +17176,7 @@ bool NNQEvaluateCriticRows(CNet*critic,
 
    if(!head_info)
       return(false);
+
    const uint n=head_info.window_out;
    delete head_info;
    CBufferFloat *quantiles=work.Take(rows*n);
@@ -17055,6 +17205,7 @@ bool NNQRankCriticRows(COpenCLMy*context,CBufferFloat*q1,CBufferFloat*q2,CBuffer
       !NNQValid(context,scores,rows)||!NNQValid(context,selected,1))
 
       return(false);
+
    CBufferFloat *buffers[]={q1,q2,candidate_flags,numeric_flags,scores,selected};
    uint         values[]={rows};
    uint         global[]={1};
@@ -17094,6 +17245,7 @@ bool NNQSelectedPolicyGradient(CNet*critic,
       NNQOwnedByCritic(critic,action_gradient))
 
       return(false);
+
    CBufferFloat *query=work.Take(19);
    CBufferFloat *flags=work.Take(1);
    CBufferFloat *srm=work.Take(1);
@@ -17101,6 +17253,7 @@ bool NNQSelectedPolicyGradient(CNet*critic,
 
    if(!query||!flags||!srm||!gradient||!flags.Fill(0)||!gradient.Fill(upstream))
       return(false);
+
    CBufferFloat *buffers[]={account13,action6,query,flags};
    uint         values[]={1};
    uint         global[]={19,1};
@@ -17111,10 +17264,11 @@ bool NNQSelectedPolicyGradient(CNet*critic,
 
    if(!NNQRestoreCritic(critic,state))
       return(false);
+
    bool ok=false;
    do
      {
-      //--- virtual inference BN and captured gates match the read-only rows semantics.
+   //--- virtual inference BN and captured gates match the read-only rows semantics.
       if(!critic.TrainMode(false)||!critic.SetWeightsUpdate(false)||
          !critic.feedForward((CArrayFloat*)query,1,false,market,6))
          break;
@@ -17131,6 +17285,7 @@ bool NNQSelectedPolicyGradient(CNet*critic,
       ok=true;
      }
    while(false);
+
 //--- also restore native backward cStack changes, activation roles and diagnostic flags.
    const bool restored=NNQRestoreCritic(critic,state);
 

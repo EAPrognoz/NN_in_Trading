@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| legendre.mqh                                                     |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                                     legendre.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 #ifndef LEGENDRE_MQH
 #define LEGENDRE_MQH

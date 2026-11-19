@@ -1,7 +1,9 @@
 //+------------------------------------------------------------------+
-//|                                                       Study.mq5  |
-//|                                 Copyright 2026, MetaQuotes Ltd.  |
-//|                                                    www.mql5.com  |
+//|                                                        Study.mq5 |
+//|                                                             Habi |
+//|                                  Copyright 2026, MetaQuotes Ltd. |
+//|                                                     www.mql5.com |
+//|                           https://www.mql5.com/ru/articles/25764 |
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MetaQuotes Ltd."
 #property link        "https://www.mql5.com"
@@ -9,10 +11,13 @@
 #property description "Offline study pass for the Habi policy"
 #property description "Fits prior, decoder and critic from history"
 #property description "Runs bounded work chunks from a timer"
-#property strict
+
 //--- Offline settings belong only to this program.
 #define HABI_OFFLINE_STUDY
-input group    "---- Study ----"
+//+------------------------------------------------------------------+
+//| Input parameters                                                 |
+//+------------------------------------------------------------------+
+input group "---- Study ----"
 input datetime Start=D'2024.01.01';
 input datetime End=D'2026.01.01';
 input int      Epochs=100;
@@ -21,35 +26,38 @@ input double   MaxBalance=150;
 #include "Trajectory.mqh"
 
 //+------------------------------------------------------------------+
-//| Входные параметры                                                |
+//| Input parameters                                                 |
 //+------------------------------------------------------------------+
-const uint StudyWorkBudgetMs=200;    // timer work chunk, ms
+//+------------------------------------------------------------------+
+//| Global variables                                                 |
+//+------------------------------------------------------------------+
+const uint StudyWorkBudgetMs=200;   // timer work chunk, ms
 
 //+------------------------------------------------------------------+
-//| Глобальные переменные                                            |
+//| Global variables                                                 |
 //+------------------------------------------------------------------+
-CHabiModels   ExtModels;          // model container
-CHabiHistory  ExtHistory;         // history and sampling
-bool          ExtRunning=false;   // timer reentry guard
-bool          ExtFinished=false;  // study finished flag
-bool          ExtFailed=false;    // fatal error flag
-int           ExtPass=0;          // fitted pass counter
-int           ExtDecision=-1;     // current sample index
-ulong         ExtExamples=0;      // trained examples counter
-ulong         ExtSkipped=0;       // skipped examples counter
-ulong         ExtStartedMs=0;     // elapsed wall time, including initialization
-ulong         ExtShownMs=0;       // last chart update
-ulong         ExtTotal=0;         // planned sample decisions across all passes
-const string  StudyStopButton="HABI_Study_Stop";
-ulong         ExtBCUpdates=0;
-double        ExtBCSquaredError=0;
-double        ExtKLSum=0;
-double        ExtBeta=0;
-double        ExtMCSquaredError=0;
-string        ExtStage="Инициализация моделей / OpenCL";
+CHabiModels  ExtModels;                                   // model container
+CHabiHistory ExtHistory;                                  // history and sampling
+bool         ExtRunning=false;                            // timer reentry guard
+bool         ExtFinished=false;                           // study finished flag
+bool         ExtFailed=false;                             // fatal error flag
+int          ExtPass=0;                                   // fitted pass counter
+int          ExtDecision=-1;                              // current sample index
+ulong        ExtExamples=0;                               // trained examples counter
+ulong        ExtSkipped=0;                                // skipped examples counter
+ulong        ExtStartedMs=0;                              // elapsed wall time, including initialization
+ulong        ExtShownMs=0;                                // last chart update
+ulong        ExtTotal=0;                                  // planned sample decisions across all passes
+const string StudyStopButton="HABI_Study_Stop";
+ulong        ExtBCUpdates=0;
+double       ExtBCSquaredError=0;
+double       ExtKLSum=0;
+double       ExtBeta=0;
+double       ExtMCSquaredError=0;
+string       ExtStage="Инициализация моделей / OpenCL";
 
 //+------------------------------------------------------------------+
-//| StudyProgress - refreshes the chart without slowing each sample |
+//| StudyProgress - refreshes the chart without slowing each sample  |
 //+------------------------------------------------------------------+
 string StudyMetrics()
   {
@@ -60,18 +68,23 @@ string StudyMetrics()
    string mc=ExtExamples>0 ?
              StringFormat("Critic MC RMSE=%.6g | MC=%I64u",
                           MathSqrt(ExtMCSquaredError/ExtExamples),ExtExamples) : "Critic MC RMSE: —";
+
    return(bc+" | "+mc);
   }
 
+//+------------------------------------------------------------------+
+//| StudyProgress                                                    |
+//+------------------------------------------------------------------+
 void StudyProgress(bool force=false)
   {
    ulong now=GetTickCount64();
-   if(!force && now-ExtShownMs<500)
+   if(!force&&now-ExtShownMs<500)
       return;
+
    ExtShownMs=now;
-   ulong processed=ExtExamples+ExtSkipped;
+   ulong  processed=ExtExamples+ExtSkipped;
    double percent=ExtTotal>0?MathMin(100.0,100.0*(double)processed/(double)ExtTotal):0;
-   ulong seconds=(now-ExtStartedMs)/1000;
+   ulong  seconds=(now-ExtStartedMs)/1000;
    double speed=seconds>0?(double)ExtExamples/(double)seconds:0;
    Comment(StringFormat("HABI Study | %s %s\nЭтап: %s\nFIT: %s — %s\n"+
                         "Проход: %d/%d | Прогресс: %.2f%% (%I64u/%I64u)\n"+
@@ -83,35 +96,36 @@ void StudyProgress(bool force=false)
                         ExtExamples,ExtSkipped,seconds/3600,(uint)((seconds/60)%60),(uint)(seconds%60),speed,StudyMetrics()));
    ChartRedraw();
   }
-
 //+------------------------------------------------------------------+
 //| OnInit - prepares modules and starts the study timer             |
 //+------------------------------------------------------------------+
 int OnInit()
   {
    ExtStartedMs=GetTickCount64();
-   if(!ObjectCreate(0,StudyStopButton,OBJ_BUTTON,0,0,0) ||
-      !ObjectSetInteger(0,StudyStopButton,OBJPROP_CORNER,CORNER_RIGHT_UPPER) ||
-      !ObjectSetInteger(0,StudyStopButton,OBJPROP_XDISTANCE,200) ||
-      !ObjectSetInteger(0,StudyStopButton,OBJPROP_YDISTANCE,5) ||
-      !ObjectSetInteger(0,StudyStopButton,OBJPROP_XSIZE,180) ||
-      !ObjectSetInteger(0,StudyStopButton,OBJPROP_YSIZE,28) ||
-      !ObjectSetInteger(0,StudyStopButton,OBJPROP_COLOR,clrWhite) ||
-      !ObjectSetInteger(0,StudyStopButton,OBJPROP_BGCOLOR,clrFireBrick) ||
+   if(!ObjectCreate(0,StudyStopButton,OBJ_BUTTON,0,0,0)||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_CORNER,CORNER_RIGHT_UPPER)||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_XDISTANCE,200)||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_YDISTANCE,5)||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_XSIZE,180)||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_YSIZE,28)||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_COLOR,clrWhite)||
+      !ObjectSetInteger(0,StudyStopButton,OBJPROP_BGCOLOR,clrFireBrick)||
       !ObjectSetString(0,StudyStopButton,OBJPROP_TEXT,"Остановить и сохранить"))
      {
       ExtFailed=true;
       ExtStage="Ошибка создания кнопки остановки";
       StudyProgress(true);
+
       return(INIT_FAILED);
      }
 
    StudyProgress(true);
-   if(StudyWorkBudgetMs<1 || !HabiStart(ExtModels,ExtHistory,0))
+   if(StudyWorkBudgetMs<1||!HabiStart(ExtModels,ExtHistory,0))
      {
       ExtFailed=true;
       ExtStage="Ошибка инициализации моделей / OpenCL";
       StudyProgress(true);
+
       return(INIT_FAILED);
      }
 
@@ -122,6 +136,7 @@ int OnInit()
       ExtFailed=true;
       ExtStage="Ошибка загрузки истории";
       StudyProgress(true);
+
       return(INIT_FAILED);
      }
 
@@ -133,13 +148,18 @@ int OnInit()
       ExtFailed=true;
       ExtStage="Ошибка запуска таймера";
       StudyProgress(true);
+
       return(INIT_FAILED);
      }
 
    ExtStage="Обучение BC / MC";
    StudyProgress(true);
+
    return(INIT_SUCCEEDED);
   }
+//+------------------------------------------------------------------+
+//| StudyFinish                                                      |
+//+------------------------------------------------------------------+
 void StudyFinish(bool interrupted)
   {
    ExtFinished=true;
@@ -168,12 +188,14 @@ void StudyFinish(bool interrupted)
    ExpertRemove();
   }
 
+//+------------------------------------------------------------------+
+//| OnChartEvent                                                     |
+//+------------------------------------------------------------------+
 void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
   {
-   if(id==CHARTEVENT_OBJECT_CLICK && sparam==StudyStopButton && !ExtFailed && !IsStopped())
+   if(id==CHARTEVENT_OBJECT_CLICK&&sparam==StudyStopButton&&!ExtFailed&&!IsStopped())
       StudyFinish(ExtPass<Epochs);
   }
-
 //+------------------------------------------------------------------+
 //| StudyStep - performs one training step on the current sample     |
 //+------------------------------------------------------------------+
@@ -186,24 +208,25 @@ bool StudyStep()
       if(ExtPass>=Epochs)
         {
          StudyFinish(false);
+
          return(false);
         }
 
       ExtDecision=ArraySize(ExtHistory.rates)-MathMax(HistoryBars,5)-1;
      }
 
-   int e=ExtDecision--;
-   SState record;
-   SHabiSnapshot snapshot;
-   float observation[];
-   float teacher[];
-   float distribution[];
-   float actions[];
+   int             e=ExtDecision--;
+   SState          record;
+   SHabiSnapshot   snapshot;
+   float           observation[];
+   float           teacher[];
+   float           distribution[];
+   float           actions[];
    SHabiEvaluation evaluation;
-   uint id=0;
-   double teacher_return=0;
+   uint            id=0;
+   double          teacher_return=0;
 
-   if(!ExtHistory.Sample(e,snapshot,record,observation) || !HabiTeacher(ExtHistory,e,snapshot,observation,teacher,teacher_return))
+   if(!ExtHistory.Sample(e,snapshot,record,observation)||!HabiTeacher(ExtHistory,e,snapshot,observation,teacher,teacher_return))
      {
       ExtSkipped++;
 
@@ -272,7 +295,7 @@ bool StudyStep()
 //+------------------------------------------------------------------+
 void OnTimer()
   {
-   if(ExtRunning || ExtFinished || ExtFailed || IsStopped())
+   if(ExtRunning||ExtFinished||ExtFailed||IsStopped())
       return;
 
    ExtRunning=true;
@@ -281,10 +304,10 @@ void OnTimer()
 
    do
      {
-      if(IsStopped() || !StudyStep())
+      if(IsStopped()||!StudyStep())
          break;
      }
-   while(!ExtFinished && !ExtFailed && !IsStopped() && GetMicrosecondCount()-started<budget);
+   while(!ExtFinished&&!ExtFailed&&!IsStopped()&&GetMicrosecondCount()-started<budget);
 
    ExtRunning=false;
    if(!ExtFinished)
@@ -298,7 +321,7 @@ void OnDeinit(const int reason)
    EventKillTimer();
    ObjectDelete(0,StudyStopButton);
    ChartRedraw();
-   if(!ExtFinished && !ExtFailed)
+   if(!ExtFinished&&!ExtFailed)
      {
       ExtStage="Остановлено";
       StudyProgress(true);

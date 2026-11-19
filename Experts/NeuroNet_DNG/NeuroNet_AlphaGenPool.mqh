@@ -1,5 +1,7 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_AlphaGenPool.mqh                                        |
+//|                                        NeuroNet_AlphaGenPool.mqh |
+//|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/25939 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAGENPOOL_MQH
 #define NEURONET_ALPHAGENPOOL_MQH
@@ -15,7 +17,7 @@ bool CAlphaGenPool::Configure(COpenCLMy*context,const float&config[])
       if(!MathIsValidNumber(config[i]))
          ReturnFalse;
 
-   //--- reconfiguration must not retain indices belonging to an earlier context.
+//--- reconfiguration must not retain indices belonging to an earlier context.
    m_cEvaluationWork.Clear();
    m_cEvaluated.Clear();
    m_cHistory.Clear();
@@ -57,7 +59,7 @@ bool CAlphaGenPool::Configure(COpenCLMy*context,const float&config[])
       !Allocate(m_cPreparedSignal,1)||!Allocate(m_cPreparedContext,m_iContext)||!Allocate(m_cDummy,1))
       ReturnFalse;
 
-   //--- the first accepted formula receives ID one; zero remains unassigned.
+//--- the first accepted formula receives ID one; zero remains unassigned.
    if(!m_cBanks.Update(1,1)||!m_cBanks.BufferWrite())
       ReturnFalse;
 
@@ -102,8 +104,7 @@ bool CAlphaGenPool::Transaction(CBufferFloat*market,CBufferFloat*tokens,const in
    uint global_work_size[]={lanes};
    uint local_work_size[]={lanes};
 
-   if(!OpenCL.Execute(def_k_AGPoolTransaction,1,global_work_offset,global_work_size,local_work_size))
-      ReturnFalse;
+   kernelExecuteLoc(def_k_AGPoolTransaction,global_work_offset,global_work_size,local_work_size)
 
    return(true);
   }
@@ -157,7 +158,7 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
    if(lane_limit<1)
       ReturnFalse;
 
-   //--- tree reductions in commit use a power-of-two group, at most 64 lanes.
+//--- tree reductions in commit use a power-of-two group, at most 64 lanes.
    uint lanes=1;
    while(lanes<64&&2*(long)lanes<=lane_limit)
       lanes*=2;
@@ -237,7 +238,7 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
    return(true);
   }
 //+------------------------------------------------------------------+
-//| SetWarmupHistory - Upload the pinned history once.                |
+//| SetWarmupHistory - Upload the pinned history once.               |
 //+------------------------------------------------------------------+
 bool CAlphaGenPool::SetWarmupHistory(const float&history[],const int count)
   {
@@ -246,25 +247,27 @@ bool CAlphaGenPool::SetWarmupHistory(const float&history[],const int count)
    if(!m_cHistory.AssignArray(history)||!m_cHistory.BufferCreate(OpenCL))
       ReturnFalse;
    m_iHistoryCount=count;
+
    return(true);
   }
 //+------------------------------------------------------------------+
-//| SignalStep - Evaluate history in groups and advance the ring      |
+//| SignalStep - Evaluate history in groups and advance the ring     |
 //+------------------------------------------------------------------+
 bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool first,const int count)
   {
    int span=count>0?count:m_iWindow;
    if(!OpenCL||!market||span<m_iWindow||(long)market.Total()<5*(long)span)
       ReturnFalse;
-   int start=first?(mode==2?m_iLookback:MathMax(m_iLookback,span-m_iContext)):span-1;
+   int  start=first?(mode==2?m_iLookback:MathMax(m_iLookback,span-m_iContext)):span-1;
    long required=2*(long)m_iCapacity*span;
    long available=0;
    if(required>INT_MAX||!OpenCL.GetLocalMemorySize(available))
       ReturnFalse;
-   int tile=(int)MathMin(span,(available-512)/(8*(long)m_iTokens));
+   int  tile=(int)MathMin(span,(available-512)/(8*(long)m_iTokens));
    long local_bytes=0;
    long kernel_local_bytes=0;
-   //--- the driver may pad local allocations beyond the requested byte count.
+
+//--- the driver may pad local allocations beyond the requested byte count.
    while(tile>m_iLookback)
      {
       long slots=(long)m_iTokens*tile;
@@ -285,7 +288,7 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
                   available,kernel_local_bytes,m_iLookback,m_iTokens);
       ReturnFalse;
      }
-   if(m_cHistoryValues.Total()!=required&& !Allocate(m_cHistoryValues,(int)required))
+   if(m_cHistoryValues.Total()!=required&&!Allocate(m_cHistoryValues,(int)required))
       ReturnFalse;
    setBuffer(def_k_AGPoolEvaluateHistory,0,market.GetIndex())
    setBuffer(def_k_AGPoolEvaluateHistory,1,m_cConfig.GetIndex())
@@ -336,8 +339,7 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
    uint global_work_size[]={lanes};
    uint local_work_size[]={lanes};
 
-   if(!OpenCL.Execute(def_k_AGPoolSignal,1,global_work_offset,global_work_size,local_work_size))
-      ReturnFalse;
+   kernelExecuteLoc(def_k_AGPoolSignal,global_work_offset,global_work_size,local_work_size)
 #ifdef ALPHAGEN_TEST_DIAGNOSTICS
    if(!OpenCL.WaitAlphaGenKernel(def_k_AGPoolSignal))
      {
@@ -412,7 +414,7 @@ bool CAlphaGenPool::Load(const int file_handle)
       !prepared_context.Load(file_handle)||prepared_context.Total()!=m_iContext)
       ReturnFalse;
 
-   //--- every persisted scalar must be finite before any working state changes.
+//--- every persisted scalar must be finite before any working state changes.
    for(int i=0;i<banks.Total();i++)if(!MathIsValidNumber(banks.At(i))){ReturnFalse;}
    for(int i=0;i<rings.Total();i++)if(!MathIsValidNumber(rings.At(i))){ReturnFalse;}
    for(int i=0;i<control.Total();i++)if(!MathIsValidNumber(control.At(i))){ReturnFalse;}

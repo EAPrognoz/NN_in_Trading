@@ -1,7 +1,9 @@
 //+------------------------------------------------------------------+
 //|                                                 Habi_History.mqh |
-//|                                 Copyright 2026, MetaQuotes Ltd.  |
-//|                                                    www.mql5.com  |
+//|                                                             Habi |
+//|                                  Copyright 2026, MetaQuotes Ltd. |
+//|                                                     www.mql5.com |
+//|                           https://www.mql5.com/ru/articles/25764 |
 //+------------------------------------------------------------------+
 #ifndef HABI_HISTORY_MQH
 #define HABI_HISTORY_MQH
@@ -19,15 +21,15 @@ enum EHabiReason
 //+------------------------------------------------------------------+
 struct SHabiSymbol
   {
-   double            point;                          // price point size
-   double            tick;                           // trade tick size
-   double            lot_min;                        // minimum volume
-   double            lot_step;                       // volume step
-   double            lot_max;                        // maximum volume
-   double            lot_limit;                      // volume limit of one position
-   long              stops;                          // stops level in points
-   long              freeze;                         // freeze level in points
-   long              trade_mode;                     // allowed trade modes
+   double point;        // price point size
+   double tick;         // trade tick size
+   double lot_min;      // minimum volume
+   double lot_step;     // volume step
+   double lot_max;      // maximum volume
+   double lot_limit;    // volume limit of one position
+   long   stops;        // stops level in points
+   long   freeze;       // freeze level in points
+   long   trade_mode;   // allowed trade modes
 //+------------------------------------------------------------------+
 //| Read - reads and validates the symbol constraints                |
 //+------------------------------------------------------------------+
@@ -43,7 +45,7 @@ struct SHabiSymbol
       freeze=SymbolInfoInteger(_Symbol,SYMBOL_TRADE_FREEZE_LEVEL);
       trade_mode=SymbolInfoInteger(_Symbol,SYMBOL_TRADE_MODE);
 
-      return(point>0 && tick>0 && lot_min>0 && lot_step>0 && lot_max>=lot_min && VolumeCap>=lot_min);
+      return(point>0&&tick>0&&lot_min>0&&lot_step>0&&lot_max>=lot_min&&VolumeCap>=lot_min);
      }
   };
 //+------------------------------------------------------------------+
@@ -51,23 +53,23 @@ struct SHabiSymbol
 //+------------------------------------------------------------------+
 struct SHabiCost
   {
-   datetime          time;                         // record time of the bar
-   double            buy_value;                    // buy conversion value
-   double            sell_value;                   // sell conversion value
-   double            margin_buy;                   // buy margin rate
-   double            margin_sell;                  // sell margin rate
-   double            entry_cash;                   // entry cash cost
-   double            exit_cash;                    // exit cash cost
-   double            hold_buy;                     // buy holding cost
-   double            hold_sell;                    // sell holding cost
-   double            swap_buy;                     // buy swap rate
-   double            swap_sell;                    // sell swap rate
+   datetime time;          // record time of the bar
+   double   buy_value;     // buy conversion value
+   double   sell_value;    // sell conversion value
+   double   margin_buy;    // buy margin rate
+   double   margin_sell;   // sell margin rate
+   double   entry_cash;    // entry cash cost
+   double   exit_cash;     // exit cash cost
+   double   hold_buy;      // buy holding cost
+   double   hold_sell;     // sell holding cost
+   double   swap_buy;      // buy swap rate
+   double   swap_sell;     // sell swap rate
 //+------------------------------------------------------------------+
 //| Valid - checks that every cost field is usable                   |
 //+------------------------------------------------------------------+
    bool              Valid()
      {
-      return(buy_value>0 && sell_value>0 && margin_buy>0 && margin_sell>0 && MathIsValidNumber(buy_value+sell_value+margin_buy+margin_sell+entry_cash+exit_cash+hold_buy+hold_sell+swap_buy+swap_sell));
+      return(buy_value>0&&sell_value>0&&margin_buy>0&&margin_sell>0&&MathIsValidNumber(buy_value+sell_value+margin_buy+margin_sell+entry_cash+exit_cash+hold_buy+hold_sell+swap_buy+swap_sell));
      }
   };
 //+------------------------------------------------------------------+
@@ -75,29 +77,29 @@ struct SHabiCost
 //+------------------------------------------------------------------+
 struct SHabiSnapshot
   {
-   double            balance;                      // balance before the command
-   double            equity;                       // equity before the command
-   double            previous_balance;             // balance of the previous bar
-   double            previous_equity;              // equity of the previous bar
-   double            lot;                          // signed position volume
-   double            entry;                        // position entry price
-   double            sl;                           // protective stop level
-   double            tp;                           // profit target level
-   double            profit_buy;                   // profit of a long position
-   double            profit_sell;                  // profit of a short position
-   double            age_weight;                   // age weighted profit
-   double            swap;                         // accrued swap
-   datetime          entered;                      // position open time
+   double   balance;            // balance before the command
+   double   equity;             // equity before the command
+   double   previous_balance;   // balance of the previous bar
+   double   previous_equity;    // equity of the previous bar
+   double   lot;                // signed position volume
+   double   entry;              // position entry price
+   double   sl;                 // protective stop level
+   double   tp;                 // profit target level
+   double   profit_buy;         // profit of a long position
+   double   profit_sell;        // profit of a short position
+   double   age_weight;         // age weighted profit
+   double   swap;               // accrued swap
+   datetime entered;            // position open time
   };
 //+------------------------------------------------------------------+
 //| SHabiAction - mapped target position and reason                  |
 //+------------------------------------------------------------------+
 struct SHabiAction
   {
-   double            lot;                            // signed target lot, source raw unchanged
-   double            sl;                             // target stop level
-   double            tp;                             // target profit level
-   int               reason;                         // mapping reason code
+   double lot;      // signed target lot, source raw unchanged
+   double sl;       // target stop level
+   double tp;       // target profit level
+   int    reason;   // mapping reason code
   };
 
 //+------------------------------------------------------------------+
@@ -128,7 +130,7 @@ bool HabiProtection(int side,double sl,double tp,double bid,double ask,SHabiSymb
    double dtp=side*(tp-mark);
    double dsl=side*(mark-sl);
 
-   return(sl>0 && tp>0 && dtp>2*base && dsl>base && dtp>s.freeze*s.point && dsl>s.freeze*s.point);
+   return(sl>0&&tp>0&&dtp>2*base&&dsl>base&&dtp>s.freeze*s.point&&dsl>s.freeze*s.point);
   }
 //+------------------------------------------------------------------+
 //| HabiMap - maps a policy output to a position                     |
@@ -140,7 +142,7 @@ bool HabiMap(const float &raw[],double bid,double ask,SHabiSymbol &s,double free
    a.tp=0;
    a.reason=HABI_OK;
 
-   if(ArraySize(raw)!=6 || bid<=0 || ask<bid)
+   if(ArraySize(raw)!=6||bid<=0||ask<bid)
      {
       a.reason=HABI_INPUT_ERROR;
 
@@ -148,14 +150,14 @@ bool HabiMap(const float &raw[],double bid,double ask,SHabiSymbol &s,double free
      }
 
    for(int k=0;k<6;k++)
-      if(!MathIsValidNumber(raw[k]) || raw[k]<0 || raw[k]>1)
+      if(!MathIsValidNumber(raw[k])||raw[k]<0||raw[k]>1)
         {
          a.reason=HABI_INPUT_ERROR;
 
          return(false);
         }
 
-   if(VolumeCap<s.lot_min || s.tick<=0)
+   if(VolumeCap<s.lot_min||s.tick<=0)
      {
       a.reason=HABI_PROFILE_ERROR;
 
@@ -176,7 +178,7 @@ bool HabiMap(const float &raw[],double bid,double ask,SHabiSymbol &s,double free
 
    a.lot=side*HabiLot(v,s);
 
-   if(raw[off+1]==0 || raw[off+2]==0)
+   if(raw[off+1]==0||raw[off+2]==0)
      {
       a.reason=HABI_ZERO_PROTECTION;
 
@@ -189,9 +191,9 @@ bool HabiMap(const float &raw[],double bid,double ask,SHabiSymbol &s,double free
    a.tp=HabiTick(price+side*raw[off+1]*MaxTP*s.point,s.tick);
    a.sl=HabiTick(price-side*raw[off+2]*MaxSL*s.point,s.tick);
 
-   bool direction=s.trade_mode==SYMBOL_TRADE_MODE_FULL || (side>0 && s.trade_mode==SYMBOL_TRADE_MODE_LONGONLY) || (side<0 && s.trade_mode==SYMBOL_TRADE_MODE_SHORTONLY);
+   bool direction=s.trade_mode==SYMBOL_TRADE_MODE_FULL||(side>0&&s.trade_mode==SYMBOL_TRADE_MODE_LONGONLY)||(side<0&&s.trade_mode==SYMBOL_TRADE_MODE_SHORTONLY);
 
-   if(!direction || !HabiProtection(side,a.sl,a.tp,bid,ask,s) || (s.lot_limit>0 && MathAbs(a.lot)>s.lot_limit) || MathAbs(a.lot)*(side>0?margin_buy:margin_sell)>free_margin)
+   if(!direction||!HabiProtection(side,a.sl,a.tp,bid,ask,s)||(s.lot_limit>0&&MathAbs(a.lot)>s.lot_limit)||MathAbs(a.lot)*(side>0?margin_buy:margin_sell)>free_margin)
       a.reason=HABI_ECONOMIC_INVALID;
 
    return(true);
@@ -201,7 +203,7 @@ bool HabiMap(const float &raw[],double bid,double ask,SHabiSymbol &s,double free
 //+------------------------------------------------------------------+
 bool HabiAccount(SHabiSnapshot &s,datetime time,float &account[])
   {
-   if(s.previous_balance<=0 || s.previous_equity<=0 || EtalonBalance<=0)
+   if(s.previous_balance<=0||s.previous_equity<=0||EtalonBalance<=0)
       return(false);
 
    ArrayResize(account,13);
@@ -231,13 +233,13 @@ bool HabiAccount(SHabiSnapshot &s,datetime time,float &account[])
 class CHabiHistory
   {
 public:
-   MqlRates          rates[];                   // copied history rates
-   SHabiCost         costs[];                   // terminal-derived bar profiles
-   SHabiSymbol       symbol;                    // symbol constraints
-   int               rsi;                       // rsi indicator handle
-   int               cci;                       // cci indicator handle
-   int               atr;                       // atr indicator handle
-   int               macd;                      // macd indicator handle
+   MqlRates    rates[];   // copied history rates
+   SHabiCost   costs[];   // terminal-derived bar profiles
+   SHabiSymbol symbol;    // symbol constraints
+   int         rsi;       // rsi indicator handle
+   int         cci;       // cci indicator handle
+   int         atr;       // atr indicator handle
+   int         macd;      // macd indicator handle
 //+------------------------------------------------------------------+
 //| CHabiHistory - constructor resets indicator handles              |
 //+------------------------------------------------------------------+
@@ -278,25 +280,25 @@ public:
       atr=iATR(_Symbol,TimeFrame,ATRPeriod);
       macd=iMACD(_Symbol,TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice);
 
-      return(rsi!=INVALID_HANDLE && cci!=INVALID_HANDLE && atr!=INVALID_HANDLE && macd!=INVALID_HANDLE);
+      return(rsi!=INVALID_HANDLE&&cci!=INVALID_HANDLE&&atr!=INVALID_HANDLE&&macd!=INVALID_HANDLE);
      }
 //+------------------------------------------------------------------+
-//| Load - loads terminal rates and symbol profiles                      |
+//| Load - loads terminal rates and symbol profiles                  |
 //+------------------------------------------------------------------+
    bool              Load()
      {
-      if(Start<=0 || End<=Start || PlanningHorizonBars<1 || NForecast<1 || Epochs<1)
+      if(Start<=0||End<=Start||PlanningHorizonBars<1||NForecast<1||Epochs<1)
          return(false);
 
-      bool range=MinBalance!=0 || MaxBalance!=0;
+      bool range=MinBalance!=0||MaxBalance!=0;
 
       if(range)
         {
-         if(!MathIsValidNumber(MinBalance+MaxBalance) || MinBalance<=0 || MaxBalance<MinBalance)
+         if(!MathIsValidNumber(MinBalance+MaxBalance)||MinBalance<=0||MaxBalance<MinBalance)
             return(false);
         }
       else
-         if(!MathIsValidNumber(InitialOfflineBalance) || InitialOfflineBalance<=0)
+         if(!MathIsValidNumber(InitialOfflineBalance)||InitialOfflineBalance<=0)
             return(false);
 
       ArraySetAsSeries(rates,true);
@@ -311,13 +313,13 @@ public:
          return(false);
         }
 
-      //--- AC-SRM methodology: symbol money value and native margin, no file input.
+   //--- AC-SRM methodology: symbol money value and native margin, no file input.
       double tick_value=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
       double price_value=tick_value/symbol.tick;
       double volume=symbol.lot_min;
-      int count=ArraySize(rates);
+      int    count=ArraySize(rates);
 
-      if(!MathIsValidNumber(price_value) || price_value<=0 || ArrayResize(costs,count)!=count)
+      if(!MathIsValidNumber(price_value)||price_value<=0||ArrayResize(costs,count)!=count)
          return(false);
 
       for(int i=0;i<count;i++)
@@ -330,20 +332,23 @@ public:
          double bid=rates[i].open;
          double ask=bid+rates[i].spread*symbol.point;
 
-         if(bid<=0 || ask<bid ||
-            !OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,volume,ask,c.margin_buy) ||
+         if(bid<=0||ask<bid||
+            !OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,volume,ask,c.margin_buy)||
             !OrderCalcMargin(ORDER_TYPE_SELL,_Symbol,volume,bid,c.margin_sell))
             return(false);
 
          c.margin_buy/=volume;
          c.margin_sell/=volume;
-         //--- Spread is already in historical bid/ask prices. AC-SRM does not
-         //--- add commission or swap to its virtual horizon labels.
+
+      //--- spread is already in historical bid/ask prices. AC-SRM does not
+      //--- add commission or swap to its virtual horizon labels.
          if(!c.Valid())
             return(false);
+
          costs[i]=c;
         }
       PrintFormat("Habi history: terminal bars=%d, no external cost file",count);
+
       return(count>0);
      }
 //+------------------------------------------------------------------+
@@ -351,7 +356,7 @@ public:
 //+------------------------------------------------------------------+
    bool              Cost(datetime t,SHabiCost &c)
      {
-      //--- CopyRates series is newest first; keep lookup logarithmic.
+   //--- copyRates series is newest first; keep lookup logarithmic.
       int left=0,right=ArraySize(costs)-1;
       while(left<=right)
         {
@@ -359,6 +364,7 @@ public:
          if(costs[mid].time==t)
            {
             c=costs[mid];
+
             return(c.Valid());
            }
          if(costs[mid].time>t)
@@ -366,6 +372,7 @@ public:
          else
             right=mid-1;
         }
+
       return(false);
      }
 //+------------------------------------------------------------------+
@@ -392,7 +399,7 @@ public:
          datetime t=past[j].time;
          int      k=iBarShift(_Symbol,TimeFrame,t,true);
 
-         if(k<0 || iTime(_Symbol,TimeFrame,k)!=t)
+         if(k<0||iTime(_Symbol,TimeFrame,k)!=t)
             return(false);
 
          out[j]=(float)(past[j].close-past[j].open);
@@ -405,7 +412,7 @@ public:
             int handle=f==4?rsi:(f==5?cci:(f==6?atr:macd));
             int buffer=f==8?1:0;
 
-            if(CopyBuffer(handle,buffer,k,1,v)!=1 || v[0]==EMPTY_VALUE || !MathIsValidNumber(v[0]))
+            if(CopyBuffer(handle,buffer,k,1,v)!=1||v[0]==EMPTY_VALUE||!MathIsValidNumber(v[0]))
                return(false);
 
             out[f*HistoryBars+j]=(float)v[0];
@@ -438,7 +445,7 @@ public:
       int    count=0;
       double last=-1;
 
-      //--- reservoir selection is uniform over distinct admissible rounded levels
+   //--- reservoir selection is uniform over distinct admissible rounded levels
       for(int k=1;k<=int(MathFloor(maxdist/symbol.tick));k++)
         {
          double p=HabiTick(mark+(tp?side:-side)*k*symbol.tick,symbol.tick);
@@ -446,7 +453,7 @@ public:
          double base=MathMax(symbol.stops,1)*symbol.point+(ask-bid);
          double min_dist=MathMax((tp?2:1)*base,symbol.freeze*symbol.point);
 
-         if(p<=0 || dist<=min_dist || dist>maxdist+symbol.tick*1e-8 || p==last)
+         if(p<=0||dist<=min_dist||dist>maxdist+symbol.tick*1e-8||p==last)
             continue;
 
          last=p;
@@ -466,17 +473,17 @@ public:
       ZeroMemory(s);
       ZeroMemory(record);
 
-      if(e<0 || e+MathMax(HistoryBars,5)>=ArraySize(rates))
+      if(e<0||e+MathMax(HistoryBars,5)>=ArraySize(rates))
          return(false);
 
-      bool range=MinBalance!=0 || MaxBalance!=0;
+      bool range=MinBalance!=0||MaxBalance!=0;
 
-      if(range && (MinBalance<=0 || MaxBalance<MinBalance))
+      if(range&&(MinBalance<=0||MaxBalance<MinBalance))
          return(false);
 
       s.balance=range?MinBalance+Uniform()*(MaxBalance-MinBalance):InitialOfflineBalance;
 
-      if(!MathIsValidNumber(s.balance) || s.balance<=0)
+      if(!MathIsValidNumber(s.balance)||s.balance<=0)
          return(false);
 
       s.previous_balance=s.balance;
@@ -493,7 +500,7 @@ public:
          SHabiCost now;
          SHabiCost prev;
 
-         if(!Cost(rates[e+age].time,entry) || !Cost(rates[e].time,now) || !Cost(rates[e+1].time,prev))
+         if(!Cost(rates[e+age].time,entry)||!Cost(rates[e].time,now)||!Cost(rates[e+1].time,prev))
             return(false);
 
          int    selected=0;
@@ -528,7 +535,7 @@ public:
          double profit=s.lot*(mark-s.entry)*(side>0?now.buy_value:now.sell_value);
          double pp=s.lot*(pmark-s.entry)*(side>0?prev.buy_value:prev.sell_value);
 
-         //--- B already includes settled entry and holding costs, undo only the last interval
+      //--- B already includes settled entry and holding costs, undo only the last interval
          s.previous_balance=s.balance-MathAbs(s.lot)*(side>0?prev.hold_buy:prev.hold_sell);
 
          double previous_swap=0;
@@ -554,14 +561,14 @@ public:
          s.profit_sell=side<0?profit:0;
          s.age_weight=(double)(rates[e].time-s.entered)*MathAbs(profit);
 
-         if(!Level(side,false,rates[e].open,rates[e].open+rates[e].spread*symbol.point,s.sl) || !Level(side,true,rates[e].open,rates[e].open+rates[e].spread*symbol.point,s.tp))
+         if(!Level(side,false,rates[e].open,rates[e].open+rates[e].spread*symbol.point,s.sl)||!Level(side,true,rates[e].open,rates[e].open+rates[e].spread*symbol.point,s.tp))
             return(false);
         }
 
       float market[];
       float account[];
 
-      if(!Market(rates[e].time,market) || !HabiAccount(s,rates[e].time,account))
+      if(!Market(rates[e].time,market)||!HabiAccount(s,rates[e].time,account))
          return(false);
 
       ArrayCopy(record.state,market);
@@ -575,6 +582,7 @@ public:
       return(true);
      }
   };
+
 //--- all alternatives share one bar loop, helpers operate on entire columns
 
 //+------------------------------------------------------------------+
@@ -618,11 +626,11 @@ vector HabiValue(const vector &lot,const vector &entry,double bid,double ask,SHa
 //+------------------------------------------------------------------+
 struct SHabiEvaluation
   {
-   float             target[];                       // target value of a candidate
-   double            money_return[];                 // money return of a candidate
-   double            penalty[];                      // penalty of a candidate
-   int               status[];                       // validity flag of a candidate
-   int               reason[];                       // reason code of a candidate
+   float  target[];         // target value of a candidate
+   double money_return[];   // money return of a candidate
+   double penalty[];        // penalty of a candidate
+   int    status[];         // validity flag of a candidate
+   int    reason[];         // reason code of a candidate
   };
 
 //+------------------------------------------------------------------+
@@ -630,10 +638,10 @@ struct SHabiEvaluation
 //+------------------------------------------------------------------+
 bool HabiHistoricalEvaluate(CHabiHistory &history,int e,SHabiSnapshot &source,const float &actions[],int C,SHabiEvaluation &result)
   {
-   if(C<1 || ArraySize(actions)!=C*6 || e-PlanningHorizonBars+1<0)
+   if(C<1||ArraySize(actions)!=C*6||e-PlanningHorizonBars+1<0)
       return(false);
 
-   matrix agents=matrix::Zeros(C,HC_COUNT);
+   matrix    agents=matrix::Zeros(C,HC_COUNT);
    SHabiCost first;
 
    if(!history.Cost(history.rates[e].time,first))
@@ -655,7 +663,7 @@ bool HabiHistoricalEvaluate(CHabiHistory &history,int e,SHabiSnapshot &source,co
       int    side=lot>0?1:-1;
       double mark=side>0?bid:ask;
 
-      if(lot!=0 && ((side*(mark-sl)<=0) || (side*(mark-tp)>=0)))
+      if(lot!=0&&((side*(mark-sl)<=0)||(side*(mark-tp)>=0)))
         {
          cash=lot*(mark-entry)*(side>0?first.buy_value:first.sell_value)+swap+MathAbs(lot)*first.exit_cash;
          lot=0;
@@ -676,18 +684,18 @@ bool HabiHistoricalEvaluate(CHabiHistory &history,int e,SHabiSnapshot &source,co
          return(false);
 
       bool reverse=lot*a.lot<0;
-      bool close=a.reason==HABI_FLAT || a.reason==HABI_ZERO_PROTECTION || reverse;
+      bool close=a.reason==HABI_FLAT||a.reason==HABI_ZERO_PROTECTION||reverse;
 
-      if(close && lot!=0)
+      if(close&&lot!=0)
         {
          cash+=lot*((lot>0?bid:ask)-entry)*(lot>0?first.buy_value:first.sell_value)+swap+MathAbs(lot)*first.exit_cash;
          lot=0;
          swap=0;
         }
 
-      //--- closing a prior exposure changes available equity through its actual exit costs
-      //--- a margin-only rejection before a reverse close is reconsidered after that close
-      if(close && a.reason!=HABI_FLAT && a.reason!=HABI_ZERO_PROTECTION)
+   //--- closing a prior exposure changes available equity through its actual exit costs
+   //--- a margin-only rejection before a reverse close is reconsidered after that close
+      if(close&&a.reason!=HABI_FLAT&&a.reason!=HABI_ZERO_PROTECTION)
         {
          available_equity=source.balance+cash;
 
@@ -730,14 +738,14 @@ bool HabiHistoricalEvaluate(CHabiHistory &history,int e,SHabiSnapshot &source,co
       agents[n,HC_CASH]=cash;
       agents[n,HC_PREVIOUS]=source_profit;
       agents[n,HC_ACTIVE]=lot!=0;
-      agents[n,HC_PENALTY]=(a.reason==HABI_ZERO_PROTECTION || a.reason==HABI_ECONOMIC_INVALID)?PenaltyInvalidCurrency:0;
+      agents[n,HC_PENALTY]=(a.reason==HABI_ZERO_PROTECTION||a.reason==HABI_ECONOMIC_INVALID)?PenaltyInvalidCurrency:0;
       agents[n,HC_REASON]=a.reason;
      }
 
    for(int h=0;h<PlanningHorizonBars;h++)
      {
-      int i=e-h;
-      MqlRates bar=history.rates[i];
+      int       i=e-h;
+      MqlRates  bar=history.rates[i];
       SHabiCost cost;
 
       if(!history.Cost(bar.time,cost))
@@ -808,13 +816,13 @@ bool HabiHistoricalEvaluate(CHabiHistory &history,int e,SHabiSnapshot &source,co
       double penalty=agents[n,HC_PENALTY];
       double target=money-penalty;
 
-      if(!MathIsValidNumber(target) || MathAbs(target)>FLT_MAX)
+      if(!MathIsValidNumber(target)||MathAbs(target)>FLT_MAX)
          return(false);
 
       result.target[n]=(float)target;
       result.money_return[n]=money;
       result.penalty[n]=penalty;
-      result.reason[n]=(int)(penalty>0 || agents[n,HC_EXIT_REASON]==HABI_OK?agents[n,HC_REASON]:agents[n,HC_EXIT_REASON]);
+      result.reason[n]=(int)(penalty>0||agents[n,HC_EXIT_REASON]==HABI_OK?agents[n,HC_REASON]:agents[n,HC_EXIT_REASON]);
       result.status[n]=1;
      }
 
@@ -823,11 +831,11 @@ bool HabiHistoricalEvaluate(CHabiHistory &history,int e,SHabiSnapshot &source,co
 //+------------------------------------------------------------------+
 //| HabiOracul - builds the teacher action from bars                 |
 //+------------------------------------------------------------------+
-vector<float> HabiOracul(const vector<float> &account,const matrix<float> &future)
+vector<float>HabiOracul(const vector<float>&account,const matrix<float>&future)
   {
-   vector<float> result=vector<float>::Zeros(NActions);
-   matrix<float> fstate=future;
-   vector<float> target=fstate.Col(0).CumSum();
+   vector<float>result=vector<float>::Zeros(NActions);
+   matrix<float>fstate=future;
+   vector<float>target=fstate.Col(0).CumSum();
 
 //--- the target is the cumulative move of the forecast close
    if(account[4]>account[5])
@@ -848,7 +856,7 @@ vector<float> HabiOracul(const vector<float> &account,const matrix<float> &futur
          sl=MathMin(sl,target[j]+fstate[j,2]-fstate[j,0]);
         }
 
-      if(pos>0 && tp>0)
+      if(pos>0&&tp>0)
         {
          sl=float(MathMax(MathMin(MathAbs(sl)/(MaxSL*SymbolInfoDouble(_Symbol,SYMBOL_POINT)),1),0.01));
          tp=float(MathMax(MathMin(tp/(MaxTP*SymbolInfoDouble(_Symbol,SYMBOL_POINT)),1),0.01));
@@ -879,7 +887,7 @@ vector<float> HabiOracul(const vector<float> &account,const matrix<float> &futur
             sl=MathMax(sl,target[j]+fstate[j,1]-fstate[j,0]);
            }
 
-         if(pos>0 && tp<0)
+         if(pos>0&&tp<0)
            {
             sl=float(MathMax(MathMin(MathAbs(sl)/(MaxSL*SymbolInfoDouble(_Symbol,SYMBOL_POINT)),1),0.01));
             tp=float(MathMax(MathMin(-tp/(MaxTP*SymbolInfoDouble(_Symbol,SYMBOL_POINT)),1),0.01));
@@ -892,17 +900,17 @@ vector<float> HabiOracul(const vector<float> &account,const matrix<float> &futur
         }
       else
         {
-         ulong argmin=target.ArgMin();
+         ulong  argmin=target.ArgMin();
          ulong  argmax=target.ArgMax();
-         float max_sl=float(MaxSL*SymbolInfoDouble(_Symbol,SYMBOL_POINT));
+         float  max_sl=float(MaxSL*SymbolInfoDouble(_Symbol,SYMBOL_POINT));
          double equity=account[2]*account[0]*EtalonBalance/(1+account[1]);
 
-         while(argmax>0 && argmin>0)
+         while(argmax>0&&argmin>0)
            {
-            if(argmax<argmin && target[argmax]/2>MathAbs(target[argmin]) && MathAbs(target[argmin])<max_sl)
+            if(argmax<argmin&&target[argmax]/2>MathAbs(target[argmin])&&MathAbs(target[argmin])<max_sl)
                break;
 
-            if(argmax>argmin && target[argmax]<MathAbs(target[argmin]/2) && target[argmax]<max_sl)
+            if(argmax>argmin&&target[argmax]<MathAbs(target[argmin]/2)&&target[argmax]<max_sl)
                break;
 
             target.Resize(MathMin(argmax,argmin));
@@ -911,7 +919,7 @@ vector<float> HabiOracul(const vector<float> &account,const matrix<float> &futur
             argmax=target.ArgMax();
            }
 
-         if(argmin==0 || (argmax<argmin && argmax>0))
+         if(argmin==0||(argmax<argmin&&argmax>0))
            {
             float tp=0;
             float sl=0;
@@ -929,7 +937,7 @@ vector<float> HabiOracul(const vector<float> &account,const matrix<float> &futur
                sl=MathMin(sl,target[j]+fstate[j,2]-fstate[j,0]);
               }
 
-            if(pos>0 && tp>0)
+            if(pos>0&&tp>0)
               {
                sl=(float)MathMax(MathMin(MathAbs(sl)/(MaxSL*SymbolInfoDouble(_Symbol,SYMBOL_POINT)),1),0.01);
                tp=(float)MathMin(tp/(MaxTP*SymbolInfoDouble(_Symbol,SYMBOL_POINT)),1);
@@ -942,7 +950,7 @@ vector<float> HabiOracul(const vector<float> &account,const matrix<float> &futur
            }
          else
            {
-            if(argmax==0 || argmax>argmin)
+            if(argmax==0||argmax>argmin)
               {
                float tp=0;
                float sl=0;
@@ -960,7 +968,7 @@ vector<float> HabiOracul(const vector<float> &account,const matrix<float> &futur
                   sl=MathMax(sl,target[j]+fstate[j,1]-fstate[j,0]);
                  }
 
-               if(pos>0 && tp<0)
+               if(pos>0&&tp<0)
                  {
                   sl=(float)MathMax(MathMin(MathAbs(sl)/(MaxSL*SymbolInfoDouble(_Symbol,SYMBOL_POINT)),1),0.01);
                   tp=(float)MathMin(-tp/(MaxTP*SymbolInfoDouble(_Symbol,SYMBOL_POINT)),1);
@@ -988,7 +996,7 @@ bool HabiTeacher(CHabiHistory &h,int e,SHabiSnapshot &snapshot,const float &obse
    if(e-NForecast+1<0)
       return(false);
 
-   matrix<float> future=matrix<float>::Zeros(NForecast,9);
+   matrix<float>future=matrix<float>::Zeros(NForecast,9);
 
    for(int j=0;j<NForecast;j++)
      {
@@ -1004,13 +1012,13 @@ bool HabiTeacher(CHabiHistory &h,int e,SHabiSnapshot &snapshot,const float &obse
    if(!HabiAccount(snapshot,h.rates[e].time,account))
       return(false);
 
-   vector<float> av;
+   vector<float>av;
 
    if(!av.Assign(account))
       return(false);
 
-   vector<float> candidate=HabiOracul(av,future);
-   float         pair[];
+   vector<float>candidate=HabiOracul(av,future);
+   float pair[];
 
    ArrayResize(pair,12);
    ArrayInitialize(pair,0);
@@ -1023,7 +1031,7 @@ bool HabiTeacher(CHabiHistory &h,int e,SHabiSnapshot &snapshot,const float &obse
    if(!HabiHistoricalEvaluate(h,e,snapshot,pair,2,evaluation))
       return(false);
 
-   bool valid=evaluation.penalty[0]==0 && evaluation.target[0]>evaluation.target[1];
+   bool valid=evaluation.penalty[0]==0&&evaluation.target[0]>evaluation.target[1];
 
    ArrayResize(teacher,6);
 

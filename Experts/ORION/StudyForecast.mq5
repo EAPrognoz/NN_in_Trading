@@ -1,43 +1,47 @@
 //+------------------------------------------------------------------+
 //|                                                StudyForecast.mq5 |
+//|                                                            ORION |
 //|                                              Copyright 2026, DNG |
-//|                                https://www.mql5.com/ru/users/dng |
+//|                           https://www.mql5.com/ru/articles/23517 |
 //+------------------------------------------------------------------+
-#property copyright "Copyright 2026, DNG"
-#property link      "https://www.mql5.com/ru/users/dng"
-#property version   "1.00"
+#property copyright   "Copyright 2026, DNG"
+#property link        "https://www.mql5.com/ru/users/dng"
+#property version     "1.00"
 #property description "Харнесс обучения прогнозного блока ORION."
 #property description "Обучает модель на заданном историческом интервале и проверяет восстановление чекпоинта."
 #property description "Только для тестов; ордера не выставляет."
 #define ORION_FORECAST_STUDY
 #define Study
 #include "Trajectory.mqh"
-input datetime Start  = D'2024.01.01';
-input datetime End    = D'2026.01.01';
-input int      Epochs = 100;
-input bool     ORIONRecoverySmoke = false;
-input uint     ORIONRecoverySmokeBatches = 2000;
-input uint     ORIONRecoverySmokeAge = 512;
 //+------------------------------------------------------------------+
-//| Function OnInit.                                                 |
+//| Input parameters                                                 |
+//+------------------------------------------------------------------+
+input datetime Start=D'2024.01.01';
+input datetime End=D'2026.01.01';
+input int      Epochs=100;
+input bool     ORIONRecoverySmoke=false;
+input uint     ORIONRecoverySmokeBatches=2000;
+input uint     ORIONRecoverySmokeAge=512;
+//+------------------------------------------------------------------+
+//| OnInit - function OnInit.                                        |
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   return (CreateORIONForecastStudy() ? INIT_SUCCEEDED : INIT_FAILED);
+   return(CreateORIONForecastStudy() ? INIT_SUCCEEDED : INIT_FAILED);
   }
 //+------------------------------------------------------------------+
-//| Function OnDeinit.                                               |
+//| OnDeinit - function OnDeinit.                                    |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
    ReleaseORIONForecastStudy(reason);
   }
 //+------------------------------------------------------------------+
-//| Chart event callback.                                            |
+//| OnChartEvent - chart event callback.                             |
 //+------------------------------------------------------------------+
-void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
   {
-   if(id == 1001)
+   if(id==1001)
       TrainORIONForecast();
   }
 //+------------------------------------------------------------------+

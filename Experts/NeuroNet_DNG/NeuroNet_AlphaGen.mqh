@@ -1,5 +1,7 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_AlphaGen.mqh                                            |
+//|                                            NeuroNet_AlphaGen.mqh |
+//|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/25894 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_BUILDING_FACADE
 #include "NeuroNet.mqh"
@@ -295,7 +297,7 @@ bool CNeuronAlphaGenLSTMOCL::RestoreWorkspace(COpenCLMy*context,const int capaci
    long local_bytes=0;
    long state_bytes=(long)hidden*22*sizeof(float);
 
-   //--- one local-state implementation on every OpenCL device.
+//--- one local-state implementation on every OpenCL device.
    if(!OpenCL.GetLocalMemorySize(local_bytes)||state_bytes>local_bytes||state_bytes>INT_MAX)
      {
       PrintFormat("AlphaGen LSTM local memory insufficient: required=%I64d available=%I64d",
@@ -355,7 +357,7 @@ bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat*source,CBufferFloat*input_gra
       (long)m_iLength*m_iInputs>input_gradient.Total())
       ReturnFalse;
 
-   const int first=horizon>0 && horizon<m_iLength?m_iLength-horizon:0;
+   const int first=horizon>0&&horizon<m_iLength?m_iLength-horizon:0;
    setArgument(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_first,first)
    setBuffer(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_input,source.GetIndex())
    setArgument(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_length,m_iLength)

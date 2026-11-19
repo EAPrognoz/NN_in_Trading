@@ -1,7 +1,9 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_Habi.mqh                                                |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                                NeuroNet_Habi.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
+//|                           https://www.mql5.com/ru/articles/25646 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_DECLARATIONS_MQH
 #include "NeuroNet.mqh"
@@ -123,7 +125,7 @@ bool HabiScratch(CBufferFloat*buf,COpenCLMy*cl,int size)
          return(false);
 
       if(!buf.BufferInit(size,0))
-         return(false);
+         ReturnFalse;
      }
 
    if(buf.GetOpenCL()!=cl||buf.GetIndex()<0)
@@ -166,11 +168,17 @@ class CNeuronHabiLeafOCL:public CNeuronBaseOCL
 public:
                      CNeuronHabiLeafOCL();
    virtual bool Configure(CLayerDescription*d);
+//+------------------------------------------------------------------+
+//| SupportsOpenCLChecked                                            |
+//+------------------------------------------------------------------+
    virtual bool SupportsOpenCLChecked(void)const override
      {
       return(true);
      }
    virtual bool SetOpenCLChecked(COpenCLMy*cl);
+//+------------------------------------------------------------------+
+//| SetOpenCL                                                        |
+//+------------------------------------------------------------------+
    virtual void SetOpenCL(COpenCLMy*cl)override
      {
       SetOpenCLChecked(cl);
@@ -203,12 +211,18 @@ public:
      {
       return((n==0||N==n)&&L==l&&A==a&&M==m&&posterior==post);
      }
+//+------------------------------------------------------------------+
+//| Clear                                                            |
+//+------------------------------------------------------------------+
    virtual bool Clear()override
      {
       frame.Reset();
 
       return(CNeuronBaseOCL::Clear());
      }
+//+------------------------------------------------------------------+
+//| WeightsUpdate                                                    |
+//+------------------------------------------------------------------+
    virtual bool WeightsUpdate(CNeuronBaseOCL*s,float tau)override
      {
       return(s&&s.Type()==Type()&&s.Neurons()==Neurons()&&tau>=0&&tau<=1);
@@ -224,10 +238,16 @@ protected:
    bool         posterior;
    SHabiFrame   frame;
    CBufferFloat scratch[9];
+//+------------------------------------------------------------------+
+//| updateInputWeights                                               |
+//+------------------------------------------------------------------+
    virtual bool updateInputWeights(CNeuronBaseOCL*p)override
      {
       return(true);
      }
+//+------------------------------------------------------------------+
+//| updateInputWeights                                               |
+//+------------------------------------------------------------------+
    virtual bool updateInputWeights(CNeuronBaseOCL*p,CBufferFloat*ctx)override
      {
       return(updateInputWeights(p));
@@ -362,6 +382,9 @@ public:
      {
       initialized=false;
      }
+//+------------------------------------------------------------------+
+//| Type                                                             |
+//+------------------------------------------------------------------+
    virtual int Type()const override
      {
       return(defNeuronHabiObservationOCL);
@@ -419,7 +442,7 @@ bool CNeuronHabiObservationOCL::feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)
                return(false);
 
       if(!o.BufferWrite()||!bn.SetBatchCount(2))
-         return(false);
+         ReturnFalse;
      }
 
    bool accumulate=!startup&&bTrain&&frame.mode==F_GAUSSIAN_BC;
@@ -438,7 +461,7 @@ bool CNeuronHabiObservationOCL::feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| calcInputGradients -...                                          |
+//| calcInputGradients - calcInputGradients -...                     |
 //+------------------------------------------------------------------+
 bool CNeuronHabiObservationOCL::calcInputGradients(CNeuronBaseOCL*p,CBufferFloat*ctx,
                                                    CBufferFloat *sg,ENUM_ACTIVATION ac=None)
@@ -462,7 +485,7 @@ bool CNeuronHabiObservationOCL::calcInputGradients(CNeuronBaseOCL*p,CBufferFloat
    return(Concat(market.getGradient(),GetPointer(scratch[1]),p.getGradient(),M,Neurons()-M,1));
   }
 //+------------------------------------------------------------------+
-//| updateInputWeights -...                                          |
+//| updateInputWeights - updateInputWeights -...                     |
 //+------------------------------------------------------------------+
 bool CNeuronHabiObservationOCL::updateInputWeights(CNeuronBaseOCL*p)
   {
@@ -549,7 +572,7 @@ bool CNeuronHabiObservationOCL::Save(const int h)
    if(!BNStateValid()||!CNeuronHabiLeafOCL::Save(h))
       return(false);
 
-//--- версия локального состояния; старые checkpoint не поддерживаются
+//--- local state version; older checkpoints are unsupported
    dFileWriteUInt(h,0x48424E31)
    dFileWriteUInt(h,1)
    dFileWriteUInt(h,M)
@@ -629,7 +652,7 @@ bool CNeuronHabiObservationOCL::Load(const int h)
 
       return(false);
 
-//--- проверка границы вложенного состояния до его восстановления
+//--- validate the nested state boundary before restoring it
    ulong start=FileTell(h);
    ulong end=start+size;
 
@@ -685,14 +708,29 @@ class CNeuronHabiGaussianOCL:public CNeuronHabiLeafOCL
   {
 public:
                      CNeuronHabiGaussianOCL();
+//+------------------------------------------------------------------+
+//| Type                                                             |
+//+------------------------------------------------------------------+
    virtual int Type()const override
      {
       return(defNeuronHabiGaussianOCL);
      }
    bool Beta(bool use_adaptive,double value,double lr_beta,double k_target,
              double r1,double r2,double epsilon);
-   double LastKL()const{return(cached_K);}
-   bool   IsBetaAdaptive()const{return(adaptive);}
+//+------------------------------------------------------------------+
+//| LastKL                                                           |
+//+------------------------------------------------------------------+
+   double LastKL()const
+     {
+      return(cached_K);
+     }
+//+------------------------------------------------------------------+
+//| IsBetaAdaptive                                                   |
+//+------------------------------------------------------------------+
+   bool   IsBetaAdaptive()const
+     {
+      return(adaptive);
+     }
    //+------------------------------------------------------------------+
    //| EffectiveBeta - Implement EffectiveBeta                          |
    //+------------------------------------------------------------------+
@@ -703,25 +741,25 @@ public:
    virtual bool Save(const int h)override;
    virtual bool Load(const int h)override;
 protected:
-   bool         adaptive;
-   double       beta_fixed;
-   double       b;
-   double       mb;
-   double       vb;
-   double       eta;
-   double       rho1;
-   double       rho2;
-   double       eps;
-   double       target;
-   uint         bt;
-   double       cached_K;
+   bool   adaptive;
+   double beta_fixed;
+   double b;
+   double mb;
+   double vb;
+   double eta;
+   double rho1;
+   double rho2;
+   double eps;
+   double target;
+   uint   bt;
+   double cached_K;
    virtual bool feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)override;
    virtual bool calcInputGradients(CNeuronBaseOCL*p,CBufferFloat*ctx,CBufferFloat*sg,
                                    ENUM_ACTIVATION ac=None)override;
    virtual bool updateInputWeights(CNeuronBaseOCL*p)override;
   };
 //+------------------------------------------------------------------+
-//| CNeuronHabiGaussianOCL -...                                      |
+//| CNeuronHabiGaussianOCL - CNeuronHabiGaussianOCL -...             |
 //+------------------------------------------------------------------+
 CNeuronHabiGaussianOCL::CNeuronHabiGaussianOCL()
   {
@@ -764,7 +802,7 @@ bool CNeuronHabiGaussianOCL::feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)
    return(Finite(L));
   }
 //+------------------------------------------------------------------+
-//| calcInputGradients -...                                          |
+//| calcInputGradients - calcInputGradients -...                     |
 //+------------------------------------------------------------------+
 bool CNeuronHabiGaussianOCL::calcInputGradients(CNeuronBaseOCL*p,CBufferFloat*ctx,
                                                 CBufferFloat *sg,ENUM_ACTIVATION ac=None)
@@ -850,7 +888,7 @@ bool CNeuronHabiGaussianOCL::calcInputGradients(CNeuronBaseOCL*p,CBufferFloat*ct
    return(true);
   }
 //+------------------------------------------------------------------+
-//| updateInputWeights -...                                          |
+//| updateInputWeights - updateInputWeights -...                     |
 //+------------------------------------------------------------------+
 bool CNeuronHabiGaussianOCL::updateInputWeights(CNeuronBaseOCL*p)
   {
@@ -961,6 +999,9 @@ class CNeuronHabiVAEOCL:public CVAE
   {
 public:
                      CNeuronHabiVAEOCL();
+//+------------------------------------------------------------------+
+//| Type                                                             |
+//+------------------------------------------------------------------+
    virtual int Type()const override
      {
       return(defNeuronHabiVAEOCL);
@@ -987,21 +1028,33 @@ public:
      {
       return(L);
      }
+//+------------------------------------------------------------------+
+//| Clear                                                            |
+//+------------------------------------------------------------------+
    virtual bool Clear()override
      {
       frame.Reset();
 
       return(CVAE::Clear());
      }
+//+------------------------------------------------------------------+
+//| SupportsOpenCLChecked                                            |
+//+------------------------------------------------------------------+
    virtual bool SupportsOpenCLChecked()const override
      {
       return(true);
      }
    virtual bool SetOpenCLChecked(COpenCLMy*cl)override;
+//+------------------------------------------------------------------+
+//| SetOpenCL                                                        |
+//+------------------------------------------------------------------+
    virtual void SetOpenCL(COpenCLMy*cl)override
      {
       SetOpenCLChecked(cl);
      }
+//+------------------------------------------------------------------+
+//| WeightsUpdate                                                    |
+//+------------------------------------------------------------------+
    virtual bool WeightsUpdate(CNeuronBaseOCL*src,float tau)override
      {
       return(src&&src.Type()==Type()&&src.Neurons()==Neurons());
@@ -1060,7 +1113,7 @@ bool CNeuronHabiVAEOCL::feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)
    kernelExecute(k,off,sz)
 
    if(!flags.BufferRead())
-      return(false);
+      ReturnFalse;
 
    for(int i=0;i<flags.Total();i++)
       if(flags.At(i)!=0)
@@ -1184,11 +1237,17 @@ bool CNeuronHabiVAEOCL::Load(const int h)
 class CNeuronHabiDecoderHeadOCL:public CNeuronHabiLeafOCL
   {
 public:
+//+------------------------------------------------------------------+
+//| Type                                                             |
+//+------------------------------------------------------------------+
    virtual int Type()const override
      {
       return(defNeuronHabiDecoderHeadOCL);
      }
 protected:
+//+------------------------------------------------------------------+
+//| feedForward                                                      |
+//+------------------------------------------------------------------+
    virtual bool feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)override
      {
       return(frame.Forward(ctx,0,bTrain)&&frame.mode==21&&Pass(p));
@@ -1197,7 +1256,7 @@ protected:
                                    ENUM_ACTIVATION ac=None)override;
   };
 //+------------------------------------------------------------------+
-//| calcInputGradients -...                                          |
+//| calcInputGradients - calcInputGradients -...                     |
 //+------------------------------------------------------------------+
 bool CNeuronHabiDecoderHeadOCL::calcInputGradients(CNeuronBaseOCL*p,CBufferFloat*ctx,
                                                    CBufferFloat *sg,ENUM_ACTIVATION ac=None)
@@ -1231,7 +1290,16 @@ bool CNeuronHabiDecoderHeadOCL::calcInputGradients(CNeuronBaseOCL*p,CBufferFloat
 class CNeuronHabiCriticInputOCL:public CNeuronHabiLeafOCL
   {
 public:
-   CNeuronHabiCriticInputOCL(){direct_valid=false;}
+//+------------------------------------------------------------------+
+//| CNeuronHabiCriticInputOCL                                        |
+//+------------------------------------------------------------------+
+   CNeuronHabiCriticInputOCL()
+     {
+      direct_valid=false;
+     }
+//+------------------------------------------------------------------+
+//| Type                                                             |
+//+------------------------------------------------------------------+
    virtual int Type()const override
      {
       return(defNeuronHabiCriticInputOCL);
@@ -1244,7 +1312,7 @@ public:
       return(direct_valid&&scratch[2].GetData(v)==(int)(2*L));
      }
 protected:
-   bool         direct_valid;
+   bool direct_valid;
    virtual bool feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)override;
    virtual bool calcInputGradients(CNeuronBaseOCL*p,CBufferFloat*ctx,CBufferFloat*sg,
                                    ENUM_ACTIVATION ac=None)override;
@@ -1272,7 +1340,7 @@ bool CNeuronHabiCriticInputOCL::feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)
    return(ConcatVecMatrix(GetPointer(scratch[0]),p.getOutput(),Output,2*L,N,A,1,true));
   }
 //+------------------------------------------------------------------+
-//| calcInputGradients -...                                          |
+//| calcInputGradients - calcInputGradients -...                     |
 //+------------------------------------------------------------------+
 bool CNeuronHabiCriticInputOCL::calcInputGradients(CNeuronBaseOCL*p,CBufferFloat*ctx,
                                                    CBufferFloat *sg,ENUM_ACTIVATION ac=None)
@@ -1323,6 +1391,9 @@ public:
      {
       gamma=.5f;
      }
+//+------------------------------------------------------------------+
+//| Type                                                             |
+//+------------------------------------------------------------------+
    virtual int Type()const override
      {
       return(defNeuronHabiCriticHeadOCL);
@@ -1331,7 +1402,10 @@ public:
    virtual bool Save(const int h)override;
    virtual bool Load(const int h)override;
 protected:
-   float        gamma;
+   float gamma;
+//+------------------------------------------------------------------+
+//| feedForward                                                      |
+//+------------------------------------------------------------------+
    virtual bool feedForward(CNeuronBaseOCL*p,CBufferFloat*ctx)override
      {
       return(frame.Forward(ctx,2*L,bTrain)&&(frame.mode==31||frame.mode==35||
@@ -1341,7 +1415,7 @@ protected:
                                    ENUM_ACTIVATION ac=None)override;
   };
 //+------------------------------------------------------------------+
-//| calcInputGradients -...                                          |
+//| calcInputGradients - calcInputGradients -...                     |
 //+------------------------------------------------------------------+
 bool CNeuronHabiCriticHeadOCL::calcInputGradients(CNeuronBaseOCL*p,CBufferFloat*ctx,
                                                   CBufferFloat *sg,ENUM_ACTIVATION ac=None)

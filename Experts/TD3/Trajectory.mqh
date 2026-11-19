@@ -1,13 +1,14 @@
 //+------------------------------------------------------------------+
-//| Trajectory.mqh |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                   Trajectory.mqh |
+//|                                                              TD3 |
+//|                                                   Copyright DNG® |
+//|                           https://www.mql5.com/ru/articles/12892 |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
 #property version   "1.00"
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
 #include "..\RL\FQF.mqh"
 //---
@@ -25,195 +26,201 @@
 #define                    PoliticAdjust  1.0e-1f
 #define                    MaxReplayBuffer 200
 //+------------------------------------------------------------------+
-//| |
+//| SState                                                           |
 //+------------------------------------------------------------------+
 struct SState
   {
-   float             state[HistoryBars * BarDescr];
-   float             account[AccountDescr - 1];
-   float             action[NActions];
+   float state[HistoryBars * BarDescr];
+   float account[AccountDescr-1];
+   float action[NActions];
    //---
                      SState(void);
    //---
    bool              Save(int file_handle);
    bool              Load(int file_handle);
-   //--- overloading
+
+//--- overloading
    void              operator=(const SState &obj)
      {
-      ArrayCopy(state, obj.state);
-      ArrayCopy(account, obj.account);
-      ArrayCopy(action, obj.action);
+      ArrayCopy(state,obj.state);
+      ArrayCopy(account,obj.account);
+      ArrayCopy(action,obj.action);
      }
   };
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Implements SState.                                             |
+//| SState - | Implements SState.                                    |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
-   ArrayInitialize(state, 0);
-   ArrayInitialize(account, 0);
+   ArrayInitialize(state,0);
+   ArrayInitialize(account,0);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Saves .                                                        |
+//| Save - | Saves .                                                 |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
-   if(file_handle == INVALID_HANDLE)
-      return false;
+   if(file_handle==INVALID_HANDLE)
+      return(false);
 //---
-   int total = ArraySize(state);
-   if(FileWriteInteger(file_handle, total) < sizeof(int))
-      return false;
-   for(int i = 0; i < total; i++)
-      if(FileWriteFloat(file_handle, state[i]) < sizeof(float))
-         return false;
+   int total=ArraySize(state);
+   if(FileWriteInteger(file_handle,total)<sizeof(int))
+      return(false);
+
+   for(int i=0; i<total; i++)
+      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
+         return(false);
 //---
-   total = ArraySize(account);
-   if(FileWriteInteger(file_handle, total) < sizeof(int))
-      return false;
-   for(int i = 0; i < total; i++)
-      if(FileWriteFloat(file_handle, account[i]) < sizeof(float))
-         return false;
+   total=ArraySize(account);
+   if(FileWriteInteger(file_handle,total)<sizeof(int))
+      return(false);
+
+   for(int i=0; i<total; i++)
+      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
+         return(false);
 //---
-   total = ArraySize(action);
-   if(FileWriteInteger(file_handle, total) < sizeof(int))
-      return false;
-   for(int i = 0; i < total; i++)
-      if(FileWriteFloat(file_handle, action[i]) < sizeof(float))
-         return false;
+   total=ArraySize(action);
+   if(FileWriteInteger(file_handle,total)<sizeof(int))
+      return(false);
+
+   for(int i=0; i<total; i++)
+      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
+         return(false);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Loads .                                                        |
+//| Load - | Loads .                                                 |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
-   if(file_handle == INVALID_HANDLE)
-      return false;
+   if(file_handle==INVALID_HANDLE)
+      return(false);
    if(FileIsEnding(file_handle))
-      return false;
+      return(false);
 //---
-   int total = FileReadInteger(file_handle);
-   if(total != ArraySize(state))
-      return false;
+   int total=FileReadInteger(file_handle);
+   if(total!=ArraySize(state))
+      return(false);
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         return false;
-      state[i] = FileReadFloat(file_handle);
+         return(false);
+      state[i]=FileReadFloat(file_handle);
      }
 //---
-   total = FileReadInteger(file_handle);
-   if(total != ArraySize(account))
-      return false;
+   total=FileReadInteger(file_handle);
+   if(total!=ArraySize(account))
+      return(false);
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         return false;
-      account[i] = FileReadFloat(file_handle);
+         return(false);
+      account[i]=FileReadFloat(file_handle);
      }
 //---
-   total = FileReadInteger(file_handle);
-   if(total != ArraySize(action))
-      return false;
+   total=FileReadInteger(file_handle);
+   if(total!=ArraySize(action))
+      return(false);
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         return false;
-      action[i] = FileReadFloat(file_handle);
+         return(false);
+      action[i]=FileReadFloat(file_handle);
      }
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//| |
+//| STrajectory                                                      |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
-   SState            States[Buffer_Size];
-   float             Revards[Buffer_Size];
-   int               Total;
-   float             DiscountFactor;
-   bool              CumCounted;
+   SState States[Buffer_Size];
+   float  Revards[Buffer_Size];
+   int    Total;
+   float  DiscountFactor;
+   bool   CumCounted;
    //---
                      STrajectory(void);
    //---
-   bool              Add(SState &state, float reward);
+   bool              Add(SState &state,float reward);
    void              CumRevards(void);
    //---
    bool              Save(int file_handle);
    bool              Load(int file_handle);
   };
 //+------------------------------------------------------------------+
-//| |
+//| STrajectory                                                      |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
    DiscountFactor(DiscFactor),
    // Creates and manages object lifecycle for CumCounted.
    CumCounted(false)
   {
-   ArrayInitialize(Revards, 0);
+   ArrayInitialize(Revards,0);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Saves .                                                        |
+//| Save - | Saves .                                                 |
 //+------------------------------------------------------------------+
 bool STrajectory::Save(int file_handle)
   {
-   if(file_handle == INVALID_HANDLE)
-      return false;
+   if(file_handle==INVALID_HANDLE)
+      return(false);
 //---
    if(!CumCounted)
       CumRevards();
-   if(FileWriteInteger(file_handle, Total) < sizeof(int))
-      return false;
-   for(int i = 0; i < Total; i++)
+   if(FileWriteInteger(file_handle,Total)<sizeof(int))
+      return(false);
+
+   for(int i=0; i<Total; i++)
      {
       if(!States[i].Save(file_handle))
-         return false;
-      if(FileWriteFloat(file_handle, Revards[i]) < sizeof(float))
-         return false;
+         return(false);
+
+      if(FileWriteFloat(file_handle,Revards[i])<sizeof(float))
+         return(false);
      }
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Loads .                                                        |
+//| Load - | Loads .                                                 |
 //+------------------------------------------------------------------+
 bool STrajectory::Load(int file_handle)
   {
-   if(file_handle == INVALID_HANDLE)
-      return false;
+   if(file_handle==INVALID_HANDLE)
+      return(false);
 //---
-   Total = FileReadInteger(file_handle);
-   if(Total >= ArraySize(Revards))
-      return false;
-   CumCounted = true;
+   Total=FileReadInteger(file_handle);
+   if(Total>=ArraySize(Revards))
+      return(false);
+   CumCounted=true;
 //---
-   for(int i = 0; i < Total; i++)
+   for(int i=0; i<Total; i++)
      {
       if(!States[i].Load(file_handle))
-         return false;
-      Revards[i] = FileReadFloat(file_handle);
+         return(false);
+      Revards[i]=FileReadFloat(file_handle);
      }
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
 //| | Creates and manages object lifecycle for CumRevards.           |
 //+------------------------------------------------------------------+
@@ -222,414 +229,471 @@ void STrajectory::CumRevards(void)
    if(CumCounted)
       return;
 //---
-   for(int i = Total - 2; i >= 0; i--)
-      Revards[i] += Revards[i + 1] * DiscountFactor;
-   CumCounted = true;
+   for(int i=Total-2; i>=0; i--)
+      Revards[i] += Revards[i+1] * DiscountFactor;
+   CumCounted=true;
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Implements Add.                                                |
+//| Add - | Implements Add.                                          |
 //+------------------------------------------------------------------+
-bool STrajectory::Add(SState &state, float reward)
+bool STrajectory::Add(SState &state,float reward)
   {
-   if(Total + 1 >= ArraySize(Revards))
-      return false;
-   States[Total] = state;
-   if(Total > 0)
-      Revards[Total - 1] = reward;
+   if(Total+1>=ArraySize(Revards))
+      return(false);
+
+   States[Total]=state;
+   if(Total>0)
+      Revards[Total-1]=reward;
    Total++;
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Saves TotalBase.                                               |
+//| SaveTotalBase - | Saves TotalBase.                               |
 //+------------------------------------------------------------------+
 bool SaveTotalBase(void)
   {
-   int total = ArraySize(Buffer);
-   if(total < 0)
-      return true;
-   int handle = FileOpen(FileName + ".bd", FILE_WRITE | FILE_BIN | FILE_COMMON);
-   if(handle < 0)
-      return false;
-   int start = MathMax(total - MaxReplayBuffer, 0);
-   if(FileWriteInteger(handle, total - start) < INT_VALUE)
+   int total=ArraySize(Buffer);
+   if(total<0)
+      return(true);
+
+   int handle=FileOpen(FileName+".bd",FILE_WRITE | FILE_BIN | FILE_COMMON);
+   if(handle<0)
+      return(false);
+
+   int start=MathMax(total-MaxReplayBuffer,0);
+   if(FileWriteInteger(handle,total-start)<INT_VALUE)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   for(int i = start; i < total; i++)
+   for(int i=start; i<total; i++)
       if(!Buffer[i].Save(handle))
         {
          FileClose(handle);
-         return false;
+
+         return(false);
         }
    FileFlush(handle);
    FileClose(handle);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Loads TotalBase.                                               |
+//| LoadTotalBase - | Loads TotalBase.                               |
 //+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
-   int handle = FileOpen(FileName + ".bd", FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
-   if(handle < 0)
-      return false;
-   int total = FileReadInteger(handle);
-   if(total <= 0)
+   int handle=FileOpen(FileName+".bd",FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
+   if(handle<0)
+      return(false);
+
+   int total=FileReadInteger(handle);
+   if(total<=0)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   if(ArrayResize(Buffer, total) < total)
+   if(ArrayResize(Buffer,total)<total)
      {
       FileClose(handle);
-      return false;
+
+      return(false);
      }
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
       if(!Buffer[i].Load(handle))
         {
          FileClose(handle);
-         return false;
+
+         return(false);
         }
    FileClose(handle);
 //---
-   return true;
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates or initializes Descriptions.                           |
+//| CreateDescriptions - | Creates or initializes Descriptions.      |
 //+------------------------------------------------------------------+
-bool CreateDescriptions(CArrayObj *actor, CArrayObj *critic)
+bool CreateDescriptions(CArrayObj *actor,CArrayObj *critic)
   {
 //---
    CLayerDescription *descr;
 //---
    if(!actor)
      {
-      actor = new CArrayObj();
+      actor=new CArrayObj();
       if(!actor)
-         return false;
+         return(false);
      }
    if(!critic)
      {
-      critic = new CArrayObj();
+      critic=new CArrayObj();
       if(!critic)
-         return false;
+         return(false);
      }
-//--- Actor
+
+//--- actor
    actor.Clear();
-//--- Input layer
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   uint prev_count = descr.count = (HistoryBars * BarDescr);
-   descr.window = 0;
-   descr.activation = None;
-   descr.optimization = ADAM;
+
+//--- input layer
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   uint prev_count=descr.count=(HistoryBars * BarDescr);
+   descr.window=0;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 1
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBatchNormOCL;
-   descr.count = prev_count;
-   descr.batch = 1000;
-   descr.activation = None;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBatchNormOCL;
+   descr.count=prev_count;
+   descr.batch=1000;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 2
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronConvOCL;
-   prev_count = descr.count = prev_count - 1;
-   descr.window = 2;
-   descr.step = 1;
-   descr.window_out = 8;
-   descr.activation = LReLU;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronConvOCL;
+   prev_count=descr.count=prev_count-1;
+   descr.window=2;
+   descr.step=1;
+   descr.window_out=8;
+   descr.activation=LReLU;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 3
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronConvOCL;
-   prev_count = descr.count = prev_count;
-   descr.window = 8;
-   descr.step = 8;
-   descr.window_out = 8;
-   descr.activation = LReLU;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronConvOCL;
+   prev_count=descr.count=prev_count;
+   descr.window=8;
+   descr.step=8;
+   descr.window_out=8;
+   descr.activation=LReLU;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 4
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = 256;
-   descr.optimization = ADAM;
-   descr.activation = LReLU;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=256;
+   descr.optimization=ADAM;
+   descr.activation=LReLU;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 5
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   prev_count = descr.count = 128;
-   descr.activation = LReLU;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   prev_count=descr.count=128;
+   descr.activation=LReLU;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 6
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronConcatenate;
-   descr.count = LatentCount;
-   descr.window = prev_count;
-   descr.step = AccountDescr;
-   descr.optimization = ADAM;
-   descr.activation = SIGMOID;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronConcatenate;
+   descr.count=LatentCount;
+   descr.window=prev_count;
+   descr.step=AccountDescr;
+   descr.optimization=ADAM;
+   descr.activation=SIGMOID;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 7
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = 256;
-   descr.activation = LReLU;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=256;
+   descr.activation=LReLU;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 8
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = 256;
-   descr.activation = LReLU;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=256;
+   descr.activation=LReLU;
+   descr.optimization=ADAM;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 9
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = 6;
-   descr.optimization = ADAM;
-   descr.activation = SIGMOID;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=6;
+   descr.optimization=ADAM;
+   descr.activation=SIGMOID;
    if(!actor.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
-//--- Critic
+
+//--- critic
    critic.Clear();
-//--- Input layer
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   prev_count = descr.count = LatentCount;
-   descr.window = 0;
-   descr.activation = None;
-   descr.optimization = ADAM;
+
+//--- input layer
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   prev_count=descr.count=LatentCount;
+   descr.window=0;
+   descr.activation=None;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 1
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronConcatenate;
-   descr.count = 128;
-   descr.window = prev_count;
-   descr.step = 6;
-   descr.optimization = ADAM;
-   descr.activation = LReLU;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronConcatenate;
+   descr.count=128;
+   descr.window=prev_count;
+   descr.step=6;
+   descr.optimization=ADAM;
+   descr.activation=LReLU;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 2
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = 128;
-   descr.activation = LReLU;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=128;
+   descr.activation=LReLU;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 3
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = 128;
-   descr.activation = LReLU;
-   descr.optimization = ADAM;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=128;
+   descr.activation=LReLU;
+   descr.optimization=ADAM;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
+
 //--- layer 4
-   if(!(descr = new CLayerDescription()))
-      return false;
-   descr.type = defNeuronBaseOCL;
-   descr.count = 1;
-   descr.optimization = ADAM;
-   descr.activation = None;
+   if(!(descr=new CLayerDescription()))
+      return(false);
+
+   descr.type=defNeuronBaseOCL;
+   descr.count=1;
+   descr.optimization=ADAM;
+   descr.activation=None;
    if(!critic.Add(descr))
      {
       delete descr;
-      return false;
+
+      return(false);
      }
 //---
-   return true;
+   return(true);
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Checks NewBar.                                                 |
+//| IsNewBar - | Checks NewBar.                                      |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
-   static datetime last_bar = 0;
-   if(last_bar >= iTime(Symb.Name(), TimeFrame, 0))
-      return false;
+   static datetime last_bar=0;
+   if(last_bar>=iTime(Symb.Name(),TimeFrame,0))
+      return(false);
 //---
-   last_bar = iTime(Symb.Name(), TimeFrame, 0);
-   return true;
+   last_bar=iTime(Symb.Name(),TimeFrame,0);
+
+   return(true);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
 //| | Creates and manages object lifecycle for CloseByDirection.     |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
-   int total = PositionsTotal();
-   bool result = true;
-   for(int i = total - 1; i >= 0; i--)
+   int  total=PositionsTotal();
+   bool result=true;
+   for(int i=total-1; i>=0; i--)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
-      if(PositionGetInteger(POSITION_TYPE) != type)
+      if(PositionGetInteger(POSITION_TYPE)!=type)
          continue;
-      result = (Trade.PositionClose(PositionGetInteger(POSITION_TICKET)) && result);
+      result=(Trade.PositionClose(PositionGetInteger(POSITION_TICKET))&&result);
      }
 //---
-   return result;
+   return(result);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
-//| | Implements TrailPosition.                                      |
+//| TrailPosition - | Implements TrailPosition.                      |
 //+------------------------------------------------------------------+
-bool TrailPosition(ENUM_POSITION_TYPE type, double sl, double tp)
+bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
   {
-   int total = PositionsTotal();
-   bool result = true;
+   int  total=PositionsTotal();
+   bool result=true;
 //---
-   for(int i = 0; i < total; i++)
+   for(int i=0; i<total; i++)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
-      if(PositionGetInteger(POSITION_TYPE) != type)
+      if(PositionGetInteger(POSITION_TYPE)!=type)
          continue;
-      bool modify = false;
-      double psl = PositionGetDouble(POSITION_SL);
-      double ptp = PositionGetDouble(POSITION_TP);
+      bool   modify=false;
+      double psl=PositionGetDouble(POSITION_SL);
+      double ptp=PositionGetDouble(POSITION_TP);
       switch(type)
         {
          case POSITION_TYPE_BUY:
-            if((sl - psl) >= Symb.Point())
+            if((sl-psl)>=Symb.Point())
               {
-               psl = sl;
-               modify = true;
+               psl=sl;
+               modify=true;
               }
-            if(MathAbs(tp - ptp) >= Symb.Point())
+            if(MathAbs(tp-ptp)>=Symb.Point())
               {
-               ptp = tp;
-               modify = true;
+               ptp=tp;
+               modify=true;
               }
             break;
          case POSITION_TYPE_SELL:
-            if((psl - sl) >= Symb.Point())
+            if((psl-sl)>=Symb.Point())
               {
-               psl = sl;
-               modify = true;
+               psl=sl;
+               modify=true;
               }
-            if(MathAbs(tp - ptp) >= Symb.Point())
+            if(MathAbs(tp-ptp)>=Symb.Point())
               {
-               ptp = tp;
-               modify = true;
+               ptp=tp;
+               modify=true;
               }
             break;
         }
       if(modify)
-         result = (Trade.PositionModify(PositionGetInteger(POSITION_TICKET), psl, ptp) && result);
+         result=(Trade.PositionModify(PositionGetInteger(POSITION_TICKET),psl,ptp)&&result);
      }
 //---
-   return result;
+   return(result);
   }
 //+------------------------------------------------------------------+
-//|                                                                |
+//|                                                                  |
 //+------------------------------------------------------------------+
 //| | Creates and manages object lifecycle for ClosePartial.         |
 //+------------------------------------------------------------------+
-bool ClosePartial(ENUM_POSITION_TYPE type, double value)
+bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {
-   if(value <= 0)
-      return true;
+   if(value<=0)
+      return(true);
 //---
-   for(int i = 0; (i < PositionsTotal() && value > 0); i++)
+   for(int i=0; (i<PositionsTotal()&&value>0); i++)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
-      if(PositionGetInteger(POSITION_TYPE) != type)
+      if(PositionGetInteger(POSITION_TYPE)!=type)
          continue;
-      double pvalue = PositionGetDouble(POSITION_VOLUME);
-      if(pvalue <= value)
+      double pvalue=PositionGetDouble(POSITION_VOLUME);
+      if(pvalue<=value)
         {
          if(Trade.PositionClose(PositionGetInteger(POSITION_TICKET)))
            {
@@ -639,12 +703,12 @@ bool ClosePartial(ENUM_POSITION_TYPE type, double value)
         }
       else
         {
-         if(Trade.PositionClosePartial(PositionGetInteger(POSITION_TICKET), value))
-            value = 0;
+         if(Trade.PositionClosePartial(PositionGetInteger(POSITION_TICKET),value))
+            value=0;
         }
      }
 //---
-   return (value <= 0);
+   return(value<=0);
   }
 #endif
 //+------------------------------------------------------------------+

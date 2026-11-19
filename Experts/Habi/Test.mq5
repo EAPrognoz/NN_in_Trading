@@ -1,7 +1,9 @@
 //+------------------------------------------------------------------+
-//|                                                        Test.mq5  |
-//|                                 Copyright 2026, MetaQuotes Ltd.  |
-//|                                                    www.mql5.com  |
+//|                                                         Test.mq5 |
+//|                                                             Habi |
+//|                                  Copyright 2026, MetaQuotes Ltd. |
+//|                                                     www.mql5.com |
+//|                           https://www.mql5.com/ru/articles/25764 |
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MetaQuotes Ltd."
 #property link        "https://www.mql5.com"
@@ -9,20 +11,23 @@
 #property description "Online smoke test for the Habi pipeline"
 #property description "Runs one decision per closed bar"
 #property description "Sends orders through the execution module"
-#property strict
+
 #include "Trajectory.mqh"
 
+//+------------------------------------------------------------------+
+//| Input parameters                                                 |
+//+------------------------------------------------------------------+
 input group "---- Q filter ----"
-input double MinExpectedQ=0.0; // execute only when best Q is strictly above this threshold
+input double MinExpectedQ=0.0;   // execute only when best Q is strictly above this threshold
 
 //+------------------------------------------------------------------+
-//| Глобальные переменные                                            |
+//| Global variables                                                 |
 //+------------------------------------------------------------------+
-CHabiModels     ExtModels;         // model container
-CHabiHistory    ExtHistory;        // history container
-CHabiExecution  ExtExecution;      // execution module
-datetime        ExtLastBar=0;      // last processed bar
-bool            ExtFailed=false;   // fatal error flag
+CHabiModels    ExtModels;         // model container
+CHabiHistory   ExtHistory;        // history container
+CHabiExecution ExtExecution;      // execution module
+datetime       ExtLastBar=0;      // last processed bar
+bool           ExtFailed=false;   // fatal error flag
 
 //+------------------------------------------------------------------+
 //| OnInit - initialises modules for the single slot test            |
@@ -32,7 +37,7 @@ int OnInit()
    if(!MathIsValidNumber(MinExpectedQ))
       return(INIT_PARAMETERS_INCORRECT);
 
-   if(!HabiStart(ExtModels,ExtHistory,2) || !ExtExecution.Init(1,true))
+   if(!HabiStart(ExtModels,ExtHistory,2)||!ExtExecution.Init(1,true))
       return(INIT_FAILED);
 
    return(INIT_SUCCEEDED);
@@ -47,7 +52,7 @@ void OnTick()
 
    datetime bar=iTime(_Symbol,TimeFrame,0);
 
-   if(bar<=0 || bar==ExtLastBar)
+   if(bar<=0||bar==ExtLastBar)
       return;
 
    ExtLastBar=bar;
@@ -63,7 +68,7 @@ void OnTick()
    float observation[];
    float scores[];
 
-   if(!ExtExecution.Observation(ExtHistory,bar,observation) || !ExtModels.Predict(observation,false) || !ExtModels.Scores(ExtModels.critic,ExtModels.last_distribution,ExtModels.last_actions,++ExtModels.serial,35,false,scores))
+   if(!ExtExecution.Observation(ExtHistory,bar,observation)||!ExtModels.Predict(observation,false)||!ExtModels.Scores(ExtModels.critic,ExtModels.last_distribution,ExtModels.last_actions,++ExtModels.serial,35,false,scores))
      {
       ExtFailed=true;
       HabiFatal("Test observation/forward failed");
@@ -79,7 +84,7 @@ void OnTick()
       if(scores[n]>scores[best])
          best=(int)n;
 
-   bool accepted=scores[best]>MinExpectedQ;
+   bool  accepted=scores[best]>MinExpectedQ;
    ulong elapsed=GetMicrosecondCount()-start;
 
    PrintFormat("Habi Test decision_us=%I64u N=%u selected=%d Q=%.9g threshold=%.9g accepted=%s",

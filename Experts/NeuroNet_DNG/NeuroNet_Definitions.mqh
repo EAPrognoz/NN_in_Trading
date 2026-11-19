@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_Definitions.mqh                                         |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                         NeuroNet_Definitions.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 
 #ifndef NEURONET_DEFINITIONS_MQH
@@ -19,8 +20,8 @@
 //--- - \ref group1
 //--- - [<b>Class Hierarchy</b>](hierarchy.html)
 //--- - [<b>Files</b>](files.html)
-#property link      "https://www.mql5.com"
-#property version   "1.00"
+#property link    "https://www.mql5.com"
+#property version "1.00"
 //+------------------------------------------------------------------+
 //| Include standart libraries                                       |
 //+------------------------------------------------------------------+
@@ -50,7 +51,9 @@
                            rnd_y=rnd_z; \
                            rnd_z=rnd_w; \
                            rnd_w=(rnd_w^(rnd_w>>19))^(rnd_t^(rnd_t>>8))
-//---
+//+------------------------------------------------------------------+
+//| Global variables                                                 |
+//+------------------------------------------------------------------+
 uint rnd_x=MathRand();
 uint rnd_y=MathRand();
 uint rnd_z=MathRand();
@@ -120,7 +123,7 @@ uint rnd_t=0;
 #define D2SKILL_ACTIVE                           3
 #define D2SKILL_INACTIVE                         4
 //+------------------------------------------------------------------+
-//| Implements the pow helper function.                              |
+//| pow - implements the pow helper function.                        |
 //+------------------------------------------------------------------+
 template<typename T1,typename T2>
 //+------------------------------------------------------------------+
@@ -128,7 +131,7 @@ template<typename T1,typename T2>
 //+------------------------------------------------------------------+
 T1 pow(T2 a,T1 b)
   {
-   return(T1)MathPow((T1)a,(T1)b);
+   return((T1)MathPow((T1)a,(T1)b));
   }
 //+------------------------------------------------------------------+
 //| Declares the uaLongChar union.                                   |
@@ -1275,7 +1278,7 @@ union uaLongChar
 //---
 /// Index of the kernel of the multi-heads sparse attention neuron to calculate score matrix (#MHSparseAttentionScore)
 #define def_k_MHSparseAttentionScore    44
-/// less than 1.0 сoefficient of sparse
+/// sparsity coefficient below 1.0
 #define def_k_mhas_sparse                3
 //---
 /// Index of the kernel of the multi-heads sparse attention neuron to calculate multi-heads out matrix (#MHSparseAttentionOut)
@@ -3649,16 +3652,16 @@ const string cl_program="";
 #endif // NEURONET_COMPILE_WITHOUT_OPENCL_SOURCE
 enum ENUM_ACTIVATION
   {
-   //--- without activation formula
+//--- without activation formula
    None=-1,
 
-   //--- use \f$tanh(x)\f$ for activation neuron
+//--- use \f$tanh(x)\f$ for activation neuron
    TANH=0,
 
-   //--- use \f$\frac{1}{1+e^x}\f$ for activation neuron
+//--- use \f$\frac{1}{1+e^x}\f$ for activation neuron
    SIGMOID=1,
 
-   //--- for activation neuron use LReLU \f[\left\{ \begin{array} a x>=0, \ x \\x<0, \ 0.01*x \end{array} \right.\f]
+//--- for activation neuron use LReLU \f[\left\{ \begin{array} a x>=0, \ x \\x<0, \ 0.01*x \end{array} \right.\f]
    LReLU=2,
    SoftPlus=3,
    GELU=4,
@@ -3670,16 +3673,16 @@ enum ENUM_ACTIVATION
 //+------------------------------------------------------------------+
 enum ENUM_OPTIMIZATION
   {
-   //--- stochastic gradient descent
+//--- stochastic gradient descent
    SGD=0,
 
-   //--- adam
+//--- adam
    ADAM=1,
 
-   //--- least Squares
+//--- least Squares
    LS=2,
 
-   //--- adam-mini
+//--- adam-mini
    ADAM_MINI=3
   };
 

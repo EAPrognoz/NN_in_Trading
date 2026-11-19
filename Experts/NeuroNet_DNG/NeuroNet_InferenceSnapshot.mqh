@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_InferenceSnapshot.mqh                                   |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                   NeuroNet_InferenceSnapshot.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_INFERENCE_SNAPSHOT_WORK_MQH
 #define NEURONET_INFERENCE_SNAPSHOT_WORK_MQH
@@ -290,6 +291,7 @@ bool CNeuronScenarioForecast::InferenceRuntimeSidecar(const int handle,const boo
 
    if(vhd>(ulong)INT_MAX||(ulong)iScenarios*vhd>(ulong)INT_MAX/2)
       return(false);
+
    const int conf=(int)((ulong)iScenarios*vh);
    const int latent=(int)((ulong)iScenarios*vhd);
    const int target=(int)vhd;
@@ -339,6 +341,7 @@ bool CNet::InferenceSnapshotGraph(void)const
   {
    if(!layers||(layers.Total()!=5&&layers.Total()!=7)||!opencl||!bOwnOpenCL||pendingOpenCL!=NULL)
       return(false);
+
    const int n=layers.Total();
    const int tail[]=
      {
@@ -404,6 +407,7 @@ bool CNet::InferenceSnapshotLoadFile(const string file_name,const bool common)
 
    if(handle==INVALID_HANDLE)
       return(false);
+
    bool accepted=false;
    do
      {
@@ -525,6 +529,7 @@ bool CBufferFloat::LoadInferenceFinite(const int handle,COpenCLMy*receiver)
 
    if(!NNInferenceRemaining(handle,16))
       return(false);
+
    const ulong position=FileTell(handle);
    const ulong remaining=FileSize(handle)-position;
    const long  marker=FileReadLong(handle);

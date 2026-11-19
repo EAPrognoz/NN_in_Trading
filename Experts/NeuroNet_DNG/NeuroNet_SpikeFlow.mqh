@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_SpikeFlow.mqh                                           |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                           NeuroNet_SpikeFlow.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| Logical method implementations generated from NeuroNet.mqh:      |
@@ -2303,20 +2304,11 @@ bool CNeuronSSAM::Load(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
+   dFileReadUInt(file_handle,iUnits)
 
-   iUnits=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iHeads)
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iHeads=(uint)FileReadInteger(file_handle);
-
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iDimension=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iDimension)
 
    if(FileIsEnding(file_handle))
       ReturnFalse;
@@ -3432,20 +3424,11 @@ bool CNeuronAddToStack::Load(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
+   dFileReadUInt(file_handle,iStackSize)
 
-   iStackSize=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iDimension)
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iDimension=(uint)FileReadInteger(file_handle);
-
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iVariables=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iVariables)
    const ulong rows=(ulong)iStackSize*iDimension;
    const ulong expected=(rows<=(ulong)INT_MAX?rows*iVariables:(ulong)INT_MAX+1);
 
@@ -3701,20 +3684,20 @@ bool CNeuronSTEFlowNetEncoder::feedForward(CNeuronBaseOCL*NeuronOCL)
 //---
    for(int i=0;i<layers;i++)
      {
-      //--- resNeXt
+   //--- resNeXt
       if(!cRecurrentLine[i*3]||!cRecurrentLine[i*3].FeedForward(recur))
          ReturnFalse;
 
       recur=cRecurrentLine[i*3];
 
-      //--- correlation
+   //--- correlation
       correl=cCorrelation[i];
 
       if(!correl||
          !correl.FeedForward(flow))
          ReturnFalse;
 
-      //--- concatenate
+   //--- concatenate
       resnext=recur;
       recur=cRecurrentLine[i*3+1];
 
@@ -3725,7 +3708,7 @@ bool CNeuronSTEFlowNetEncoder::feedForward(CNeuronBaseOCL*NeuronOCL)
       if((i*3+2)==cRecurrentLine.Total())
          break;
 
-      //--- gRU
+   //--- gRU
       if(!cRecurrentLine[i*3+1]||
          !cRecurrentLine[i*3+2].FeedForward(recur))
          ReturnFalse;
@@ -3757,26 +3740,26 @@ bool CNeuronSTEFlowNetEncoder::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 //---
    for(int i=0;i<layers;i++)
      {
-      //--- resNeXt
+   //--- resNeXt
       if(!cRecurrentLine[i*3]||!cRecurrentLine[i*3].UpdateInputWeights(recur))
          ReturnFalse;
 
       recur=cRecurrentLine[i*3];
 
-      //--- correlation
+   //--- correlation
       correl=cCorrelation[i];
 
       if(!correl||
          !correl.UpdateInputWeights(flow))
          ReturnFalse;
 
-      //--- concatenate
+   //--- concatenate
       recur=cRecurrentLine[i*3+1];
 
       if((i*3+2)==cRecurrentLine.Total())
          break;
 
-      //--- gRU
+   //--- gRU
       if(!cRecurrentLine[i*3+1]||
          !cRecurrentLine[i*3+2].UpdateInputWeights(recur))
          ReturnFalse;
@@ -3838,7 +3821,7 @@ bool CNeuronSTEFlowNetEncoder::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 //---
    for(int i=layers;i>=0;i--)
      {
-      //--- concatenate
+   //--- concatenate
       if(!resnext||!concat||!correl||
          !DeConcat(resnext.getGradient(),correl.getGradient(),concat.getGradient(),
                    resnext.GetChannelsOut(),correl.GetStackSize(),resnext.GetUnitsOut()))
@@ -3848,13 +3831,13 @@ bool CNeuronSTEFlowNetEncoder::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
         {
          CBufferFloat *temp=resnext.getGradient();
 
-         //--- correlation
+      //--- correlation
          if(!resnext.SetGradient(resnext.getPrevOutput(),false)||
             !resnext.CalcHiddenGradients(correl)||
             !SumAndNormalize(temp,resnext.getGradient(),temp,resnext.GetChannelsOut(),false,0,0,0,1))
             ReturnFalse;
 
-         //--- flow
+      //--- flow
          if(i<layers)
             if(!resnext.CalcHiddenGradients(cFlow[i])||
                !SumAndNormalize(temp,resnext.getGradient(),temp,1,false,0,0,0,1))
@@ -3863,18 +3846,18 @@ bool CNeuronSTEFlowNetEncoder::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
          if(!resnext.SetGradient(temp,false))
             ReturnFalse;
 
-         //--- resNeXt
+      //--- resNeXt
          if(!NeuronOCL.CalcHiddenGradients(resnext))
             ReturnFalse;
         }
       else
         {
-         //--- correlation
+      //--- correlation
          if(!flow||
             !flow.CalcHiddenGradients(correl))
             ReturnFalse;
 
-         //--- flow
+      //--- flow
          if(i<layers)
            {
             CBufferFloat *temp=flow.getGradient();
@@ -3886,7 +3869,7 @@ bool CNeuronSTEFlowNetEncoder::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
                ReturnFalse;
            }
 
-         //--- resNeXt
+      //--- resNeXt
          if(!cRecurrentLine[i*3-1]||
             !cRecurrentLine[i*3-1].CalcHiddenGradients(resnext))
             ReturnFalse;
@@ -3897,7 +3880,7 @@ bool CNeuronSTEFlowNetEncoder::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
          correl=cCorrelation[i-1];
          resnext=cRecurrentLine[(i-1)*3];
 
-         //--- gRU
+      //--- gRU
          if(!concat||
             !concat.CalcHiddenGradients(cRecurrentLine[i*3-1]))
             ReturnFalse;
@@ -4015,7 +3998,7 @@ void CNeuronSTEFlowNetEncoder::TrainMode(bool flag)
    cCorrelation.TrainMode(bTrain);
   }
 //+------------------------------------------------------------------+
-//| Returns the layer of the CNeuronSTEFlowNetEncoder.               |
+//| GetLayer - returns the layer of the CNeuronSTEFlowNetEncoder.    |
 //+------------------------------------------------------------------+
 CNeuronBaseOCL*CNeuronSTEFlowNetEncoder::GetLayer(uint layer)
   {
@@ -4330,7 +4313,7 @@ bool CNeuronSTEFlowNetDecoder::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
 //---
    for(uint i=1;i<layers;i++)
      {
-      //--- main Line
+   //--- main Line
       index++;
       sa=new CNeuronSpikeActivation();
 
@@ -4342,7 +4325,7 @@ bool CNeuronSTEFlowNetDecoder::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
          ReturnFalse;
         }
 
-      //--- flow
+   //--- flow
       index++;
       conv_res=new CNeuronSSAMResNeXtBlock();
 
@@ -4381,7 +4364,7 @@ bool CNeuronSTEFlowNetDecoder::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
         }
       concat.SetActivationFunction(None);
 
-      //--- main Line
+   //--- main Line
       conv_res=new CNeuronSSAMResNeXtBlock();
 
       if(!conv_res||
@@ -4467,7 +4450,7 @@ bool CNeuronSTEFlowNetDecoder::feedForward(CNeuronBaseOCL*NeuronOCL)
       flow=cFlow[i*2];
       concat=cFlow[i*2+1];
 
-      //--- main Line
+   //--- main Line
       if(!conv_res||
          !conv_res.FeedForward(prev))
          ReturnFalse;
@@ -4487,7 +4470,7 @@ bool CNeuronSTEFlowNetDecoder::feedForward(CNeuronBaseOCL*NeuronOCL)
          !sa.FeedForward(norm))
          ReturnFalse;
 
-      //--- flow
+   //--- flow
       if(!flow||
          !flow.FeedForward(prev))
          ReturnFalse;
@@ -4567,7 +4550,7 @@ bool CNeuronSTEFlowNetDecoder::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
       flow=cFlow[i*2];
       concat=cFlow[i*2+1];
 
-      //--- main Line
+   //--- main Line
       if(!conv_res||
          !conv_res.UpdateInputWeights(prev))
          ReturnFalse;
@@ -4587,7 +4570,7 @@ bool CNeuronSTEFlowNetDecoder::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
          !sa.UpdateInputWeights(norm))
          ReturnFalse;
 
-      //--- flow
+   //--- flow
       if(!flow||
          !flow.UpdateInputWeights(prev))
          ReturnFalse;
@@ -4671,14 +4654,14 @@ bool CNeuronSTEFlowNetDecoder::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
                       conv.GetFilters(),flow.GetChannelsOut(),enc_dim,conv.GetUnits()))
             ReturnFalse;
 
-      //--- flow
+   //--- flow
       prev=(i>0?cFlow[i*2-1]:NeuronOCL);
 
       if(!prev||
          !prev.CalcHiddenGradients(flow))
          ReturnFalse;
 
-      //--- main Line
+   //--- main Line
       conv_res=cMainLine[i*4];
       conv=cMainLine[i*4+1];
       norm=cMainLine[i*4+2];
@@ -4706,7 +4689,7 @@ bool CNeuronSTEFlowNetDecoder::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
          continue;
       sa=cMainLine[i*4-1];
 
-      //--- flow
+   //--- flow
       flow=cFlow[(i-1)*2];
      }
 
@@ -9979,7 +9962,7 @@ void CNeuronSDformerUBlock::TrainMode(bool flag)
    cConcat.TrainMode(bTrain);
   }
 //+------------------------------------------------------------------+
-//| Returns the stack of the CNeuronSDformerUBlock.                  |
+//| GetStack - returns the stack of the CNeuronSDformerUBlock.       |
 //+------------------------------------------------------------------+
 CBufferFloat*CNeuronSDformerUBlock::GetStack(void)
   {
@@ -13084,7 +13067,7 @@ bool CNeuronBAT::Clear(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the weights of the CNeuronBAT.                           |
+//| getWeights - returns the weights of the CNeuronBAT.              |
 //+------------------------------------------------------------------+
 CBufferFloat*CNeuronBAT::getWeights(void)
   {
@@ -15833,7 +15816,7 @@ bool CNeuronSpikeEEMFLow::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       cEncoder[i].SetOpenCL(OpenCL);
       cDecoder[i].SetOpenCL(OpenCL);
 
-      //--- encoder
+   //--- encoder
       padconv=new CNeuronMultiWindowsConvWPadOCL();
 
       if(!padconv||
@@ -15912,7 +15895,7 @@ bool CNeuronSpikeEEMFLow::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       cConcat[i].SetActivationFunction(None);
       index++;
 
-      //--- decoder
+   //--- decoder
       windows[0]=2*(window_out+count);
       padconv=new CNeuronMultiWindowsConvWPadOCL();
 
@@ -16392,10 +16375,7 @@ bool CNeuronSpikeEEMFLow::Load(const int file_handle)
       if(!cDecoder[i].Load(file_handle))
          ReturnFalse;
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iMaxDisplacement=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iMaxDisplacement)
 
 //---
    OpenCL.BufferFree(ibShifts);
@@ -16543,7 +16523,7 @@ void CNeuronSpikeEEMFLow::TrainMode(bool flag)
      }
   }
 //+------------------------------------------------------------------+
-//| Returns the weights of the CNeuronSpikeEEMFLow.                  |
+//| getWeights - returns the weights of the CNeuronSpikeEEMFLow.     |
 //+------------------------------------------------------------------+
 CBufferFloat*CNeuronSpikeEEMFLow::getWeights(void)
   {
@@ -17725,7 +17705,7 @@ void CNeuronEDCFlow::TrainMode(bool flag)
    cFlow.TrainMode(bTrain);
   }
 //+------------------------------------------------------------------+
-//| Returns the weights of the CNeuronEDCFlow.                       |
+//| getWeights - returns the weights of the CNeuronEDCFlow.          |
 //+------------------------------------------------------------------+
 CBufferFloat*CNeuronEDCFlow::getWeights(void)
   {
@@ -18383,10 +18363,7 @@ bool CNeuronSpikeMHCrossAttention::Load(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iHeads=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iHeads)
 
    if(!LoadInsideLayer(file_handle,cQ_Embedding.AsObject()))
       ReturnFalse;
@@ -23910,6 +23887,7 @@ bool CNeuronSpikeActivation::ForwardRowsReadOnly(CBufferFloat*source,const uint 
       !NNQValid(OpenCL,output,(ulong)rows*width)||!NNQValid(OpenCL,flags,rows)||!next)
 
       return(false);
+
    CBufferFloat *buffers[]={source,previous,levels,gates,output,next,flags};
    uint         values[]={width};
    uint         global[]={width,rows};

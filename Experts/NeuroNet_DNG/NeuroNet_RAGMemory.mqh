@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_RAGMemory.mqh                                           |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                           NeuroNet_RAGMemory.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_RAG_MEMORY_MQH
 #define NEURONET_RAG_MEMORY_MQH
@@ -438,6 +439,7 @@ float CNeuronRAGMemory::SquaredDistance(const float&left[],const float&right[])c
      {
       if(!MathIsValidNumber(left[i])||!MathIsValidNumber(right[i]))
          return(maxFloat);
+
       const float delta=(float)(left[i]-right[i]);
       const float squared=(float)(delta*delta);
       distance=(float)(distance+squared);
@@ -504,7 +506,7 @@ int CNeuronRAGMemory::FirstFreeScenario()const
   {
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
       if(!scenarios[scenario].used)
-         return(int)scenario;
+         return((int)scenario);
 
    return(-1);
   }
@@ -518,7 +520,7 @@ int CNeuronRAGMemory::FirstFreeAction(const uint scenarioId)const
 
    for(uint action=0;action<iActionCapacity;action++)
       if(!scenarios[scenarioId].actions[action].used)
-         return(int)action;
+         return((int)action);
 
    return(-1);
   }
@@ -639,14 +641,13 @@ bool CNeuronRAGMemory::FindNearestPairsGPU(const float&candidateCentroids[],
    uint global[]={batchCount*RAG_TOPK_LOCAL_WIDTH};
    uint local[]={RAG_TOPK_LOCAL_WIDTH};
 
-   if(!OpenCL.SetArgumentBuffer(def_k_RAGNearestPair,def_k_ragn_centroids,cNearestCentroids.GetIndex())||
-      !OpenCL.SetArgumentBuffer(def_k_RAGNearestPair,def_k_ragn_used,cNearestUsed.GetIndex())||
-      !OpenCL.SetArgumentBuffer(def_k_RAGNearestPair,def_k_ragn_result,cNearestResult.GetIndex())||
-      !OpenCL.SetArgument(def_k_RAGNearestPair,def_k_ragn_candidate_count,candidateCount)||
-      !OpenCL.SetArgument(def_k_RAGNearestPair,def_k_ragn_dimension,dimension)||
-      !OpenCL.SetArgument(def_k_RAGNearestPair,def_k_ragn_batch_count,batchCount)||
-      !OpenCL.Execute(def_k_RAGNearestPair,1,offset,global,local))
-      ReturnFalse;
+   setBuffer(def_k_RAGNearestPair,def_k_ragn_centroids,cNearestCentroids.GetIndex())
+   setBuffer(def_k_RAGNearestPair,def_k_ragn_used,cNearestUsed.GetIndex())
+   setBuffer(def_k_RAGNearestPair,def_k_ragn_result,cNearestResult.GetIndex())
+   setArgument(def_k_RAGNearestPair,def_k_ragn_candidate_count,candidateCount)
+   setArgument(def_k_RAGNearestPair,def_k_ragn_dimension,dimension)
+   setArgument(def_k_RAGNearestPair,def_k_ragn_batch_count,batchCount)
+   kernelExecuteLoc(def_k_RAGNearestPair,offset,global,local)
 
    float valuesOut[];
 
@@ -1347,7 +1348,7 @@ bool CNeuronRAGMemory::CopySnapshot(const SRAGScenarioCentroid&source[],
 //+------------------------------------------------------------------+
 ulong CNeuronRAGMemory::HashValue(const ulong hash,const ulong value)const
   {
-   return(hash^value)*RAG_FNV_PRIME;
+   return((hash^value)*RAG_FNV_PRIME);
   }
 //+------------------------------------------------------------------+
 //| HashFloatBits - Returns whether hash float bits CNeuronRAGMemory.|
@@ -1697,6 +1698,7 @@ ulong CNeuronRAGMemory::OpenPending(const float&scenarioEmbedding[],
       ArraySize(scenarioEmbedding)!=(int)iScenarioEmbedding||!ValidAction(action))
 
       return(0);
+
    const ulong     pendingId=iNextPendingId;
    SRAGPendingFact source;
    source.id=pendingId;
@@ -1706,6 +1708,7 @@ ulong CNeuronRAGMemory::OpenPending(const float&scenarioEmbedding[],
       ArrayResize(source.events[0].action,(int)iActionDimension)!=(int)iActionDimension)
 
       return(0);
+
    ArrayCopy(source.scenarioEmbedding,scenarioEmbedding);
    ArrayCopy(source.events[0].action,action);
    source.events[0].confirmed=false;
@@ -2537,6 +2540,7 @@ bool CNeuronRAGMemory::Load(const int file_handle)
 
    if(CommitSnapshot(loaded,scenarioCount))
       return(true);
+
    iFormatVersion=oldFormatVersion;
    iScenarioEmbedding=oldScenarioEmbedding;
    iActionDimension=oldActionDimension;
@@ -2789,7 +2793,7 @@ ulong CNeuronRAGMemory::ActionHitCount(const uint scenarioId,const uint actionId
           scenarios[scenarioId].actions[actionId].hit_count:0);
   }
 //+------------------------------------------------------------------+
-//| Returns the layer info of the CNeuronRAGMemory.                  |
+//| GetLayerInfo - returns the layer info of the CNeuronRAGMemory.   |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronRAGMemory::GetLayerInfo(void)
   {
@@ -2797,6 +2801,7 @@ CLayerDescription*CNeuronRAGMemory::GetLayerInfo(void)
 
    if(result==NULL)
       return(NULL);
+
    result.type=defNeuronRAGMemory;
    result.count=iTokenWidth;
    result.window=iScenarioEmbedding;

@@ -1,7 +1,9 @@
 //+------------------------------------------------------------------+
-//|                                                 StudyOnline.mq5  |
-//|                                 Copyright 2026, MetaQuotes Ltd.  |
-//|                                                    www.mql5.com  |
+//|                                                  StudyOnline.mq5 |
+//|                                                             Habi |
+//|                                  Copyright 2026, MetaQuotes Ltd. |
+//|                                                     www.mql5.com |
+//|                           https://www.mql5.com/ru/articles/25764 |
 //+------------------------------------------------------------------+
 #property copyright   "Copyright 2026, MetaQuotes Ltd."
 #property link        "https://www.mql5.com"
@@ -9,26 +11,26 @@
 #property description "Online study and trading loop for Habi"
 #property description "Updates critic and policy on closed bars"
 #property description "Keeps ledger records across bar boundaries"
-#property strict
+
 #include "Trajectory.mqh"
 
 //+------------------------------------------------------------------+
-//| Глобальные переменные                                            |
+//| Global variables                                                 |
 //+------------------------------------------------------------------+
-CHabiModels      ExtModels;          // model container
-CHabiHistory     ExtHistory;         // history container
-CHabiExecution   ExtExecution;       // execution module
-datetime         ExtLastBar=0;       // last processed bar
-uint             ExtPolicyTick=0;    // policy update counter
-uint             ExtTDTick=0;        // critic TD update counter
-bool             ExtFailed=false;    // fatal error flag
+CHabiModels    ExtModels;         // model container
+CHabiHistory   ExtHistory;        // history container
+CHabiExecution ExtExecution;      // execution module
+datetime       ExtLastBar=0;      // last processed bar
+uint           ExtPolicyTick=0;   // policy update counter
+uint           ExtTDTick=0;       // critic TD update counter
+bool           ExtFailed=false;   // fatal error flag
 
 //+------------------------------------------------------------------+
 //| OnInit - initialises modules for the online stage                |
 //+------------------------------------------------------------------+
 int OnInit()
   {
-   if(!HabiStart(ExtModels,ExtHistory,1) || !ExtExecution.Init(ExtModels.g.N,false))
+   if(!HabiStart(ExtModels,ExtHistory,1)||!ExtExecution.Init(ExtModels.g.N,false))
       return(INIT_FAILED);
 
    return(INIT_SUCCEEDED);
@@ -51,7 +53,7 @@ void OnTick()
 
    datetime bar=iTime(_Symbol,TimeFrame,0);
 
-   if(bar<=0 || bar==ExtLastBar)
+   if(bar<=0||bar==ExtLastBar)
       return;
 
    ExtLastBar=bar;
@@ -63,10 +65,10 @@ void OnTick()
       return;
      }
 
-   bool terminal=OnlineEpisodeEnd>0 && bar>=OnlineEpisodeEnd;
+   bool  terminal=OnlineEpisodeEnd>0&&bar>=OnlineEpisodeEnd;
    float observation[];
 
-   if(!terminal && !ExtExecution.Observation(ExtHistory,bar,observation))
+   if(!terminal&&!ExtExecution.Observation(ExtHistory,bar,observation))
      {
       Stop("invalid online observation");
 
@@ -82,7 +84,7 @@ void OnTick()
 
    if(terminal)
       for(int k=0;k<ArraySize(ExtExecution.records);k++)
-         if(ExtExecution.records[k].boundary && ExtExecution.records[k].finish==bar && !ExtExecution.records[k].used)
+         if(ExtExecution.records[k].boundary&&ExtExecution.records[k].finish==bar&&!ExtExecution.records[k].used)
             ArrayInitialize(ExtExecution.records[k].done,1);
 
    bool target_due=false;
@@ -109,7 +111,7 @@ void OnTick()
    ExtExecution.Prune(enable_critic_td);
    ExtPolicyTick++;
 
-   if(enable_policy && ExtPolicyTick%(uint)policy_period==0)
+   if(enable_policy&&ExtPolicyTick%(uint)policy_period==0)
      {
       if(!ExtModels.Policy())
         {
@@ -125,7 +127,7 @@ void OnTick()
       ExtModels.policy_live=false;
      }
 
-   if(target_due && !ExtModels.Sync())
+   if(target_due&&!ExtModels.Sync())
      {
       Stop("target synchronization failed");
 
@@ -154,7 +156,7 @@ void OnTick()
       return;
      }
 
-   if(!ExtModels.Predict(observation,enable_policy && (train_prior || train_decoder)))
+   if(!ExtModels.Predict(observation,enable_policy&&(train_prior||train_decoder)))
      {
       Stop("new online generation failed");
 
@@ -187,7 +189,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &
 void OnDeinit(const int reason)
   {
 //--- stopping is not evidence of an episode terminal boundary
-   if(!ExtFailed && ExtModels.prior!=NULL && !ExtModels.Save())
+   if(!ExtFailed&&ExtModels.prior!=NULL&&!ExtModels.Save())
       Print("Habi: Save on stop failed");
   }
 

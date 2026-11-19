@@ -1,5 +1,7 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_AlphaGenPolicy.mqh                                      |
+//|                                      NeuroNet_AlphaGenPolicy.mqh |
+//|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/25997 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAGEN_POLICY_MQH
 #define NEURONET_ALPHAGEN_POLICY_MQH
@@ -127,7 +129,7 @@ bool CNeuronAlphaGenDenseOCL::Outer(CNeuronBaseOCL*next)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Expose the materialized parameter gradient.                      |
+//| WeightGradient - expose the materialized parameter gradient.     |
 //+------------------------------------------------------------------+
 CBufferFloat*CNeuronAlphaGenDenseOCL::WeightGradient(void)
   {
@@ -475,14 +477,14 @@ CNeuronAlphaGenPolicyOCL::CNeuronAlphaGenPolicyOCL(void):m_iRandom(1),m_bReady(f
   {
   }
 //+------------------------------------------------------------------+
-//| Expose the immutable policy sample device buffer.                |
+//| Sample - expose the immutable policy sample device buffer.       |
 //+------------------------------------------------------------------+
 CBufferFloat*CNeuronAlphaGenPolicyOCL::Sample(void)
   {
    return(GetPointer(m_cSample));
   }
 //+------------------------------------------------------------------+
-//| Expose the final Action6 device buffer.                          |
+//| Action - expose the final Action6 device buffer.                 |
 //+------------------------------------------------------------------+
 CBufferFloat*CNeuronAlphaGenPolicyOCL::Action(void)
   {
@@ -602,7 +604,7 @@ bool CNeuronAlphaGenSearchPolicyOCL::ForwardPrefix(CBufferFloat*tokens,const int
    uint global_work_size[]={(uint)EmbeddingDim(),(uint)length};
    kernelExecute(def_k_AGEmbedding,global_work_offset,global_work_size)
 
-   //--- search anchors stay zero after workspace initialization.
+//--- search anchors stay zero after workspace initialization.
    if(!m_cFirst.Sequence(GetPointer(m_cEmbedded),length)||
       !m_cSecond.Sequence(m_cFirst.SequenceOutput(),length)||
       !SequenceMap(m_cSecond.SequenceOutput(),m_cMean.getOutput(),length,SearchHidden(),0,mask)||
@@ -798,7 +800,7 @@ bool CNeuronAlphaGenTradingPolicyOCL::Apply(void)
    return(m_cRecurrent.Apply()&&m_cInput.Apply()&&m_cHidden1.Apply()&&m_cHidden2.Apply());
   }
 //+------------------------------------------------------------------+
-//| Expose the incoming recurrent anchor.                            |
+//| Anchor - expose the incoming recurrent anchor.                   |
 //+------------------------------------------------------------------+
 CBufferFloat*CNeuronAlphaGenTradingPolicyOCL::Anchor(void)
   {

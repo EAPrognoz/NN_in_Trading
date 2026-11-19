@@ -1,6 +1,11 @@
+//+------------------------------------------------------------------+
+//|                                                   Trajectory.mqh |
+//|                                                         AlphaGen |
+//|                           https://www.mql5.com/ru/articles/25872 |
+//+------------------------------------------------------------------+
 #ifndef ALPHAGEN_TRAJECTORY_MQH
 #define ALPHAGEN_TRAJECTORY_MQH
-#include "../NeuroNet_DNG/NeuroNet.mqh"
+#include "../NeuroNet_DNG/NeuroNet_AlphaGenSelectiveOpenCL.mqh"
 #include <Trade/Trade.mqh>
 #include <Generic/HashMap.mqh>
 //+------------------------------------------------------------------+
@@ -71,15 +76,19 @@
 #define AG_INTERVAL_TEN 10
 #define AG_INTERVAL_TWENTY 20
 #define AG_INTERVAL_SIXTY 60
+//+------------------------------------------------------------------+
+//| Input parameters                                                 |
+//+------------------------------------------------------------------+
 input ENUM_TIMEFRAMES TimeFrame=PERIOD_H1;
-input string ModelFile="AlphaGen\\AlphaGen.nn";
-input ulong Seed=0;
+input string          ModelFile="AlphaGen\\AlphaGen.nn";
+input ulong           Seed=0;
+input bool            SelectiveOpenCL=true;
 #ifdef ALPHAGEN_STUDY
 input datetime Start=0;
 input datetime End=0;
-input int Epochs=1;
-input double MinBalance=100;
-input double MaxBalance=1500;
+input int      Epochs=1;
+input double   MinBalance=100;
+input double   MaxBalance=1500;
 #endif
 //+------------------------------------------------------------------+
 //| Encode exact integer metadata in FP32 service words.             |
@@ -99,11 +108,17 @@ struct SAlphaGenPart
    double volume,entry;
    datetime time;
   };
+//+------------------------------------------------------------------+
+//| SAlphaGenTarget                                                  |
+//+------------------------------------------------------------------+
 struct SAlphaGenTarget
   {
    double volume,sl,tp;
    bool invalid;
   };
+//+------------------------------------------------------------------+
+//| CAlphaGenEnvironment                                             |
+//+------------------------------------------------------------------+
 class CAlphaGenEnvironment
   {
    public:
@@ -114,11 +129,11 @@ class CAlphaGenEnvironment
    double point,tick,lot_min,lot_step,lot_max,lot_limit,k_buy,k_sell;
    long stops,freeze,trade_mode;
    ulong trades,successful_requests;
-   datetime entered;
+   datetime      entered;
    SAlphaGenPart parts[];
-   CTrade trade;
+   CTrade        trade;
    bool pending,stopout,unknown_request,reconciling;
-   uint request_id;
+   uint  request_id;
    ulong request_deals[],request_orders[];
    double intended_volume,intended_sl,intended_tp;
 //+------------------------------------------------------------------+
@@ -139,7 +154,7 @@ class CAlphaGenEnvironment
      {
      }
 //+------------------------------------------------------------------+
-//| Validate the run and initialize the shared state.                |
+//| Init - validate the run and initialize the shared state.         |
 //+------------------------------------------------------------------+
    bool Init(bool simulated,double capital)
      {
@@ -153,24 +168,25 @@ class CAlphaGenEnvironment
       stops=SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL);
       freeze=SymbolInfoInteger(_Symbol,SYMBOL_TRADE_FREEZE_LEVEL);
       trade_mode=SymbolInfoInteger(_Symbol,SYMBOL_TRADE_MODE);
-      if(point<=0 || tick<=0 || lot_min<=0 || lot_step<=0 || lot_max<lot_min || capital<=0 ||
-         AG_VOLUME_CAP<lot_min || !MathIsValidNumber(point+tick+lot_min+lot_step+lot_max+capital))
+      if(point<=0||tick<=0||lot_min<=0||lot_step<=0||lot_max<lot_min||capital<=0||
+         AG_VOLUME_CAP<lot_min||!MathIsValidNumber(point+tick+lot_min+lot_step+lot_max+capital))
         {
          ReturnFalse;
         }
       k_buy=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE_PROFIT)/tick;
       k_sell=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE_LOSS)/tick;
-      if(k_buy<=0 || k_sell<=0 || !MathIsValidNumber(k_buy+k_sell))
+      if(k_buy<=0||k_sell<=0||!MathIsValidNumber(k_buy+k_sell))
         {
          ReturnFalse;
         }
-      if(!simulated && (PositionsTotal()!=0 || OrdersTotal()!=0))
+      if(!simulated&&(PositionsTotal()!=0||OrdersTotal()!=0))
         {
          ReturnFalse;
         }
       trade.SetAsyncMode(false);
       trade.SetTypeFillingBySymbol(_Symbol);
       Reset(capital);
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -224,12 +240,12 @@ class CAlphaGenEnvironment
          bool all_protected=true;
          for(int i=PositionsTotal()-1;i>=0;i--)
            {
-            if(PositionGetTicket(i)==0 || PositionGetString(POSITION_SYMBOL)!=_Symbol)
+            if(PositionGetTicket(i)==0||PositionGetString(POSITION_SYMBOL)!=_Symbol)
               {
                ReturnFalse;
               }
             double q=PositionGetDouble(POSITION_VOLUME);
-            bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
+            bool   buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
             double p=PositionGetDouble(POSITION_PROFIT);
             volume+=buy?q:-q;
             if(buy)
@@ -243,7 +259,7 @@ class CAlphaGenEnvironment
             age_weight+=MathAbs(p)*(double)(time-(datetime)PositionGetInteger(POSITION_TIME));
             sl=PositionGetDouble(POSITION_SL);
             tp=PositionGetDouble(POSITION_TP);
-            if(sl<=0 || tp<=0)
+            if(sl<=0||tp<=0)
               {
                all_protected=false;
               }
@@ -253,7 +269,7 @@ class CAlphaGenEnvironment
             sl=tp=0;
            }
 // Synchronous requests are reconciled against orders and account state.
-         pending=unknown_request || OrdersTotal()>0;
+         pending=unknown_request||OrdersTotal()>0;
         }
       peak=MathMax(peak,equity);
       max_drawdown=MathMax(max_drawdown,peak-equity);
@@ -265,6 +281,7 @@ class CAlphaGenEnvironment
         {
          ReturnFalse;
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -272,7 +289,7 @@ class CAlphaGenEnvironment
 //+------------------------------------------------------------------+
    bool Account(datetime time,float &a[])
      {
-      if(previous_balance<=0 || previous_equity<=0)
+      if(previous_balance<=0||previous_equity<=0)
         {
          ReturnFalse;
         }
@@ -297,6 +314,7 @@ class CAlphaGenEnvironment
             ReturnFalse;
            }
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -308,7 +326,7 @@ class CAlphaGenEnvironment
       previous_equity=equity;
      }
 //+------------------------------------------------------------------+
-//| Round the target volume to the symbol lot grid.                  |
+//| Lot - round the target volume to the symbol lot grid.            |
 //+------------------------------------------------------------------+
    double Lot(double v)
      {
@@ -316,6 +334,7 @@ class CAlphaGenEnvironment
         {
          return(0);
         }
+
       return(lot_min+MathFloor((MathMin(MathMin(v,lot_max),AG_VOLUME_CAP)-lot_min)/lot_step+AG_LOT_EPSILON)*lot_step);
      }
 //+------------------------------------------------------------------+
@@ -325,16 +344,18 @@ class CAlphaGenEnvironment
      {
       a.volume=a.sl=a.tp=0;
       a.invalid=false;
-      if(ArraySize(raw)!=AG_OUTPUT_SIZE || bid<=0 || ask<bid)
+      if(ArraySize(raw)!=AG_OUTPUT_SIZE||bid<=0||ask<bid)
         {
          a.invalid=true;
+
          return(true);
         }
       for(int i=0;i<AG_OUTPUT_SIZE;i++)
         {
-         if(!MathIsValidNumber(raw[i]) || raw[i]<0 || raw[i]>1)
+         if(!MathIsValidNumber(raw[i])||raw[i]<0||raw[i]>1)
            {
             a.invalid=true;
+
             return(true);
            }
         }
@@ -343,17 +364,18 @@ class CAlphaGenEnvironment
         {
          return(true);
         }
-      int side=raw[0]>raw[3]?1:-1,off=side>0?0:3;
+      int    side=raw[0]>raw[3]?1:-1,off=side>0?0:3;
       double price=side>0?ask:bid,mark=side>0?bid:ask;
       a.volume=side*q;
       a.tp=tick*MathFloor((price+side*raw[off+1]*AG_MAX_TP*point)/tick+AG_CONST_HALF);
       a.sl=tick*MathFloor((price-side*raw[off+2]*AG_MAX_SL*point)/tick+AG_CONST_HALF);
       double base=MathMax(stops,1)*point+(ask-bid);
       double dtp=side*(a.tp-mark),dsl=side*(mark-a.sl);
-      bool direction=trade_mode==SYMBOL_TRADE_MODE_FULL || (side>0 && trade_mode==SYMBOL_TRADE_MODE_LONGONLY)
-      || (side<0 && trade_mode==SYMBOL_TRADE_MODE_SHORTONLY);
-      a.invalid=(!direction || raw[off+1]==0 || raw[off+2]==0 || a.sl<=0 || a.tp<=0 || dtp<=AG_PROTECTION_MULTIPLIER*base
-      || dsl<=base || dtp<=freeze*point || dsl<=freeze*point || (lot_limit>0 && q>lot_limit));
+      bool direction=trade_mode==SYMBOL_TRADE_MODE_FULL||(side>0&&trade_mode==SYMBOL_TRADE_MODE_LONGONLY)
+      ||(side<0&&trade_mode==SYMBOL_TRADE_MODE_SHORTONLY);
+      a.invalid=(!direction||raw[off+1]==0||raw[off+2]==0||a.sl<=0||a.tp<=0||dtp<=AG_PROTECTION_MULTIPLIER*base
+      ||dsl<=base||dtp<=freeze*point||dsl<=freeze*point||(lot_limit>0&&q>lot_limit));
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -361,7 +383,7 @@ class CAlphaGenEnvironment
 //+------------------------------------------------------------------+
    bool CloseVirtual(double amount,double bid,double ask,datetime time)
      {
-      for(int i=ArraySize(parts)-1;i>=0 && amount>AG_LOT_EPSILON;i--)
+      for(int i=ArraySize(parts)-1;i>=0&&amount>AG_LOT_EPSILON;i--)
         {
          double q=parts[i].volume,take=MathMin(MathAbs(q),amount);
          double realized=q>0?take*k_buy*(bid-parts[i].entry):take*k_sell*(parts[i].entry-ask);
@@ -382,6 +404,7 @@ class CAlphaGenEnvironment
            }
          trades++;
         }
+
       return(Snapshot(bid,ask,time));
      }
 //+------------------------------------------------------------------+
@@ -389,12 +412,12 @@ class CAlphaGenEnvironment
 //+------------------------------------------------------------------+
    void RecordRequest(MqlTradeResult &result)
      {
-      if(result.deal==0 && result.order==0)
+      if(result.deal==0&&result.order==0)
         {
          return;
         }
       int n=ArraySize(request_deals);
-      if(ArrayResize(request_deals,n+1)!=n+1 || ArrayResize(request_orders,n+1)!=n+1)
+      if(ArrayResize(request_deals,n+1)!=n+1||ArrayResize(request_orders,n+1)!=n+1)
         {
          return;
         }
@@ -402,7 +425,7 @@ class CAlphaGenEnvironment
       request_orders[n]=result.order;
      }
 //+------------------------------------------------------------------+
-//| Inspect request outcomes without repeating an unknown request.  |
+//| Inspect request outcomes without repeating an unknown request.   |
 //+------------------------------------------------------------------+
    bool ConfirmRequest(bool sent)
      {
@@ -410,17 +433,19 @@ class CAlphaGenEnvironment
       trade.Result(result);
       RecordRequest(result);
       request_id=result.request_id;
-      if(result.retcode==TRADE_RETCODE_TIMEOUT || result.retcode==TRADE_RETCODE_CONNECTION)
+      if(result.retcode==TRADE_RETCODE_TIMEOUT||result.retcode==TRADE_RETCODE_CONNECTION)
         {
          unknown_request=true;
          pending=true;
          reconciling=true;
+
          return(true);
         }
       if(result.retcode==TRADE_RETCODE_PLACED)
         {
          pending=true;
          reconciling=true;
+
          return(true);
         }
       if(result.retcode==TRADE_RETCODE_DONE_PARTIAL)
@@ -431,11 +456,12 @@ class CAlphaGenEnvironment
         {
          return(true);
         }
-      bool confirmed=sent && (result.retcode==TRADE_RETCODE_DONE || result.retcode==TRADE_RETCODE_DONE_PARTIAL);
+      bool confirmed=sent&&(result.retcode==TRADE_RETCODE_DONE||result.retcode==TRADE_RETCODE_DONE_PARTIAL);
       if(confirmed)
         {
          successful_requests++;
         }
+
       return(confirmed);
      }
 //+------------------------------------------------------------------+
@@ -455,7 +481,7 @@ class CAlphaGenEnvironment
          a.volume=0;
         }
       double same_side_delta=(volume*a.volume>0)?MathAbs(a.volume)-MathAbs(volume):0;
-      if(MathAbs(same_side_delta)>AG_LOT_EPSILON && MathAbs(same_side_delta)<lot_min-AG_LOT_EPSILON)
+      if(MathAbs(same_side_delta)>AG_LOT_EPSILON&&MathAbs(same_side_delta)<lot_min-AG_LOT_EPSILON)
         {
          a.invalid=true;
          a.volume=0;
@@ -463,7 +489,7 @@ class CAlphaGenEnvironment
         }
       if(virtual_mode)
         {
-         if(volume*a.volume<0 || a.volume==0)
+         if(volume*a.volume<0||a.volume==0)
            {
             if(!CloseVirtual(MathAbs(volume),bid,ask,time))
               {
@@ -488,6 +514,7 @@ class CAlphaGenEnvironment
             if(m>equity-margin)
               {
                a.invalid=true;
+
                return(CloseVirtual(MathAbs(volume),bid,ask,time));
               }
             int n=ArraySize(parts);
@@ -499,9 +526,10 @@ class CAlphaGenEnvironment
            }
          sl=a.sl;
          tp=a.tp;
+
          return(Snapshot(bid,ask,time));
         }
-      if(!TerminalInfoInteger(TERMINAL_CONNECTED) && !MQLInfoInteger(MQL_TESTER))
+      if(!TerminalInfoInteger(TERMINAL_CONNECTED)&&!MQLInfoInteger(MQL_TESTER))
         {
          return(false);
         }
@@ -514,9 +542,9 @@ class CAlphaGenEnvironment
            {
             ReturnFalse;
            }
-         bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
+         bool   buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
          double q=PositionGetDouble(POSITION_VOLUME);
-         if(a.volume==0 || (buy && a.volume<0) || (!buy && a.volume>0))
+         if(a.volume==0||(buy&&a.volume<0)||(!buy&&a.volume>0))
            {
             bool sent=trade.PositionClose(ticket);
             if(!ConfirmRequest(sent))
@@ -543,8 +571,10 @@ class CAlphaGenEnvironment
                     {
                      a.invalid=true;
                      a.volume=0;
+
                      return(Execute(a,bid,ask,time));
                     }
+
                   return(false);
                  }
                if(pending)
@@ -558,26 +588,28 @@ class CAlphaGenEnvironment
         {
          ReturnFalse;
         }
-      if(volume*a.volume<0 || (a.volume==0 && volume!=0))
+      if(volume*a.volume<0||(a.volume==0&&volume!=0))
         {
          reconciling=true;
+
          return(true);
         }
       if(a.volume==0)
         {
-         if(volume==0 && !pending)
+         if(volume==0&&!pending)
            {
             reconciling=false;
            }
-         return(volume==0 && !pending);
+
+         return(volume==0&&!pending);
         }
       for(int i=PositionsTotal()-1;i>=0;i--)
         {
          ulong ticket=PositionGetTicket(i);
-         bool modified=trade.PositionModify(ticket,a.sl,a.tp);
+         bool  modified=trade.PositionModify(ticket,a.sl,a.tp);
          if(!ConfirmRequest(modified))
            {
-            if(PositionGetDouble(POSITION_SL)<=0 || PositionGetDouble(POSITION_TP)<=0)
+            if(PositionGetDouble(POSITION_SL)<=0||PositionGetDouble(POSITION_TP)<=0)
               {
                bool closed=trade.PositionClose(ticket);
                if(!ConfirmRequest(closed))
@@ -593,6 +625,7 @@ class CAlphaGenEnvironment
                   ReturnFalse;
                  }
               }
+
             return(false);
            }
          if(pending)
@@ -617,34 +650,37 @@ class CAlphaGenEnvironment
             a.invalid=true;
             SAlphaGenTarget flat;
             ZeroMemory(flat);
+
             return(Execute(flat,bid,ask,time));
            }
-         bool ok=a.volume>0?trade.Buy(delta,_Symbol,0,a.sl,a.tp):trade.Sell(delta,_Symbol,0,a.sl,a.tp);
+         bool           ok=a.volume>0?trade.Buy(delta,_Symbol,0,a.sl,a.tp):trade.Sell(delta,_Symbol,0,a.sl,a.tp);
          MqlTradeResult result;
          trade.Result(result);
          RecordRequest(result);
          request_id=result.request_id;
          uint code=result.retcode;
          pending=(code==TRADE_RETCODE_PLACED);
-         if(code==TRADE_RETCODE_TIMEOUT || code==TRADE_RETCODE_CONNECTION)
+         if(code==TRADE_RETCODE_TIMEOUT||code==TRADE_RETCODE_CONNECTION)
            {
             unknown_request=true;
             pending=true;
+
             return(true);
            }
-         if(!ok || (code!=TRADE_RETCODE_DONE && code!=TRADE_RETCODE_DONE_PARTIAL && code!=TRADE_RETCODE_PLACED))
+         if(!ok||(code!=TRADE_RETCODE_DONE&&code!=TRADE_RETCODE_DONE_PARTIAL&&code!=TRADE_RETCODE_PLACED))
            {
             return(false);
            }
-         if(code==TRADE_RETCODE_DONE || code==TRADE_RETCODE_DONE_PARTIAL)
+         if(code==TRADE_RETCODE_DONE||code==TRADE_RETCODE_DONE_PARTIAL)
            {
             successful_requests++;
            }
-         reconciling=(code==TRADE_RETCODE_DONE_PARTIAL || code==TRADE_RETCODE_PLACED);
+         reconciling=(code==TRADE_RETCODE_DONE_PARTIAL||code==TRADE_RETCODE_PLACED);
         }
       intended_volume=a.volume;
       intended_sl=a.sl;
       intended_tp=a.tp;
+
       return(Snapshot(bid,ask,time));
      }
 //+------------------------------------------------------------------+
@@ -656,15 +692,16 @@ class CAlphaGenEnvironment
         {
          ReturnFalse;
         }
-      bool hit=volume>0?(bid<=sl || bid>=tp):(volume<0 && (bid+spread>=sl || bid+spread<=tp));
-      if(hit || equity<=AG_EQUITY_FLOOR*reference)
+      bool hit=volume>0?(bid<=sl||bid>=tp):(volume<0&&(bid+spread>=sl||bid+spread<=tp));
+      if(hit||equity<=AG_EQUITY_FLOOR*reference)
         {
          return(CloseVirtual(MathAbs(volume),bid,bid+spread,time));
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
-//| Find the first protection or equity-floor crossing.              |
+//| Segment - find the first protection or equity-floor crossing.    |
 //+------------------------------------------------------------------+
    bool Segment(double from,double to,double spread,datetime time)
      {
@@ -686,7 +723,7 @@ class CAlphaGenEnvironment
             continue;
            }
          double fraction=(levels[i]-from)/(to-from);
-         if(fraction>=0 && fraction<=1 && fraction<nearest)
+         if(fraction>=0&&fraction<=1&&fraction<nearest)
            {
             nearest=fraction;
             end=levels[i];
@@ -696,17 +733,18 @@ class CAlphaGenEnvironment
         {
          ReturnFalse;
         }
-      if(nearest<=1 && volume!=0)
+      if(nearest<=1&&volume!=0)
         {
          if(!CloseVirtual(MathAbs(volume),end,end+spread,time))
            {
             ReturnFalse;
            }
         }
+
       return(PathPoint(to,spread,time));
      }
 //+------------------------------------------------------------------+
-//| Advance one causal historical OHLC execution path.               |
+//| Bar - advance one causal historical OHLC execution path.         |
 //+------------------------------------------------------------------+
    bool Bar(MqlRates &bar)
      {
@@ -716,10 +754,11 @@ class CAlphaGenEnvironment
          ReturnFalse;
         }
       double first=volume>=0?bar.low:bar.high,second=volume>=0?bar.high:bar.low;
-      if(!Segment(bar.open,first,spread,bar.time) || !Segment(first,second,spread,bar.time) || !Segment(second,bar.close,spread,bar.time))
+      if(!Segment(bar.open,first,spread,bar.time)||!Segment(first,second,spread,bar.time)||!Segment(second,bar.close,spread,bar.time))
         {
          ReturnFalse;
         }
+
       return(Snapshot(bar.close,bar.close+spread,bar.time+PeriodSeconds(TimeFrame)));
      }
 //+------------------------------------------------------------------+
@@ -727,14 +766,14 @@ class CAlphaGenEnvironment
 //+------------------------------------------------------------------+
    bool Exhausted(double bid,double ask)
      {
-      if(volume!=0 || pending)
+      if(volume!=0||pending)
         {
          return(false);
         }
       bool any=false;
       for(int side=0;side<2;side++)
         {
-         if(trade_mode!=SYMBOL_TRADE_MODE_FULL && trade_mode!=(side==0?SYMBOL_TRADE_MODE_LONGONLY:SYMBOL_TRADE_MODE_SHORTONLY))
+         if(trade_mode!=SYMBOL_TRADE_MODE_FULL&&trade_mode!=(side==0?SYMBOL_TRADE_MODE_LONGONLY:SYMBOL_TRADE_MODE_SHORTONLY))
            {
             continue;
            }
@@ -749,6 +788,7 @@ class CAlphaGenEnvironment
             return(false);
            }
         }
+
       return(any);
      }
   };
@@ -757,33 +797,43 @@ class CAlphaGenEnvironment
 //+------------------------------------------------------------------+
 struct SAlphaGenDeal
   {
-   ulong ticket;
+   ulong  ticket;
    double cash;
-   long milliseconds;
-   ulong owner;
+   long   milliseconds;
+   ulong  owner;
   };
+//+------------------------------------------------------------------+
+//| SAlphaGenInterval                                                |
+//+------------------------------------------------------------------+
 struct SAlphaGenInterval
   {
    ulong decision;
    datetime start_boundary,end_boundary;
    long start_msc,end_msc;
    double reference,gamma,start_equity,end_equity;
-   int duration;
+   int  duration;
    bool trained;
   };
+//+------------------------------------------------------------------+
+//| SAlphaGenRequestOwner                                            |
+//+------------------------------------------------------------------+
 struct SAlphaGenRequestOwner
   {
    ulong deal,order,decision;
   };
 
+//+------------------------------------------------------------------+
+//| CAlphaGenApplication                                             |
+//+------------------------------------------------------------------+
 class CAlphaGenApplication
   {
    public:
-   CNet model;
+   CAlphaGenSelectiveOpenCL selective_runtime;
+   CNet                     model;
    SAlphaGenDeal ledger[];
-   CHashMap<ulong,int> ledger_index;
-   int confirmed_requests;
-   SAlphaGenInterval sealed[];
+   CHashMap<ulong,int>ledger_index;
+   int                   confirmed_requests;
+   SAlphaGenInterval     sealed[];
    SAlphaGenRequestOwner request_owners[];
    long snapshot_msc,decision_start_msc;
    bool fault_announced,fault_settled;
@@ -804,8 +854,8 @@ class CAlphaGenApplication
    int study_finish_batch_total,study_finish_batch_completed;
    ulong study_finish_updates,study_finish_started;
    double start_equity,last_equity,interval_reward,trade_gamma;
-   int delta;
-   float input_values[],context[];
+   int      delta;
+   float    input_values[],context[];
    MqlRates history[],pool_warmup_rates[];
    int cursor,epoch,window,context_bars,warmup_bars;
    ulong prep_us,forward_us,ppo_us,total_us,max_us,boundaries;
@@ -892,6 +942,7 @@ class CAlphaGenApplication
         }
       ArrayResize(money.request_deals,0);
       ArrayResize(money.request_orders,0);
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -904,6 +955,7 @@ class CAlphaGenApplication
         {
          return(false);
         }
+
       return(result);
      }
 //+------------------------------------------------------------------+
@@ -911,7 +963,7 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    void FaultCleanup()
      {
-      if(!failed || fault_settled)
+      if(!failed||fault_settled)
         {
          return;
         }
@@ -920,12 +972,12 @@ class CAlphaGenApplication
          fault_settled=true;
          return;
         }
-      if(!MQLInfoInteger(MQL_TESTER) && !TerminalInfoInteger(TERMINAL_CONNECTED))
+      if(!MQLInfoInteger(MQL_TESTER)&&!TerminalInfoInteger(TERMINAL_CONNECTED))
         {
          return;
         }
       MqlTick quote;
-      if(!SymbolInfoTick(_Symbol,quote) || quote.bid<=0 || quote.ask<quote.bid)
+      if(!SymbolInfoTick(_Symbol,quote)||quote.bid<=0||quote.ask<quote.bid)
         {
          return;
         }
@@ -940,15 +992,16 @@ class CAlphaGenApplication
       money.intended_sl=0;
       money.intended_tp=0;
       ExecuteTarget(flat,quote.bid,quote.ask,quote.time);
-      if(money.Snapshot(quote.bid,quote.ask,quote.time) && money.volume==0 && !money.pending)
+      if(money.Snapshot(quote.bid,quote.ask,quote.time)&&money.volume==0&&!money.pending)
         {
          fault_settled=true;
          Print("AlphaGen fault exposure confirmed Flat; checkpoint preserved");
         }
      }
 //+------------------------------------------------------------------+
-//| Disable the model and saving before attempting protective closing.|
+//| Disable the model and saving before attempting protective        |
 //+------------------------------------------------------------------+
+//--- closing.
    void Fault(string reason)
      {
       failed=true;
@@ -980,6 +1033,7 @@ class CAlphaGenApplication
       sealed[n].end_equity=money.equity;
       sealed[n].duration=MathMax(delta,1);
       sealed[n].trained=false;
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -987,7 +1041,7 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    bool CorrectSealedCash(ulong owner,long at,double difference)
      {
-      if(!training || difference==0)
+      if(!training||difference==0)
         {
          return(true);
         }
@@ -995,7 +1049,7 @@ class CAlphaGenApplication
       for(int i=0;i<ArraySize(sealed);i++)
         {
          bool candidate=owner!=0?sealed[i].decision==owner:
-         (at>=sealed[i].start_msc && at<=sealed[i].end_msc);
+         (at>=sealed[i].start_msc&&at<=sealed[i].end_msc);
          if(!candidate)
            {
             continue;
@@ -1003,6 +1057,7 @@ class CAlphaGenApplication
          if(match>=0)
            {
             PrintFormat("AlphaGen cash correction rejected: ambiguous owner; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
+
             return(false);
            }
          match=i;
@@ -1010,44 +1065,50 @@ class CAlphaGenApplication
       if(match<0)
         {
 // Current unsealed cash is already represented by its equity sample.
-         if(owner==decision_id && open_decision)
+         if(owner==decision_id&&open_decision)
            {
             return(true);
            }
-         if(open_decision && at<decision_start_msc)
+         if(open_decision&&at<decision_start_msc)
            {
             PrintFormat("AlphaGen cash correction rejected: cash precedes open decision; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
+
             return(false);
            }
-         if(ArraySize(sealed)==0 || at>sealed[ArraySize(sealed)-1].end_msc)
+         if(ArraySize(sealed)==0||at>sealed[ArraySize(sealed)-1].end_msc)
            {
             return(true);
            }
          PrintFormat("AlphaGen cash correction rejected: no matching interval; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
+
          return(false);
         }
-      if(sealed[match].trained || sealed[match].reference<=0)
+      if(sealed[match].trained||sealed[match].reference<=0)
         {
          PrintFormat("AlphaGen cash correction rejected: interval trained or invalid reference; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
+
          return(false);
         }
       int start_shift=iBarShift(_Symbol,TimeFrame,sealed[match].start_boundary,true);
       int cash_shift=iBarShift(_Symbol,TimeFrame,(datetime)((at-1)/1000),false);
-      if(start_shift<0 || cash_shift<0)
+      if(start_shift<0||cash_shift<0)
         {
          PrintFormat("AlphaGen cash correction rejected: history shift unavailable; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
+
          return(false);
         }
       int cash_step=MathMax(start_shift-cash_shift+1,1);
       if(cash_step>sealed[match].duration)
         {
          PrintFormat("AlphaGen cash correction rejected: cash outside interval duration; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
+
          return(false);
         }
       double adjustment=MathPow(sealed[match].gamma,cash_step-1)*difference/sealed[match].reference;
-      if(!MathIsValidNumber(adjustment) || !agent.AdjustReward(sealed[match].decision,(float)adjustment))
+      if(!MathIsValidNumber(adjustment)||!agent.AdjustReward(sealed[match].decision,(float)adjustment))
         {
          PrintFormat("AlphaGen cash correction rejected: reward adjustment rejected; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
+
          return(false);
         }
 // The current confirmed equity already includes this cash correction.
@@ -1065,6 +1126,7 @@ class CAlphaGenApplication
          sealed[i].start_equity+=difference;
          sealed[i].end_equity+=difference;
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -1115,33 +1177,31 @@ class CAlphaGenApplication
       c[AG_CFG_INTERVALS+4]=(float)AG_INTERVAL_SIXTY;
       c[AG_CFG_POSITION_SCALE]=(float)AG_POSITION_SCALE;
       c[AG_CFG_INVALID_TOKEN_REWARD]=(float)AG_INVALID_TOKEN_REWARD;
+
       return(true);
      }
 //+------------------------------------------------------------------+
-//| Validate the run and initialize the shared state.                |
+//| InitializeModel - Prepare the AlphaGen composite and GPU program |
 //+------------------------------------------------------------------+
-   bool Init(bool train,bool offline)
+   bool InitializeModel(const string path,const bool train,const bool common,bool &exists)
      {
-      training=train;
-      service_rebase=true;
-      simulated=offline;
-      LastBarTime=0;
-      finance_started=TimeCurrent();
-      if(window<AG_LOOKBACK+MathMax(AG_IC_WINDOW+AG_HORIZON,AG_NORM_WINDOW))
+      const ulong started=GetTickCount64();
+      if(SelectiveOpenCL)
         {
-         ReturnFalse;
+         int device=CL_USE_ANY;
+#ifdef NN_OPENCL_DEVICE
+         device=NN_OPENCL_DEVICE;
+#endif
+         if(!selective_runtime.Begin(device)||!model.UseOpenCLRuntime(GetPointer(selective_runtime)))
+            ReturnFalse;
         }
-      if(train && !offline && !MQLInfoInteger(MQL_TESTER))
-        {
-         Print("StudyOnline requires Strategy Tester");
-         ReturnFalse;
-        }
-      float error=0,undefined=0,forecast=0;
+
+      float    error=0,undefined=0,forecast=0;
       datetime stamp=0;
-      bool exists=FileIsExist(ModelFile,FILE_COMMON);
+      exists=FileIsExist(path,common?FILE_COMMON:0);
       if(exists)
         {
-         if(!model.Load(ModelFile,error,undefined,forecast,stamp,true))
+         if(!model.Load(path,error,undefined,forecast,stamp,common))
            {
             ReturnFalse;
            }
@@ -1154,9 +1214,9 @@ class CAlphaGenApplication
             ReturnFalse;
            }
          ResetLastError();
-         CArrayObj description;
+         CArrayObj         description;
          CLayerDescription *in=new CLayerDescription(),*out=new CLayerDescription();
-         if(!in || !out)
+         if(!in||!out)
            {
             if(in)
               {
@@ -1187,7 +1247,7 @@ class CAlphaGenApplication
             ReturnFalse;
            }
         }
-      if(!model.Layer(0) || !model.Layer(1) || model.Layer(1).Type()!=defNeuronAlphaGenOCL || model.Layer(1).Neurons()!=AG_OUTPUT_SIZE)
+      if(!model.Layer(0)||!model.Layer(1)||model.Layer(1).Type()!=defNeuronAlphaGenOCL||model.Layer(1).Neurons()!=AG_OUTPUT_SIZE)
         {
          ReturnFalse;
         }
@@ -1201,17 +1261,48 @@ class CAlphaGenApplication
             ReturnFalse;
            }
         }
+      if(SelectiveOpenCL&&!selective_runtime.Build())
+         ReturnFalse;
+
+      PrintFormat("AlphaGen OpenCL init: mode=%s elapsed_ms=%I64u context=%d program=%d",
+                  SelectiveOpenCL?"selective":"full",GetTickCount64()-started,
+                  model.GetOpenCL().GetContext(),model.GetOpenCL().GetProgram());
+
+      return(true);
+     }
+//+------------------------------------------------------------------+
+//| Init - validate the run and initialize the shared state.         |
+//+------------------------------------------------------------------+
+   bool Init(bool train,bool offline)
+     {
+      training=train;
+      service_rebase=true;
+      simulated=offline;
+      LastBarTime=0;
+      finance_started=TimeCurrent();
+      if(window<AG_LOOKBACK+MathMax(AG_IC_WINDOW+AG_HORIZON,AG_NORM_WINDOW))
+        {
+         ReturnFalse;
+        }
+      if(train&&!offline&&!MQLInfoInteger(MQL_TESTER))
+        {
+         Print("StudyOnline requires Strategy Tester");
+         ReturnFalse;
+        }
+      bool exists=false;
+      if(!InitializeModel(ModelFile,train,true,exists))
+         ReturnFalse;
       window=(int)agent.ConfigValue(AG_CFG_W);
       context_bars=(int)agent.ConfigValue(AG_CFG_CONTEXT);
       trade_gamma=(double)agent.ConfigValue(AG_CFG_TRADE_GAMMA);
-      int lookback=(int)agent.ConfigValue(AG_CFG_LOOKBACK),norm=(int)agent.ConfigValue(AG_CFG_NORM_WINDOW);
-      int ic=(int)agent.ConfigValue(AG_CFG_IC_WINDOW),horizon=(int)agent.ConfigValue(AG_CFG_HORIZON);
+      int  lookback=(int)agent.ConfigValue(AG_CFG_LOOKBACK),norm=(int)agent.ConfigValue(AG_CFG_NORM_WINDOW);
+      int  ic=(int)agent.ConfigValue(AG_CFG_IC_WINDOW),horizon=(int)agent.ConfigValue(AG_CFG_HORIZON);
       long required=(long)lookback+norm+context_bars-1;
       long inputs=(long)AG_CHANNELS*window+AG_ACCOUNT_SIZE;
       long metadata=(long)AG_CTX_SIZE+AG_CONTEXT_METADATA*window;
-      if(!MathIsValidNumber(trade_gamma) || trade_gamma<=0 || trade_gamma>1 || window<=0 ||
-         context_bars<=0 || lookback<0 || norm<=0 || ic<=0 || horizon<=0 || required>INT_MAX ||
-         inputs>INT_MAX || metadata>INT_MAX || (long)window<(long)lookback+MathMax((long)ic+horizon,(long)norm) ||
+      if(!MathIsValidNumber(trade_gamma)||trade_gamma<=0||trade_gamma>1||window<=0||
+         context_bars<=0||lookback<0||norm<=0||ic<=0||horizon<=0||required>INT_MAX||
+         inputs>INT_MAX||metadata>INT_MAX||(long)window<(long)lookback+MathMax((long)ic+horizon,(long)norm)||
          model.Layer(0).Neurons()!=AG_CHANNELS*window+AG_ACCOUNT_SIZE)
         {
          ReturnFalse;
@@ -1221,7 +1312,7 @@ class CAlphaGenApplication
         {
          ReturnFalse;
         }
-      if(ArrayResize(context,(int)metadata)!=(int)metadata || ArrayResize(input_values,(int)inputs)!=(int)inputs)
+      if(ArrayResize(context,(int)metadata)!=(int)metadata||ArrayResize(input_values,(int)inputs)!=(int)inputs)
         {
          ReturnFalse;
         }
@@ -1231,7 +1322,7 @@ class CAlphaGenApplication
 #ifdef ALPHAGEN_STUDY
       if(offline)
         {
-         if(Start>=End || Epochs<1 || MinBalance<=0 || MaxBalance<MinBalance)
+         if(Start>=End||Epochs<1||MinBalance<=0||MaxBalance<MinBalance)
            {
             ReturnFalse;
            }
@@ -1248,11 +1339,11 @@ class CAlphaGenApplication
             ReturnFalse;
            }
          cursor=0;
-         while(cursor<copied && history[cursor].time<Start)
+         while(cursor<copied&&history[cursor].time<Start)
            {
             cursor++;
            }
-         if(cursor<window || cursor>=copied || history[cursor].time>=End)
+         if(cursor<window||cursor>=copied||history[cursor].time>=End)
            {
             ReturnFalse;
            }
@@ -1264,12 +1355,12 @@ class CAlphaGenApplication
         {
          ReturnFalse;
         }
-      if(!training && agent.ActiveCount()<1)
+      if(!training&&agent.ActiveCount()<1)
         {
          Print("AlphaGen Test requires a checkpoint with a published Active Pool");
          ReturnFalse;
         }
-      if(offline && !agent.EnableParallelSearch())
+      if(offline&&!agent.EnableParallelSearch())
         {
          ReturnFalse;
         }
@@ -1321,15 +1412,16 @@ class CAlphaGenApplication
       AlphaGenInteger(context,AG_CTX_BOUNDARY,(ulong)boundary);
       context[AG_CTX_EQUITY]=(float)money.equity;
       context[AG_CTX_REFERENCE]=(float)money.reference;
-      if(!service.AssignArray(context) || !(service.GetIndex()<0?service.BufferCreate(model.GetOpenCL()):service.BufferWrite()))
+      if(!service.AssignArray(context)||!(service.GetIndex()<0?service.BufferCreate(model.GetOpenCL()):service.BufferWrite()))
         {
          ReturnFalse;
         }
       agent.Phase(phase);
+
       return(true);
      }
 //+------------------------------------------------------------------+
-//| Run one native phase and propagate numerical failures.           |
+//| Forward - run one native phase and propagate numerical failures. |
 //+------------------------------------------------------------------+
    bool Forward(int phase,int flags,datetime boundary)
      {
@@ -1338,7 +1430,7 @@ class CAlphaGenApplication
          ReturnFalse;
         }
       ulong start=GetMicrosecondCount();
-      if(!Context(phase,flags,boundary) || !raw.AssignArray(input_values) || !model.feedForward(GetPointer(raw),1,false,GetPointer(service)))
+      if(!Context(phase,flags,boundary)||!raw.AssignArray(input_values)||!model.feedForward(GetPointer(raw),1,false,GetPointer(service)))
         {
          Fault("native forward failed");
          ReturnFalse;
@@ -1347,11 +1439,12 @@ class CAlphaGenApplication
       forward_us+=elapsed;
       max_forward=MathMax(max_forward,elapsed);
       forward_calls++;
-      if(agent.Status()==AG_CORRUPTED || agent.Status()==AG_TECHNICAL)
+      if(agent.Status()==AG_CORRUPTED||agent.Status()==AG_TECHNICAL)
         {
          Fault("native numerical state is unusable");
          ReturnFalse;
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -1376,11 +1469,11 @@ class CAlphaGenApplication
             ReturnFalse;
            }
          CBufferFloat echo;
-         float zeros[];
+         float        zeros[];
          ArrayResize(zeros,AG_OUTPUT_SIZE);
          ArrayInitialize(zeros,0);
          ulong previous_trade_updates=agent.TradeUpdates();
-         if(!echo.AssignArray(zeros) || !model.backProp(GetPointer(echo),GetPointer(service)))
+         if(!echo.AssignArray(zeros)||!model.backProp(GetPointer(echo),GetPointer(service)))
            {
             Fault("native PPO backward failed");
             ReturnFalse;
@@ -1407,22 +1500,23 @@ class CAlphaGenApplication
       ppo_us+=elapsed;
       max_ppo=MathMax(max_ppo,elapsed);
       ppo_calls++;
+
       return(true);
      }
 //+------------------------------------------------------------------+
-//| Pack only closed OHLCV bars and the current Account13.           |
+//| Pack - pack only closed OHLCV bars and the current Account13.    |
 //+------------------------------------------------------------------+
    bool Pack(MqlRates &bars[],int end,datetime boundary,bool account)
      {
       ulong begin=GetMicrosecondCount();
-      if(end<window || end>ArraySize(bars))
+      if(end<window||end>ArraySize(bars))
         {
          return(false);
         }
       for(int i=0;i<window;i++)
         {
          MqlRates bar=bars[end-window+i];
-         if(!MathIsValidNumber(bar.open+bar.high+bar.low+bar.close) || bar.open<=0 || bar.high<bar.low || bar.close<=0 || bar.spread<0)
+         if(!MathIsValidNumber(bar.open+bar.high+bar.low+bar.close)||bar.open<=0||bar.high<bar.low||bar.close<=0||bar.spread<0)
            {
             return(false);
            }
@@ -1434,9 +1528,9 @@ class CAlphaGenApplication
          AlphaGenInteger(context,AG_CTX_SIZE+i*AG_CONTEXT_METADATA,(ulong)bar.time);
          context[AG_CTX_SIZE+i*AG_CONTEXT_METADATA+AG_TIME_LIMBS]=(float)bar.spread;
         }
-      float a[];
+      float    a[];
       datetime account_time=simulated?boundary:(snapshot_msc>0?(datetime)(snapshot_msc/1000):TimeCurrent());
-      if(account && !money.Account(account_time,a))
+      if(account&&!money.Account(account_time,a))
         {
          return(false);
         }
@@ -1448,6 +1542,7 @@ class CAlphaGenApplication
       prep_us+=elapsed;
       max_prep=MathMax(max_prep,elapsed);
       prep_calls++;
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -1455,21 +1550,21 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    void RealMoneySample(bool terminal=false)
      {
-      if(simulated || !training || !open_decision)
+      if(simulated||!training||!open_decision)
         {
          return;
         }
       datetime at=snapshot_msc>0?(datetime)(snapshot_msc/1000):TimeCurrent();
-      int start=iBarShift(_Symbol,TimeFrame,decision_time,true);
-      int finish=iBarShift(_Symbol,TimeFrame,at,false);
-      if(start<0 || finish<0)
+      int      start=iBarShift(_Symbol,TimeFrame,decision_time,true);
+      int      finish=iBarShift(_Symbol,TimeFrame,at,false);
+      if(start<0||finish<0)
         {
          return;
         }
 // Intrabar risk marks are not reward observations. A terminal event belongs
 // to the right boundary of its bar, with exact boundary events ending there.
       int step=start-finish;
-      if(terminal && snapshot_msc>(long)iTime(_Symbol,TimeFrame,finish)*1000)
+      if(terminal&&snapshot_msc>(long)iTime(_Symbol,TimeFrame,finish)*1000)
         {
          step++;
         }
@@ -1482,7 +1577,7 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    void MoneySample()
      {
-      if(!training || !open_decision)
+      if(!training||!open_decision)
         {
          return;
         }
@@ -1495,19 +1590,20 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    bool Feedback(bool terminal,bool ready,bool ruin,datetime boundary)
      {
-      if(!training || !open_decision)
+      if(!training||!open_decision)
         {
          return(true);
         }
 // Register execution cash while its decision is still mutable. Use the
 // current server time: boundary may be the beginning of the current bar.
-      if(!simulated && !ReconcileDeals(TimeCurrent()))
+      if(!simulated&&!ReconcileDeals(TimeCurrent()))
         {
          Fault("INCOMPLETE_DATA: pre-feedback cash reconciliation failed");
+
          return(false);
         }
       event_id++;
-      context[AG_CTX_MONEY_CONFIRMED]=(!money.pending && !money.reconciling && !money.unknown_request)?1.0f:0.0f;
+      context[AG_CTX_MONEY_CONFIRMED]=(!money.pending&&!money.reconciling&&!money.unknown_request)?1.0f:0.0f;
       context[AG_CTX_TERMINAL]=terminal?1.0f:0.0f;
       context[AG_CTX_NEXT_READY]=ready?1.0f:0.0f;
       context[AG_CTX_DELTA]=(float)MathMax(delta,1);
@@ -1516,7 +1612,7 @@ class CAlphaGenApplication
         {
          ReturnFalse;
         }
-      if(!money.pending && !money.reconciling && !money.unknown_request && (terminal || ready))
+      if(!money.pending&&!money.reconciling&&!money.unknown_request&&(terminal||ready))
         {
          if(!SealInterval(boundary))
            {
@@ -1530,6 +1626,7 @@ class CAlphaGenApplication
          invalid=false;
          context[AG_CTX_MONEY_CONFIRMED]=context[AG_CTX_TERMINAL]=context[AG_CTX_NEXT_READY]=context[AG_CTX_REWARD]=0;
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -1538,20 +1635,20 @@ class CAlphaGenApplication
    bool AdvancePoolWarmup()
      {
       int end=ArraySize(pool_warmup_rates);
-      if(pool_warmup_end<window || pool_warmup_end>end)
+      if(pool_warmup_end<window||pool_warmup_end>end)
         {
          Fault("invalid pinned pool warmup cursor");
          ReturnFalse;
         }
       float warmup_history[];
-      if(warmup_bars<=0 || warmup_bars>INT_MAX/5 || end<warmup_bars || ArrayResize(warmup_history,5*warmup_bars)!=5*warmup_bars)
+      if(warmup_bars<=0||warmup_bars>INT_MAX/5||end<warmup_bars||ArrayResize(warmup_history,5*warmup_bars)!=5*warmup_bars)
         {
          ReturnFalse;
         }
       for(int i=0;i<warmup_bars;i++)
         {
          MqlRates bar=pool_warmup_rates[end-warmup_bars+i];
-         if(!MathIsValidNumber(bar.open+bar.high+bar.low+bar.close) || bar.open<=0 || bar.high<bar.low || bar.close<=0 || bar.spread<0)
+         if(!MathIsValidNumber(bar.open+bar.high+bar.low+bar.close)||bar.open<=0||bar.high<bar.low||bar.close<=0||bar.spread<0)
            {
             Fault("invalid pinned history bar");
             ReturnFalse;
@@ -1563,8 +1660,8 @@ class CAlphaGenApplication
          warmup_history[4*warmup_bars+i]=(float)bar.tick_volume;
         }
       int flags=AG_FLAG_WARMUP|AG_FLAG_RESET_WORK|AG_FLAG_END;
-      if(!agent.SetPoolWarmupHistory(warmup_history,warmup_bars) ||
-         !Pack(pool_warmup_rates,end,pool_warmup_boundary,false) ||
+      if(!agent.SetPoolWarmupHistory(warmup_history,warmup_bars)||
+         !Pack(pool_warmup_rates,end,pool_warmup_boundary,false)||
          !Forward(AG_PREPARE,flags,pool_warmup_boundary))
         {
          ReturnFalse;
@@ -1583,6 +1680,7 @@ class CAlphaGenApplication
       pool_warmup_boundary=0;
       ArrayResize(pool_warmup_rates,0);
       cycle_complete=true;
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -1600,47 +1698,48 @@ class CAlphaGenApplication
         {
          return(true);
         }
-      if(training && agent.HasTraining() && observed_boundary!=boundary)
+      if(training&&agent.HasTraining()&&observed_boundary!=boundary)
         {
          if(!Train())
            {
             ReturnFalse;
            }
+
          return(true);
         }
       if(!Pack(bars,end,boundary,true))
         {
          return(true);
         }
-      int count=1;
+      int      count=1;
       datetime market_cursor=observed_boundary>0?observed_boundary:LastBarTime;
       if(market_cursor!=0)
         {
          count=0;
-         for(int i=end-1;i>=0 && bars[i].time>=market_cursor;i--)
+         for(int i=end-1;i>=0&&bars[i].time>=market_cursor;i--)
            {
             count++;
            }
-         if(count==0 && observed_boundary!=boundary)
+         if(count==0&&observed_boundary!=boundary)
            {
             return(true);
            }
         }
-      bool reset=market_cursor==0 || count>window ||
-                 (end>=window && market_cursor<bars[end-window].time);
+      bool reset=market_cursor==0||count>window||
+                 (end>=window&&market_cursor<bars[end-window].time);
       if(observed_boundary!=boundary)
         {
          int first=reset?end-1:end-count;
-         if(first<window-1 || (reset && end<window))
+         if(first<window-1||(reset&&end<window))
            {
             return(true);
            }
 // Fixed-normalizer warmup consumes all valid rows in one W-window.
          for(int i=first;i<end;i++)
            {
-            bool latest=i==end-1;
+            bool     latest=i==end-1;
             datetime at=latest?boundary:bars[i+1].time;
-            if(!reset && at<=observed_boundary)
+            if(!reset&&at<=observed_boundary)
               {
                continue;
               }
@@ -1649,7 +1748,7 @@ class CAlphaGenApplication
                return(true);
               }
             int flags=reset?(AG_FLAG_WARMUP|AG_FLAG_RESET_WORK|AG_FLAG_END):AG_FLAG_ADVANCE;
-            if(latest && open_decision)
+            if(latest&&open_decision)
               {
                flags|=AG_FLAG_VALUE;
               }
@@ -1662,7 +1761,7 @@ class CAlphaGenApplication
                observed_boundary=at;
               }
            }
-         if(agent.Status()==AG_WAIT && (open_decision || !training))
+         if(agent.Status()==AG_WAIT&&(open_decision||!training))
            {
             return(true);
            }
@@ -1670,7 +1769,7 @@ class CAlphaGenApplication
            {
             SAlphaGenTarget flat;
             ZeroMemory(flat);
-            if(!ExecuteTarget(flat,bid,ask,boundary) || money.pending || money.reconciling || money.volume!=0)
+            if(!ExecuteTarget(flat,bid,ask,boundary)||money.pending||money.reconciling||money.volume!=0)
               {
                return(true);
               }
@@ -1700,7 +1799,7 @@ class CAlphaGenApplication
            }
          else
            {
-            if(open_decision && agent.Status()!=AG_OK)
+            if(open_decision&&agent.Status()!=AG_OK)
               {
                return(true);
               }
@@ -1732,7 +1831,7 @@ class CAlphaGenApplication
                return(true);
               }
            }
-         if(agent.NeedsPoolWarmup() && end<warmup_bars)
+         if(agent.NeedsPoolWarmup()&&end<warmup_bars)
            {
             if(!agent.AbortPoolWarmup())
               {
@@ -1752,15 +1851,16 @@ class CAlphaGenApplication
               }
             pool_warmup_boundary=boundary;
             pool_warmup_end=end-warmup_bars+window;
+
             return(AdvancePoolWarmup());
            }
          if(!preparation_done)
            {
-            if(!Pack(bars,end,boundary,true) || !Forward(AG_PREPARE,0,boundary))
+            if(!Pack(bars,end,boundary,true)||!Forward(AG_PREPARE,0,boundary))
               {
                ReturnFalse;
               }
-            if(agent.Status()==AG_WORKING || agent.NeedsPoolWarmup())
+            if(agent.Status()==AG_WORKING||agent.NeedsPoolWarmup())
               {
                return(true);
               }
@@ -1781,6 +1881,7 @@ class CAlphaGenApplication
                service_rebase=true;
                LastBarTime=boundary;
                cycle_complete=true;
+
                return(true);
               }
            }
@@ -1819,6 +1920,7 @@ class CAlphaGenApplication
                return(true);
               }
            }
+
          return(true);
         }
       service_rebase=false;
@@ -1843,15 +1945,15 @@ class CAlphaGenApplication
       open_decision=training;
       invalid=target.invalid;
       double before_volume=money.volume;
-      ulong before_requests=money.successful_requests;
-      bool executed=ExecuteTarget(target,bid,ask,boundary);
+      ulong  before_requests=money.successful_requests;
+      bool   executed=ExecuteTarget(target,bid,ask,boundary);
       invalid=target.invalid;
 #ifdef ALPHAGEN_DECISION_TRACE
       PrintFormat("AlphaGen execution result=%d invalid=%d requested=%.8f actual=%.8f requests=%I64u pending=%d search_updates=%I64u trade_updates=%I64u",
                   (int)executed,(int)invalid,target.volume,money.volume,money.successful_requests,
                   (int)money.pending,agent.TokenUpdates(),agent.TradeUpdates());
 #endif
-      if(!executed && !money.pending && before_volume==money.volume && before_requests==money.successful_requests)
+      if(!executed&&!money.pending&&before_volume==money.volume&&before_requests==money.successful_requests)
         {
 // A rejected technical request is not a fictitious policy sample.
          if(!agent.DiscardDecision())
@@ -1863,30 +1965,31 @@ class CAlphaGenApplication
          service_rebase=true;
          excluded++;
         }
-      if(!executed && !money.pending && (before_volume!=money.volume || before_requests!=money.successful_requests))
+      if(!executed&&!money.pending&&(before_volume!=money.volume||before_requests!=money.successful_requests))
         {
          SAlphaGenTarget flat;
          ZeroMemory(flat);
-         if(!ExecuteTarget(flat,bid,ask,boundary) || money.pending)
+         if(!ExecuteTarget(flat,bid,ask,boundary)||money.pending)
            {
             money.intended_volume=0;
             money.intended_sl=0;
             money.intended_tp=0;
             money.reconciling=true;
+
             return(true);
            }
          interval_reward+=MathPow(trade_gamma,MathMax(delta-1,0))*(money.equity-last_equity)/money.reference;
          last_equity=money.equity;
-         if(!Feedback(true,false,false,boundary) || !Train())
+         if(!Feedback(true,false,false,boundary)||!Train())
            {
             ReturnFalse;
            }
         }
-      if(target.invalid && !money.pending && !money.reconciling && money.volume==0)
+      if(target.invalid&&!money.pending&&!money.reconciling&&money.volume==0)
         {
          interval_reward+=(money.equity-last_equity)/money.reference;
          last_equity=money.equity;
-         if(!Feedback(true,false,false,boundary) || !Train())
+         if(!Feedback(true,false,false,boundary)||!Train())
            {
             ReturnFalse;
            }
@@ -1895,6 +1998,7 @@ class CAlphaGenApplication
       total_us+=elapsed;
       max_us=MathMax(max_us,elapsed);
       boundaries++;
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -1902,7 +2006,7 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    bool SavePhase(int phase)
      {
-      if(!training || failed || agent.Status()==AG_CORRUPTED || !agent.SafeToSave())
+      if(!training||failed||agent.Status()==AG_CORRUPTED||!agent.SafeToSave())
         {
          return(false);
         }
@@ -1919,11 +2023,12 @@ class CAlphaGenApplication
          if(!verify.UseOpenCLRuntime(model.GetOpenCL()))
            {
             Print("AlphaGen checkpoint verification could not borrow OpenCL runtime");
+
             return(false);
            }
-         float a=0,b=0,c=0;
+         float    a=0,b=0,c=0;
          datetime t=0;
-         return(verify.Load(temp,a,b,c,t,true) && CheckPointer(verify.Layer(1))!=POINTER_INVALID &&
+         return(verify.Load(temp,a,b,c,t,true)&&CheckPointer(verify.Layer(1))!=POINTER_INVALID&&
                 verify.Layer(1).Type()==defNeuronAlphaGenOCL);
         }
       if(phase!=2)
@@ -1931,22 +2036,23 @@ class CAlphaGenApplication
          return(false);
         }
       bool had=FileIsExist(ModelFile,FILE_COMMON);
-      if(had && !FileCopy(ModelFile,FILE_COMMON,backup,FILE_COMMON|FILE_REWRITE))
+      if(had&&!FileCopy(ModelFile,FILE_COMMON,backup,FILE_COMMON|FILE_REWRITE))
         {
          ReturnFalse;
         }
       if(!FileMove(temp,FILE_COMMON,ModelFile,FILE_COMMON|FILE_REWRITE))
         {
-         if(had && !FileCopy(backup,FILE_COMMON,ModelFile,FILE_COMMON|FILE_REWRITE))
+         if(had&&!FileCopy(backup,FILE_COMMON,ModelFile,FILE_COMMON|FILE_REWRITE))
            {
             Print("AlphaGen checkpoint restore failed: ",GetLastError());
            }
          ReturnFalse;
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
-//| Save and verify synchronously outside the Study timer driver.     |
+//| Save and verify synchronously outside the Study timer driver.    |
 //+------------------------------------------------------------------+
    bool Save()
      {
@@ -1957,6 +2063,7 @@ class CAlphaGenApplication
             return(false);
            }
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -1964,7 +2071,7 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    bool FinishExcluded(bool save,datetime time)
      {
-      if(training && open_decision)
+      if(training&&open_decision)
         {
          excluded++;
          excluded_cash+=money.equity-start_equity;
@@ -1994,17 +2101,18 @@ class CAlphaGenApplication
 // at their buffer edge. It never invents money or a value for the open row.
             for(int contour=0;contour<=AG_LEARNING_CONTOURS;contour++)
               {
-               if(!Forward(AG_FLUSH,AG_FLAG_DISCARD|AG_FLAG_END,time) || !Train(true))
+               if(!Forward(AG_FLUSH,AG_FLAG_DISCARD|AG_FLAG_END,time)||!Train(true))
                   ReturnFalse;
               }
            }
         }
-      if(save && !Save())
+      if(save&&!Save())
         {
          return(false);
         }
       Finalized=true;
       Print("AlphaGen terminal money unresolved; unfinished sample excluded; coherent weights retained");
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -2015,15 +2123,16 @@ class CAlphaGenApplication
       if(failed)
         {
          FaultCleanup();
+
          return(false);
         }
       if(Finalized)
         {
          return(true);
         }
-      double bid=0,ask=0;
+      double   bid=0,ask=0;
       datetime time=LastBarTime;
-      if(simulated && virtual_gap_terminal && cursor<ArraySize(history))
+      if(simulated&&virtual_gap_terminal&&cursor<ArraySize(history))
         {
          MqlRates current=history[cursor];
          bid=current.open;
@@ -2033,7 +2142,7 @@ class CAlphaGenApplication
         }
       else
         {
-         if(simulated && cursor>0 && cursor<=ArraySize(history))
+         if(simulated&&cursor>0&&cursor<=ArraySize(history))
            {
             MqlRates last=history[cursor-1];
             bid=last.close;
@@ -2069,18 +2178,18 @@ class CAlphaGenApplication
         {
          settled=false;
         }
-      if(!simulated && !ReconcileDeals(time))
+      if(!simulated&&!ReconcileDeals(time))
         {
          Fault("INCOMPLETE_DATA: terminal cash reconciliation failed");
          ReturnFalse;
         }
-      settled=settled && !money.pending && !money.reconciling && !money.unknown_request && money.volume==0;
+      settled=settled&&!money.pending&&!money.reconciling&&!money.unknown_request&&money.volume==0;
       if(!settled)
         {
          return(final_pass?FinishExcluded(save,time):false);
         }
-      ruin=ruin || money.stopout || controlled_stopping;
-      if(training && open_decision)
+      ruin=ruin||money.stopout||controlled_stopping;
+      if(training&&open_decision)
         {
          if(!simulated)
            {
@@ -2100,25 +2209,25 @@ class CAlphaGenApplication
         {
          return(true);
         }
-      if(training && !training_done && stop_requested)
+      if(training&&!training_done&&stop_requested)
         {
          if(!agent.CancelTraining())
            {
             ReturnFalse;
            }
         }
-      if(training && !training_done && !stop_requested && !Train(true))
+      if(training&&!training_done&&!stop_requested&&!Train(true))
         {
          ReturnFalse;
         }
-      if(training && !training_done && !stop_requested)
+      if(training&&!training_done&&!stop_requested)
         {
          for(int i=0;i<AG_LEARNING_CONTOURS;i++)
            {
             context[AG_CTX_TERMINAL]=1.0f;
             context[AG_CTX_MONEY_CONFIRMED]=1.0f;
             context[AG_CTX_NEXT_READY]=0.0f;
-            if(!Forward(AG_FLUSH,AG_FLAG_END,time) || !Train(true))
+            if(!Forward(AG_FLUSH,AG_FLAG_END,time)||!Train(true))
               {
                ReturnFalse;
               }
@@ -2130,7 +2239,7 @@ class CAlphaGenApplication
          service_cash+=money.equity-reported_equity;
          reported_equity=money.equity;
         }
-      if(save && !Save())
+      if(save&&!Save())
         {
          return(false);
         }
@@ -2146,6 +2255,7 @@ class CAlphaGenApplication
       PrintFormat("AlphaGen final balance %.2f equity %.2f updates %I64u excluded %I64u boundaries %I64u mean_us %.1f max_us %I64u",
       money.balance,money.equity,updates,excluded,boundaries,boundaries>0?(double)total_us/boundaries:0,
       max_us);
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -2156,6 +2266,7 @@ class CAlphaGenApplication
       if(!HistorySelect(finance_started,now))
         {
          money.pending=true;
+
          return(true);
         }
       int total=HistoryDealsTotal();
@@ -2165,6 +2276,7 @@ class CAlphaGenApplication
          if(ticket==0)
            {
             money.pending=true;
+
             return(true);
            }
          if(HistoryDealGetString(ticket,DEAL_SYMBOL)!=_Symbol)
@@ -2178,7 +2290,7 @@ class CAlphaGenApplication
          double cash=HistoryDealGetDouble(ticket,DEAL_PROFIT)+HistoryDealGetDouble(ticket,
          DEAL_COMMISSION)+HistoryDealGetDouble(ticket,DEAL_SWAP)+HistoryDealGetDouble(ticket,DEAL_FEE);
          long at=HistoryDealGetInteger(ticket,DEAL_TIME_MSC);
-         int found=-1;
+         int  found=-1;
          if(ledger_index.TryGetValue(ticket,found))
            {
             if(ledger[found].cash==cash)
@@ -2213,28 +2325,31 @@ class CAlphaGenApplication
             ulong order=(ulong)HistoryDealGetInteger(ticket,DEAL_ORDER);
             for(int j=0;j<ArraySize(request_owners);j++)
               {
-               if(request_owners[j].deal==ticket || (order!=0 && request_owners[j].order==order))
+               if(request_owners[j].deal==ticket||(order!=0&&request_owners[j].order==order))
                  {
                   owner=request_owners[j].decision;
                   break;
                  }
               }
-            if(owner==0 && open_decision && at>decision_start_msc)
+            if(owner==0&&open_decision&&at>decision_start_msc)
               {
                owner=decision_id;
               }
             int n=ArraySize(ledger);
             if(ArrayResize(ledger,n+1,256)!=n+1)
                return(false);
+
             if(!ledger_index.Add(ticket,n))
               {
                ArrayResize(ledger,n);
+
                return(false);
               }
             if(!CorrectSealedCash(owner,at,cash))
               {
                ledger_index.Remove(ticket);
                ArrayResize(ledger,n);
+
                return(false);
               }
             ledger[n].ticket=ticket;
@@ -2262,9 +2377,11 @@ class CAlphaGenApplication
          if(!ledger_index.TryGetValue(deal,row))
            {
             money.pending=true;
+
             return(true);
            }
         }
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -2272,7 +2389,7 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    void Transaction(const MqlTradeTransaction &trans,const MqlTradeRequest &request,const MqlTradeResult &result)
      {
-      if(trans.type==TRADE_TRANSACTION_REQUEST && result.request_id==money.request_id)
+      if(trans.type==TRADE_TRANSACTION_REQUEST&&result.request_id==money.request_id)
         {
          MqlTradeResult outcome=result;
          money.RecordRequest(outcome);
@@ -2283,7 +2400,7 @@ class CAlphaGenApplication
            }
          money.unknown_request=false;
         }
-      if(trans.type==TRADE_TRANSACTION_DEAL_ADD && HistoryDealSelect(trans.deal))
+      if(trans.type==TRADE_TRANSACTION_DEAL_ADD&&HistoryDealSelect(trans.deal))
         {
          if(HistoryDealGetInteger(trans.deal,DEAL_REASON)==DEAL_REASON_SO)
            {
@@ -2293,7 +2410,7 @@ class CAlphaGenApplication
 // Order and deal notification order is not a money confirmation.
      }
 //+------------------------------------------------------------------+
-//| Reconcile risk before processing any new bar boundary.           |
+//| Tick - reconcile risk before processing any new bar boundary.    |
 //+------------------------------------------------------------------+
    void Tick()
      {
@@ -2322,9 +2439,9 @@ class CAlphaGenApplication
          Fault("INCOMPLETE_DATA: sealed cash has no mutable causal owner");
          return;
         }
-      bool ruin=money.stopout || money.equity<=AG_EQUITY_FLOOR*money.reference || (training
-      && money.balance<=AG_MIN_TRADING_BALANCE) || money.Exhausted(quote.bid,quote.ask);
-      if(ruin || controlled_stopping)
+      bool ruin=money.stopout||money.equity<=AG_EQUITY_FLOOR*money.reference||(training
+      &&money.balance<=AG_MIN_TRADING_BALANCE)||money.Exhausted(quote.bid,quote.ask);
+      if(ruin||controlled_stopping)
         {
          controlled_stopping=true;
          if(Finish(true,training))
@@ -2333,25 +2450,25 @@ class CAlphaGenApplication
            }
          return;
         }
-      if(money.volume!=0 && (money.sl<=0 || money.tp<=0) && !money.pending)
+      if(money.volume!=0&&(money.sl<=0||money.tp<=0)&&!money.pending)
         {
          SAlphaGenTarget flat;
          ZeroMemory(flat);
-         if(!ExecuteTarget(flat,quote.bid,quote.ask,quote.time) || money.pending)
+         if(!ExecuteTarget(flat,quote.bid,quote.ask,quote.time)||money.pending)
            {
             return;
            }
-         if(training && open_decision)
+         if(training&&open_decision)
            {
             RealMoneySample(true);
-            if(!Feedback(true,false,false,quote.time) || !Train())
+            if(!Feedback(true,false,false,quote.time)||!Train())
               {
                Fault("protective terminal training failed");
                return;
               }
            }
         }
-      if(money.reconciling && !money.pending)
+      if(money.reconciling&&!money.pending)
         {
          SAlphaGenTarget remaining;
          remaining.volume=money.intended_volume;
@@ -2373,41 +2490,41 @@ class CAlphaGenApplication
               }
            }
         }
-      if(training && invalid && open_decision && money.volume==0 && !money.pending && !money.reconciling)
+      if(training&&invalid&&open_decision&&money.volume==0&&!money.pending&&!money.reconciling)
         {
          RealMoneySample(true);
-         if(!Feedback(true,false,false,quote.time) || !Train())
+         if(!Feedback(true,false,false,quote.time)||!Train())
            {
             Fault("invalid action terminal reconciliation failed");
             return;
            }
         }
-      if(!TerminalInfoInteger(TERMINAL_CONNECTED) && !MQLInfoInteger(MQL_TESTER))
+      if(!TerminalInfoInteger(TERMINAL_CONNECTED)&&!MQLInfoInteger(MQL_TESTER))
         {
          return;
         }
       datetime current=iTime(_Symbol,TimeFrame,0);
-      if(current>0 && current!=sample_boundary)
+      if(current>0&&current!=sample_boundary)
         {
          RealMoneySample();
          sample_boundary=current;
         }
-      if(current<=0 || (current==LastBarTime && pool_warmup_end==0) || money.pending || money.reconciling)
+      if(current<=0||(current==LastBarTime&&pool_warmup_end==0)||money.pending||money.reconciling)
         {
          return;
         }
       MqlRates bars[];
-      int required=warmup_bars;
+      int      required=warmup_bars;
       if(LastBarTime!=0)
         {
          int missing=iBarShift(_Symbol,TimeFrame,LastBarTime,true);
-         if(missing>0 && missing<=window)
+         if(missing>0&&missing<=window)
            {
             required=MathMax(required,window+missing-1);
            }
         }
       int copied=CopyRates(_Symbol,TimeFrame,1,required,bars);
-      if(copied<window && required>window)
+      if(copied<window&&required>window)
         {
          copied=CopyRates(_Symbol,TimeFrame,1,window,bars);
         }
@@ -2422,12 +2539,12 @@ class CAlphaGenApplication
      }
 #ifdef ALPHAGEN_STUDY
 //+------------------------------------------------------------------+
-//| Show the next finalization operation before its timer event.      |
+//| Show the next finalization operation before its timer event.     |
 //+------------------------------------------------------------------+
    void StudyFinishProgress()
      {
       string stage="Closing the final virtual trajectory";
-      if(study_finish_stage==2 || study_finish_stage==4)
+      if(study_finish_stage==2||study_finish_stage==4)
         {
             stage=StringFormat("Final PPO | batch %d/%d | final updates %I64u | flush %d/%d",
                                study_finish_batch_completed,study_finish_batch_total,
@@ -2463,7 +2580,7 @@ class CAlphaGenApplication
       ChartRedraw();
      }
 //+------------------------------------------------------------------+
-//| Start a finalizer: end=1, stop=2, opening ruin=3, bar ruin=4.       |
+//| Start a finalizer: end=1, stop=2, opening ruin=3, bar ruin=4.    |
 //+------------------------------------------------------------------+
    bool BeginStudyFinish(int reason,bool ruin)
      {
@@ -2478,6 +2595,7 @@ class CAlphaGenApplication
       study_finish_stage=1;
       PrintFormat("AlphaGen Study finalization BEGIN reason=%d",reason);
       StudyFinishProgress();
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -2485,7 +2603,7 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    bool StudyFinishStep()
      {
-      if(stop_requested && study_finish_stage>1 && study_finish_stage<5)
+      if(stop_requested&&study_finish_stage>1&&study_finish_stage<5)
         {
          if(!agent.CancelTraining())
            {
@@ -2495,9 +2613,10 @@ class CAlphaGenApplication
          study_finish_stage=5;
          study_finish_reason=2;
          StudyFinishProgress();
+
          return(true);
         }
-      int previous=study_finish_stage;
+      int   previous=study_finish_stage;
       ulong begin=GetMicrosecondCount();
       if(study_finish_stage==1)
         {
@@ -2509,7 +2628,7 @@ class CAlphaGenApplication
          study_finish_batch_completed=agent.TrainingCompleted();
          study_finish_stage=2;
         }
-      else if(study_finish_stage==2 || study_finish_stage==4)
+      else if(study_finish_stage==2||study_finish_stage==4)
         {
          if(agent.HasTraining())
            {
@@ -2548,17 +2667,18 @@ class CAlphaGenApplication
                return(false);
            }
          Finalized=false;
-         bool save=stop_requested || study_finish_reason==2 ||
-                   (study_finish_reason==1 && epoch>=Epochs);
+         bool save=stop_requested||study_finish_reason==2||
+                   (study_finish_reason==1&&epoch>=Epochs);
          study_finish_stage=save?6:9;
         }
-      else if(study_finish_stage>=6 && study_finish_stage<=8)
+      else if(study_finish_stage>=6&&study_finish_stage<=8)
         {
          int phase=study_finish_stage-6;
          PrintFormat("AlphaGen checkpoint phase %d/3 BEGIN",phase+1);
          if(!SavePhase(phase))
            {
             PrintFormat("AlphaGen checkpoint phase %d/3 FAILED error=%d",phase+1,GetLastError());
+
             return(false);
            }
          PrintFormat("AlphaGen checkpoint phase %d/3 END elapsed_ms=%I64u",phase+1,
@@ -2571,19 +2691,21 @@ class CAlphaGenApplication
         }
       else if(study_finish_stage==9)
         {
-         if(stop_requested && !study_finish_saved)
+         if(stop_requested&&!study_finish_saved)
            {
             study_finish_reason=2;
             study_finish_stage=6;
             StudyFinishProgress();
+
             return(true);
            }
          study_finish_stage=0;
-         if(stop_requested || study_finish_reason==2 || (study_finish_reason==1 && epoch>=Epochs))
+         if(stop_requested||study_finish_reason==2||(study_finish_reason==1&&epoch>=Epochs))
            {
             Finalized=true;
             Print("AlphaGen Study finalization complete; verified checkpoint saved");
             ExpertRemove();
+
             return(true);
            }
          if(study_finish_reason==1)
@@ -2592,7 +2714,7 @@ class CAlphaGenApplication
             LastBarTime=0;
             observed_boundary=0;
             cursor=0;
-            while(cursor<ArraySize(history) && history[cursor].time<Start)
+            while(cursor<ArraySize(history)&&history[cursor].time<Start)
               {
                   cursor++;
               }
@@ -2603,6 +2725,7 @@ class CAlphaGenApplication
             cursor++;
            }
          ResetFinance();
+
          return(true);
         }
       if(previous!=study_finish_stage)
@@ -2611,6 +2734,7 @@ class CAlphaGenApplication
                         (GetMicrosecondCount()-begin)/1000);
         }
       StudyFinishProgress();
+
       return(true);
      }
 //+------------------------------------------------------------------+
@@ -2618,7 +2742,7 @@ class CAlphaGenApplication
 //+------------------------------------------------------------------+
    bool StudyStep()
      {
-      if(Finalized || failed)
+      if(Finalized||failed)
         {
          return(false);
         }
@@ -2631,8 +2755,8 @@ class CAlphaGenApplication
          // An opening gap may already have been reconciled before a bounded
          // search/PPO operation returned. Finish this bar under its existing
          // protection without another search step or policy action.
-         bool partial_bar=cursor<ArraySize(history) && history[cursor].time<End &&
-                          virtual_open_boundary==history[cursor].time && !cycle_complete;
+         bool partial_bar=cursor<ArraySize(history)&&history[cursor].time<End&&
+                          virtual_open_boundary==history[cursor].time&&!cycle_complete;
          if(partial_bar)
            {
             MqlRates last=history[cursor];
@@ -2646,9 +2770,10 @@ class CAlphaGenApplication
             snapshot_msc=(long)(last.time+PeriodSeconds(TimeFrame))*1000;
            }
          bool stop_ruin=money.equity<=AG_EQUITY_FLOOR*money.reference;
+
          return(BeginStudyFinish(2,stop_ruin));
         }
-      if(cursor>=ArraySize(history) || history[cursor].time>=End)
+      if(cursor>=ArraySize(history)||history[cursor].time>=End)
         {
          return(BeginStudyFinish(1,false));
         }
@@ -2671,6 +2796,7 @@ class CAlphaGenApplication
                last_equity=money.equity;
               }
             virtual_gap_terminal=true;
+
             return(BeginStudyFinish(3,true));
            }
         }
@@ -2704,6 +2830,7 @@ class CAlphaGenApplication
          Comment(StringFormat("AlphaGen Study | epoch %d/%d | %s\n%s\nActive pool %d | prepared pool %d\nSearch PPO updates %I64u | trade PPO updates %I64u",
                               epoch,Epochs,TimeToString(bar.time),stage,agent.ActiveCount(),agent.PreparedCount(),
                               agent.TokenUpdates(),agent.TradeUpdates()));
+
          return(true);
         }
       if(!money.Bar(bar))
@@ -2712,7 +2839,7 @@ class CAlphaGenApplication
         }
       cursor++;
       MoneySample();
-      bool ruin=money.equity<=AG_EQUITY_FLOOR*money.reference || money.Exhausted(bar.close,bar.close+bar.spread*money.point);
+      bool ruin=money.equity<=AG_EQUITY_FLOOR*money.reference||money.Exhausted(bar.close,bar.close+bar.spread*money.point);
       if(ruin)
         {
          return(BeginStudyFinish(4,true));
@@ -2720,6 +2847,7 @@ class CAlphaGenApplication
       string pools=StringFormat("Pool active %d prepared %d | search PPO %I64u trade PPO %I64u",
       agent.ActiveCount(),agent.PreparedCount(),agent.TokenUpdates(),agent.TradeUpdates());
       Comment(pools,"\n",StringFormat("AlphaGen Study | epoch %d/%d | %s\nbalance %.2f equity %.2f | virtual trades %I64u | updates %I64u\nUse the button to stop and save",epoch,Epochs,TimeToString(bar.time),money.balance,money.equity,money.trades,updates));
+
       return(true);
      }
 #endif

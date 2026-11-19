@@ -1,5 +1,7 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_AlphaGenComposite.mqh                                   |
+//|                                   NeuroNet_AlphaGenComposite.mqh |
+//|                                                     NeuroNet_DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAGEN_COMPOSITE_MQH
 #define NEURONET_ALPHAGEN_COMPOSITE_MQH
@@ -1417,7 +1419,8 @@ bool CNeuronAlphaGenOCL::Load(const int handle)
       saved_metadata.Total()!=m_cWorkMetadata.Total())
       ReturnFalse;
 
-   if(!PoolControl())
+//--- Pool.Load already validates and populates the host control buffer.
+   if(!OpenCL.IsCollectingSelectiveKernels()&&!PoolControl())
       ReturnFalse;
 
    m_bPublicationPermit=m_cPool.Control().At(AG_POOL_ACTIVE_READY)!=1;

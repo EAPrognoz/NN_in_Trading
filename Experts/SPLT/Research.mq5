@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| Research.mq5 |
-//| Copyright DNG® |
-//| https://www.mql5.com/ru/users/dng |
+//|                                                     Research.mq5 |
+//|                                                             SPLT |
+//|                                                   Copyright DNG® |
+//|                           https://www.mql5.com/ru/articles/13639 |
 //+------------------------------------------------------------------+
 #property copyright "Copyright DNG®"
 #property link      "https://www.mql5.com/ru/users/dng"
@@ -16,110 +17,118 @@
 //+------------------------------------------------------------------+
 //| Input parameters                                                 |
 //+------------------------------------------------------------------+
-input ENUM_TIMEFRAMES      TimeFrame   =  PERIOD_H1;
-input double               MinProfit   =  10;
-input int                  Agents = 5;
+input ENUM_TIMEFRAMES TimeFrame=PERIOD_H1;
+input double          MinProfit=10;
+input int             Agents=5;
 //---
-input group                "---- RSI ----"
-input int                  RSIPeriod   =  14;            //Period
-input ENUM_APPLIED_PRICE   RSIPrice    =  PRICE_CLOSE;   //Applied price
+input group "---- RSI ----"
+input int                RSIPeriod=14;           //Period
+input ENUM_APPLIED_PRICE RSIPrice=PRICE_CLOSE;   //Applied price
 //---
-input group                "---- CCI ----"
-input int                  CCIPeriod   =  14;            //Period
-input ENUM_APPLIED_PRICE   CCIPrice    =  PRICE_TYPICAL; //Applied price
+input group "---- CCI ----"
+input int                CCIPeriod=14;             //Period
+input ENUM_APPLIED_PRICE CCIPrice=PRICE_TYPICAL;   //Applied price
 //---
-input group                "---- ATR ----"
-input int                  ATRPeriod   =  14;            //Period
+input group "---- ATR ----"
+input int ATRPeriod=14;   //Period
 //---
-input group                "---- MACD ----"
-input int                  FastPeriod  =  12;            //Fast
-input int                  SlowPeriod  =  26;            //Slow
-input int                  SignalPeriod =  9;            //Signal
-input ENUM_APPLIED_PRICE   MACDPrice   =  PRICE_CLOSE;   //Applied price
-input int                  OptimizationAgents = 1;
+input group "---- MACD ----"
+input int                FastPeriod=12;           //Fast
+input int                SlowPeriod=26;           //Slow
+input int                SignalPeriod=9;          //Signal
+input ENUM_APPLIED_PRICE MACDPrice=PRICE_CLOSE;   //Applied price
+input int                OptimizationAgents=1;
 //+------------------------------------------------------------------+
-//| |
+//|                                                                  |
 //+------------------------------------------------------------------+
-SState               sState;
-STrajectory          Base;
-STrajectory          Buffer[];
-STrajectory          Frame[1];
-CNet                 Latent;
-CNet                 Agent;
-CNet                 World;
-//---
-float                dError;
-datetime             dtStudied;
-//---
-CSymbolInfo          Symb;
-CTrade               Trade;
-//---
-MqlRates             Rates[];
-CiRSI                RSI;
-CiCCI                CCI;
-CiATR                ATR;
-CiMACD               MACD;
-//---
-CBufferFloat         bState;
-CBufferFloat        *Result;
-vector<float>        check;
-vector<float>        AgentResult;
-double               PrevBalance = 0;
-double               PrevEquity = 0;
 //+------------------------------------------------------------------+
-//| Expert initialization function                                   |
+//| Global variables                                                 |
+//+------------------------------------------------------------------+
+SState      sState;
+STrajectory Base;
+STrajectory Buffer[];
+STrajectory Frame[1];
+CNet        Latent;
+CNet        Agent;
+CNet        World;
+//---
+float    dError;
+datetime dtStudied;
+//---
+CSymbolInfo Symb;
+CTrade      Trade;
+//---
+MqlRates Rates[];
+CiRSI    RSI;
+CiCCI    CCI;
+CiATR    ATR;
+CiMACD   MACD;
+//---
+CBufferFloat bState;
+CBufferFloat *Result;
+vector<float>check;
+vector<float>AgentResult;
+double PrevBalance=0;
+double PrevEquity=0;
+//+------------------------------------------------------------------+
+//| OnInit - expert initialization function                          |
 //+------------------------------------------------------------------+
 int OnInit()
   {
 //---
    if(!Symb.Name(_Symbol))
-      return INIT_FAILED;
+      return(INIT_FAILED);
    Symb.Refresh();
 //---
-   if(!RSI.Create(Symb.Name(), TimeFrame, RSIPeriod, RSIPrice))
-      return INIT_FAILED;
+   if(!RSI.Create(Symb.Name(),TimeFrame,RSIPeriod,RSIPrice))
+      return(INIT_FAILED);
 //---
-   if(!CCI.Create(Symb.Name(), TimeFrame, CCIPeriod, CCIPrice))
-      return INIT_FAILED;
+   if(!CCI.Create(Symb.Name(),TimeFrame,CCIPeriod,CCIPrice))
+      return(INIT_FAILED);
 //---
-   if(!ATR.Create(Symb.Name(), TimeFrame, ATRPeriod))
-      return INIT_FAILED;
+   if(!ATR.Create(Symb.Name(),TimeFrame,ATRPeriod))
+      return(INIT_FAILED);
 //---
-   if(!MACD.Create(Symb.Name(), TimeFrame, FastPeriod, SlowPeriod, SignalPeriod, MACDPrice))
-      return INIT_FAILED;
-   if(!RSI.BufferResize(NBarInPattern) || !CCI.BufferResize(NBarInPattern) ||
-      !ATR.BufferResize(NBarInPattern) || !MACD.BufferResize(NBarInPattern))
+   if(!MACD.Create(Symb.Name(),TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice))
+      return(INIT_FAILED);
+
+   if(!RSI.BufferResize(NBarInPattern)||!CCI.BufferResize(NBarInPattern)||
+      !ATR.BufferResize(NBarInPattern)||!MACD.BufferResize(NBarInPattern))
      {
-      PrintFormat("%s -> %d", __FUNCTION__, __LINE__);
-      return INIT_FAILED;
+      PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
+
+      return(INIT_FAILED);
      }
 //---
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
-      return INIT_FAILED;
+      return(INIT_FAILED);
+
 //--- load models
    float temp;
-   if(!Agent.Load(FileName + "Act.nnw", temp, temp, temp, dtStudied, true) ||
-      !World.Load(FileName + "Wld.nnw", temp, temp, temp, dtStudied, true) ||
-      !Latent.Load(FileName + "Lat.nnw", temp, temp, temp, dtStudied, true))
+   if(!Agent.Load(FileName+"Act.nnw",temp,temp,temp,dtStudied,true)||
+      !World.Load(FileName+"Wld.nnw",temp,temp,temp,dtStudied,true)||
+      !Latent.Load(FileName+"Lat.nnw",temp,temp,temp,dtStudied,true))
      {
-      CArrayObj *agent = new CArrayObj();
-      CArrayObj *latent = new CArrayObj();
-      CArrayObj *world = new CArrayObj();
-      if(!CreateDescriptions(agent, latent, world))
+      CArrayObj *agent=new CArrayObj();
+      CArrayObj *latent=new CArrayObj();
+      CArrayObj *world=new CArrayObj();
+      if(!CreateDescriptions(agent,latent,world))
         {
          delete agent;
          delete latent;
          delete world;
-         return INIT_FAILED;
+
+         return(INIT_FAILED);
         }
-      if(!Agent.Create(agent) ||
-         !World.Create(world) ||
+      if(!Agent.Create(agent)||
+         !World.Create(world)||
          !Latent.Create(latent))
         {
          delete agent;
          delete latent;
          delete world;
-         return INIT_FAILED;
+
+         return(INIT_FAILED);
         }
       delete agent;
       delete latent;
@@ -127,33 +136,35 @@ int OnInit()
       //---
      }
 //---
-   COpenCL *opcl = Agent.GetOpenCL();
+   COpenCL *opcl=Agent.GetOpenCL();
    Latent.SetOpenCL(opcl);
    World.SetOpenCL(opcl);
 //---
    Agent.getResults(Result);
-   if(Result.Total() != NActions)
+   if(Result.Total()!=NActions)
      {
-      PrintFormat("The scope of the Agent does not match the actions count (%d <> %d)", 6, Result.Total());
-      return INIT_FAILED;
+      PrintFormat("The scope of the Agent does not match the actions count (%d <> %d)",6,Result.Total());
+
+      return(INIT_FAILED);
      }
-   AgentResult = vector<float>::Zeros(NActions);
+   AgentResult=vector<float>::Zeros(NActions);
 //---
-   Latent.GetLayerOutput(0, Result);
-   if(Result.Total() != (BarDescr * NBarInPattern + AccountDescr + TimeDescription + NActions))
+   Latent.GetLayerOutput(0,Result);
+   if(Result.Total()!=(BarDescr * NBarInPattern+AccountDescr+TimeDescription+NActions))
      {
-      PrintFormat("Input size of Latent model doesn't match state description (%d <> %d)", Result.Total(), (BarDescr * NBarInPattern + AccountDescr + TimeDescription + NActions));
-      return INIT_FAILED;
+      PrintFormat("Input size of Latent model doesn't match state description (%d <> %d)",Result.Total(),(BarDescr * NBarInPattern+AccountDescr+TimeDescription+NActions));
+
+      return(INIT_FAILED);
      }
    Latent.Clear();
 //---
-   PrevBalance = AccountInfoDouble(ACCOUNT_BALANCE);
-   PrevEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   PrevBalance=AccountInfoDouble(ACCOUNT_BALANCE);
+   PrevEquity=AccountInfoDouble(ACCOUNT_EQUITY);
 //---
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| OnDeinit - expert deinitialization function                      |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
@@ -161,7 +172,7 @@ void OnDeinit(const int reason)
    delete Result;
   }
 //+------------------------------------------------------------------+
-//| Expert tick function                                             |
+//| OnTick - expert tick function                                    |
 //+------------------------------------------------------------------+
 void OnTick()
   {
@@ -169,8 +180,8 @@ void OnTick()
    if(!IsNewBar())
       return;
 //---
-   int bars = CopyRates(Symb.Name(), TimeFrame, iTime(Symb.Name(), TimeFrame, 1), NBarInPattern, Rates);
-   if(!ArraySetAsSeries(Rates, true))
+   int bars=CopyRates(Symb.Name(),TimeFrame,iTime(Symb.Name(),TimeFrame,1),NBarInPattern,Rates);
+   if(!ArraySetAsSeries(Rates,true))
       return;
 //---
    RSI.Refresh();
@@ -179,45 +190,47 @@ void OnTick()
    MACD.Refresh();
    Symb.Refresh();
    Symb.RefreshRates();
-//--- History data
-   float atr = 0;
-   for(int b = 0; b < (int)NBarInPattern; b++)
+
+//--- history data
+   float atr=0;
+   for(int b=0; b<(int)NBarInPattern; b++)
      {
-      float open = (float)Rates[b].open;
-      float rsi = (float)RSI.Main(b);
-      float cci = (float)CCI.Main(b);
-      atr = (float)ATR.Main(b);
-      float macd = (float)MACD.Main(b);
-      float sign = (float)MACD.Signal(b);
-      if(rsi == EMPTY_VALUE || cci == EMPTY_VALUE || atr == EMPTY_VALUE || macd == EMPTY_VALUE || sign == EMPTY_VALUE)
+      float open=(float)Rates[b].open;
+      float rsi=(float)RSI.Main(b);
+      float cci=(float)CCI.Main(b);
+      atr=(float)ATR.Main(b);
+      float macd=(float)MACD.Main(b);
+      float sign=(float)MACD.Signal(b);
+      if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
          continue;
       //---
-      int shift = b * BarDescr;
-      sState.state[shift] = (float)(Rates[b].close - open);
-      sState.state[shift + 1] = (float)(Rates[b].high - open);
-      sState.state[shift + 2] = (float)(Rates[b].low - open);
-      sState.state[shift + 3] = (float)(Rates[b].tick_volume / 1000.0f);
-      sState.state[shift + 4] = rsi;
-      sState.state[shift + 5] = cci;
-      sState.state[shift + 6] = atr;
-      sState.state[shift + 7] = macd;
-      sState.state[shift + 8] = sign;
+      int shift=b * BarDescr;
+      sState.state[shift]=(float)(Rates[b].close-open);
+      sState.state[shift+1]=(float)(Rates[b].high-open);
+      sState.state[shift+2]=(float)(Rates[b].low-open);
+      sState.state[shift+3]=(float)(Rates[b].tick_volume / 1000.0f);
+      sState.state[shift+4]=rsi;
+      sState.state[shift+5]=cci;
+      sState.state[shift+6]=atr;
+      sState.state[shift+7]=macd;
+      sState.state[shift+8]=sign;
      }
    bState.AssignArray(sState.state);
-//--- Account description
-   sState.account[0] = (float)AccountInfoDouble(ACCOUNT_BALANCE);
-   sState.account[1] = (float)AccountInfoDouble(ACCOUNT_EQUITY);
+
+//--- account description
+   sState.account[0]=(float)AccountInfoDouble(ACCOUNT_BALANCE);
+   sState.account[1]=(float)AccountInfoDouble(ACCOUNT_EQUITY);
 //---
-   double buy_value = 0, sell_value = 0, buy_profit = 0, sell_profit = 0;
-   double position_discount = 0;
-   double multiplyer = 1.0 / (60.0 * 60.0 * 10.0);
-   int total = PositionsTotal();
-   datetime current = TimeCurrent();
-   for(int i = 0; i < total; i++)
+   double   buy_value=0,sell_value=0,buy_profit=0,sell_profit=0;
+   double   position_discount=0;
+   double   multiplyer=1.0 / (60.0 * 60.0 * 10.0);
+   int      total=PositionsTotal();
+   datetime current=TimeCurrent();
+   for(int i=0; i<total; i++)
      {
-      if(PositionGetSymbol(i) != Symb.Name())
+      if(PositionGetSymbol(i)!=Symb.Name())
          continue;
-      double profit = PositionGetDouble(POSITION_PROFIT);
+      double profit=PositionGetDouble(POSITION_PROFIT);
       switch((int)PositionGetInteger(POSITION_TYPE))
         {
          case POSITION_TYPE_BUY:
@@ -229,154 +242,160 @@ void OnTick()
             sell_profit += profit;
             break;
         }
-      position_discount += profit - (current - PositionGetInteger(POSITION_TIME)) * multiplyer * MathAbs(profit);
+      position_discount += profit-(current-PositionGetInteger(POSITION_TIME)) * multiplyer * MathAbs(profit);
      }
-   sState.account[2] = (float)buy_value;
-   sState.account[3] = (float)sell_value;
-   sState.account[4] = (float)buy_profit;
-   sState.account[5] = (float)sell_profit;
-   sState.account[6] = (float)position_discount;
-   sState.account[7] = (float)Rates[0].time;
+   sState.account[2]=(float)buy_value;
+   sState.account[3]=(float)sell_value;
+   sState.account[4]=(float)buy_profit;
+   sState.account[5]=(float)sell_profit;
+   sState.account[6]=(float)position_discount;
+   sState.account[7]=(float)Rates[0].time;
 //---
-   bState.Add((float)((sState.account[0] - PrevBalance) / PrevBalance));
+   bState.Add((float)((sState.account[0]-PrevBalance) / PrevBalance));
    bState.Add((float)(sState.account[1] / PrevBalance));
-   bState.Add((float)((sState.account[1] - PrevEquity) / PrevEquity));
+   bState.Add((float)((sState.account[1]-PrevEquity) / PrevEquity));
    bState.Add(sState.account[2]);
    bState.Add(sState.account[3]);
    bState.Add((float)(sState.account[4] / PrevBalance));
    bState.Add((float)(sState.account[5] / PrevBalance));
    bState.Add((float)(sState.account[6] / PrevBalance));
-//--- Time label
-   double x = (double)Rates[0].time / (double)(D'2024.01.01' - D'2023.01.01');
+
+//--- time label
+   double x=(double)Rates[0].time / (double)(D'2024.01.01'-D'2023.01.01');
    bState.Add((float)MathSin(2.0 * M_PI * x));
-   x = (double)Rates[0].time / (double)PeriodSeconds(PERIOD_MN1);
+   x=(double)Rates[0].time / (double)PeriodSeconds(PERIOD_MN1);
    bState.Add((float)MathCos(2.0 * M_PI * x));
-   x = (double)Rates[0].time / (double)PeriodSeconds(PERIOD_W1);
+   x=(double)Rates[0].time / (double)PeriodSeconds(PERIOD_W1);
    bState.Add((float)MathSin(2.0 * M_PI * x));
-   x = (double)Rates[0].time / (double)PeriodSeconds(PERIOD_D1);
+   x=(double)Rates[0].time / (double)PeriodSeconds(PERIOD_D1);
    bState.Add((float)MathSin(2.0 * M_PI * x));
-//--- Prev action
+
+//--- prev action
    bState.AddArray(AgentResult);
-//--- Latent representation
+
+//--- latent representation
    ResetLastError();
-   if(!Latent.feedForward(GetPointer(bState), 1, false, (CBufferFloat*)NULL))
+   if(!Latent.feedForward(GetPointer(bState),1,false,(CBufferFloat*)NULL))
      {
-      PrintFormat("Error of Latent model feed forward: %d", GetLastError());
+      PrintFormat("Error of Latent model feed forward: %d",GetLastError());
       return;
      }
 //---
-   matrix<float> actions = matrix<float>::Zeros(Agents, NActions);
-   matrix<float> values = matrix<float>::Zeros(Agents, NRewards);
-   for(ulong i = 0; i < (ulong)Agents; i++)
+   matrix<float>actions=matrix<float>::Zeros(Agents,NActions);
+   matrix<float>values=matrix<float>::Zeros(Agents,NRewards);
+   for(ulong i=0; i<(ulong)Agents; i++)
      {
-      if(!World.feedForward(GetPointer(Latent), -1, GetPointer(Latent), LatentLayer) ||
-         !Agent.feedForward(GetPointer(World), 2, (CBufferFloat *)NULL))
+      if(!World.feedForward(GetPointer(Latent),-1,GetPointer(Latent),LatentLayer)||
+         !Agent.feedForward(GetPointer(World),2,(CBufferFloat *)NULL))
          return;
-      vector<float> result;
+
+      vector<float>result;
       Agent.getResults(result);
-      actions.Row(result, i);
+      actions.Row(result,i);
       World.getResults(result);
-      values.Row(result, i);
+      values.Row(result,i);
      }
 //---
-   PrevBalance = sState.account[0];
-   PrevEquity = sState.account[1];
+   PrevBalance=sState.account[0];
+   PrevEquity=sState.account[1];
 //---
-   vector<float> temp = values.Sum(1);
-   temp = actions.Row(temp.ArgMax());
+   vector<float>temp=values.Sum(1);
+   temp=actions.Row(temp.ArgMax());
 //---
-   double min_lot = Symb.LotsMin();
-   double step_lot = Symb.LotsStep();
-   double stops = MathMax(Symb.StopsLevel(), 1) * Symb.Point();
-   if(temp[0] >= temp[3])
+   double min_lot=Symb.LotsMin();
+   double step_lot=Symb.LotsStep();
+   double stops=MathMax(Symb.StopsLevel(),1) * Symb.Point();
+   if(temp[0]>=temp[3])
      {
       temp[0] -= temp[3];
-      temp[3] = 0;
+      temp[3]=0;
      }
    else
      {
       temp[3] -= temp[0];
-      temp[0] = 0;
+      temp[0]=0;
      }
-   float delta = MathAbs(AgentResult - temp).Sum();
-   AgentResult = temp;
+   float delta=MathAbs(AgentResult-temp).Sum();
+   AgentResult=temp;
+
 //--- buy control
-   if(temp[0] < min_lot || (temp[1] * MaxTP * Symb.Point()) <= stops || (temp[2] * MaxSL * Symb.Point()) <= stops)
+   if(temp[0]<min_lot||(temp[1] * MaxTP * Symb.Point())<=stops||(temp[2] * MaxSL * Symb.Point())<=stops)
      {
-      if(buy_value > 0)
+      if(buy_value>0)
          CloseByDirection(POSITION_TYPE_BUY);
      }
    else
      {
-      double buy_lot = min_lot + MathRound((double)(temp[0] - min_lot) / step_lot) * step_lot;
-      double buy_tp = Symb.NormalizePrice(Symb.Ask() + temp[1] * MaxTP * Symb.Point());
-      double buy_sl = Symb.NormalizePrice(Symb.Ask() - temp[2] * MaxSL * Symb.Point());
-      if(buy_value > 0)
-         TrailPosition(POSITION_TYPE_BUY, buy_sl, buy_tp);
-      if(buy_value != buy_lot)
+      double buy_lot=min_lot+MathRound((double)(temp[0]-min_lot) / step_lot) * step_lot;
+      double buy_tp=Symb.NormalizePrice(Symb.Ask()+temp[1] * MaxTP * Symb.Point());
+      double buy_sl=Symb.NormalizePrice(Symb.Ask()-temp[2] * MaxSL * Symb.Point());
+      if(buy_value>0)
+         TrailPosition(POSITION_TYPE_BUY,buy_sl,buy_tp);
+      if(buy_value!=buy_lot)
         {
-         if(buy_value > buy_lot)
-            ClosePartial(POSITION_TYPE_BUY, buy_value - buy_lot);
+         if(buy_value>buy_lot)
+            ClosePartial(POSITION_TYPE_BUY,buy_value-buy_lot);
          else
-            Trade.Buy(buy_lot - buy_value, Symb.Name(), Symb.Ask(), buy_sl, buy_tp);
+            Trade.Buy(buy_lot-buy_value,Symb.Name(),Symb.Ask(),buy_sl,buy_tp);
         }
      }
+
 //--- sell control
-   if(temp[3] < min_lot || (temp[4] * MaxTP * Symb.Point()) <= stops || (temp[5] * MaxSL * Symb.Point()) <= stops)
+   if(temp[3]<min_lot||(temp[4] * MaxTP * Symb.Point())<=stops||(temp[5] * MaxSL * Symb.Point())<=stops)
      {
-      if(sell_value > 0)
+      if(sell_value>0)
          CloseByDirection(POSITION_TYPE_SELL);
      }
    else
      {
-      double sell_lot = min_lot + MathRound((double)(temp[3] - min_lot) / step_lot) * step_lot;;
-      double sell_tp = Symb.NormalizePrice(Symb.Bid() - temp[4] * MaxTP * Symb.Point());
-      double sell_sl = Symb.NormalizePrice(Symb.Bid() + temp[5] * MaxSL * Symb.Point());
-      if(sell_value > 0)
-         TrailPosition(POSITION_TYPE_SELL, sell_sl, sell_tp);
-      if(sell_value != sell_lot)
+      double sell_lot=min_lot+MathRound((double)(temp[3]-min_lot) / step_lot) * step_lot;;
+      double sell_tp=Symb.NormalizePrice(Symb.Bid()-temp[4] * MaxTP * Symb.Point());
+      double sell_sl=Symb.NormalizePrice(Symb.Bid()+temp[5] * MaxSL * Symb.Point());
+      if(sell_value>0)
+         TrailPosition(POSITION_TYPE_SELL,sell_sl,sell_tp);
+      if(sell_value!=sell_lot)
         {
-         if(sell_value > sell_lot)
-            ClosePartial(POSITION_TYPE_SELL, sell_value - sell_lot);
+         if(sell_value>sell_lot)
+            ClosePartial(POSITION_TYPE_SELL,sell_value-sell_lot);
          else
-            Trade.Sell(sell_lot - sell_value, Symb.Name(), Symb.Bid(), sell_sl, sell_tp);
+            Trade.Sell(sell_lot-sell_value,Symb.Name(),Symb.Bid(),sell_sl,sell_tp);
         }
      }
 //---
-   int shift = BarDescr * (NBarInPattern - 1);
-   sState.rewards[0] = bState[shift];
-   sState.rewards[1] = bState[shift + 1] - 1.0f;
-   if((buy_value + sell_value) == 0)
+   int shift=BarDescr * (NBarInPattern-1);
+   sState.rewards[0]=bState[shift];
+   sState.rewards[1]=bState[shift+1]-1.0f;
+   if((buy_value+sell_value)==0)
       sState.rewards[2] -= (float)(atr / PrevBalance);
    else
-      sState.rewards[2] = 0;
-   for(ulong i = 0; i < NActions; i++)
-      sState.action[i] = AgentResult[i];
+      sState.rewards[2]=0;
+   for(ulong i=0; i<NActions; i++)
+      sState.action[i]=AgentResult[i];
    Latent.getResults(sState.latent);
    if(!Base.Add(sState))
       ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| Tester function                                                |
+//| Tester function                                                  |
 //+------------------------------------------------------------------+
-//| | Strategy tester callback.                                      |
+//| OnTester - | Strategy tester callback.                           |
 //+------------------------------------------------------------------+
 double OnTester()
   {
 //---
-   double ret = 0.0;
+   double ret=0.0;
 //---
-   double profit = TesterStatistics(STAT_PROFIT);
-   Frame[0] = Base;
-   if(profit >= MinProfit)
-      FrameAdd(MQLInfoString(MQL_PROGRAM_NAME), 1, profit, Frame);
+   double profit=TesterStatistics(STAT_PROFIT);
+   Frame[0]=Base;
+   if(profit>=MinProfit)
+      FrameAdd(MQLInfoString(MQL_PROGRAM_NAME),1,profit,Frame);
 //---
    return(ret);
   }
 //+------------------------------------------------------------------+
-//| TesterInit function                                            |
+//| TesterInit function                                              |
 //+------------------------------------------------------------------+
-//| | Tester initialization handler.                                 |
+//| OnTesterInit - | Tester initialization handler.                  |
 //+------------------------------------------------------------------+
 void OnTesterInit()
   {
@@ -384,38 +403,39 @@ void OnTesterInit()
    LoadTotalBase();
   }
 //+------------------------------------------------------------------+
-//| TesterPass function                                            |
+//| TesterPass function                                              |
 //+------------------------------------------------------------------+
-//| | Tester pass callback.                                          |
+//| OnTesterPass - | Tester pass callback.                           |
 //+------------------------------------------------------------------+
 void OnTesterPass()
   {
 //---
-   ulong pass;
-   string name;
-   long id;
-   double value;
+   ulong       pass;
+   string      name;
+   long        id;
+   double      value;
    STrajectory array[];
-   while(FrameNext(pass, name, id, value, array))
+   while(FrameNext(pass,name,id,value,array))
      {
-      int total = ArraySize(Buffer);
-      if(name != MQLInfoString(MQL_PROGRAM_NAME))
+      int total=ArraySize(Buffer);
+      if(name!=MQLInfoString(MQL_PROGRAM_NAME))
          continue;
-      if(id <= 0)
+      if(id<=0)
          continue;
-      if(ArrayResize(Buffer, total + (int)id, 10) < 0)
+      if(ArrayResize(Buffer,total+(int)id,10)<0)
          return;
-      ArrayCopy(Buffer, array, total, 0, (int)id);
+
+      ArrayCopy(Buffer,array,total,0,(int)id);
      }
   }
 //+------------------------------------------------------------------+
-//| TesterDeinit function                                            |
+//| OnTesterDeinit - testerDeinit function                           |
 //+------------------------------------------------------------------+
 void OnTesterDeinit()
   {
 //---
-   int total = ArraySize(Buffer);
-   printf("total %d", MathMin(total, MaxReplayBuffer));
+   int total=ArraySize(Buffer);
+   printf("total %d",MathMin(total,MaxReplayBuffer));
    Print("Saving...");
    SaveTotalBase();
    Print("Saved");

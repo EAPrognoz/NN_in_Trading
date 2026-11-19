@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_GraphSparse.mqh                                         |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                         NeuroNet_GraphSparse.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| Logical method implementations generated from NeuroNet.mqh:      |
@@ -1722,19 +1723,19 @@ bool CNeuronSCNNEncoder::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
    cAdaptSpatNorm.SetActivationFunction(None);
    index++;
 
-   //--- inputs
+//--- inputs
    uint concatSize=units_count*variables;
 
-   //--- long term
+//--- long term
    concatSize+=cLongNorm.Neurons()+cLongNorm.GetMeanSTDevs().Neurons();
 
-   //--- seasons
+//--- seasons
    concatSize+=cSeasonNorm.Neurons()+cSeasonNorm.GetMeanSTDevs().Neurons();
 
-   //--- short term
+//--- short term
    concatSize+=cShortNorm.Neurons()+cShortNorm.GetMeanSTDevs().Neurons();
 
-   //--- spatial
+//--- spatial
    concatSize+=cAdaptSpatNorm.Neurons()+cAdaptSpatNorm.GetMeanSTDevs().Neurons();
 
    if(!cConcatenated.Init(0,index,OpenCL,concatSize,optimization,iBatch))
@@ -3462,15 +3463,9 @@ bool CChebPolinom::Load(const int file_handle)
    if(!CNeuronBaseOCL::Load(file_handle))
       ReturnFalse;
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
+   dFileReadUInt(file_handle,iDimension)
 
-   iDimension=(uint)FileReadInteger(file_handle);
-
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iSteps=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iSteps)
 
 //---
    return(true);
@@ -6465,20 +6460,11 @@ bool CNeuronSpatialEmbedding::Load(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
+   dFileReadUInt(file_handle,iUnits)
 
-   iUnits=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iWindow)
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iWindow=(uint)FileReadInteger(file_handle);
-
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iEmbeddingDim=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iEmbeddingDim)
 
 //---
    return(true);
@@ -6974,10 +6960,7 @@ bool CNeuronSparseSoftMax::Load(const int file_handle)
    if(!CNeuronSoftMaxOCL::Load(file_handle))
       ReturnFalse;
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iDimensionIn=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iDimensionIn)
 
 //---
    cIndexes.BufferFree();

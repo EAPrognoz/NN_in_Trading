@@ -1,7 +1,9 @@
 //+------------------------------------------------------------------+
 //|                                               Habi_Execution.mqh |
-//|                                 Copyright 2026, MetaQuotes Ltd.  |
-//|                                                    www.mql5.com  |
+//|                                                             Habi |
+//|                                  Copyright 2026, MetaQuotes Ltd. |
+//|                                                     www.mql5.com |
+//|                           https://www.mql5.com/ru/articles/25764 |
 //+------------------------------------------------------------------+
 #ifndef HABI_EXECUTION_MQH
 #define HABI_EXECUTION_MQH
@@ -12,93 +14,93 @@
 //+------------------------------------------------------------------+
 struct SHabiPosition
   {
-   ulong             ticket;
-   ulong             identifier;
-   long              created;
-   double            lot;
-   double            price;
-   double            profit;
-   double            swap;
+   ulong  ticket;
+   ulong  identifier;
+   long   created;
+   double lot;
+   double price;
+   double profit;
+   double swap;
   };
 //+------------------------------------------------------------------+
 //| SHabiSlot - per-slot command and request state                   |
 //+------------------------------------------------------------------+
 struct SHabiSlot
   {
-   ulong             magic;                   // slot Magic number
-   ulong             command;                 // command counter of the slot
-   ulong             request_id;              // request identity of the slot
-   ulong             request_order;           // order ticket of the request
-   ulong             request_deal;            // deal ticket of the request
-   uint              generation;              // generation of the command
-   bool              pending;                 // request is not resolved yet
-   bool              unknown;                 // request state is uncertain
-   datetime          issued;                  // request issue time
-   datetime          bar;                     // bar of the command
-   int               reason;                  // mapping reason code
+   ulong    magic;           // slot Magic number
+   ulong    command;         // command counter of the slot
+   ulong    request_id;      // request identity of the slot
+   ulong    request_order;   // order ticket of the request
+   ulong    request_deal;    // deal ticket of the request
+   uint     generation;      // generation of the command
+   bool     pending;         // request is not resolved yet
+   bool     unknown;         // request state is uncertain
+   datetime issued;          // request issue time
+   datetime bar;             // bar of the command
+   int      reason;          // mapping reason code
   };
 //+------------------------------------------------------------------+
 //| SHabiTransition - one observed transition record                 |
 //+------------------------------------------------------------------+
 struct SHabiTransition
   {
-   ulong             id;                      // record identity
-   datetime          start;                   // start boundary time
-   datetime          finish;                  // end boundary time
-   float             observation[];           // observation at the start
-   float             distribution[];                     // snapshot of the policy distribution
-   float             actions[];               // actions applied to the slots
-   float             reward[];                // reward of every slot
-   float             done[];                  // terminal flag of every slot
-   float             next[];                  // observation of the next state
-   double            start_float[];           // floating result at the start
-   double            end_float[];             // floating result at the end
-   double            start_cash[];            // cash per slot at the start
-   double            end_cash[];              // cash per slot at the end
-   double            penalty[];               // policy penalty of every slot
-   bool              money_known[];           // cash snapshot is complete
-   ulong             command[];               // command counter per slot
-   ulong             start_cash_revision;     // cash revision at the start
-   ulong             end_cash_revision;       // cash revision at the end
-   bool              boundary;                // the record reached a boundary
-   bool              used;                    // the record is already learned
-   bool              gap;                     // the record is not recoverable
+   ulong    id;                    // record identity
+   datetime start;                 // start boundary time
+   datetime finish;                // end boundary time
+   float    observation[];         // observation at the start
+   float    distribution[];        // snapshot of the policy distribution
+   float    actions[];             // actions applied to the slots
+   float    reward[];              // reward of every slot
+   float    done[];                // terminal flag of every slot
+   float    next[];                // observation of the next state
+   double   start_float[];         // floating result at the start
+   double   end_float[];           // floating result at the end
+   double   start_cash[];          // cash per slot at the start
+   double   end_cash[];            // cash per slot at the end
+   double   penalty[];             // policy penalty of every slot
+   bool     money_known[];         // cash snapshot is complete
+   ulong    command[];             // command counter per slot
+   ulong    start_cash_revision;   // cash revision at the start
+   ulong    end_cash_revision;     // cash revision at the end
+   bool     boundary;              // the record reached a boundary
+   bool     used;                  // the record is already learned
+   bool     gap;                   // the record is not recoverable
   };
 //+------------------------------------------------------------------+
 //| SHabiPositionOwner - position to slot map                        |
 //+------------------------------------------------------------------+
 struct SHabiPositionOwner
   {
-   ulong             identifier;
-   int               slot;
+   ulong identifier;
+   int   slot;
   };
 //+------------------------------------------------------------------+
 //| SHabiOrderOwner - order ticket to slot map                       |
 //+------------------------------------------------------------------+
 struct SHabiOrderOwner
   {
-   ulong             ticket;
-   int               slot;
+   ulong ticket;
+   int   slot;
   };
 //+------------------------------------------------------------------+
 //| SHabiCashDeal - cash deal bookkeeping record                     |
 //+------------------------------------------------------------------+
 struct SHabiCashDeal
   {
-   ulong             ticket;                    // deal ticket
-   ulong             position;                  // position identity of the deal
-   ulong             revision;                  // cash revision of the record
-   double            amount;                    // profit, swap and fees
-   int               slot;                      // owning slot or minus one
-   bool              deleted;                   // the deal was reported as deleted
+   ulong  ticket;     // deal ticket
+   ulong  position;   // position identity of the deal
+   ulong  revision;   // cash revision of the record
+   double amount;     // profit, swap and fees
+   int    slot;       // owning slot or minus one
+   bool   deleted;    // the deal was reported as deleted
   };
 //+------------------------------------------------------------------+
 //| SHabiUnownedCash - cash deal without an owner                    |
 //+------------------------------------------------------------------+
 struct SHabiUnownedCash
   {
-   ulong             position;
-   ulong             ticket;
+   ulong position;
+   ulong ticket;
   };
 //+------------------------------------------------------------------+
 //| CHabiExecution - order execution and ownership                   |
@@ -106,34 +108,34 @@ struct SHabiUnownedCash
 class CHabiExecution
   {
 public:
-   SHabiSlot          slots[];                    // per-slot state
-   SHabiTransition    records[];                  // transition records
-   SHabiPositionOwner owners[];                   // position ownership
-   SHabiOrderOwner    owned_orders[];             // order ownership
-   SHabiCashDeal      cash_deals[];               // cash deal book
-   SHabiUnownedCash   cash_unowned[];             // deals without owner
-   ulong              cash_retry[];               // deferred deal tickets
-   double             cash_totals[];              // cash total per slot
-   datetime           cash_poll_from;             // start of the cash poll
-   ulong              cash_revision;              // cash book revision
-   ulong              boundary_cash_revision;     // revision of the last boundary
-   bool               cash_ready;                 // cash book is complete
-   datetime           run_started;                // start of this run
-   SHabiSymbol        symbol;                     // symbol constraints
-   ulong              run_id;                     // identity of this run
-   ulong              next_command;               // command counter
-   ulong              next_record;                // record counter
-   ulong              next_request;               // request counter
-   uint               generation;                 // current generation
-   double             previous_balance;           // balance of the last boundary
-   double             previous_equity;            // equity of the last boundary
-   bool               test;                       // single slot test mode
-   datetime           current_bar;                // bar of the last boundary
-   double             boundary_cash[];            // cash snapshot per slot
-   double             boundary_float[];           // floating snapshot per slot
-   bool               boundary_known[];           // snapshot validity per slot
-   double             observed_balance;           // balance of the observation
-   double             observed_equity;            // equity of the observation
+   SHabiSlot          slots[];                  // per-slot state
+   SHabiTransition    records[];                // transition records
+   SHabiPositionOwner owners[];                 // position ownership
+   SHabiOrderOwner    owned_orders[];           // order ownership
+   SHabiCashDeal      cash_deals[];             // cash deal book
+   SHabiUnownedCash   cash_unowned[];           // deals without owner
+   ulong              cash_retry[];             // deferred deal tickets
+   double             cash_totals[];            // cash total per slot
+   datetime           cash_poll_from;           // start of the cash poll
+   ulong              cash_revision;            // cash book revision
+   ulong              boundary_cash_revision;   // revision of the last boundary
+   bool               cash_ready;               // cash book is complete
+   datetime           run_started;              // start of this run
+   SHabiSymbol        symbol;                   // symbol constraints
+   ulong              run_id;                   // identity of this run
+   ulong              next_command;             // command counter
+   ulong              next_record;              // record counter
+   ulong              next_request;             // request counter
+   uint               generation;               // current generation
+   double             previous_balance;         // balance of the last boundary
+   double             previous_equity;          // equity of the last boundary
+   bool               test;                     // single slot test mode
+   datetime           current_bar;              // bar of the last boundary
+   double             boundary_cash[];          // cash snapshot per slot
+   double             boundary_float[];         // floating snapshot per slot
+   bool               boundary_known[];         // snapshot validity per slot
+   double             observed_balance;         // balance of the observation
+   double             observed_equity;          // equity of the observation
 //+------------------------------------------------------------------+
 //| CHabiExecution - constructor resets execution state              |
 //+------------------------------------------------------------------+
@@ -168,10 +170,10 @@ public:
      {
       test=testing;
 
-      if(count<1 || !symbol.Read() || (!test && AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING))
+      if(count<1||!symbol.Read()||(!test&&AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING))
          return(false);
 
-      if((test && MagicTest==0) || (!test && (MagicBase==0 || MagicBase>ULONG_MAX-(ulong)count)))
+      if((test&&MagicTest==0)||(!test&&(MagicBase==0||MagicBase>ULONG_MAX-(ulong)count)))
          return(false);
 
       if(AccountInfoInteger(ACCOUNT_MARGIN_MODE)!=ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)
@@ -193,10 +195,10 @@ public:
          slots[n].magic=test?MagicTest:MagicBase+(ulong)n+1;
         }
 
-      //--- an existing position of this run cannot be adopted automatically
+   //--- an existing position of this run cannot be adopted automatically
       for(int i=0;i<PositionsTotal();i++)
         {
-         if(PositionGetTicket(i)==0 || PositionGetString(POSITION_SYMBOL)!=_Symbol)
+         if(PositionGetTicket(i)==0||PositionGetString(POSITION_SYMBOL)!=_Symbol)
             continue;
 
          for(int n=0;n<count;n++)
@@ -208,10 +210,10 @@ public:
               }
         }
 
-      //--- the same check is repeated for pending orders of this run
+   //--- the same check is repeated for pending orders of this run
       for(int i=0;i<OrdersTotal();i++)
         {
-         if(OrderGetTicket(i)==0 || OrderGetString(ORDER_SYMBOL)!=_Symbol)
+         if(OrderGetTicket(i)==0||OrderGetString(ORDER_SYMBOL)!=_Symbol)
             continue;
 
          for(int n=0;n<count;n++)
@@ -230,7 +232,7 @@ public:
       previous_balance=AccountInfoDouble(ACCOUNT_BALANCE);
       previous_equity=AccountInfoDouble(ACCOUNT_EQUITY);
 
-      return(previous_balance>0 && previous_equity>0);
+      return(previous_balance>0&&previous_equity>0);
      }
 //+------------------------------------------------------------------+
 //| Positions - collects slot positions sorted by age                |
@@ -246,7 +248,7 @@ public:
          if(t==0)
             return(false);
 
-         if(PositionGetString(POSITION_SYMBOL)!=_Symbol || (ulong)PositionGetInteger(POSITION_MAGIC)!=slots[slot].magic)
+         if(PositionGetString(POSITION_SYMBOL)!=_Symbol||(ulong)PositionGetInteger(POSITION_MAGIC)!=slots[slot].magic)
             continue;
 
          SHabiPosition p;
@@ -269,11 +271,11 @@ public:
          out[n]=p;
         }
 
-      //--- insertion sort keeps the oldest position first
+   //--- insertion sort keeps the oldest position first
       for(int i=1;i<ArraySize(out);i++)
          for(int j=i;j>0;j--)
            {
-            if(out[j-1].created<out[j].created || (out[j-1].created==out[j].created && out[j-1].ticket<out[j].ticket))
+            if(out[j-1].created<out[j].created||(out[j-1].created==out[j].created&&out[j-1].ticket<out[j].ticket))
                break;
 
             SHabiPosition temp=out[j-1];
@@ -350,7 +352,7 @@ public:
          return(false);
 
       for(int i=0;i<ArraySize(owned_orders);i++)
-         if(owned_orders[i].ticket==ticket && owned_orders[i].slot==slot)
+         if(owned_orders[i].ticket==ticket&&owned_orders[i].slot==slot)
             return(true);
 
       return(false);
@@ -392,7 +394,7 @@ public:
       if(test)
          return(magic==MagicTest?0:-1);
 
-      if(magic<=MagicBase || magic-MagicBase>(ulong)ArraySize(slots))
+      if(magic<=MagicBase||magic-MagicBase>(ulong)ArraySize(slots))
          return(-1);
 
       return((int)(magic-MagicBase-1));
@@ -405,7 +407,7 @@ public:
       int lo=0;
       int hi=ArraySize(cash_deals);
 
-      //--- the cash book is kept sorted by ticket
+   //--- the cash book is kept sorted by ticket
       while(lo<hi)
         {
          int mid=lo+(hi-lo)/2;
@@ -416,7 +418,7 @@ public:
             hi=mid;
         }
 
-      found=lo<ArraySize(cash_deals) && cash_deals[lo].ticket==ticket;
+      found=lo<ArraySize(cash_deals)&&cash_deals[lo].ticket==ticket;
 
       return(lo);
      }
@@ -432,13 +434,13 @@ public:
         {
          int mid=lo+(hi-lo)/2;
 
-         if(cash_unowned[mid].position<position || (cash_unowned[mid].position==position && cash_unowned[mid].ticket<ticket))
+         if(cash_unowned[mid].position<position||(cash_unowned[mid].position==position&&cash_unowned[mid].ticket<ticket))
             lo=mid+1;
          else
             hi=mid;
         }
 
-      if(lo<ArraySize(cash_unowned) && cash_unowned[lo].position==position && cash_unowned[lo].ticket==ticket)
+      if(lo<ArraySize(cash_unowned)&&cash_unowned[lo].position==position&&cash_unowned[lo].ticket==ticket)
          return;
 
       int count=ArraySize(cash_unowned);
@@ -471,13 +473,13 @@ public:
 
       int finish=lo;
 
-      while(finish<ArraySize(cash_unowned) && cash_unowned[finish].position==position)
+      while(finish<ArraySize(cash_unowned)&&cash_unowned[finish].position==position)
         {
          bool found=false;
 
          int at=CashIndex(cash_unowned[finish].ticket,found);
 
-         if(found && cash_deals[at].slot<0)
+         if(found&&cash_deals[at].slot<0)
            {
             double amount=cash_deals[at].amount;
 
@@ -505,20 +507,20 @@ public:
 //+------------------------------------------------------------------+
    void              CorrectCashSnapshots(ulong revision,int slot,double delta)
      {
-      if(slot<0 || delta==0)
+      if(slot<0||delta==0)
          return;
 
-      //--- a correction belongs to the snapshots that already held the ticket
+   //--- a correction belongs to the snapshots that already held the ticket
       for(int k=0;k<ArraySize(records);k++)
         {
-         if(records[k].start_cash_revision>=revision && ArraySize(records[k].start_cash)>slot)
+         if(records[k].start_cash_revision>=revision&&ArraySize(records[k].start_cash)>slot)
             records[k].start_cash[slot]+=delta;
 
-         if(records[k].boundary && records[k].end_cash_revision>=revision)
+         if(records[k].boundary&&records[k].end_cash_revision>=revision)
             records[k].end_cash[slot]+=delta;
         }
 
-      if(boundary_cash_revision>=revision && ArraySize(boundary_cash)>slot)
+      if(boundary_cash_revision>=revision&&ArraySize(boundary_cash)>slot)
          boundary_cash[slot]+=delta;
      }
 //+------------------------------------------------------------------+
@@ -533,7 +535,7 @@ public:
       if(!found)
          return(true);
 
-      int slot=cash_deals[at].slot;
+      int    slot=cash_deals[at].slot;
       double amount=cash_deals[at].amount;
 
       if(slot>=0)
@@ -562,7 +564,7 @@ public:
 
       int slot=SlotForMagic((ulong)HistoryDealGetInteger(ticket,DEAL_MAGIC));
 
-      if(slot>=0 && RunEvidence(ticket,slot))
+      if(slot>=0&&RunEvidence(ticket,slot))
          RememberOwner((ulong)HistoryDealGetInteger(ticket,DEAL_POSITION_ID),slot);
 
       return(true);
@@ -578,24 +580,24 @@ public:
 
          int at=CashIndex(ticket,found);
 
-         return(found && cash_deals[at].deleted);
+         return(found&&cash_deals[at].deleted);
         }
 
       if(HistoryDealGetString(ticket,DEAL_SYMBOL)!=_Symbol)
          return(true);
 
       ulong position=(ulong)HistoryDealGetInteger(ticket,DEAL_POSITION_ID);
-      int slot=Owner(position);
+      int   slot=Owner(position);
 
-      if(slot<0 && position==0)
+      if(slot<0&&position==0)
         {
          int candidate=SlotForMagic((ulong)HistoryDealGetInteger(ticket,DEAL_MAGIC));
 
-         if(candidate>=0 && RunEvidence(ticket,candidate))
+         if(candidate>=0&&RunEvidence(ticket,candidate))
             slot=candidate;
         }
 
-      double amount=HistoryDealGetDouble(ticket,DEAL_PROFIT)+HistoryDealGetDouble(ticket,DEAL_SWAP)+ HistoryDealGetDouble(ticket,DEAL_COMMISSION)+HistoryDealGetDouble(ticket,DEAL_FEE);
+      double amount=HistoryDealGetDouble(ticket,DEAL_PROFIT)+HistoryDealGetDouble(ticket,DEAL_SWAP)+HistoryDealGetDouble(ticket,DEAL_COMMISSION)+HistoryDealGetDouble(ticket,DEAL_FEE);
 
       if(!MathIsValidNumber(amount))
          return(false);
@@ -620,21 +622,21 @@ public:
          cash_deals[at].deleted=false;
         }
 
-      int old_slot=cash_deals[at].slot;
+      int    old_slot=cash_deals[at].slot;
       double old_amount=cash_deals[at].amount;
 
       cash_deals[at].position=position;
       cash_deals[at].deleted=false;
 
-      if(slot<0 && position>0)
+      if(slot<0&&position>0)
          QueueUnownedCash(position,ticket);
 
-      bool unresolved_ours=slot<0 && SlotForMagic((ulong)HistoryDealGetInteger(ticket,DEAL_MAGIC))>=0 && HistoryDealGetInteger(ticket,DEAL_TIME)>=run_started;
+      bool unresolved_ours=slot<0&&SlotForMagic((ulong)HistoryDealGetInteger(ticket,DEAL_MAGIC))>=0&&HistoryDealGetInteger(ticket,DEAL_TIME)>=run_started;
 
-      if(old_slot==slot && old_amount==amount)
+      if(old_slot==slot&&old_amount==amount)
          return(!unresolved_ours);
 
-      //--- the same deal may arrive twice through a callback and a poll
+   //--- the same deal may arrive twice through a callback and a poll
       if(old_slot>=0)
         {
          cash_totals[old_slot]-=old_amount;
@@ -653,7 +655,7 @@ public:
       cash_deals[at].slot=slot;
       cash_deals[at].amount=amount;
 
-      return(!unresolved_ours && (slot<0 || MathIsValidNumber(cash_totals[slot])));
+      return(!unresolved_ours&&(slot<0||MathIsValidNumber(cash_totals[slot])));
      }
 //+------------------------------------------------------------------+
 //| QueueCashRetry - defers a deal that is not resolved              |
@@ -695,7 +697,7 @@ public:
          return;
         }
 
-      if(kind!=TRADE_TRANSACTION_DEAL_ADD && kind!=TRADE_TRANSACTION_DEAL_UPDATE)
+      if(kind!=TRADE_TRANSACTION_DEAL_ADD&&kind!=TRADE_TRANSACTION_DEAL_UPDATE)
          return;
 
       if(!UpdateCashDeal(ticket))
@@ -708,16 +710,16 @@ public:
      {
       datetime now=TimeCurrent();
 
-      if(now<cash_poll_from || !HistorySelect(cash_poll_from,now))
+      if(now<cash_poll_from||!HistorySelect(cash_poll_from,now))
         {
          cash_ready=false;
 
          return(false);
         }
 
-      //--- one incremental range for all slots, exact-ticket upserts avoid duplicates
+   //--- one incremental range for all slots, exact-ticket upserts avoid duplicates
       ulong tickets[];
-      int count=HistoryDealsTotal();
+      int   count=HistoryDealsTotal();
 
       ArrayResize(tickets,count);
 
@@ -733,7 +735,7 @@ public:
            }
         }
 
-      //--- entry ownership is registered before manual and SL closing deals
+   //--- entry ownership is registered before manual and SL closing deals
       for(int i=0;i<count;i++)
          if(!RegisterDealOwner(tickets[i]))
            {
@@ -786,7 +788,7 @@ public:
 
          double lot=PositionGetDouble(POSITION_VOLUME);
          double profit=PositionGetDouble(POSITION_PROFIT);
-         bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
+         bool   buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
 
          s.lot+=buy?lot:-lot;
 
@@ -801,7 +803,7 @@ public:
       float market[];
       float account[];
 
-      if(!history.Market(time,market) || !HabiAccount(s,time,account))
+      if(!history.Market(time,market)||!HabiAccount(s,time,account))
          return(false);
 
       ArrayCopy(out,market);
@@ -825,7 +827,7 @@ public:
 //+------------------------------------------------------------------+
    bool              FinalOrder(int n,ulong order)
      {
-      if(order==0 || OrderSelect(order))
+      if(order==0||OrderSelect(order))
          return(false);
 
       if(!HistoryOrderSelect(order))
@@ -833,7 +835,7 @@ public:
 
       ENUM_ORDER_STATE state=(ENUM_ORDER_STATE)HistoryOrderGetInteger(order,ORDER_STATE);
 
-      if(state!=ORDER_STATE_FILLED && state!=ORDER_STATE_CANCELED && state!=ORDER_STATE_REJECTED && state!=ORDER_STATE_EXPIRED)
+      if(state!=ORDER_STATE_FILLED&&state!=ORDER_STATE_CANCELED&&state!=ORDER_STATE_REJECTED&&state!=ORDER_STATE_EXPIRED)
         {
          PrintFormat("Habi order unresolved slot=%d order=%I64u state=%d",n,order,(int)state);
 
@@ -850,13 +852,13 @@ public:
 //+------------------------------------------------------------------+
    bool              ReconcileSlot(int n)
      {
-      if(!slots[n].pending && !slots[n].unknown)
+      if(!slots[n].pending&&!slots[n].unknown)
          return(true);
 
       ulong order=slots[n].request_order;
       ulong deal=slots[n].request_deal;
 
-      if(order==0 && deal>0 && HistoryDealSelect(deal))
+      if(order==0&&deal>0&&HistoryDealSelect(deal))
         {
          order=(ulong)HistoryDealGetInteger(deal,DEAL_ORDER);
 
@@ -865,7 +867,7 @@ public:
          RememberOrder(order,n);
         }
 
-      //--- a partial deal never proves that the remainder of an order is final
+   //--- a partial deal never proves that the remainder of an order is final
       if(order>0)
          return(FinalOrder(n,order));
 
@@ -876,12 +878,12 @@ public:
 
       ulong found=0;
 
-      //--- one identity lookup and one state check, never recursive
+   //--- one identity lookup and one state check, never recursive
       for(int i=0;i<HistoryOrdersTotal();i++)
         {
          ulong t=HistoryOrderGetTicket(i);
 
-         if(HistoryOrderGetString(t,ORDER_SYMBOL)==_Symbol && (ulong)HistoryOrderGetInteger(t,ORDER_MAGIC)==slots[n].magic && HistoryOrderGetString(t,ORDER_COMMENT)==comment)
+         if(HistoryOrderGetString(t,ORDER_SYMBOL)==_Symbol&&(ulong)HistoryOrderGetInteger(t,ORDER_MAGIC)==slots[n].magic&&HistoryOrderGetString(t,ORDER_COMMENT)==comment)
            {
             found=t;
 
@@ -925,7 +927,7 @@ public:
 //+------------------------------------------------------------------+
    void              EconomicEvidence(int n,const MqlTradeRequest &req,uint code)
      {
-      if(req.action!=TRADE_ACTION_DEAL || req.position!=0 || req.volume<=0)
+      if(req.action!=TRADE_ACTION_DEAL||req.position!=0||req.volume<=0)
          return;
 
       bool buy=req.type==ORDER_TYPE_BUY;
@@ -935,16 +937,16 @@ public:
         {
          double margin=0;
 
-         proven=OrderCalcMargin(req.type,_Symbol,req.volume,req.price,margin) && margin>AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+         proven=OrderCalcMargin(req.type,_Symbol,req.volume,req.price,margin)&&margin>AccountInfoDouble(ACCOUNT_MARGIN_FREE);
         }
 
-      if(code==TRADE_RETCODE_LIMIT_VOLUME && symbol.lot_limit>0)
+      if(code==TRADE_RETCODE_LIMIT_VOLUME&&symbol.lot_limit>0)
         {
          double total=req.volume;
 
          for(int i=0;i<PositionsTotal();i++)
            {
-            if(!PositionGetTicket(i) || PositionGetString(POSITION_SYMBOL)!=_Symbol)
+            if(!PositionGetTicket(i)||PositionGetString(POSITION_SYMBOL)!=_Symbol)
                continue;
 
             if((PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)==buy)
@@ -953,11 +955,11 @@ public:
 
          for(int i=0;i<OrdersTotal();i++)
            {
-            if(!OrderGetTicket(i) || OrderGetString(ORDER_SYMBOL)!=_Symbol)
+            if(!OrderGetTicket(i)||OrderGetString(ORDER_SYMBOL)!=_Symbol)
                continue;
 
             ENUM_ORDER_TYPE t=(ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
-            bool same=buy?(t==ORDER_TYPE_BUY || t==ORDER_TYPE_BUY_LIMIT || t==ORDER_TYPE_BUY_STOP || t==ORDER_TYPE_BUY_STOP_LIMIT): (t==ORDER_TYPE_SELL || t==ORDER_TYPE_SELL_LIMIT || t==ORDER_TYPE_SELL_STOP || t==ORDER_TYPE_SELL_STOP_LIMIT);
+            bool            same=buy?(t==ORDER_TYPE_BUY||t==ORDER_TYPE_BUY_LIMIT||t==ORDER_TYPE_BUY_STOP||t==ORDER_TYPE_BUY_STOP_LIMIT): (t==ORDER_TYPE_SELL||t==ORDER_TYPE_SELL_LIMIT||t==ORDER_TYPE_SELL_STOP||t==ORDER_TYPE_SELL_STOP_LIMIT);
 
             if(same)
                total+=OrderGetDouble(ORDER_VOLUME_CURRENT);
@@ -966,19 +968,19 @@ public:
          proven=total>symbol.lot_limit+1e-9;
         }
 
-      if(code==TRADE_RETCODE_INVALID_STOPS && req.sl>0 && req.tp>0)
+      if(code==TRADE_RETCODE_INVALID_STOPS&&req.sl>0&&req.tp>0)
         {
          MqlTick now;
 
-         if(SymbolInfoTick(_Symbol,now) && MathAbs(req.price-(buy?now.ask:now.bid))<symbol.tick*.5)
+         if(SymbolInfoTick(_Symbol,now)&&MathAbs(req.price-(buy?now.ask:now.bid))<symbol.tick*.5)
             proven=!HabiProtection(buy?1:-1,req.sl,req.tp,now.bid,now.ask,symbol);
         }
 
-      if(code==TRADE_RETCODE_LONG_ONLY || code==TRADE_RETCODE_SHORT_ONLY || code==TRADE_RETCODE_CLOSE_ONLY)
+      if(code==TRADE_RETCODE_LONG_ONLY||code==TRADE_RETCODE_SHORT_ONLY||code==TRADE_RETCODE_CLOSE_ONLY)
         {
          long mode=SymbolInfoInteger(_Symbol,SYMBOL_TRADE_MODE);
 
-         proven=mode==SYMBOL_TRADE_MODE_CLOSEONLY || (buy && mode==SYMBOL_TRADE_MODE_SHORTONLY) || (!buy && mode==SYMBOL_TRADE_MODE_LONGONLY);
+         proven=mode==SYMBOL_TRADE_MODE_CLOSEONLY||(buy&&mode==SYMBOL_TRADE_MODE_SHORTONLY)||(!buy&&mode==SYMBOL_TRADE_MODE_LONGONLY);
         }
 
       if(proven)
@@ -992,16 +994,16 @@ public:
       ZeroMemory(check);
 
       bool checked=OrderCheck(request,check);
-      bool supported=request.action==TRADE_ACTION_DEAL || request.action==TRADE_ACTION_SLTP || request.action==TRADE_ACTION_REMOVE;
+      bool supported=request.action==TRADE_ACTION_DEAL||request.action==TRADE_ACTION_SLTP||request.action==TRADE_ACTION_REMOVE;
       bool finite=MathIsValidNumber(check.balance+check.equity+check.profit+check.margin+check.margin_free+check.margin_level);
 
-      //--- native OrderCheck reports retcode zero for these operations
-      if(checked && supported && finite && check.retcode==0)
+   //--- native OrderCheck reports retcode zero for these operations
+      if(checked&&supported&&finite&&check.retcode==0)
          return(true);
 
       EconomicEvidence(n,request,check.retcode);
 
-      if(!supported || !finite)
+      if(!supported||!finite)
          slots[n].reason=HABI_ADAPTER_ERROR;
 
       PrintFormat("Habi OrderCheck command=%I64u bool=%d action=%d retcode=%u comment=%s",slots[n].command,(int)checked,(int)request.action,check.retcode,check.comment);
@@ -1016,8 +1018,8 @@ public:
       if(!symbol.Read())
          return(false);
 
-      //--- prior generation entry orders expire even when a slot stays pending
-      //--- this cancellation must not overwrite the original request identity
+   //--- prior generation entry orders expire even when a slot stays pending
+   //--- this cancellation must not overwrite the original request identity
       for(int n=0;n<ArraySize(slots);n++)
         {
          ReconcileSlot(n);
@@ -1026,11 +1028,11 @@ public:
            {
             ulong order=OrderGetTicket(i);
 
-            if(!order || OrderGetString(ORDER_SYMBOL)!=_Symbol || (ulong)OrderGetInteger(ORDER_MAGIC)!=slots[n].magic)
+            if(!order||OrderGetString(ORDER_SYMBOL)!=_Symbol||(ulong)OrderGetInteger(ORDER_MAGIC)!=slots[n].magic)
                continue;
 
-            MqlTradeRequest req;
-            MqlTradeResult result;
+            MqlTradeRequest     req;
+            MqlTradeResult      result;
             MqlTradeCheckResult check;
 
             ZeroMemory(req);
@@ -1043,7 +1045,7 @@ public:
             req.magic=slots[n].magic;
             req.comment=StringFormat("C%I64X:%I64X",run_id,++next_request);
 
-            if(CheckRequest(n,req,check) && !OrderSend(req,result))
+            if(CheckRequest(n,req,check)&&!OrderSend(req,result))
                PrintFormat("Habi cancel failed slot=%d order=%I64u retcode=%u",n,order,result.retcode);
 
             if(OrderSelect(order))
@@ -1065,7 +1067,7 @@ public:
 //+------------------------------------------------------------------+
    bool              Request(int n,MqlTradeRequest &request)
      {
-      if(slots[n].pending || slots[n].unknown || iTime(_Symbol,TimeFrame,0)!=slots[n].bar)
+      if(slots[n].pending||slots[n].unknown||iTime(_Symbol,TimeFrame,0)!=slots[n].bar)
          return(false);
 
       request.symbol=_Symbol;
@@ -1098,28 +1100,28 @@ public:
 
       RememberOrder(result.order,n);
 
-      if(result.deal>0 && !UpdateCashDeal(result.deal))
+      if(result.deal>0&&!UpdateCashDeal(result.deal))
          QueueCashRetry(result.deal);
 
       PrintFormat("Habi request run=%I64u generation=%u slot=%d command=%I64u position_ticket=%I64u order=%I64u deal=%I64u retcode=%u",run_id,generation,n,slots[n].command,request.position,result.order,result.deal,result.retcode);
 
-      if(result.retcode==TRADE_RETCODE_PLACED || result.retcode==TRADE_RETCODE_DONE_PARTIAL || result.retcode==TRADE_RETCODE_TIMEOUT || result.retcode==0)
+      if(result.retcode==TRADE_RETCODE_PLACED||result.retcode==TRADE_RETCODE_DONE_PARTIAL||result.retcode==TRADE_RETCODE_TIMEOUT||result.retcode==0)
         {
          slots[n].pending=true;
-         slots[n].unknown=result.retcode==TRADE_RETCODE_TIMEOUT || result.retcode==0;
+         slots[n].unknown=result.retcode==TRADE_RETCODE_TIMEOUT||result.retcode==0;
 
          ReconcileSlot(n);
 
-         //--- an uncertain command is never continued, even if an event resolves it
+      //--- an uncertain command is never continued, even if an event resolves it
          return(false);
         }
 
-      if(result.retcode==TRADE_RETCODE_DONE || result.retcode==TRADE_RETCODE_NO_CHANGES)
+      if(result.retcode==TRADE_RETCODE_DONE||result.retcode==TRADE_RETCODE_NO_CHANGES)
          return(sent);
 
       EconomicEvidence(n,request,result.retcode);
 
-      //--- a retcode is evidence to investigate, not an automatic penalty
+   //--- a retcode is evidence to investigate, not an automatic penalty
       return(false);
      }
 //+------------------------------------------------------------------+
@@ -1132,7 +1134,7 @@ public:
       if(!Positions(n,p))
          return(false);
 
-      for(int i=0;i<ArraySize(p) && volume>=symbol.lot_min-1e-9;i++)
+      for(int i=0;i<ArraySize(p)&&volume>=symbol.lot_min-1e-9;i++)
         {
          double amount=MathMin(volume,MathAbs(p[i].lot));
 
@@ -1142,7 +1144,7 @@ public:
 
             double rest=MathAbs(p[i].lot)-amount;
 
-            if(rest>1e-9 && rest<symbol.lot_min)
+            if(rest>1e-9&&rest<symbol.lot_min)
                return(false);
            }
 
@@ -1194,7 +1196,7 @@ public:
          if(!t)
             return(false);
 
-         if(OrderGetString(ORDER_SYMBOL)!=_Symbol || (ulong)OrderGetInteger(ORDER_MAGIC)!=slots[n].magic)
+         if(OrderGetString(ORDER_SYMBOL)!=_Symbol||(ulong)OrderGetInteger(ORDER_MAGIC)!=slots[n].magic)
             continue;
 
          MqlTradeRequest req;
@@ -1204,7 +1206,7 @@ public:
          req.action=TRADE_ACTION_REMOVE;
          req.order=t;
 
-         if(!Request(n,req) || OrderSelect(t))
+         if(!Request(n,req)||OrderSelect(t))
             return(false);
         }
 
@@ -1215,7 +1217,7 @@ public:
 //+------------------------------------------------------------------+
    bool              Execute(int n,const float &raw[],datetime bar)
      {
-      //--- a generation expires at this bar boundary, never replay a skipped command
+   //--- a generation expires at this bar boundary, never replay a skipped command
       if(!ReconcileSlot(n))
          return(true);
 
@@ -1243,7 +1245,7 @@ public:
 
       double q=symbol.lot_min;
 
-      if(!OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,q,tick.ask,margin_buy) || !OrderCalcMargin(ORDER_TYPE_SELL,_Symbol,q,tick.bid,margin_sell))
+      if(!OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,q,tick.ask,margin_buy)||!OrderCalcMargin(ORDER_TYPE_SELL,_Symbol,q,tick.bid,margin_sell))
          return(false);
 
       margin_buy/=q;
@@ -1258,31 +1260,31 @@ public:
 
       slots[n].reason=a.reason;
 
-      bool close=a.reason==HABI_FLAT || a.reason==HABI_ZERO_PROTECTION || current*a.lot<0;
+      bool close=a.reason==HABI_FLAT||a.reason==HABI_ZERO_PROTECTION||current*a.lot<0;
 
       if(close)
         {
          if(!CancelEntries(n))
             return(true);
 
-         //--- close gross positions, including both sides of a corrupted state
+      //--- close gross positions, including both sides of a corrupted state
          double gross=0;
 
          for(int i=0;i<ArraySize(p);i++)
             gross+=MathAbs(p[i].lot);
 
-         if(gross>0 && !CloseVolume(n,gross))
+         if(gross>0&&!CloseVolume(n,gross))
             return(true);
 
-         if(!Positions(n,p) || ArraySize(p)!=0)
+         if(!Positions(n,p)||ArraySize(p)!=0)
             return(true);
 
          current=0;
 
-         if(a.reason!=HABI_FLAT && a.reason!=HABI_ZERO_PROTECTION)
+         if(a.reason!=HABI_FLAT&&a.reason!=HABI_ZERO_PROTECTION)
            {
-            //--- a confirmed closure may change available money through actual fees
-            if(!SymbolInfoTick(_Symbol,tick) || !OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,q,tick.ask,margin_buy) || !OrderCalcMargin(ORDER_TYPE_SELL,_Symbol,q,tick.bid,margin_sell))
+         //--- a confirmed closure may change available money through actual fees
+            if(!SymbolInfoTick(_Symbol,tick)||!OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,q,tick.ask,margin_buy)||!OrderCalcMargin(ORDER_TYPE_SELL,_Symbol,q,tick.bid,margin_sell))
                return(false);
 
             margin_buy/=q;
@@ -1339,7 +1341,7 @@ public:
          if(!PositionSelectByTicket(p[i].ticket))
             return(true);
 
-         if(MathAbs(PositionGetDouble(POSITION_SL)-a.sl)<symbol.tick*.1 && MathAbs(PositionGetDouble(POSITION_TP)-a.tp)<symbol.tick*.1)
+         if(MathAbs(PositionGetDouble(POSITION_SL)-a.sl)<symbol.tick*.1&&MathAbs(PositionGetDouble(POSITION_TP)-a.tp)<symbol.tick*.1)
             continue;
 
          MqlTradeRequest req;
@@ -1385,7 +1387,7 @@ public:
 
       ArrayInitialize(records[k].done,0);
 
-      if(current_bar!=bar || ArraySize(boundary_cash)!=N)
+      if(current_bar!=bar||ArraySize(boundary_cash)!=N)
          return(false);
 
       records[k].start_cash_revision=boundary_cash_revision;
@@ -1410,7 +1412,7 @@ public:
             return(false);
 
          records[k].command[n]=slots[n].command;
-         records[k].penalty[n]=slots[n].command!=old && (slots[n].reason==HABI_ZERO_PROTECTION || slots[n].reason==HABI_ECONOMIC_INVALID)?PenaltyInvalidCurrency:0;
+         records[k].penalty[n]=slots[n].command!=old&&(slots[n].reason==HABI_ZERO_PROTECTION||slots[n].reason==HABI_ECONOMIC_INVALID)?PenaltyInvalidCurrency:0;
         }
 
       return(true);
@@ -1443,7 +1445,7 @@ public:
       for(int n=0;n<count;n++)
         {
          boundary_cash[n]=cash_totals[n];
-         boundary_known[n]=cash_ready && !slots[n].unknown;
+         boundary_known[n]=cash_ready&&!slots[n].unknown;
 
          if(!boundary_known[n])
             PrintFormat("Habi UNRESOLVED monetary boundary slot=%d command=%I64u",n,slots[n].command);
@@ -1451,13 +1453,13 @@ public:
 
       for(int k=0;k<ArraySize(records);k++)
         {
-         if(records[k].boundary || records[k].used || records[k].gap || records[k].start>=bar)
+         if(records[k].boundary||records[k].used||records[k].gap||records[k].start>=bar)
             continue;
 
          int distance=iBarShift(_Symbol,TimeFrame,records[k].start,true);
          int end_shift=iBarShift(_Symbol,TimeFrame,bar,true);
 
-         if(distance<0 || end_shift<0 || distance-end_shift!=1)
+         if(distance<0||end_shift<0||distance-end_shift!=1)
            {
             records[k].gap=true;
 
@@ -1477,7 +1479,7 @@ public:
          ArrayCopy(records[k].end_float,boundary_float);
 
          for(int n=0;n<count;n++)
-            records[k].money_known[n]=records[k].money_known[n] && boundary_known[n];
+            records[k].money_known[n]=records[k].money_known[n]&&boundary_known[n];
         }
 
       return(true);
@@ -1487,24 +1489,24 @@ public:
 //+------------------------------------------------------------------+
    bool              Ready(int k)
      {
-      if(!records[k].boundary || records[k].used || records[k].gap)
+      if(!records[k].boundary||records[k].used||records[k].gap)
          return(false);
 
       int N=ArraySize(slots);
 
       for(int n=0;n<N;n++)
         {
-         if((slots[n].pending || slots[n].unknown) && slots[n].command==records[k].command[n])
+         if((slots[n].pending||slots[n].unknown)&&slots[n].command==records[k].command[n])
             return(false);
 
-         //--- an unestablished monetary snapshot is not repaired with today's cash
-         //--- the whole record stays unresolved instead of receiving a fake reward
+      //--- an unestablished monetary snapshot is not repaired with today's cash
+      //--- the whole record stays unresolved instead of receiving a fake reward
          if(!records[k].money_known[n])
             return(false);
 
          double r=records[k].end_cash[n]-records[k].start_cash[n]+records[k].end_float[n]-records[k].start_float[n]-records[k].penalty[n];
 
-         if(!MathIsValidNumber(r) || MathAbs(r)>FLT_MAX)
+         if(!MathIsValidNumber(r)||MathAbs(r)>FLT_MAX)
            {
             records[k].gap=true;
 
@@ -1525,7 +1527,7 @@ public:
 
       for(int k=0;k<ArraySize(records);k++)
         {
-         if(records[k].used || records[k].gap || (!td_enabled && records[k].boundary))
+         if(records[k].used||records[k].gap||(!td_enabled&&records[k].boundary))
             continue;
 
          if(keep!=k)

@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| NeuroNet_Core.mqh                                                |
-//| Copyright 2026, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                                NeuroNet_Core.mqh |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2026, DNG |
+//|                            https://www.mql5.com/ru/articles/7447 |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| Logical method implementations generated from NeuroNet.mqh:      |
@@ -83,12 +84,15 @@ float CNeuronBase::alpha=(float)0.8;
 //| CNeuronBase - Constructor: initializes the CNeuronBase layer...  |
 //+------------------------------------------------------------------+
 CNeuronBase::CNeuronBase(void):
+//+------------------------------------------------------------------+
+//| outputVal                                                        |
+//+------------------------------------------------------------------+
    outputVal(1),
    gradient(0),
    activation(TANH),
    t(1),
    optimization(SGD)
-  {
+     {
   }
 //+------------------------------------------------------------------+
 //| ~CNeuronBase - Destructor: releases the CNeuronBase GPU...       |
@@ -240,8 +244,8 @@ bool CNeuron::feedForward(CLayer*prevLayer)
 //+------------------------------------------------------------------+
 bool COpenCLMy::Initialize(const string program,const bool show_log=true)
   {
-   //--- own the complete initialization transaction; do not use ProgramCreate,
-   //--- which frees a failed context without invalidating its stored handle.
+//--- own the complete initialization transaction; do not use ProgramCreate,
+//--- which frees a failed context without invalidating its stored handle.
    Shutdown();
    ulong started=GetTickCount64();
 
@@ -3748,8 +3752,8 @@ bool CLayer::CreateElement(int index)
             if(!spike_block)
                ReturnFalse;
 
-            //--- serialized SpikeConvBlock restores all nested holders in Load().
-            //--- a default Init() creates incompatible temporary shapes first.
+      //--- serialized SpikeConvBlock restores all nested holders in Load().
+      //--- a default Init() creates incompatible temporary shapes first.
             spike_block.AttachOpenCL(OpenCL);
             m_data[index]=spike_block;
 
@@ -5115,9 +5119,9 @@ bool CLayer::CreateElement(int index)
             return(true);
          case defNeuronScenarioForecast:
 
-            //--- serialized layers reconstruct their exact contract in
-            //--- cNeuronScenarioForecast::Load().  Init requires a descriptor
-            //--- and is therefore intentionally reserved for CNet::Create().
+      //--- serialized layers reconstruct their exact contract in
+      //--- cNeuronScenarioForecast::Load().  Init requires a descriptor
+      //--- and is therefore intentionally reserved for CNet::Create().
             scenario_forecast=new CNeuronScenarioForecast;
 
             if(!scenario_forecast)
@@ -5145,9 +5149,9 @@ bool CLayer::CreateElement(int index)
             if(!scenario_cross)
                ReturnFalse;
 
-            //--- load reconstructs the serialized MSRes and scenario holders.
-            //--- initializing defaults here creates shared temporary buffers;
-            //--- their slots can be released while the serialized graph loads.
+      //--- load reconstructs the serialized MSRes and scenario holders.
+      //--- initializing defaults here creates shared temporary buffers;
+      //--- their slots can be released while the serialized graph loads.
             scenario_cross.AttachOpenCL(OpenCL);
             m_data[index]=scenario_cross;
 
@@ -5493,7 +5497,7 @@ bool CNeuronBase::calcHiddenGradients(CObject*&TargetObject)
             default:
 
                //---temp_n=GetPointer(this);
-               temp_l =/*temp_n*/getOutputLayer();
+               temp_l=/*temp_n*/getOutputLayer();
                temp_n=TargetObject;
                result=temp_n.calcInputGradients(temp_l);
                break;
@@ -5889,12 +5893,10 @@ bool CNeuronBase::Save(int file_handle)
       ReturnFalse;
 
 //---
-   if(FileWriteInteger(file_handle,(int)activation,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,activation)
 
 //---
-   if(FileWriteInteger(file_handle,(int)optimization,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,optimization)
 
 //---
    if(FileWriteInteger(file_handle,t,INT_VALUE)<INT_VALUE)
@@ -5916,7 +5918,8 @@ CLayerDescription::CLayerDescription(void):type(defNeuron),
    probability((float)0.1),
    batch(1e+4),
    variables(1)
-  {}
+  {
+  }
 //+------------------------------------------------------------------+
 //| Copy - Handles the CLayerDescription copy operation.             |
 //+------------------------------------------------------------------+
@@ -5982,7 +5985,12 @@ bool CNet::PrepareOpenCLRuntime(void)
 bool CNet::UseOpenCLRuntime(COpenCLMy*runtime)
   {
    if(CheckPointer(runtime)==POINTER_INVALID||runtime.GetContext()==INVALID_HANDLE||
-      runtime.GetProgram()==INVALID_HANDLE||!IsOpenCLTransferReady()||m_inference_load_active||
+      (runtime.GetProgram()==INVALID_HANDLE&&!runtime.IsCollectingSelectiveKernels()
+#ifdef NN_OPENCL_DEFERRED_PILOT
+       &&!runtime.IsCollectingKernels()
+#endif
+       )||
+      !IsOpenCLTransferReady()||m_inference_load_active||
       (CheckPointer(layers)!=POINTER_INVALID&&layers.Total()>0))
       ReturnFalse;
 
@@ -13714,8 +13722,8 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
         {
          case defNeuronAlphaGenOCL:
 
-            //--- the composite owns its parameters. Its native backward frame
-            //--- must be completed; there is no public projection to read back.
+      //--- the composite owns its parameters. Its native backward frame
+      //--- must be completed; there is no public projection to read back.
             result=temp.CanStartForward();
             break;
          case defNeuronDPCCActorOCL:
@@ -13957,6 +13965,7 @@ int CNet::DPCCPolicyTrainingGraphKind(void)
 
    if(CheckPointer(cross)==POINTER_INVALID||CheckPointer(projection)==POINTER_INVALID)
       return(0);
+
    uint query_window=0;
    uint attention_dimension=0;
    uint heads=0;
@@ -14282,7 +14291,7 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
 
    if(temp==-1)
      {
-      //--- read and check array type
+   //--- read and check array type
       if(FileReadInteger(handle,INT_VALUE)!=layers.Type())
         {
          FileClose(handle);
@@ -14303,7 +14312,7 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
      {
       for(i=0;i<num;i++)
         {
-         //--- create new element
+      //--- create new element
          CLayer *Layer=new CLayer(0,handle,opencl);
 
          if(!Layer.Load(handle))
@@ -14416,7 +14425,7 @@ bool CNet::Load(const int file_handle)
 
    if(temp==-1)
      {
-      //--- read and check array type
+   //--- read and check array type
       if(FileReadInteger(file_handle,INT_VALUE)!=layers.Type())
          return(false);
      }
@@ -14439,7 +14448,7 @@ bool CNet::Load(const int file_handle)
      {
       for(i=0;i<num;i++)
         {
-         //--- create new element
+      //--- create new element
          CLayer *Layer=new CLayer(0,file_handle,opencl);
 
          if(!Layer.Load(file_handle))
@@ -14984,8 +14993,8 @@ bool CBufferFloat::BufferWrite(void)
 
 //---
 #ifdef ALPHAGEN_TEST_DIAGNOSTICS
-   //--- bufferCreate already requires COpenCLMy. Preserve its diagnostic dispatch
-   //--- here: the base-class template otherwise bypasses the derived wrapper.
+//--- bufferCreate already requires COpenCLMy. Preserve its diagnostic dispatch
+//--- here: the base-class template otherwise bypasses the derived wrapper.
    if(!((COpenCLMy*)OpenCL).BufferWrite(m_myIndex,m_data,0,0,m_data_total))
 #else
    if(!OpenCL.BufferWrite(m_myIndex,m_data,0,0,m_data_total))
@@ -15011,7 +15020,7 @@ bool CBufferFloat::BufferInit(uint count,float value)
    return(m_data_total==count);
   }
 //+------------------------------------------------------------------+
-//| Returns the data of the CBufferFloat.                            |
+//| GetData - returns the data of the CBufferFloat.                  |
 //+------------------------------------------------------------------+
 template<typename T>
 //+------------------------------------------------------------------+
@@ -15025,7 +15034,7 @@ int CBufferFloat::GetData(T&values[])
    return(ArrayCopy(values,m_data,0,0,m_data_total));
   }
 //+------------------------------------------------------------------+
-//| Returns the data of the CBufferFloat (GetData).                  |
+//| GetData - returns the data of the CBufferFloat (GetData).        |
 //+------------------------------------------------------------------+
 template<typename T>
 //+------------------------------------------------------------------+
@@ -15041,7 +15050,7 @@ int CBufferFloat::GetData(vector<T>&values)
    if(!values.Resize(m_data_total))
       ReturnFalse;
 
-   return(int)values.Size();
+   return((int)values.Size());
   }
 //+------------------------------------------------------------------+
 //| Returns the data of the CBufferFloat (GetData) (GetData).        |
@@ -15089,7 +15098,7 @@ int CBufferFloat::GetData(CArrayFloat*values)
    return(m_data_total);
   }
 //+------------------------------------------------------------------+
-//| Assignment (copying) of another array                            |
+//| AssignArray - assignment (copying) of another array              |
 //+------------------------------------------------------------------+
 template<typename T>
 //+------------------------------------------------------------------+
@@ -15245,7 +15254,7 @@ bool CBufferFloat::AddArray(const vector<float>&src)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Adding (copying) of another array (AddArray).                    |
+//| AddArray - adding (copying) of another array (AddArray).         |
 //+------------------------------------------------------------------+
 template<typename T>
 //+------------------------------------------------------------------+
@@ -15385,7 +15394,7 @@ bool CBufferFloat::Fill(const CBufferFloat*obj)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Handles the CBufferFloat fill operation (Fill) (Fill).           |
+//| Fill - handles the CBufferFloat fill operation (Fill) (Fill).    |
 //+------------------------------------------------------------------+
 template<typename T>
 //+------------------------------------------------------------------+
@@ -15645,6 +15654,19 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
      }
 
 //---
+   if(OpenCL!=NULL&&OpenCL.IsCollectingSelectiveKernels()&&
+      !OpenCL.RegisterSelectiveLayer(Type(),Optimization()))
+      ReturnFalse;
+#ifdef NN_OPENCL_DEFERRED_PILOT
+   if(numOutputs>0&&OpenCL.IsCollectingKernels()&&
+      (Optimization()!=SGD||!OpenCL.RequireDeferredKernel(def_k_FeedForward)||
+       !OpenCL.RequireDeferredKernel(def_k_CalcOutputGradient)||
+       !OpenCL.RequireDeferredKernel(def_k_CalcHiddenGradient)||
+       !OpenCL.RequireDeferredKernel(def_k_UpdateWeightsMomentum)||
+       !OpenCL.RequireDeferredKernel(def_k_NormalizeWeights)))
+      ReturnFalse;
+#endif
+
    return(true);
   }
 //+------------------------------------------------------------------+
@@ -16431,20 +16453,15 @@ bool CNeuronBaseOCL::Save(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileWriteInteger(file_handle,(int)activation,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,activation)
 
-   if(FileWriteInteger(file_handle,(int)optimization,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,optimization)
 
-   if(FileWriteInteger(file_handle,(int)iBatch,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iBatch)
 
-   if(FileWriteInteger(file_handle,(int)t,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,t)
 
-   if(FileWriteInteger(file_handle,(int)bTrain,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,bTrain)
 
 //---
    if(CheckPointer(Output)==POINTER_INVALID||!Output.Save(file_handle))
@@ -16645,10 +16662,23 @@ bool CNeuronBaseOCL::Load(const int file_handle)
      }
 
 //---
+   if(OpenCL!=NULL&&OpenCL.IsCollectingSelectiveKernels()&&
+      !OpenCL.RegisterSelectiveLayer(Type(),Optimization()))
+      ReturnFalse;
+#ifdef NN_OPENCL_DEFERRED_PILOT
+   if(OpenCL&&Weights&&Weights.Total()>0&&OpenCL.IsCollectingKernels()&&
+      (Optimization()!=SGD||!OpenCL.RequireDeferredKernel(def_k_FeedForward)||
+       !OpenCL.RequireDeferredKernel(def_k_CalcOutputGradient)||
+       !OpenCL.RequireDeferredKernel(def_k_CalcHiddenGradient)||
+       !OpenCL.RequireDeferredKernel(def_k_UpdateWeightsMomentum)||
+       !OpenCL.RequireDeferredKernel(def_k_NormalizeWeights)))
+      ReturnFalse;
+#endif
+
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the layer info of the CNeuronBaseOCL.                    |
+//| GetLayerInfo - returns the layer info of the CNeuronBaseOCL.     |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronBaseOCL::GetLayerInfo(void)
   {
@@ -16827,31 +16857,38 @@ void CNeuronBaseOCL::SetOpenCL(COpenCLMy*obj)
    OpenCL=obj;
 
    if(!!Output&&Output.Total()>0)
-      //--- buffer of Output tensor
+
+//--- buffer of Output tensor
       Output.BufferCreate(OpenCL);
 
    if(!!PrevOutput&&PrevOutput.Total()>0)
-      //--- buffer of previous iteration Output tensor
+
+//--- buffer of previous iteration Output tensor
       PrevOutput.BufferCreate(OpenCL);
 
    if(!!Weights&&Weights.Total()>0)
-      //--- buffer of weights matrix
+
+//--- buffer of weights matrix
       Weights.BufferCreate(OpenCL);
 
    if(!!DeltaWeights&&DeltaWeights.Total()>0)
-      //--- buffer of last delta weights matrix (#SGD)
+
+//--- buffer of last delta weights matrix (#SGD)
       DeltaWeights.BufferCreate(OpenCL);
 
    if(!!Gradient&&Gradient.Total()>0)
-      //--- buffer of gradient tensor
+
+//--- buffer of gradient tensor
       Gradient.BufferCreate(OpenCL);
 
    if(!!FirstMomentum&&FirstMomentum.Total()>0)
-      //--- buffer of first momentum matrix (#ADAM)
+
+//--- buffer of first momentum matrix (#ADAM)
       FirstMomentum.BufferCreate(OpenCL);
 
    if(!!SecondMomentum&&SecondMomentum.Total()>0)
-      //--- buffer of second momentum matrix (#ADAM)
+
+//--- buffer of second momentum matrix (#ADAM)
       SecondMomentum.BufferCreate(OpenCL);
   }
 //+------------------------------------------------------------------+
@@ -17102,7 +17139,7 @@ bool CNeuronProofOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the layer info of the CNeuronProofOCL.                   |
+//| GetLayerInfo - returns the layer info of the CNeuronProofOCL.    |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronProofOCL::GetLayerInfo(void)
   {
@@ -17550,7 +17587,7 @@ bool CNeuronConvOCL::UpdateInputWeightsBuffer(CBufferFloat*source)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the layer info of the CNeuronConvOCL.                    |
+//| GetLayerInfo - returns the layer info of the CNeuronConvOCL.     |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronConvOCL::GetLayerInfo(void)
   {
@@ -17572,19 +17609,23 @@ void CNeuronConvOCL::SetOpenCL(COpenCLMy*obj)
    CNeuronBaseOCL::SetOpenCL(obj);
 
    if(!!WeightsConv)
-      //--- matrix of weights to previous layer
+
+//--- matrix of weights to previous layer
       WeightsConv.BufferCreate(obj);
 
    if(!!DeltaWeightsConv)
-      //--- matrix of delta weights to previous layer (#SGD)
+
+//--- matrix of delta weights to previous layer (#SGD)
       DeltaWeightsConv.BufferCreate(obj);
 
    if(!!FirstMomentumConv)
-      //--- matrix of first momentum to previous layer (#ADAM)
+
+//--- matrix of first momentum to previous layer (#ADAM)
       FirstMomentumConv.BufferCreate(obj);
 
    if(!!SecondMomentumConv)
-      //--- matrix of second momentum to previous layer (#ADAM)
+
+//--- matrix of second momentum to previous layer (#ADAM)
       SecondMomentumConv.BufferCreate(obj);
   }
 //+------------------------------------------------------------------+
@@ -18636,7 +18677,7 @@ bool CNeuronBaseOCL::ReduceNumericFlags(CBufferFloat*numeric_flags,
 
 //--- read only the reduction scalar and classify the completed device result.
    if(!numeric_scalar.BufferRead())
-      return(false);
+      ReturnFalse;
    const float total=numeric_scalar[0];
    rejected=(!MathIsValidNumber(total)||total>0.0f);
 
@@ -19327,7 +19368,7 @@ bool CNeuronDropoutOCL::Load(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the layer info of the CNeuronDropoutOCL.                 |
+//| GetLayerInfo - returns the layer info of the CNeuronDropoutOCL.  |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronDropoutOCL::GetLayerInfo(void)
   {
@@ -19557,6 +19598,7 @@ bool CNeuronBatchNormOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 
    if(iBatchCount<100*iBatchSize)
       return(true);
+
    uint global_work_offset[1]={0};
    uint global_work_size[1];
    global_work_size[0]=Neurons();
@@ -19671,7 +19713,8 @@ void CNeuronBatchNormOCL::SetOpenCL(COpenCLMy*obj)
    CNeuronBaseOCL::SetOpenCL(obj);
 
    if(!!BatchOptions)
-      //--- container of method parameters
+
+//--- container of method parameters
       BatchOptions.BufferCreate(obj);
   }
 //+------------------------------------------------------------------+
@@ -20128,7 +20171,7 @@ bool CNeuronSoftMaxOCL::calcOutputGradients(CBufferFloat*Target,float&error)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the layer info of the CNeuronSoftMaxOCL.                 |
+//| GetLayerInfo - returns the layer info of the CNeuronSoftMaxOCL.  |
 //+------------------------------------------------------------------+
 CLayerDescription*CNeuronSoftMaxOCL::GetLayerInfo(void)
   {
@@ -20704,6 +20747,7 @@ bool CNet::backProp(CArrayFloat*targetVals,CNet*secondNet=NULL,int secondLayer=-
 
       if(!second)
          return(backPropOCL(targetVals));
+
       CLayer         *layer=secondNet.layers.At(secondLayer);
       CNeuronBaseOCL *neuron=layer.At(0);
       CBufferFloat   gradient;
@@ -22395,6 +22439,7 @@ bool CNeuronBaseOCL::CopyBufferRaw(CBufferFloat*source,CBufferFloat*destination,
 
    if(source==destination)
       return(true);
+
    const int items=(int)total;
    uint      global_work_offset[1]={0};
    uint      global_work_size[1]={total};
@@ -22664,6 +22709,7 @@ bool CNeuronRevINDenormOCL::BeginOwned(void)
          (parameters[i].Total()!=0||parameters[i].GetIndex()>=0))
 
          return(false);
+
    m_owned_mode=true;
    BatchOptions=new CBufferFloat();
    m_owned_buffers[3]=BatchOptions;
@@ -22961,6 +23007,7 @@ bool CNeuronRevINDenormOCL::LoadOwned(const int file_handle,COpenCLMy*context,ui
 
    if(begin>size||size-begin<ulong(6*INT_VALUE))
       return(false);
+
    const int magic=FileReadInteger(file_handle,INT_VALUE);
    const int version=FileReadInteger(file_handle,INT_VALUE);
    const int count=FileReadInteger(file_handle,INT_VALUE);
@@ -22979,6 +23026,7 @@ bool CNeuronRevINDenormOCL::LoadOwned(const int file_handle,COpenCLMy*context,ui
 
    if(type!=defNeuronRevInDenormOCL)
       return(false);
+
    OpenCL=context;
    m_owned_neurons=neurons;
    iBatchNormLayer=-1;
@@ -22994,6 +23042,7 @@ bool CNeuronRevINDenormOCL::LoadOwned(const int file_handle,COpenCLMy*context,ui
 
    if(!OwnedBound(context))
       return(false);
+
    iBatchCount=batch_count;
    PrevLayer=NULL;
    m_owned_ready=true;
@@ -23136,8 +23185,7 @@ bool CNeuronRevINDenormOCL::Save(const int file_handle)
    if(!CNeuronBatchNormOCL::Save(file_handle))
       ReturnFalse;
 
-   if(FileWriteInteger(file_handle,(int)iBatchNormLayer,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iBatchNormLayer)
 
 //---
    return(true);
@@ -23209,7 +23257,7 @@ bool CNet::OpenCLInit(void)
    CreateKernel(def_k_AGContextMetadata,"AGContextMetadata")
    CreateKernel(def_k_AGCopySlice,"AGCopySlice")
 #ifdef ALPHAGEN_STUDY
-   //--- probe before any model buffers or model kernels are prepared.
+//--- probe before any model buffers or model kernels are prepared.
    {
     float probe_input[1]={13579.0f};
     float probe_output[1]={-1.0f};
@@ -24308,7 +24356,7 @@ bool CNeuronBaseOCL::DiversityLoss(CNeuronBaseOCL*neuron,const int units,
 
 //---
    uint global_work_offset[]={0,0};
-   uint global_work_size[] = {units/*Q units*/, (uint)MathMin(units, OpenCL.GetMaxLocalSize(1))};
+   uint global_work_size[]={units/*Q units*/,(uint)MathMin(units,OpenCL.GetMaxLocalSize(1))};
    uint local_work_size[]={1,global_work_size[1]};
    int  kernel=def_k_DiversityLoss;
 
@@ -24590,10 +24638,7 @@ bool CNeuronBaseSAMOCL::Load(const int file_handle)
    if(!CNeuronBaseOCL::Load(file_handle))
       ReturnFalse;
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   fRho=FileReadFloat(file_handle);
+   dFileReadUFloat(file_handle,fRho)
 
    if(fRho==0||!Weights)
       return(true);
@@ -24812,10 +24857,7 @@ bool CNeuronConvSAMOCL::Load(const int file_handle)
    if(!CNeuronConvOCL::Load(file_handle))
       ReturnFalse;
 
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   fRho=FileReadFloat(file_handle);
+   dFileReadUFloat(file_handle,fRho)
 
 //---
    cWeightsSAMConv.BufferFree();
@@ -25755,10 +25797,7 @@ bool CNeuronResNeXtBlock::Load(const int file_handle)
       ReturnFalse;
 
 //---
-   if(FileIsEnding(file_handle))
-      ReturnFalse;
-
-   iChanelsOut=(uint)FileReadInteger(file_handle);
+   dFileReadUInt(file_handle,iChanelsOut)
 
 //---
    if(!LoadInsideLayer(file_handle,cBottleneck.AsObject()))
@@ -27539,6 +27578,7 @@ bool NNQCopy(COpenCLMy*context,CBufferFloat*source,CBufferFloat*destination)
       !NNQValid(context,destination,source.Total())||source.Total()!=destination.Total())
 
       return(false);
+
    CBufferFloat *buffers[]={source,destination};
    uint         values[]={(uint)source.Total()};
    uint         global[]={(uint)source.Total()};
@@ -27558,6 +27598,7 @@ bool NNQMap(COpenCLMy*context,CBufferFloat*a,CBufferFloat*b,CBufferFloat*output,
       !NNQValid(context,output,(ulong)rows*width)||!NNQValid(context,flags,rows))
 
       return(false);
+
    CBufferFloat *buffers[]={a,b,output,flags};
    uint         values[]={width,stride_a,stride_b,offset_a,offset_b,mode};
    uint         global[]={width,rows};
@@ -27577,6 +27618,7 @@ bool NNQDense(COpenCLMy*context,CBufferFloat*weights,CBufferFloat*source,CBuffer
       !NNQValid(context,output,(ulong)rows*outputs)||!NNQValid(context,flags,rows))
 
       return(false);
+
    CBufferFloat *buffers[]={weights,source,output,flags};
    uint         values[]={inputs,outputs,(uint)shared,(uint)activation};
    uint         global[]={outputs,rows};
@@ -27588,11 +27630,16 @@ bool NNQDense(COpenCLMy*context,CBufferFloat*weights,CBufferFloat*source,CBuffer
 //| Snapshot owns device values and the original host cache          |
 //| separately.                                                      |
 //+------------------------------------------------------------------+
-SLayerReadState::SLayerReadState(void):m_context(NULL),m_cursor(0),m_owner(0),m_state(0){}
+SLayerReadState::SLayerReadState(void):m_context(NULL),m_cursor(0),m_owner(0),m_state(0)
+  {
+  }
 //+------------------------------------------------------------------+
-//| Function ~SLayerReadState                                        |
+//| ~SLayerReadState - function ~SLayerReadState                     |
 //+------------------------------------------------------------------+
-SLayerReadState::~SLayerReadState(void){Clear();}
+SLayerReadState::~SLayerReadState(void)
+  {
+   Clear();
+  }
 //+------------------------------------------------------------------+
 //| Clear - Release the saved layer read state                       |
 //+------------------------------------------------------------------+
@@ -27621,6 +27668,7 @@ bool SLayerReadState::Begin(COpenCLMy*context,const ulong owner,const ulong stat
 
    if(!context||owner==0||state==0)
       return(false);
+
    m_context=context;
    m_owner=owner;
    m_state=state;
@@ -27639,6 +27687,7 @@ int SLayerReadState::Add(const int kind)
       ArrayResize(m_value,n+1)!=n+1||ArrayResize(m_index,n+1)!=n+1)
 
       return(-1);
+
    m_kind[n]=kind;
    m_reference[n]=NULL;
    m_snapshot[n]=NULL;
@@ -27652,22 +27701,48 @@ int SLayerReadState::Add(const int kind)
 //| PutInt - Function SLayerReadState::PutInt                        |
 //+------------------------------------------------------------------+
 bool SLayerReadState::PutInt(const long value)
-  {int n=Add(1);if(n<0)return(false);m_value[n]=value;return(true);}
+  {
+   int n=Add(1);
+   if(n<0)
+      return(false);
+   m_value[n]=value;
+
+   return(true);
+  }
 //+------------------------------------------------------------------+
 //| GetInt - Function SLayerReadState::GetInt                        |
 //+------------------------------------------------------------------+
 bool SLayerReadState::GetInt(long&value)
-  {if(m_cursor>=ArraySize(m_kind)||m_kind[m_cursor]!=1)return(false);value=m_value[m_cursor++];return(true);}
+  {
+   if(m_cursor>=ArraySize(m_kind)||m_kind[m_cursor]!=1)
+      return(false);
+   value=m_value[m_cursor++];
+
+   return(true);
+  }
 //+------------------------------------------------------------------+
 //| PutLink - Function SLayerReadState::PutLink                      |
 //+------------------------------------------------------------------+
 bool SLayerReadState::PutLink(CNeuronBaseOCL*node)
-  {int n=Add(2);if(n<0)return(false);m_link[n]=node;return(true);}
+  {
+   int n=Add(2);
+   if(n<0)
+      return(false);
+   m_link[n]=node;
+
+   return(true);
+  }
 //+------------------------------------------------------------------+
 //| GetLink - Function SLayerReadState::GetLink                      |
 //+------------------------------------------------------------------+
 bool SLayerReadState::GetLink(CNeuronBaseOCL*&node)
-  {if(m_cursor>=ArraySize(m_kind)||m_kind[m_cursor]!=2)return(false);node=m_link[m_cursor++];return(true);}
+  {
+   if(m_cursor>=ArraySize(m_kind)||m_kind[m_cursor]!=2)
+      return(false);
+   node=m_link[m_cursor++];
+
+   return(true);
+  }
 //+------------------------------------------------------------------+
 //| PutBuffer - Function SLayerReadState::PutBuffer                  |
 //+------------------------------------------------------------------+
@@ -27681,6 +27756,7 @@ bool SLayerReadState::PutBuffer(CBufferFloat*buffer)
 
    if(!buffer)
       return(true);
+
    m_value[n]=buffer.Total();
    m_index[n]=buffer.GetIndex();
    m_snapshot[n]=new CBufferFloat;
@@ -27733,7 +27809,7 @@ bool SLayerReadState::GetBuffer(CBufferFloat*&buffer)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Function SLayerReadState::Saved                                  |
+//| Saved - function SLayerReadState::Saved                          |
 //+------------------------------------------------------------------+
 CBufferFloat*SLayerReadState::Saved(CBufferFloat*buffer)const
   {
@@ -27746,11 +27822,16 @@ CBufferFloat*SLayerReadState::Saved(CBufferFloat*buffer)const
 //+------------------------------------------------------------------+
 //| Reuse owned temporary tensors for each complete Q evaluation.    |
 //+------------------------------------------------------------------+
-SLayerRowsWorkspace::SLayerRowsWorkspace(void):m_context(NULL),m_cursor(0),m_rows(0),m_owner(0),m_state(0){}
+SLayerRowsWorkspace::SLayerRowsWorkspace(void):m_context(NULL),m_cursor(0),m_rows(0),m_owner(0),m_state(0)
+  {
+  }
 //+------------------------------------------------------------------+
-//| Function ~SLayerRowsWorkspace                                    |
+//| ~SLayerRowsWorkspace - function ~SLayerRowsWorkspace             |
 //+------------------------------------------------------------------+
-SLayerRowsWorkspace::~SLayerRowsWorkspace(void){Clear();}
+SLayerRowsWorkspace::~SLayerRowsWorkspace(void)
+  {
+   Clear();
+  }
 //+------------------------------------------------------------------+
 //| Clear - Release row workspace buffers                            |
 //+------------------------------------------------------------------+
@@ -27785,7 +27866,7 @@ bool SLayerRowsWorkspace::Begin(COpenCLMy*context,const uint rows,const ulong ow
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Function SLayerRowsWorkspace::Take                               |
+//| Take - function SLayerRowsWorkspace::Take                        |
 //+------------------------------------------------------------------+
 CBufferFloat*SLayerRowsWorkspace::Take(const uint count)
   {
@@ -27796,6 +27877,7 @@ CBufferFloat*SLayerRowsWorkspace::Take(const uint count)
      {
       if(ArrayResize(m_buffers,(int)m_cursor+1)!=(int)m_cursor+1)
          return(NULL);
+
       m_buffers[m_cursor]=NULL;
      }
    CBufferFloat *buffer=m_buffers[m_cursor];
@@ -27877,6 +27959,7 @@ bool CNeuronConvOCL::ForwardRowsReadOnly(CBufferFloat*source,const uint rows,con
       !NNQValid(OpenCL,output,(ulong)rows*vars*units*filters)||!NNQValid(OpenCL,flags,rows))
 
       return(false);
+
    CBufferFloat *buffers[]={WeightsConv,source,output,flags};
    uint         values[]={inputs,units,vars,width,iStep,filters,(uint)activation};
    uint         global[]={vars*units*filters,rows};
@@ -27904,17 +27987,19 @@ bool CNeuronMultiWindowsConvOCL::ForwardRowsReadOnly(CBufferFloat*source,const u
    for(uint i=0;i<5;i++)
       if(indices[i]<0||!OpenCL.SetArgumentBuffer(kernel,i,indices[i]))
          return(false);
+
    uint values[]={(uint)source.Total()/(rows*iVariables),(uint)Neurons(),iVariables,
                     (uint)ArraySize(aiWindows),iWindowOut,(uint)activation
                    };
 
    for(uint i=0;i<6;i++)
-      if(!OpenCL.SetArgument(kernel,i+5,values[i]))
-         return(false);
+      setArgument(kernel,i+5,values[i])
    uint offset[]={0,0};
    uint global[]={(uint)Neurons(),rows};
 
-   return(OpenCL.Execute(kernel,2,offset,global));
+   kernelExecute(kernel,offset,global)
+
+   return(true);
   }
 //+------------------------------------------------------------------+
 //| CaptureEvaluationState - Function...                             |
@@ -27953,6 +28038,7 @@ bool CNeuronBatchNormOCL::ForwardRowsReadOnly(CBufferFloat*source,const uint row
       !NNQValid(OpenCL,options,(iBatchSize<=1?1:(ulong)width*(optimization==SGD?7:9))))
 
       return(false);
+
    CBufferFloat *buffers[]={source,options,output,flags};
    uint         values[]={width,(optimization==SGD?7U:9U),(uint)activation,(uint)(iBatchSize<=1)};
    uint         global[]={width,rows};
@@ -27964,12 +28050,16 @@ bool CNeuronBatchNormOCL::ForwardRowsReadOnly(CBufferFloat*source,const uint row
 //| CaptureEvaluationState - Function...                             |
 //+------------------------------------------------------------------+
 bool CNeuronLearnabledPE::CaptureEvaluationState(SLayerReadState&state)
-  {return(CNeuronBaseOCL::CaptureEvaluationState(state)&&cInputs.CaptureEvaluationState(state)&&cPositionEncoder.CaptureEvaluationState(state));}
+  {
+   return(CNeuronBaseOCL::CaptureEvaluationState(state)&&cInputs.CaptureEvaluationState(state)&&cPositionEncoder.CaptureEvaluationState(state));
+  }
 //+------------------------------------------------------------------+
 //| RestoreEvaluationState - Function...                             |
 //+------------------------------------------------------------------+
 bool CNeuronLearnabledPE::RestoreEvaluationState(SLayerReadState&state)
-  {return(CNeuronBaseOCL::RestoreEvaluationState(state)&&cInputs.RestoreEvaluationState(state)&&cPositionEncoder.RestoreEvaluationState(state));}
+  {
+   return(CNeuronBaseOCL::RestoreEvaluationState(state)&&cInputs.RestoreEvaluationState(state)&&cPositionEncoder.RestoreEvaluationState(state));
+  }
 //+------------------------------------------------------------------+
 //| ForwardRowsReadOnly - Function...                                |
 //+------------------------------------------------------------------+
@@ -27990,12 +28080,16 @@ bool CNeuronLearnabledPE::ForwardRowsReadOnly(CBufferFloat*source,const uint row
 //| CaptureEvaluationState - Function CParams::CaptureEvaluationState|
 //+------------------------------------------------------------------+
 bool CParams::CaptureEvaluationState(SLayerReadState&state)
-  {return(CNeuronBaseOCL::CaptureEvaluationState(state)&&cOne.CaptureEvaluationState(state));}
+  {
+   return(CNeuronBaseOCL::CaptureEvaluationState(state)&&cOne.CaptureEvaluationState(state));
+  }
 //+------------------------------------------------------------------+
 //| RestoreEvaluationState - Function CParams::RestoreEvaluationState|
 //+------------------------------------------------------------------+
 bool CParams::RestoreEvaluationState(SLayerReadState&state)
-  {return(CNeuronBaseOCL::RestoreEvaluationState(state)&&cOne.RestoreEvaluationState(state));}
+  {
+   return(CNeuronBaseOCL::RestoreEvaluationState(state)&&cOne.RestoreEvaluationState(state));
+  }
 //+------------------------------------------------------------------+
 
 #endif // NEURONET_CORE_MQH

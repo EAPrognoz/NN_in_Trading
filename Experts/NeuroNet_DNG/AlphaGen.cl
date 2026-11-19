@@ -998,6 +998,33 @@ __kernel void AGSequence(__global const float*input,__global float*output,
                   output[j]=input[(length-1)*hidden*6+j];
   }
 //+------------------------------------------------------------------+
+//| AGTradeEntropy - Entropy of sigmoid-normal actions and slopes    |
+//+------------------------------------------------------------------+
+inline float3 AGTradeEntropy(const float mu,const float sigma)
+  {
+//--- eight-point Gauss-Hermite rule for an expectation under N(0,1).
+   const float nodes[]={0.539079811351f,1.636519042435f,2.802485861288f,4.144547186126f};
+   const float weights[]={0.373012257679f,0.117239907662f,0.009635220121f,0.000112614538f};
+   float3 result=(float3)(0.5f*log(2.0f*M_PI_F*M_E_F)+log(sigma),0.0f,1.0f/sigma);
+
+   for(int i=0;i<4;i++)
+     {
+      const float offset=sigma*nodes[i];
+      const float lower=mu-offset;
+      const float upper=mu+offset;
+      const float slope_lower=-tanh(0.5f*lower);
+      const float slope_upper=-tanh(0.5f*upper);
+
+      //--- log(sigmoid'(u)) = -abs(u)-2*log1p(exp(-abs(u))).
+      result.x-=weights[i]*(fabs(lower)+fabs(upper)+
+                            2.0f*(log1p(exp(-fabs(lower)))+log1p(exp(-fabs(upper)))));
+      result.y+=weights[i]*(slope_lower+slope_upper);
+      result.z+=weights[i]*nodes[i]*(slope_upper-slope_lower);
+     }
+
+   return(result);
+  }
+//+------------------------------------------------------------------+
 //| AGDistribution - Sampling, log-density, entropy and clipped...   |
 //+------------------------------------------------------------------+
 __kernel void AGDistribution(__global const float*head,
@@ -1082,6 +1109,10 @@ __kernel void AGDistribution(__global const float*head,
      }
    else
      {
+      float2 entropy_gradient[AG_ACTIONS];
+      float  scales[AG_ACTIONS];
+      float  standardized[AG_ACTIONS];
+
       for(int j=0;j<AG_ACTIONS;j++)
         {
          float mu=head[j];
@@ -1094,8 +1125,13 @@ __kernel void AGDistribution(__global const float*head,
          float standard=(u-mu)/sigma;
 
          action[j]=u>=0.0f?1.0f/(1.0f+exp(-u)):exp(u)/(1.0f+exp(u));
+         //--- the sigmoid Jacobian cancels in the PPO ratio for a fixed sample.
          logp-=0.5f*(standard*standard+2.0f*log(sigma)+log(2.0f*M_PI_F));
-         entropy+=0.5f*(log(2.0f*M_PI_F*M_E_F)+2.0f*log(sigma));
+         const float3 bounded_entropy=AGTradeEntropy(mu,sigma);
+         entropy+=bounded_entropy.x;
+         entropy_gradient[j]=bounded_entropy.yz;
+         scales[j]=sigma;
+         standardized[j]=standard;
         }
 
       if(mode==2)
@@ -1107,14 +1143,15 @@ __kernel void AGDistribution(__global const float*head,
 
          for(int j=0;j<AG_ACTIONS;j++)
            {
-            float mu=head[j];
-            float xi=head[AG_ACTIONS+j];
-            float sigma=fmax(xi,0.0f)+log1p(exp(-fabs(xi)))+cfg[AG_CFG_SIGMA_FLOOR];
-            float d=sample[j]-mu;
-            float dxi=1.0f/(1.0f+exp(-xi));
+            const float xi=head[AG_ACTIONS+j];
+            const float sigma=scales[j];
+            const float standard=standardized[j];
+            const float dxi=1.0f/(1.0f+exp(-xi));
+            const float entropy_coef=cfg[AG_CFG_ENTROPY_COEF];
 
-            gradient[j]=score*d/(sigma*sigma);
-            gradient[AG_ACTIONS+j]=(score*((d/sigma)*(d/sigma)-1.0f)+cfg[AG_CFG_ENTROPY_COEF])*dxi/sigma;
+            gradient[j]=score*standard/sigma+entropy_coef*entropy_gradient[j].x;
+            gradient[AG_ACTIONS+j]=(score*(standard*standard-1.0f)/sigma+
+                                    entropy_coef*entropy_gradient[j].y)*dxi;
            }
         }
      }

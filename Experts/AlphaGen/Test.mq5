@@ -1,12 +1,22 @@
-#property strict
+//+------------------------------------------------------------------+
+//|                                                         Test.mq5 |
+//|                                                         AlphaGen |
+//|                           https://www.mql5.com/ru/articles/25997 |
+//+------------------------------------------------------------------+
 #define ALPHAGEN_TEST_DIAGNOSTICS
 #define ALPHAGEN_DECISION_TRACE
+//+------------------------------------------------------------------+
+//| Input parameters                                                 |
+//+------------------------------------------------------------------+
 input bool OpenCLWriteTrace=false;
 #define ALPHAGEN_TRACE_WRITES OpenCLWriteTrace
 #include "Trajectory.mqh"
+//+------------------------------------------------------------------+
+//| Global variables                                                 |
+//+------------------------------------------------------------------+
 CAlphaGenApplication App;
 //+------------------------------------------------------------------+
-//| Initialize the EA and its event resources.                       |
+//| OnInit - initialize the EA and its event resources.              |
 //+------------------------------------------------------------------+
 int OnInit()
   {
@@ -31,18 +41,20 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &
 //+------------------------------------------------------------------+
 double OnTester()
   {
-   if(!App.Finalized && !App.failed && !App.Finish(false,false))
+   if(!App.Finalized&&!App.failed&&!App.Finish(false,false))
      {
       Print("AlphaGen Test financial finalization incomplete");
      }
    PrintFormat("AlphaGen Strategy Tester actual profit %.2f profit factor %.6f",
-   TesterStatistics(STAT_PROFIT),TesterStatistics(STAT_PROFIT_FACTOR));
+               TesterStatistics(STAT_PROFIT),TesterStatistics(STAT_PROFIT_FACTOR));
+
    return(App.money.equity-App.money.reference);
   }
 //+------------------------------------------------------------------+
-//| Release event resources without trading or saving.               |
+//| OnDeinit - release event resources without trading or saving.    |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
    Print("AlphaGen Test unloaded, finalized=",App.Finalized);
   }
+//+------------------------------------------------------------------+
