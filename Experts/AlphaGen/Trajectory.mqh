@@ -19,7 +19,7 @@
 #define AG_HORIZON 1
 #define AG_IC_WINDOW 256
 #define AG_NORM_WINDOW 256
-#define AG_POOL_SIZE 20
+#define AG_POOL_SIZE 100
 #define AG_MAX_TOKENS 20
 #define AG_CONTEXT_BARS 256
 #define AG_WARMUP_BARS 631
