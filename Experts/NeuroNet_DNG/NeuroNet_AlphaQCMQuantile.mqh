@@ -92,11 +92,21 @@ class CAlphaQCMObjective
   {
 protected:
    COpenCLMy *OpenCL;
-   CBufferFloat m_next,m_qGradient,m_zGradient,m_qLoss,m_zLoss,m_target,m_rows,m_selected,m_priority,m_flags,m_tileFlags;
+   CBufferFloat m_next;
+   CBufferFloat m_qGradient;
+   CBufferFloat m_zGradient;
+   CBufferFloat m_qLoss;
+   CBufferFloat m_zLoss;
+   CBufferFloat m_target;
+   CBufferFloat m_rows;
+   CBufferFloat m_selected;
+   CBufferFloat m_priority;
+   CBufferFloat m_flags;
+   CBufferFloat m_tileFlags;
    int          m_chunk;
    int          m_status;
-   bool         Reserve(const int rows,const int actions,const int n,const int nt,const int logical);
    bool         m_ready;
+
 public:
    CAlphaQCMObjective(void):OpenCL(NULL),m_chunk(0),m_status(AG_OK),m_ready(false) {}
    int  Status(void) const { return(m_status); }
@@ -110,6 +120,9 @@ public:
                    const int rows,const int actions,const int n,const int nt,const float gamma,const float kappa,
                    const float position_scale,const int flags);
    bool Preflight(const int flags,const int offset);
+
+protected:
+   bool         Reserve(const int rows,const int actions,const int n,const int nt,const int logical);
   };
 
 bool CAlphaQCMObjective::Reserve(const int rows,const int actions,const int n,const int nt,const int logical)

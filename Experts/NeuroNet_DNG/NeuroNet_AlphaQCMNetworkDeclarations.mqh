@@ -69,32 +69,32 @@ enum ENUM_AQC_NET_BUFFER
 class CNeuronAlphaQCMEncoderOCL : public CNeuronBaseOCL
   {
 protected:
-   CNeuronAlphaGenDenseOCL  m_embedding,m_tau,m_hidden,m_head;
-   CAlphaQCMRecurrentOwner  m_first,m_second;
+   CNeuronAlphaGenDenseOCL  m_embedding;
+   CNeuronAlphaGenDenseOCL  m_tau;
+   CNeuronAlphaGenDenseOCL  m_hidden;
+   CNeuronAlphaGenDenseOCL  m_head;
+   CAlphaQCMRecurrentOwner  m_first;
+   CAlphaQCMRecurrentOwner  m_second;
    CBufferFloat             m_work[AQX_COUNT];
-   int                      m_L,m_A,m_E,m_H,m_M,m_B,m_N;
+   int                      m_L;
+   int                      m_A;
+   int                      m_E;
+   int                      m_H;
+   int                      m_M;
+   int                      m_B;
+   int                      m_N;
    int                      m_tokens;
    int                      m_lengths;
    int                      m_taus;
    int                      m_prepared;
    float                    m_position_scale;
-   bool                     m_iqn,m_forward_ready,m_gradient_ready,m_bound;
+   bool                     m_iqn;
+   bool                     m_forward_ready;
+   bool                     m_gradient_ready;
+   bool                     m_bound;
    ulong                    m_revision;
    ulong                    m_viewLifetime;
-   int  MatrixCount(void) const { return(m_iqn?6:5); }
-   bool MatrixView(const int id,SAQCMatrix &v);
-   bool Geometry(void);
-   bool Workspace(const bool backward);
-   bool ReserveInput(int &buffer,const long count);
-   void ReleaseInput(int &buffer);
-   bool Recur(const bool second);
-   bool Reverse(const bool second);
-   bool DenseRows(const int x,const int w,const int y,const int rows,const int inputs,const int outputs,const int relu);
-   bool DenseBackward(const int x,const int dy,const int dx,const int parameter,const int rows,const bool relu);
-   bool RunBackward(void);
-   virtual bool feedForward(CNeuronBaseOCL *previous) override;
-   virtual bool calcInputGradients(CNeuronBaseOCL *previous) override;
-   virtual bool updateInputWeights(CNeuronBaseOCL *previous) override;
+
 public:
    CNeuronAlphaQCMEncoderOCL(void);
    ~CNeuronAlphaQCMEncoderOCL(void);
@@ -118,5 +118,21 @@ public:
    virtual bool WeightsUpdate(CNeuronBaseOCL *source,float fraction) override;
    virtual bool Save(const int handle) override;
    virtual bool Load(const int handle) override;
+
+protected:
+   int  MatrixCount(void) const { return(m_iqn?6:5); }
+   bool MatrixView(const int id,SAQCMatrix &v);
+   bool Geometry(void);
+   bool Workspace(const bool backward);
+   bool ReserveInput(int &buffer,const long count);
+   void ReleaseInput(int &buffer);
+   bool Recur(const bool second);
+   bool Reverse(const bool second);
+   bool DenseRows(const int x,const int w,const int y,const int rows,const int inputs,const int outputs,const int relu);
+   bool DenseBackward(const int x,const int dy,const int dx,const int parameter,const int rows,const bool relu);
+   bool RunBackward(void);
+   virtual bool feedForward(CNeuronBaseOCL *previous) override;
+   virtual bool calcInputGradients(CNeuronBaseOCL *previous) override;
+   virtual bool updateInputWeights(CNeuronBaseOCL *previous) override;
   };
 #endif

@@ -48,27 +48,8 @@ protected:
    ulong                   m_searchAttempts;
    ulong                   m_searchEpisodes;
 
-   bool     TradeWorkspace(void);
-   bool     SearchWorkspace(const bool create);
-   bool     BuildNetwork(CNet *net,const bool iqn,const bool configure=true);
-   bool     NetworkSave(CNet *net,const int handle);
-   bool     NetworkLoad(CNet *net,const int handle,const bool restore,const bool iqn);
-   bool     Search(CBufferFloat *market,const ulong boundary,const bool defer_publication=false);
-   bool     PreparePublication(CBufferFloat *market,const ulong boundary);
-   bool     TradingAction(CNeuronBaseOCL *source,const ulong boundary);
-   bool     CheckTradingAction(void);
-   bool     PublishPool(CNeuronBaseOCL *source,const int flags,const ulong boundary);
-   bool     ObservePool(CNeuronBaseOCL *source,const int flags,const ulong boundary);
-   bool     Learn(void);
-   bool     LearnBatch(AQCReplayBatch &batch);
-   bool     Broken(const int status,const bool recoverable=false);
-   int      ReplayFailure(void) const;
-
-   virtual bool feedForward(CNeuronBaseOCL *source) override;
-   virtual bool feedForward(CNeuronBaseOCL *source,CBufferFloat *context) override;
-
 public:
-                     CNeuronAlphaQCMOCL(void);
+   CNeuronAlphaQCMOCL(void);
    virtual bool      Init(uint outputs,uint index,COpenCLMy *context,uint count,ENUM_OPTIMIZATION method,uint batch) override;
    virtual int       Type(void) const override { return(defNeuronAlphaQCMOCL); }
    virtual bool      Save(const int handle) override;
@@ -89,20 +70,8 @@ public:
    bool              CausalIdentity(const string symbol,const ENUM_TIMEFRAMES timeframe);
    ulong             LastServiceEvent(void) const { return(m_lastEvent); }
    ulong             LastServiceDecision(void) const { return(m_lastDecision); }
-   bool              IssueEvent(ulong &id)
-     {
-      if(m_lastEvent==ULONG_MAX)
-         ReturnFalse;
-      id=++m_lastEvent;
-      return(true);
-     }
-   bool              IssueDecision(ulong &id)
-     {
-      if(m_lastDecision==ULONG_MAX)
-         ReturnFalse;
-      id=++m_lastDecision;
-      return(true);
-     }
+   bool              IssueEvent(ulong &id);
+   bool              IssueDecision(ulong &id);
    ulong             SearchV(void) { return(m_replay.Verified()); }
    ulong             SearchU(void) const { return(m_updates); }
    ulong             TargetSyncs(void) const { return(m_syncs); }
@@ -113,7 +82,48 @@ public:
      {
       return(m_cPool.SetWarmupHistory(history,count));
      }
+
+protected:
+   bool     TradeWorkspace(void);
+   bool     SearchWorkspace(const bool create);
+   bool     BuildNetwork(CNet *net,const bool iqn,const bool configure=true);
+   bool     NetworkSave(CNet *net,const int handle);
+   bool     NetworkLoad(CNet *net,const int handle,const bool restore,const bool iqn);
+   bool     Search(CBufferFloat *market,const ulong boundary,const bool defer_publication=false);
+   bool     PreparePublication(CBufferFloat *market,const ulong boundary);
+   bool     TradingAction(CNeuronBaseOCL *source,const ulong boundary);
+   bool     CheckTradingAction(void);
+   bool     PublishPool(CNeuronBaseOCL *source,const int flags,const ulong boundary);
+   bool     ObservePool(CNeuronBaseOCL *source,const int flags,const ulong boundary);
+   bool     Learn(void);
+   bool     LearnBatch(AQCReplayBatch &batch);
+   bool     Broken(const int status,const bool recoverable=false);
+   int      ReplayFailure(void) const;
+   virtual bool feedForward(CNeuronBaseOCL *source) override;
+   virtual bool feedForward(CNeuronBaseOCL *source,CBufferFloat *context) override;
   };
+
+//+------------------------------------------------------------------+
+//| IssueEvent - Issue an exact event identifier                     |
+//+------------------------------------------------------------------+
+bool CNeuronAlphaQCMOCL::IssueEvent(ulong &id)
+  {
+   if(m_lastEvent==ULONG_MAX)
+      ReturnFalse;
+   id=++m_lastEvent;
+   return(true);
+  }
+
+//+------------------------------------------------------------------+
+//| IssueDecision - Issue an exact decision identifier               |
+//+------------------------------------------------------------------+
+bool CNeuronAlphaQCMOCL::IssueDecision(ulong &id)
+  {
+   if(m_lastDecision==ULONG_MAX)
+      ReturnFalse;
+   id=++m_lastDecision;
+   return(true);
+  }
 
 //+------------------------------------------------------------------+
 //| Initialize without allocating the legacy token PPO.               |

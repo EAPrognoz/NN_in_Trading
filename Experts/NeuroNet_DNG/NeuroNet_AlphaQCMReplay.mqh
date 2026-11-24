@@ -109,36 +109,21 @@ private:
    bool       m_bRestoring;
    int        m_iDirty;
    ENUM_AQC_REPLAY_STATUS m_eStatus;
-
 //--- Persistent float data and the fixed association CDF mirrors.
    CBufferFloat m_cRewards;
    CBufferFloat m_cPriorities;
    CBufferFloat m_cLiveTree;
    CBufferFloat m_cStagedTree;
-
 //--- Reload staging is released once the post-Build device restore completes.
    int   m_iSavedState[];
    ulong m_uSavedMetadata[];
    float m_fSavedRewards[];
    float m_fSavedPriorities[];
-
 //--- Batch float buffers share the lifetime of the typed batch views.
    CBufferFloat m_cBatchRewards;
    CBufferFloat m_cBatchWeights;
    CBufferFloat m_cTau;
    CBufferFloat m_cNextTau;
-
-   void Clear(void);
-   void ClearRestore(void);
-   bool AllocateInteger(const ENUM_AQC_REPLAY_BUFFER slot,const long count,const int width);
-   bool AllocateFloat(CBufferFloat &buffer,const long count);
-   bool Fail(const ENUM_AQC_REPLAY_STATUS status,const string message);
-   bool Run(const int kernel,const uint first,const uint second=0,const uint local=0);
-   bool BuildTree(const int size,const int changes);
-   bool MirrorTree(const bool publish,const int changes);
-   bool CheckTree(const int size);
-   bool CheckStatus(const int count);
-   bool Discard(void);
 
 public:
    CAlphaQCMReplay(void);
@@ -163,6 +148,19 @@ public:
    ulong Verified(void) const { return(m_uVerified); }
    bool Consistent(void) const { return(m_bConsistent); }
    ENUM_AQC_REPLAY_STATUS LastStatus(void) const { return(m_eStatus); }
+
+private:
+   void Clear(void);
+   void ClearRestore(void);
+   bool AllocateInteger(const ENUM_AQC_REPLAY_BUFFER slot,const long count,const int width);
+   bool AllocateFloat(CBufferFloat &buffer,const long count);
+   bool Fail(const ENUM_AQC_REPLAY_STATUS status,const string message);
+   bool Run(const int kernel,const uint first,const uint second=0,const uint local=0);
+   bool BuildTree(const int size,const int changes);
+   bool MirrorTree(const bool publish,const int changes);
+   bool CheckTree(const int size);
+   bool CheckStatus(const int count);
+   bool Discard(void);
   };
 
 //+------------------------------------------------------------------+
