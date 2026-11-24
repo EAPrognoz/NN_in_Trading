@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                       NeuroNet_AlphaQCMReplay.mqh |
+//|                                      NeuroNet_AlphaQCMReplay.mqh |
 //|                                                     NeuroNet_DNG |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_REPLAY_MQH

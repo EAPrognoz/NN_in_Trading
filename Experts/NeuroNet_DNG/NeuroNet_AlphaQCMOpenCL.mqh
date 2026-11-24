@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                       NeuroNet_AlphaQCMOpenCL.mqh |
+//|                                      NeuroNet_AlphaQCMOpenCL.mqh |
 //|                                                     NeuroNet_DNG |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_OPENCL_MQH

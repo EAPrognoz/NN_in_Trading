@@ -1,3 +1,7 @@
+//+------------------------------------------------------------------+
+//|                                        NeuroNet_AlphaQCMPool.mqh |
+//|                                                     NeuroNet_DNG |
+//+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCMPOOL_MQH
 #define NEURONET_ALPHAQCMPOOL_MQH
 

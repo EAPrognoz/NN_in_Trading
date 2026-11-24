@@ -1,5 +1,6 @@
 //+------------------------------------------------------------------+
-//| Typed AlphaQCM market, finance and checkpoint driver              |
+//|                                 NeuroNet_AlphaQCMApplication.mqh |
+//|                                                     NeuroNet_DNG |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_APPLICATION_MQH
 #define NEURONET_ALPHAQCM_APPLICATION_MQH

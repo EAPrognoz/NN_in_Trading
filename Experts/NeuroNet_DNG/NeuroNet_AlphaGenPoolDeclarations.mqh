@@ -42,18 +42,6 @@ protected:
    int          m_iRingSize;
    int          m_iWorkSize;
    int          m_iLookback;
-   //+------------------------------------------------------------------+
-   //| Allocate - Implement Allocate                                    |
-   //+------------------------------------------------------------------+
-   bool Allocate(CBufferFloat&buffer,const int count)
-     {
-      if(count<1||!buffer.BufferInit(count,0)||!buffer.BufferCreate(OpenCL))
-         ReturnFalse;
-
-      return(true);
-     }
-   bool Transaction(CBufferFloat*market,CBufferFloat*tokens,const int length,const int mode);
-   bool SignalStep(CBufferFloat*market,const int mode,const bool first=false,const int count=0);
 #ifdef NN_ALPHAQCM
    CBufferFloat m_cQCMFit;
    CBufferFloat m_cQCMScores;
@@ -65,15 +53,7 @@ protected:
    int m_iQCMBatch;
    int m_iQCMNext;
    int m_iQCMStatus;
-   bool QCMEnsure(CBufferFloat &buffer,const long count);
-   bool QCMRun(const int kernel,const int groups);
-   bool QCMBindAdvance(const int begin,const int end);
-   bool QCMReadStatus(const int changes,const uint offset=0);
-   bool QCMCache(CBufferFloat *market,CBufferFloat *source,CBufferFloat *result,
-                 const int count,const bool packed);
-   bool QCMOrdered(CBufferFloat *market,CBufferFloat *packed,CBufferFloat *values,
-                   const int index,const int mode);
-   bool QCMSignalStep(CBufferFloat *market,const int mode,const bool first,const int count);
+
 public:
    bool QCMRefresh(CBufferFloat *market,const bool pin=false,const ulong window=0);
    bool QCMEvaluateBatch(CBufferFloat *market,CBufferFloat *packed,const int count);
@@ -89,21 +69,20 @@ public:
    float QCMFitIC(void){return(m_cQCMFit.Total()==3?m_cQCMFit.At(0):0);}
    bool QCMAggregateUsable(void){return(m_cQCMFit.Total()==3&&m_cQCMFit.At(1)==1);}
    bool QCMUncertain(void){return(m_bQCMUncertain);}
-                     CAlphaGenPool(void)
-     {
-      OpenCL=NULL;
-      m_iWindow=0;
-      m_iHistoryCount=0;
-      m_bQCMUncertain=false;
-      m_bQCMBaseline=false;
-      m_iQCMBatch=0;
-      m_iQCMNext=0;
-      m_iQCMStatus=AG_OK;
-      m_uQCMWindow=0;
-      m_iQCMMarket=-1;
-      m_iQCMPacked=-1;
-     }
+                     CAlphaGenPool(void);
 #else
+   //+------------------------------------------------------------------+
+   //| Allocate - Implement Allocate                                    |
+   //+------------------------------------------------------------------+
+   bool Allocate(CBufferFloat&buffer,const int count)
+     {
+      if(count<1||!buffer.BufferInit(count,0)||!buffer.BufferCreate(OpenCL))
+         ReturnFalse;
+
+      return(true);
+     }
+   bool Transaction(CBufferFloat*market,CBufferFloat*tokens,const int length,const int mode);
+   bool SignalStep(CBufferFloat*market,const int mode,const bool first=false,const int count=0);
 public:
                      CAlphaGenPool(void){OpenCL=NULL;m_iWindow=0;m_iHistoryCount=0;}
 #endif
@@ -130,6 +109,9 @@ public:
 //+------------------------------------------------------------------+
 //| PrepareAppend                                                    |
 //+------------------------------------------------------------------+
+#ifdef NN_ALPHAQCM
+   bool PrepareAppend(CBufferFloat*market,const bool first=false);
+#else
    bool PrepareAppend(CBufferFloat*market,const bool first=false)
      {
       if(first&&m_iHistoryCount>0)
@@ -142,6 +124,7 @@ public:
 
       return(SignalStep(market,2,first));
      }
+#endif
    //+------------------------------------------------------------------+
    //| Commit - Implement Commit                                        |
    //+------------------------------------------------------------------+
@@ -235,6 +218,69 @@ public:
      }
    bool         Save(const int file_handle);
    bool         Load(const int file_handle);
+
+#ifdef NN_ALPHAQCM
+protected:
+   bool Allocate(CBufferFloat&buffer,const int count);
+   bool Transaction(CBufferFloat*market,CBufferFloat*tokens,const int length,const int mode);
+   bool SignalStep(CBufferFloat*market,const int mode,const bool first=false,const int count=0);
+   bool QCMEnsure(CBufferFloat &buffer,const long count);
+   bool QCMRun(const int kernel,const int groups);
+   bool QCMBindAdvance(const int begin,const int end);
+   bool QCMReadStatus(const int changes,const uint offset=0);
+   bool QCMCache(CBufferFloat *market,CBufferFloat *source,CBufferFloat *result,
+                 const int count,const bool packed);
+   bool QCMOrdered(CBufferFloat *market,CBufferFloat *packed,CBufferFloat *values,
+                   const int index,const int mode);
+   bool QCMSignalStep(CBufferFloat *market,const int mode,const bool first,const int count);
+#endif
   };
+
+#ifdef NN_ALPHAQCM
+//+------------------------------------------------------------------+
+//| CAlphaGenPool - Initialize the AlphaQCM pool state                |
+//+------------------------------------------------------------------+
+CAlphaGenPool::CAlphaGenPool(void)
+  {
+   OpenCL=NULL;
+   m_iWindow=0;
+   m_iHistoryCount=0;
+   m_bQCMUncertain=false;
+   m_bQCMBaseline=false;
+   m_iQCMBatch=0;
+   m_iQCMNext=0;
+   m_iQCMStatus=AG_OK;
+   m_uQCMWindow=0;
+   m_iQCMMarket=-1;
+   m_iQCMPacked=-1;
+  }
+
+//+------------------------------------------------------------------+
+//| Allocate - Allocate a pool buffer                                |
+//+------------------------------------------------------------------+
+bool CAlphaGenPool::Allocate(CBufferFloat&buffer,const int count)
+  {
+   if(count<1||!buffer.BufferInit(count,0)||!buffer.BufferCreate(OpenCL))
+      ReturnFalse;
+
+   return(true);
+  }
+
+//+------------------------------------------------------------------+
+//| PrepareAppend - Append history or the current market window      |
+//+------------------------------------------------------------------+
+bool CAlphaGenPool::PrepareAppend(CBufferFloat*market,const bool first)
+  {
+   if(first&&m_iHistoryCount>0)
+     {
+      int count=m_iHistoryCount;
+      m_iHistoryCount=0;
+
+      return(SignalStep(GetPointer(m_cHistory),2,true,count));
+     }
+
+   return(SignalStep(market,2,first));
+  }
+#endif
 
 #endif

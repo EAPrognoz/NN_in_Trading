@@ -509,7 +509,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
      }
    if(!TerminalInfoInteger(TERMINAL_CONNECTED)&&!MQLInfoInteger(MQL_TESTER))
      {
-      return(false);
+      ReturnFalseEx("Terminal is disconnected");
      }
    // Close opposite exposure before checking incremental margin.
    double reduction_left=MathMax(MathAbs(volume)-MathAbs(a.volume),0);
