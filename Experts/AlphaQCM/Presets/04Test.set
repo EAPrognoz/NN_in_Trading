@@ -1,0 +1,5 @@
+TimeFrame=16385
+ModelFile=AlphaQCM\C.nn
+Seed=0
+SelectiveOpenCL=true
+OpenCLWriteTrace=false

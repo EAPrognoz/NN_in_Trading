@@ -991,6 +991,32 @@ bool CLayer::CreateElement(int index)
             m_data[index]=ompb;
 
             return(true);
+#ifdef NN_ALPHAQCM
+         case defNeuronAlphaQCMOCL:
+           {
+            CNeuronAlphaQCMOCL *alphaqcm=new CNeuronAlphaQCMOCL();
+
+            if(!alphaqcm)
+               ReturnFalse;
+            alphaqcm.AttachOpenCL(OpenCL);
+            m_data[index]=alphaqcm;
+
+            return(true);
+           }
+#endif
+#ifdef NN_ALPHAQCM
+         case defNeuronAlphaQCMEncoderOCL:
+           {
+            CNeuronAlphaQCMEncoderOCL *alphaqcm=new CNeuronAlphaQCMEncoderOCL();
+
+            if(!alphaqcm)
+               ReturnFalse;
+            alphaqcm.AttachOpenCL(OpenCL);
+            m_data[index]=alphaqcm;
+
+            return(true);
+           }
+#endif
          case defNeuronAlphaGenOCL:
            {
             CNeuronAlphaGenOCL *alphagen=new CNeuronAlphaGenOCL();
@@ -6428,6 +6454,36 @@ bool CNet::Create(CArrayObj*Description)
                  }
                neuron_ocl=NULL;
                break;
+#ifdef NN_ALPHAQCM
+            case defNeuronAlphaQCMOCL:
+              {
+               CNeuronAlphaQCMOCL *alphaqcm=new CNeuronAlphaQCMOCL();
+
+               if(!alphaqcm||!alphaqcm.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch)||
+                  !temp.Add(alphaqcm))
+                 {
+                  DeleteObj(alphaqcm)
+                  DeleteObj(temp)
+                  ReturnFalse;
+                 }
+               break;
+              }
+#endif
+#ifdef NN_ALPHAQCM
+            case defNeuronAlphaQCMEncoderOCL:
+              {
+               CNeuronAlphaQCMEncoderOCL *alphaqcm=new CNeuronAlphaQCMEncoderOCL();
+
+               if(!alphaqcm||!alphaqcm.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch)||
+                  !temp.Add(alphaqcm))
+                 {
+                  DeleteObj(alphaqcm)
+                  DeleteObj(temp)
+                  ReturnFalse;
+                 }
+               break;
+              }
+#endif
             case defNeuronAlphaGenOCL:
               {
                CNeuronAlphaGenOCL *alphagen=new CNeuronAlphaGenOCL();
@@ -13720,6 +13776,11 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
 
       switch(temp.Type())
         {
+#ifdef NN_ALPHAQCM
+         case defNeuronAlphaQCMOCL:
+            result=temp.CanStartForward();
+            break;
+#endif
          case defNeuronAlphaGenOCL:
 
       //--- the composite owns its parameters. Its native backward frame
@@ -14380,6 +14441,19 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
            }
         }
      }
+#ifdef NN_ALPHAQCM
+   if(layers.Total()==num&&num==2)
+     {
+      CNeuronBaseOCL *output=Layer(1);
+
+      if(!!output&&output.Type()==defNeuronAlphaQCMOCL&&FileTell(handle)!=FileSize(handle))
+        {
+         layers.Clear();
+         FileClose(handle);
+         ReturnFalse;
+        }
+     }
+#endif
    FileClose(handle);
 
 //--- result

@@ -1,0 +1,11 @@
+TimeFrame=16385
+ModelFile=AlphaQCM\A.nn
+Seed=0
+SelectiveOpenCL=true
+Start=2024.01.01 00:00
+End=2024.04.01 00:00
+Epochs=1
+MinBalance=100
+MaxBalance=1500
+PPOProfile=false
+TradeBackwardBars=64

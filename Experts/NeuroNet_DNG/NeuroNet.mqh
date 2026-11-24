@@ -17,6 +17,15 @@
 #include "NeuroNet_AlphaGenPool.mqh"
 #include "NeuroNet_AlphaGenPolicy.mqh"
 #include "NeuroNet_AlphaGenComposite.mqh"
+#ifdef NN_ALPHAQCM
+#include "NeuroNet_AlphaQCMPool.mqh"
+#include "NeuroNet_AlphaQCMReplay.mqh"
+#include "NeuroNet_AlphaQCMOpenCL.mqh"
+#include "NeuroNet_AlphaQCMGenerator.mqh"
+#include "NeuroNet_AlphaQCMEncoder.mqh"
+#include "NeuroNet_AlphaQCMQuantile.mqh"
+#include "NeuroNet_AlphaQCMComposite.mqh"
+#endif
 #include "NeuroNet_Core.mqh"
 #include "NeuroNet_RecurrentState.mqh"
 #include "NeuroNet_SpikeFlow.mqh"

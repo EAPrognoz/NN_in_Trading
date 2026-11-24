@@ -27984,6 +27984,12 @@ public:
      }
   };
 
+#ifdef NN_ALPHAQCM
+#include "AlphaQCM_Contract.mqh"
+#include "AlphaQCM_NetworkContract.mqh"
+#include "NeuroNet_AlphaQCMNetworkDeclarations.mqh"
+#endif
+
 #endif // NEURONET_DECLARATIONS_MQH
 //+------------------------------------------------------------------+
 
