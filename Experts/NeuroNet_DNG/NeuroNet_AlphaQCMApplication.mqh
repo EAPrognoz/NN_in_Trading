@@ -404,7 +404,7 @@ public:
         {
          Fault("INCOMPLETE_DATA: pre-feedback cash reconciliation failed");
 
-         return(false);
+         ReturnFalse;
         }
       if(!qcm.IssueEvent(event_id))
          ReturnFalse;
@@ -1041,7 +1041,7 @@ public:
       if(!training||failed||!qcm||qcm.Type()!=defNeuronAlphaQCMOCL||
          qcm.Status()==AG_CORRUPTED||qcm.Status()==AG_TECHNICAL||
          qcm.Status()>=AQCM_RESOURCE_UNSUPPORTED||!qcm.SafeToSave()||phase<0||phase>2)
-         return(false);
+         ReturnFalse;
       ulong begin=GetTickCount64();
       string temp=ModelFile+".tmp",backup=ModelFile+".bak";
       if(phase==0)
@@ -1097,7 +1097,7 @@ public:
         {
          if(!SavePhase(phase))
            {
-            return(false);
+            ReturnFalse;
            }
         }
 
@@ -1222,7 +1222,7 @@ public:
         }
       if(save&&!Save())
         {
-         return(false);
+         ReturnFalse;
         }
       Finalized=true;
       Print("AlphaQCM terminal money unresolved; unfinished sample excluded; coherent weights retained");
@@ -1364,7 +1364,7 @@ public:
         }
       if(save&&!Save())
         {
-         return(false);
+         ReturnFalse;
         }
       Finalized=true;
       string profit_factor=money.gross_loss>0?DoubleToString(money.gross_profit/money.gross_loss,6):"undefined (no realized losses)";
@@ -1636,7 +1636,7 @@ public:
         {
          if(!qcm.CancelTraining())
            {
-            return(false);
+            ReturnFalse;
            }
          context[AG_CTX_TERMINAL]=context[AG_CTX_MONEY_CONFIRMED]=0.0f;
          study_finish_stage=5;
@@ -1651,7 +1651,7 @@ public:
         {
          if(!Finish(study_finish_ruin,false,false,true))
            {
-            return(false);
+            ReturnFalse;
            }
          study_finish_batch_total=qcm.TrainingTotal();
          study_finish_batch_completed=qcm.TrainingCompleted();
@@ -1665,7 +1665,7 @@ public:
                study_finish_batch_total=qcm.TrainingTotal();
                if(!Train())
                  {
-                  return(false);
+                  ReturnFalse;
                  }
                study_finish_batch_completed=qcm.HasTraining()?qcm.TrainingCompleted():study_finish_batch_total;
               }
@@ -1683,7 +1683,7 @@ public:
                datetime time=(datetime)(snapshot_msc/1000);
                if(!Forward(AG_FLUSH,AG_FLAG_END,time))
                  {
-                  return(false);
+                  ReturnFalse;
                  }
                study_finish_batch_total=qcm.TrainingTotal();
                study_finish_batch_completed=qcm.TrainingCompleted();
@@ -1696,7 +1696,7 @@ public:
                   context[AG_CTX_TERMINAL]=context[AG_CTX_MONEY_CONFIRMED]=0.0f;
                   if(!Finish(study_finish_ruin,false,false,false,true))
                     {
-                     return(false);
+                     ReturnFalse;
                     }
                   Finalized=false;
                   bool save=stop_requested||study_finish_reason==2||
