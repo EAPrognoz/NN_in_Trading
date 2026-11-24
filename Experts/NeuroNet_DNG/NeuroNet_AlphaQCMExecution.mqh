@@ -748,6 +748,7 @@ struct SAlphaQCMDeal
   {
    ulong             ticket;
    double            cash;
+   double            volume;
    long              milliseconds;
    ulong             owner;
   };
@@ -796,6 +797,7 @@ public:
    ulong             request_decision,last_deal_ticket,finance_deal_ticket;
    long              last_deal_msc,finance_boundary_msc,finance_deal_msc;
    double            finance_balance,finance_equity,finance_gross_profit,finance_gross_loss;
+   double            ledger_volume;
    bool              training,simulated,Finalized,failed,stop_requested,open_decision,invalid,cycle_complete,service_rebase;
    datetime          observed_boundary,sample_boundary,pool_warmup_boundary,virtual_open_boundary;
    bool              virtual_gap_terminal,controlled_stopping;
@@ -843,6 +845,7 @@ public:
                       finance_equity(0),
                       finance_gross_profit(0),
                       finance_gross_loss(0),
+                       ledger_volume(0),
                      Finalized(false),
                      failed(false),
                      stop_requested(false),
@@ -1012,8 +1015,10 @@ public:
       int match=-1;
       for(int i=0;i<ArraySize(sealed);i++)
         {
+         // A timestamp shared by two decisions belongs to the interval ending
+         // there. Explicit order ownership still takes precedence.
          bool candidate=owner!=0?sealed[i].decision==owner:
-                        (at>=sealed[i].start_msc&&at<=sealed[i].end_msc);
+                        (at>sealed[i].start_msc&&at<=sealed[i].end_msc);
          if(!candidate)
            {
             continue;
@@ -1289,13 +1294,25 @@ public:
            }
          double cash=HistoryDealGetDouble(ticket,DEAL_PROFIT)+HistoryDealGetDouble(ticket,
                      DEAL_COMMISSION)+HistoryDealGetDouble(ticket,DEAL_SWAP)+HistoryDealGetDouble(ticket,DEAL_FEE);
-         long at=HistoryDealGetInteger(ticket,DEAL_TIME_MSC);
-         int  found=-1;
-         if(ledger_index.TryGetValue(ticket,found))
+         int found=-1;
+         bool recorded=ledger_index.TryGetValue(ticket,found);
+         if(recorded&&ledger[found].cash==cash)
+            continue;
+         double volume=0;
+         ENUM_DEAL_TYPE type=(ENUM_DEAL_TYPE)HistoryDealGetInteger(ticket,DEAL_TYPE);
+         if(type==DEAL_TYPE_BUY||type==DEAL_TYPE_SELL)
            {
-            if(ledger[found].cash==cash)
+            volume=HistoryDealGetDouble(ticket,DEAL_VOLUME)*(type==DEAL_TYPE_BUY?1:-1);
+           }
+         if(!MathIsValidNumber(cash)||!MathIsValidNumber(volume))
+            ReturnFalse;
+         long at=HistoryDealGetInteger(ticket,DEAL_TIME_MSC);
+         if(recorded)
+           {
+            if(ledger[found].volume!=volume)
               {
-               continue;
+               ledger_volume+=volume-ledger[found].volume;
+               ledger[found].volume=volume;
               }
             if(!CorrectSealedCash(ledger[found].owner,at,cash-ledger[found].cash))
               {
@@ -1354,6 +1371,8 @@ public:
               }
             ledger[n].ticket=ticket;
             ledger[n].cash=cash;
+            ledger[n].volume=volume;
+            ledger_volume+=volume;
             ledger[n].milliseconds=at;
             ledger[n].owner=owner;
             if(at>last_deal_msc||(at==last_deal_msc&&ticket>last_deal_ticket))

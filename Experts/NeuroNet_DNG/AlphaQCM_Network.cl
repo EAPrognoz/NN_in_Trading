@@ -37,10 +37,11 @@ __kernel void AQCStageBatch(__global const int *source_tokens,__global const int
    const int column=get_global_id(0);
    const int row=get_global_id(1);
    const int source=first+row;
+   const int used=source_lengths[source];
    if(column==0)
-      lengths[row]=source_lengths[source];
+      lengths[row]=used;
    if(column<length)
-      tokens[row*length+column]=source_tokens[source*length+column];
+      tokens[row*length+column]=used==0?AG_PAD:source_tokens[source*length+column];
    if(column<quantiles)
       tau[row*quantiles+column]=source_tau[source*quantiles+column];
   }

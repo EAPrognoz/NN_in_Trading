@@ -20,6 +20,7 @@ private:
    datetime          publication_checked_boundary;
    bool              publication_only,pool_warmup_staged;
    bool              signal_seen,rewarm_required;
+   bool              protective_flat_pending;
    bool              recoverable_fault,recovery_saving;
    ulong             init_started,ready_at,save_ms,decisions,processed_bars;
 public:
@@ -27,6 +28,7 @@ public:
                      CAlphaQCMApplication():qcm(NULL),checkpoint_stage(0),working_boundary(0),
                      resume_boundary(0),blocked_action_boundary(0),publication_checked_boundary(0),
                      publication_only(false),pool_warmup_staged(false),signal_seen(false),rewarm_required(false),
+                     protective_flat_pending(false),
                      recoverable_fault(false),recovery_saving(false),init_started(0),ready_at(0),save_ms(0),
                      decisions(0),processed_bars(0),save_retry_pending(false) {}
 
@@ -434,6 +436,76 @@ public:
 
       return(true);
      }
+   //+------------------------------------------------------------------+
+   //| AdvanceProtectiveFlat - confirm online protection before ACT.    |
+   //+------------------------------------------------------------------+
+   bool              AdvanceProtectiveFlat()
+     {
+      protective_flat_pending=true;
+      datetime boundary=iTime(_Symbol,TimeFrame,0);
+      if(boundary>0)
+         blocked_action_boundary=boundary;
+      money.intended_volume=0;
+      money.intended_sl=0;
+      money.intended_tp=0;
+      if(money.pending||money.unknown_request)
+         return(true);
+
+      MqlTick quote;
+      if(!SymbolInfoTick(_Symbol,quote))
+         return(true);
+      if(money.volume!=0)
+        {
+         SAlphaQCMTarget flat;
+         ZeroMemory(flat);
+         ulong owner=money.reconciling?request_decision:0;
+         if(!ExecuteTarget(flat,quote.bid,quote.ask,quote.time,owner)||money.pending)
+            return(true);
+        }
+      if(!SymbolInfoTick(_Symbol,quote))
+         return(true);
+      if(!money.Snapshot(quote.bid,quote.ask,quote.time))
+         ReturnFalse;
+      if(money.volume!=0||money.pending||money.unknown_request)
+         return(true);
+
+      money.reconciling=false;
+      snapshot_msc=quote.time_msc;
+      if(!ReconcileDeals(quote.time))
+        {
+         Fault("INCOMPLETE_DATA: protective cash reconciliation failed");
+         ReturnFalse;
+        }
+      if(money.pending||MathAbs(ledger_volume-money.volume)>AG_LOT_EPSILON)
+         return(true);
+      if(training&&open_decision)
+        {
+         RealMoneySample(true);
+         if(!Feedback(true,false,false,quote.time))
+            ReturnFalse;
+         if(open_decision)
+            return(true);
+        }
+      else
+         if(training)
+           {
+            if(!qcm.IssueEvent(event_id))
+               ReturnFalse;
+            context[AG_CTX_TERMINAL]=1.0f;
+            context[AG_CTX_MONEY_CONFIRMED]=1.0f;
+            context[AG_CTX_NEXT_READY]=0.0f;
+            if(!Forward(AG_FLUSH,0,quote.time))
+               ReturnFalse;
+            context[AG_CTX_TERMINAL]=0.0f;
+            context[AG_CTX_MONEY_CONFIRMED]=0.0f;
+           }
+      boundary=iTime(_Symbol,TimeFrame,0);
+      if(boundary>0)
+         blocked_action_boundary=boundary;
+      service_rebase=true;
+      protective_flat_pending=false;
+      return(true);
+     }
    // Stage closed OHLCV only. The pool owns the device copy for both
    // independent Active rewarm and preparation of a candidate publication.
    bool              StageHistory(MqlRates &bars[],int end,bool &valid)
@@ -696,38 +768,50 @@ public:
                   ReturnFalse;
                  }
               }
-            SAlphaQCMTarget flat;
-            ZeroMemory(flat);
-            if(!ExecuteTarget(flat,bid,ask,boundary)||money.pending||money.reconciling||money.volume!=0)
+            if(!simulated)
               {
-               return(true);
-              }
-            blocked_action_boundary=boundary;
-            if(open_decision)
-              {
-               interval_reward+=MathPow(trade_gamma,MathMax(delta-1,0))*(money.equity-last_equity)/money.reference;
-               last_equity=money.equity;
-               if(!Feedback(true,false,false,boundary))
+               if(blocked_action_boundary!=boundary&&!AdvanceProtectiveFlat())
                  {
                   ReturnFalse;
                  }
+               if(protective_flat_pending)
+                  return(true);
               }
             else
-               if(training)
+              {
+               SAlphaQCMTarget flat;
+               ZeroMemory(flat);
+               if(!ExecuteTarget(flat,bid,ask,boundary)||money.pending||money.reconciling||money.volume!=0)
                  {
-                  service_rebase=true;
-                  if(!qcm.IssueEvent(event_id))
-                     ReturnFalse;
-                  context[AG_CTX_TERMINAL]=1.0f;
-                  context[AG_CTX_MONEY_CONFIRMED]=1.0f;
-                  context[AG_CTX_NEXT_READY]=0.0f;
-                  if(!Forward(AG_FLUSH,0,boundary))
+                  return(true);
+                 }
+               blocked_action_boundary=boundary;
+               if(open_decision)
+                 {
+                  interval_reward+=MathPow(trade_gamma,MathMax(delta-1,0))*(money.equity-last_equity)/money.reference;
+                  last_equity=money.equity;
+                  if(!Feedback(true,false,false,boundary))
                     {
                      ReturnFalse;
                     }
-                  context[AG_CTX_TERMINAL]=0.0f;
-                  context[AG_CTX_MONEY_CONFIRMED]=0.0f;
                  }
+               else
+                  if(training)
+                    {
+                     service_rebase=true;
+                     if(!qcm.IssueEvent(event_id))
+                        ReturnFalse;
+                     context[AG_CTX_TERMINAL]=1.0f;
+                     context[AG_CTX_MONEY_CONFIRMED]=1.0f;
+                     context[AG_CTX_NEXT_READY]=0.0f;
+                     if(!Forward(AG_FLUSH,0,boundary))
+                       {
+                        ReturnFalse;
+                       }
+                     context[AG_CTX_TERMINAL]=0.0f;
+                     context[AG_CTX_MONEY_CONFIRMED]=0.0f;
+                    }
+              }
            }
          else
            {
@@ -998,7 +1082,16 @@ public:
          service_rebase=true;
          excluded++;
         }
-      if(!executed&&!money.pending&&(before_volume!=money.volume||before_requests!=money.successful_requests))
+      bool partial_failure=!executed&&!money.pending&&
+                           (before_volume!=money.volume||before_requests!=money.successful_requests);
+      if(!simulated&&(partial_failure||target.invalid))
+        {
+         if(!AdvanceProtectiveFlat())
+            ReturnFalse;
+         if(protective_flat_pending)
+            return(true);
+        }
+      if(simulated&&partial_failure)
         {
          SAlphaQCMTarget flat;
          ZeroMemory(flat);
@@ -1019,7 +1112,7 @@ public:
                ReturnFalse;
            }
         }
-      if(training&&target.invalid&&!money.pending&&!money.reconciling&&money.volume==0)
+      if(simulated&&training&&target.invalid&&!money.pending&&!money.reconciling&&money.volume==0)
         {
          interval_reward+=(money.equity-last_equity)/money.reference;
          last_equity=money.equity;
@@ -1111,7 +1204,9 @@ public:
       double ledger_balance=money.reference+money.gross_profit-money.gross_loss;
       double tolerance=0.5*MathPow(10.0,-(double)AccountInfoInteger(ACCOUNT_CURRENCY_DIGITS));
       if(money.pending||money.reconciling||money.unknown_request||
-         MathAbs(ledger_balance-money.balance)>tolerance)
+         !MathIsValidNumber(ledger_balance)||!MathIsValidNumber(ledger_volume)||
+         MathAbs(ledger_balance-money.balance)>tolerance||
+         MathAbs(ledger_volume-money.volume)>AG_LOT_EPSILON)
          return(false);
       finance_boundary_msc=snapshot_msc>last_deal_msc?snapshot_msc:last_deal_msc;
       finance_deal_msc=last_deal_msc;
@@ -1443,24 +1538,15 @@ public:
            }
          return;
         }
-      if(money.volume!=0&&(money.sl<=0||money.tp<=0)&&!money.pending)
+      if(protective_flat_pending||(money.volume!=0&&(money.sl<=0||money.tp<=0)))
         {
-         SAlphaQCMTarget flat;
-         ZeroMemory(flat);
-         if(!ExecuteTarget(flat,quote.bid,quote.ask,quote.time,money.reconciling?request_decision:0)||money.pending)
+         if(!AdvanceProtectiveFlat())
            {
+            Fault("protective terminal reconciliation failed");
             return;
            }
-         blocked_action_boundary=iTime(_Symbol,TimeFrame,0);
-         if(training&&open_decision)
-           {
-            RealMoneySample(true);
-            if(!Feedback(true,false,false,quote.time)||!Train())
-              {
-               Fault("protective terminal training failed");
-               return;
-              }
-           }
+         if(protective_flat_pending)
+            return;
         }
       if(money.reconciling&&!money.pending)
         {
@@ -1469,7 +1555,7 @@ public:
          remaining.sl=money.intended_sl;
          remaining.tp=money.intended_tp;
          remaining.invalid=false;
-         if(MathAbs(remaining.volume-money.volume)<money.lot_step)
+         if(MathAbs(remaining.volume-money.volume)<money.lot_step-AG_LOT_EPSILON)
            {
             money.reconciling=false;
            }
@@ -1478,24 +1564,10 @@ public:
             ulong owner=request_decision;
             if(!ExecuteTarget(remaining,quote.bid,quote.ask,quote.time,owner))
               {
-               SAlphaQCMTarget flat;
-               ZeroMemory(flat);
-               money.intended_volume=0;
-               money.intended_sl=0;
-               money.intended_tp=0;
-               if(!ExecuteTarget(flat,quote.bid,quote.ask,quote.time,owner)||money.pending||money.volume!=0)
-                  money.reconciling=true;
+               if(!AdvanceProtectiveFlat())
+                  Fault("partial fill protective reconciliation failed");
+               return;
               }
-           }
-        }
-      if(training&&invalid&&open_decision&&money.volume==0&&!money.pending&&!money.reconciling)
-        {
-         blocked_action_boundary=iTime(_Symbol,TimeFrame,0);
-         RealMoneySample(true);
-         if(!Feedback(true,false,false,quote.time)||!Train())
-           {
-            Fault("invalid action terminal reconciliation failed");
-            return;
            }
         }
       datetime current=iTime(_Symbol,TimeFrame,0);

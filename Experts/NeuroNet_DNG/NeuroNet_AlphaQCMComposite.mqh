@@ -342,7 +342,7 @@ int CNeuronAlphaQCMOCL::ReplayFailure(void) const
 bool CNeuronAlphaQCMOCL::SafeToSave(void) const
   {
    return(m_loadMode==AQCM_TRAIN&&m_qReady&&CNeuronAlphaGenOCL::SafeToSave()&&
-          !m_updateInProgress&&m_iPendingTrade<0);
+          !m_updateInProgress&&m_iPendingTrade<0&&m_replay.Consistent());
   }
 
 bool CNeuronAlphaQCMOCL::CausalIdentity(const string symbol,const ENUM_TIMEFRAMES timeframe)
@@ -868,7 +868,7 @@ bool CNeuronAlphaQCMOCL::DrainSearchStep(void)
 bool CNeuronAlphaQCMOCL::CanRecover(void) const
   {
    return(m_loadMode==AQCM_TRAIN&&m_boundedLearner&&m_qReady&&m_bCorrupted&&m_recoverable&&
-          !m_updateInProgress&&!m_bFrame);
+          !m_updateInProgress&&!m_bFrame&&m_replay.Consistent());
   }
 
 //+------------------------------------------------------------------+
@@ -876,7 +876,7 @@ bool CNeuronAlphaQCMOCL::CanRecover(void) const
 //+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::ResumeRecovery(void)
   {
-   if(!CanRecover())
+   if(!CanRecover()||!m_replay.ReleaseBatch())
       ReturnFalse;
    m_bSearchBudgetPending=false;
    m_bootstrap=false;
@@ -1118,7 +1118,7 @@ bool CNeuronAlphaQCMOCL::Load(const int handle)
       !NetworkLoad(GetPointer(m_qOnline),handle,restore,false)||!NetworkLoad(GetPointer(m_qTarget),handle,restore,false)||
       !NetworkLoad(GetPointer(m_zOnline),handle,restore,true)||!NetworkLoad(GetPointer(m_zTarget),handle,restore,true)||
       !m_replay.Load(handle,(int)m_qcmConfig[AQCM_CFG_REPLAY-AG_CFG_SIZE],
-                     (int)m_fConfig[AG_CFG_MAX_TOKENS],AG_VOCABULARY,restore))
+                     (int)m_fConfig[AG_CFG_MAX_TOKENS],AG_VOCABULARY,m_candidate,restore))
       ReturnFalse;
 
    ulong warmup=(ulong)m_qcmConfig[AQCM_CFG_WARMUP-AG_CFG_SIZE];

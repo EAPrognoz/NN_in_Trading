@@ -407,10 +407,7 @@ __kernel void AQCMPoolOrdered(__global const float *market,__global const float 
    if(mode==2)
      {
       if(fit[1]!=1)
-        {
-         if(lane==0)control[0]=AG_SKIP;
          return;
-        }
       AGPoolCopyGroup(scratch,banks+3*size,size);
       int rs=AGPoolRingSize(cfg);
       for(int i=lane;i<rs;i+=lanes)rings[rs+i]=0;

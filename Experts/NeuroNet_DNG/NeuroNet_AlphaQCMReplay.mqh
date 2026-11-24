@@ -156,7 +156,8 @@ public:
    bool CommitPriorities(void);
    bool ReleaseBatch(void);
    bool Save(const int file);
-   bool Load(const int file,const int capacity,const int length,const int actions,const bool restore);
+   bool Load(const int file,const int capacity,const int length,const int actions,
+             const ulong next_candidate,const bool restore);
    bool Restore(void);
    int Size(void) const { return(m_iSize); }
    ulong Verified(void) const { return(m_uVerified); }
@@ -802,7 +803,8 @@ bool AQCReplayFileMask(const uint low,const uint high,const int actions)
 //+------------------------------------------------------------------+
 bool AQCReplayFileRows(const int &payload[],const ulong &metadata[],const float &rewards[],
                        const float &priorities[],const int first,const int rows,const int capacity,
-                       const int length,const int actions,const int size,const int head,const ulong verified)
+                       const int length,const int actions,const int size,const int head,
+                       const ulong verified,const ulong next_candidate)
   {
    const int stride=length+AQC_REPLAY_ROW_HEADER;
    for(int row=0;row<rows;++row)
@@ -824,6 +826,11 @@ bool AQCReplayFileRows(const int &payload[],const ulong &metadata[],const float 
          !AQCReplayFileMask(low,high,actions)||!AQCReplayFileMask(next_low,next_high,actions)||
          (((action<32)?low:high)&((uint)1<<(action%32)))==0)
          ReturnFalseEx("Invalid replay checkpoint record");
+
+      const ulong candidate_id=metadata[meta+1];
+      if(candidate_id>=next_candidate)
+         ReturnFalseEx(StringFormat("Replay checkpoint slot %d uses candidate %I64u at or beyond next ID %I64u",
+                                   slot,candidate_id,next_candidate));
 
       if(action==2)
         {
@@ -893,7 +900,8 @@ bool CAlphaQCMReplay::Save(const int file)
 //+------------------------------------------------------------------+
 //| Load - Read the same bounded blocks in all three load modes       |
 //+------------------------------------------------------------------+
-bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,const int actions,const bool restore)
+bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,const int actions,
+                          const ulong next_candidate,const bool restore)
   {
    if(file==INVALID_HANDLE||capacity<length||length<2||actions<3||actions>64||
       (long)capacity*((long)length+AQC_REPLAY_ROW_HEADER)>INT_MAX/(int)sizeof(int)||
@@ -941,7 +949,8 @@ bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,co
       const int m=rows*AQC_REPLAY_META_WIDTH;
       if(FileReadArray(file,payload,0,n)!=n||FileReadArray(file,metadata,0,m)!=m||
          FileReadArray(file,rewards,0,rows)!=rows||FileReadArray(file,priorities,0,rows)!=rows||
-         !AQCReplayFileRows(payload,metadata,rewards,priorities,first,rows,capacity,length,actions,size,head,verified))
+         !AQCReplayFileRows(payload,metadata,rewards,priorities,first,rows,capacity,
+                            length,actions,size,head,verified,next_candidate))
          ReturnFalseEx("Invalid replay checkpoint block");
 
       if(restore&&(ArrayCopy(m_iSavedState,payload,first*stride,0,n)!=n||
