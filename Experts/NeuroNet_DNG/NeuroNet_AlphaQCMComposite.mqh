@@ -662,7 +662,14 @@ bool CNeuronAlphaQCMOCL::Search(CBufferFloat *market,const ulong boundary,const 
       m_bootstrap=!active&&!m_bWarmBudget;
       m_iBudget=(int)m_fConfig[m_bootstrap?AG_CFG_WARMUP_TRIALS:AG_CFG_SEARCH_TRIALS];
 
-      if(!m_cPool.QCMRefresh(market,false,boundary))
+      CBufferFloat *search_market=market;
+      if(m_bootstrap)
+        {
+         search_market=GetPointer(m_cSearchMarket);
+         if(!Slice(market,0,search_market,0,search_market.Total()))
+            return(Broken(AQCM_OPENCL_ERROR));
+        }
+      if(!m_cPool.QCMRefresh(search_market,false,boundary))
          return(Broken(m_cPool.QCMStatus()));
       int status=(int)m_cPool.Control().At(AG_POOL_STATUS);
       if(status==AG_SKIP||status==AG_WAIT)
@@ -681,8 +688,6 @@ bool CNeuronAlphaQCMOCL::Search(CBufferFloat *market,const ulong boundary,const 
         }
       m_preparedIC=m_cPool.QCMFitIC();
       m_preparedUsable=m_cPool.QCMAggregateUsable();
-      if(m_bootstrap&&!Slice(market,0,GetPointer(m_cSearchMarket),0,m_cSearchMarket.Total()))
-         return(Broken(AQCM_OPENCL_ERROR));
       m_bSearchBudgetPending=true;
      }
 

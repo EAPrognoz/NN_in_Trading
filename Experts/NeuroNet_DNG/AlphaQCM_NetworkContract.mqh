@@ -5,6 +5,8 @@
 #ifndef ALPHAQCM_NETWORK_CONTRACT_MQH
 #define ALPHAQCM_NETWORK_CONTRACT_MQH
 
+#define AQC_NET_MIN_GROUP 2
+
 #define def_k_AQCNetInit 570
 #define def_k_AQCEmbed 571
 #define def_k_AQCRecur 572

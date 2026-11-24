@@ -28,7 +28,7 @@ bool AQCNetRange(COpenCLMy *OpenCL,const int kernel,const int columns,const int 
 
 bool AQCNetGroups(COpenCLMy *OpenCL,const int kernel,const int groups)
   {
-   uint lanes=((CAlphaQCMOpenCL *)OpenCL).GroupSize(kernel,128,1);
+   uint lanes=((CAlphaQCMOpenCL *)OpenCL).GroupSize(kernel,128,AQC_NET_MIN_GROUP);
    if(lanes<1||groups<1||(ulong)groups*lanes>UINT_MAX)
       ReturnFalse;
    uint offset[]={0},local[]={lanes},global[]={(uint)groups*lanes};
@@ -38,7 +38,7 @@ bool AQCNetGroups(COpenCLMy *OpenCL,const int kernel,const int groups)
 
 bool AQCNetDots(COpenCLMy *OpenCL,const int kernel,const int features,const int rows)
   {
-   uint lanes=((CAlphaQCMOpenCL *)OpenCL).GroupSize(kernel,128,1);
+   uint lanes=((CAlphaQCMOpenCL *)OpenCL).GroupSize(kernel,128,AQC_NET_MIN_GROUP);
    if(!lanes||features<1||rows<1)
       ReturnFalse;
    uint columns=lanes/(lanes<4?lanes:4);

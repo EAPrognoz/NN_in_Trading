@@ -1,5 +1,6 @@
 //+------------------------------------------------------------------+
-//| AlphaQCM IQN-QCM-v1 production application                       |
+//|                                                   Trajectory.mqh |
+//|                                                         AlphaQCM |
 //+------------------------------------------------------------------+
 #ifndef ALPHAQCM_TRAJECTORY_MQH
 #define ALPHAQCM_TRAJECTORY_MQH

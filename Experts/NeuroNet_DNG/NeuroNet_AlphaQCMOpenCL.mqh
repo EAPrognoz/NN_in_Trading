@@ -261,12 +261,29 @@ private:
          if(m_kernel_group[id]<1||m_kernel_local[id]<0||m_kernel_local[id]>m_local_memory||private_bytes<0)
             ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: kernel=%s group=%I64d local_bytes=%I64d private_bytes=%I64d",
                                       name,m_kernel_group[id],m_kernel_local[id],private_bytes));
+         long minimum=1;
          if(id>=AQCMPoolOrderedKernel&&id<=AQCMPoolHistoryGlobalKernel)
+            minimum=id==AQCMPoolOrderedKernel?4:2;
+         switch(id)
            {
-            const long minimum=id==AQCMPoolOrderedKernel?4:2;
-            if(MathMin(m_kernel_group[id],MathMin(GetMaxWorkGroupSize(),GetMaxLocalSize(0)))<minimum)
-               ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: pool kernel %s needs %I64d parallel lanes",name,minimum));
+            case def_k_AQCRecur:
+            case def_k_AQCBPTT:
+            case def_k_AQCRecurOuter:
+            case def_k_AQCEmbedOuter:
+            case def_k_AQCDenseRows:
+            case def_k_AQCDenseInput:
+            case def_k_AQCDenseOuter:
+            case def_k_AQCProductGrad:
+            case def_k_AQCParameterCheck:
+            case def_k_AQCSpanCheck:
+            case def_k_AQCTargetSelect:
+            case def_k_AQCPairLoss:
+            case def_k_AQCPriorityLoss:
+               minimum=AQC_NET_MIN_GROUP;
+               break;
            }
+         if(MathMin(m_kernel_group[id],MathMin(GetMaxWorkGroupSize(),GetMaxLocalSize(0)))<minimum)
+            ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: kernel %s needs %I64d parallel lanes",name,minimum));
         }
 
       return(true);
