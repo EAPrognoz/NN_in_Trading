@@ -2,6 +2,7 @@
 //|                                                         Test.mq5 |
 //|                                                         AlphaQCM |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #define ALPHAGEN_TEST_DIAGNOSTICS
 //+------------------------------------------------------------------+
@@ -22,21 +23,21 @@ int OnInit()
    return(App.Init(false,false)?INIT_SUCCEEDED:INIT_FAILED);
   }
 //+------------------------------------------------------------------+
-//| Process current quotes through the shared execution driver.      |
+//| OnTick - Process quotes through the execution driver             |
 //+------------------------------------------------------------------+
 void OnTick()
   {
    App.Tick();
   }
 //+------------------------------------------------------------------+
-//| Forward trade notifications without issuing a new action.        |
+//| OnTradeTransaction - Forward trade notifications                 |
 //+------------------------------------------------------------------+
 void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &request,const MqlTradeResult &result)
   {
    App.Transaction(trans,request,result);
   }
 //+------------------------------------------------------------------+
-//| Finalize confirmed test results before terminal deinitialization.|
+//| OnTester - Finalize confirmed test results                       |
 //+------------------------------------------------------------------+
 double OnTester()
   {

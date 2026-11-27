@@ -16,7 +16,7 @@
 #define LogProbMultiplier      1.0e-5f
 
 //+------------------------------------------------------------------+
-//| CNet_SAC_D_DICE                                                  |
+//| CNet_SAC_D_DICE - Apply distributional DICE weights in SAC       |
 //+------------------------------------------------------------------+
 class CNet_SAC_D_DICE  : protected CNet
   {
@@ -42,20 +42,19 @@ protected:
    float fLoss2;
    vector<float>fZeta;
    vector<float>fQWeights;
-   //---
-   vector<float>GetLogProbability(CBufferFloat *Actions);
-   vector<float>CAGrad(vector<float>&grad);
-
 public:
    //---
                      CNet_SAC_D_DICE(void);
+//+------------------------------------------------------------------+
+//| ~CNet_SAC_D_DICE - Use automatic member cleanup                  |
+//+------------------------------------------------------------------+
                     ~CNet_SAC_D_DICE(void) {}
    //---
    bool              Create(CArrayObj *actor,CArrayObj *critic,CArrayObj *zeta,CArrayObj *nu,int latent_layer=-1);
    //---
    virtual bool      Study(CArrayFloat *State,CArrayFloat *SecondInput,CBufferFloat *Actions,vector<float>&Rewards,CBufferFloat *NextState,CBufferFloat *NextSecondInput,float discount,float tau);
 //+------------------------------------------------------------------+
-//| GetLoss                                                          |
+//| GetLoss - Read the loss                                          |
 //+------------------------------------------------------------------+
    virtual void      GetLoss(float &loss1,float &loss2)
      {
@@ -65,21 +64,21 @@ public:
    virtual bool      TargetsUpdate(float tau);
 //---
 //+------------------------------------------------------------------+
-//| SetQWeights                                                      |
+//| SetQWeights - Set q weights                                      |
 //+------------------------------------------------------------------+
    virtual void      SetQWeights(vector<float>&weights)
      {
       fQWeights=weights;
      }
 //+------------------------------------------------------------------+
-//| SetCAGradC                                                       |
+//| SetCAGradC - Set CA grad c                                       |
 //+------------------------------------------------------------------+
    virtual void      SetCAGradC(float c)
      {
       fCAGrad_C=c;
      }
 //+------------------------------------------------------------------+
-//| SetLambda                                                        |
+//| SetLambda - Set lambda                                           |
 //+------------------------------------------------------------------+
    virtual void      SetLambda(vector<float>&lambda)
      {
@@ -87,7 +86,7 @@ public:
                                                                fLambda_m=vector<float>::Zeros(lambda.Size());
                                                                fLambda_v=fLambda_m;                         }
 //+------------------------------------------------------------------+
-//| TargetsUpdateDelay                                               |
+//| TargetsUpdateDelay - Set the target update interval              |
 //+------------------------------------------------------------------+
    virtual void      TargetsUpdateDelay(int delay)
      {
@@ -97,9 +96,13 @@ public:
    //---
    virtual bool      Save(string file_name,bool common=true);
    bool              Load(string file_name,bool common=true);
+protected:
+   //---
+   vector<float>GetLogProbability(CBufferFloat *Actions);
+   vector<float>CAGrad(vector<float>&grad);
   };
 //+------------------------------------------------------------------+
-//| CNet_SAC_D_DICE                                                  |
+//| CNet_SAC_D_DICE - Apply distributional DICE weights in SAC       |
 //+------------------------------------------------------------------+
 CNet_SAC_D_DICE::CNet_SAC_D_DICE(void) :  fLoss1(0),
                                           fLoss2(0),
@@ -189,7 +192,7 @@ bool CNet_SAC_D_DICE::Create(CArrayObj *actor,CArrayObj *critic,CArrayObj *zeta,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Study                                                            |
+//| Study - Check study                                              |
 //+------------------------------------------------------------------+
 bool CNet_SAC_D_DICE::Study(CArrayFloat *State,
                             CArrayFloat *SecondInput,
@@ -482,7 +485,9 @@ bool CNet_SAC_D_DICE::Save(string file_name,bool common=true)
 //---
    int handle=FileOpen(file_name+".set",(common ? FILE_COMMON : 0) | FILE_BIN | FILE_WRITE);
    if(handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 
    ulong size=fLambda.Size();
    if(FileWriteInteger(handle,iLatentLayer)<sizeof(iLatentLayer)||
@@ -530,7 +535,9 @@ bool CNet_SAC_D_DICE::Load(string file_name,bool common=true)
 //---
    int handle=FileOpen(file_name+".set",(common ? FILE_COMMON : 0) | FILE_BIN | FILE_READ);
    if(handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 
    if(FileIsEnding(handle))
       return(false);

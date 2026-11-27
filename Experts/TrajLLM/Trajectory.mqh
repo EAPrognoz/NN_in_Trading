@@ -35,7 +35,7 @@
 #define        StartTargetIteration    200000
 #define        STE_Multiplier          1.0f/2
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -50,14 +50,18 @@ struct SState
    bool              Load(int file_handle);
 
 //--- overloading
-   void              operator=(const SState &obj)
-     {
-      ArrayCopy(state,obj.state);
-      ArrayCopy(account,obj.account);
-      ArrayCopy(action,obj.action);
-      ArrayCopy(rewards,obj.rewards);
-     }
+   void              operator=(const SState &obj);
   };
+//+------------------------------------------------------------------+
+//| operator= - Copies state data.                                   |
+//+------------------------------------------------------------------+
+void SState::operator=(const SState &obj)
+  {
+   ArrayCopy(state,obj.state);
+   ArrayCopy(account,obj.account);
+   ArrayCopy(action,obj.action);
+   ArrayCopy(rewards,obj.rewards);
+  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -78,39 +82,41 @@ SState::SState(void)
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalse
+     }
 //---
    int total=ArraySize(state);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,state[i])
+     }
 //---
    total=ArraySize(account);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,account[i])
+     }
 //---
    total=ArraySize(action);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,action[i])
+     }
 
    total=ArraySize(rewards);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,rewards[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,rewards[i])
+     }
 //---
    return(true);
   }
@@ -122,7 +128,9 @@ bool SState::Save(int file_handle)
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
    if(FileIsEnding(file_handle))
       return(false);
 //---
@@ -132,9 +140,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      state[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,state[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -143,9 +149,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      account[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,account[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -154,9 +158,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      action[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,action[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -165,15 +167,13 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      rewards[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,rewards[i])
      }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| STrajectory - Store a simulated trading trajectory               |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
@@ -191,7 +191,7 @@ struct STrajectory
    bool              Load(int file_handle);
   };
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| STrajectory - Initialize an empty trajectory                     |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
    DiscountFactor(DiscFactor),
@@ -207,7 +207,9 @@ STrajectory::STrajectory(void)  :   Total(0),
 bool STrajectory::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    if(!CumCounted)
       CumRevards();
@@ -232,7 +234,9 @@ bool STrajectory::Save(int file_handle)
 bool STrajectory::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    Total=FileReadInteger(file_handle);
    if(FileIsEnding(file_handle)||Total>=ArraySize(States))
@@ -347,7 +351,7 @@ bool LoadTotalBase(void)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | C re at eD es cr ip ti on s implementation.                    |
+//| CreateDescriptions - Define the neural network architectures     |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *&actor,CArrayObj *&critic)
   {
@@ -651,7 +655,7 @@ bool CreateDescriptions(CArrayObj *&actor,CArrayObj *&critic)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | C re at eE nc od er De sc ri pt io ns implementation.          |
+//| CreateEncoderDescriptions - Define the encoder architecture      |
 //+------------------------------------------------------------------+
 bool CreateEncoderDescriptions(CArrayObj *&encoder)
   {
@@ -965,7 +969,7 @@ int SampleTrajectory(vector<float>&probability)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| CDeal                                                            |
+//| CDeal - Represent a recorded trading deal                        |
 //+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
@@ -980,12 +984,15 @@ public:
    double             point;
    //---
                      CDeal(void);
+//+------------------------------------------------------------------+
+//| ~CDeal - Use automatic member cleanup                            |
+//+------------------------------------------------------------------+
                     ~CDeal(void) {};
    //---
    vector<float>Action(datetime current,double ask,double bid,int period_seconds);
   };
 //+------------------------------------------------------------------+
-//| CDeal                                                            |
+//| CDeal - Initialize a trading deal                                |
 //+------------------------------------------------------------------+
 void CDeal::CDeal(void) :  OpenTime(0),
    CloseTime(0),
@@ -1028,14 +1035,20 @@ vector<float>CDeal::Action(datetime current,double ask,double bid,int period_sec
    return(result);
   }
 //+------------------------------------------------------------------+
-//| CDeals                                                           |
+//| CDeals - Manage recorded trading deals                           |
 //+------------------------------------------------------------------+
 class CDeals
   {
 protected:
    CArrayObj Deals;
 public:
+//+------------------------------------------------------------------+
+//| CDeals - Start with an empty deal collection                     |
+//+------------------------------------------------------------------+
                      CDeals(void) { Deals.Clear(); }
+//+------------------------------------------------------------------+
+//| ~CDeals - Clear the stored deal collection                       |
+//+------------------------------------------------------------------+
                     ~CDeals(void) { Deals.Clear(); }
    //---
    bool              LoadDeals(string file_name,string symbol,double point);

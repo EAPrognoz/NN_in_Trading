@@ -104,7 +104,7 @@ CiCCI  CCI;
 CiATR  ATR;
 CiMACD MACD;
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -119,17 +119,22 @@ struct SState
    bool              Load(int file_handle);
 
 //--- overloading
-   void              operator=(const SState &obj)
-     {
-      ArrayCopy(state,obj.state);
-      ArrayCopy(account,obj.account);
-      ArrayCopy(action,obj.action);
-      ArrayCopy(rewards,obj.rewards);
-     }
+   void              operator=(const SState &obj);
   };
 //+------------------------------------------------------------------+
-//| Complete outcome of one independently simulated D2Skill episode. |
+//| operator= - Copies state data.                                   |
 //+------------------------------------------------------------------+
+void SState::operator=(const SState &obj)
+  {
+   ArrayCopy(state,obj.state);
+   ArrayCopy(account,obj.account);
+   ArrayCopy(action,obj.action);
+   ArrayCopy(rewards,obj.rewards);
+  }
+//+------------------------------------------------------------------+
+//| SD2SkillEpisodeOutcome - Store SD 2 skill episode outcome        |
+//+------------------------------------------------------------------+
+//--- Complete outcome of one independently simulated D2Skill episode.
 struct SD2SkillEpisodeOutcome
   {
 private:
@@ -146,88 +151,58 @@ public:
 //+------------------------------------------------------------------+
 //| Reset                                                            |
 //+------------------------------------------------------------------+
-   bool              Reset(void)
-     {
-      dOutcome=0.0;
-      dBalance=0.0;
-      dEquity=0.0;
-      dDrawdown=0.0;
-      dCost=0.0;
-      dRisk=0.0;
-      dPeakEquity=0.0;
-      uDuration=0;
-
-      return(true);
-     }
+   bool              Reset(void);
 //+------------------------------------------------------------------+
 //| Accumulate                                                       |
 //+------------------------------------------------------------------+
    bool              Accumulate(const double reward,const double balance,
                                 const double equity,const double drawdown,
                                 const double cost,const uint duration,
-                                const double risk=0.0)
-     {
-      if(!MathIsValidNumber(reward)||!MathIsValidNumber(balance)||
-         !MathIsValidNumber(equity)||!MathIsValidNumber(drawdown)||
-         !MathIsValidNumber(cost)||!MathIsValidNumber(risk))
-         ReturnFalse;
-      dOutcome += reward;
-      dBalance=balance;
-      dEquity=equity;
-      dPeakEquity=MathMax(dPeakEquity,equity);
-      const double peak_drawdown=(dPeakEquity>0.0 ?
-                                    (dPeakEquity-equity) / dPeakEquity : 0.0);
-      dDrawdown=MathMax(dDrawdown,MathMax(MathAbs(drawdown),peak_drawdown));
-      dCost += MathAbs(cost);
-      dRisk=MathMax(dRisk,MathAbs(risk));
-      uDuration += duration;
-
-      return(true);
-     }
+                                const double risk=0.0);
 //+------------------------------------------------------------------+
-//| Outcome                                                          |
+//| Outcome - Return the outcome                                     |
 //+------------------------------------------------------------------+
    double            Outcome(void) const
      {
       return(dOutcome);
      }
 //+------------------------------------------------------------------+
-//| Balance                                                          |
+//| Balance - Return the balance                                     |
 //+------------------------------------------------------------------+
    double            Balance(void) const
      {
       return(dBalance);
      }
 //+------------------------------------------------------------------+
-//| Equity                                                           |
+//| Equity - Return the equity                                       |
 //+------------------------------------------------------------------+
    double            Equity(void) const
      {
       return(dEquity);
      }
 //+------------------------------------------------------------------+
-//| Drawdown                                                         |
+//| Drawdown - Return the drawdown                                   |
 //+------------------------------------------------------------------+
    double            Drawdown(void) const
      {
       return(dDrawdown);
      }
 //+------------------------------------------------------------------+
-//| Cost                                                             |
+//| Cost - Return the cost                                           |
 //+------------------------------------------------------------------+
    double            Cost(void) const
      {
       return(dCost);
      }
 //+------------------------------------------------------------------+
-//| Risk                                                             |
+//| Risk - Return the risk                                           |
 //+------------------------------------------------------------------+
    double            Risk(void) const
      {
       return(dRisk);
      }
 //+------------------------------------------------------------------+
-//| Duration                                                         |
+//| Duration - Return the duration                                   |
 //+------------------------------------------------------------------+
    uint              Duration(void) const
      {
@@ -235,8 +210,52 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//| Calculates terminal paired utility from complete episode state.  |
+//| Reset - Clears episode outcome data.                             |
 //+------------------------------------------------------------------+
+bool SD2SkillEpisodeOutcome::Reset(void)
+  {
+   dOutcome=0.0;
+   dBalance=0.0;
+   dEquity=0.0;
+   dDrawdown=0.0;
+   dCost=0.0;
+   dRisk=0.0;
+   dPeakEquity=0.0;
+   uDuration=0;
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Accumulate - Records the step outcome.                           |
+//+------------------------------------------------------------------+
+bool SD2SkillEpisodeOutcome::Accumulate(const double reward,const double balance,
+                                        const double equity,const double drawdown,
+                                        const double cost,const uint duration,
+                                        const double risk)
+  {
+   if(!MathIsValidNumber(reward)||!MathIsValidNumber(balance)||
+      !MathIsValidNumber(equity)||!MathIsValidNumber(drawdown)||
+      !MathIsValidNumber(cost)||!MathIsValidNumber(risk))
+     {
+      ReturnFalse
+     }
+   dOutcome += reward;
+   dBalance=balance;
+   dEquity=equity;
+   dPeakEquity=MathMax(dPeakEquity,equity);
+   const double peak_drawdown=(dPeakEquity>0.0 ?
+                                 (dPeakEquity-equity) / dPeakEquity : 0.0);
+   dDrawdown=MathMax(dDrawdown,MathMax(MathAbs(drawdown),peak_drawdown));
+   dCost += MathAbs(cost);
+   dRisk=MathMax(dRisk,MathAbs(risk));
+   uDuration += duration;
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| D2SkillComputePairedEpisodeDelta - Compute paired episode delta  |
+//+------------------------------------------------------------------+
+//--- Calculates terminal paired utility from complete episode state.
 bool D2SkillComputePairedEpisodeDelta(const SD2SkillEpisodeOutcome &base,
                                       const SD2SkillEpisodeOutcome &skill,
                                       double &delta_j)
@@ -244,35 +263,42 @@ bool D2SkillComputePairedEpisodeDelta(const SD2SkillEpisodeOutcome &base,
    const double base_outcome=base.Outcome();
    const double skill_outcome=skill.Outcome();
    if(!MathIsValidNumber(base_outcome)||!MathIsValidNumber(skill_outcome))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    delta_j=skill_outcome-base_outcome;
 
    return(MathIsValidNumber(delta_j));
   }
 //+------------------------------------------------------------------+
-//| Validates a complete, synchronous paired terminal outcome.       |
+//| D2SkillValidatePairedEpisode - Validate paired episode           |
 //+------------------------------------------------------------------+
+//--- Validates a complete, synchronous paired terminal outcome.
 bool D2SkillValidatePairedEpisode(const SD2SkillEpisodeOutcome &base,
                                   const SD2SkillEpisodeOutcome &skill)
   {
    if(!MathIsValidNumber(base.Outcome())||!MathIsValidNumber(skill.Outcome())||
       base.Duration()==0||skill.Duration()==0||
       base.Duration()!=skill.Duration())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns whether a checkpoint requests a later boundary save.     |
+//| D2SkillCheckpointDue - Check whether checkpoint is due           |
 //+------------------------------------------------------------------+
+//--- Returns whether a checkpoint requests a later boundary save.
 bool D2SkillCheckpointDue(const ulong transitions,const int checkpoint_interval)
   {
    return(checkpoint_interval>0&&transitions>0&&
           transitions % (ulong)checkpoint_interval==0);
   }
 //+------------------------------------------------------------------+
-//| DeltaJ may close only at a terminal or configured pair horizon.  |
+//| D2SkillOnlinePairBoundary - Check online pair boundary           |
 //+------------------------------------------------------------------+
+//--- DeltaJ may close only at a terminal or configured pair horizon.
 bool D2SkillOnlinePairBoundary(const bool real_terminal,const bool virtual_terminal,
                                const ulong pair_transitions,const int pair_horizon)
   {
@@ -282,8 +308,9 @@ bool D2SkillOnlinePairBoundary(const bool real_terminal,const bool virtual_termi
    return(pair_horizon>0&&pair_transitions>=(ulong)pair_horizon);
   }
 //+------------------------------------------------------------------+
-//| An independent pair ends as soon as either branch is terminal.   |
+//| D2SkillPairReachedTerminal - Check pair reached terminal         |
 //+------------------------------------------------------------------+
+//--- An independent pair ends as soon as either branch is terminal.
 bool D2SkillPairReachedTerminal(const bool base_terminal,const bool skill_terminal)
   {
    return(base_terminal||skill_terminal);
@@ -304,34 +331,36 @@ SState::SState(void)
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    int total=ArraySize(state);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,state[i])
+     }
 //---
    total=ArraySize(account);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,account[i])
+     }
 //---
    total=ArraySize(action);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,action[i])
+     }
    total=ArraySize(rewards);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,rewards[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,rewards[i])
+     }
 //---
    return(true);
   }
@@ -341,52 +370,60 @@ bool SState::Save(int file_handle)
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    int total=FileReadInteger(file_handle);
    if(total!=ArraySize(state))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      state[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,state[i])
      }
 //---
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(account))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      account[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,account[i])
      }
 //---
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(action))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       action[i]=MathMin(MathMax(FileReadFloat(file_handle),0),1);
      }
 //---
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(rewards))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      rewards[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,rewards[i])
      }
 //---
    return(true);
@@ -405,13 +442,17 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
      {
       encoder=new CArrayObj();
       if(!encoder)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!decoder)
      {
       decoder=new CArrayObj();
       if(!decoder)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- state Encoder
@@ -419,57 +460,77 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    uint prev_count=descr.count=HistoryBars * BarDescr;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBatchNormOCL;
    descr.count=prev_count;
    descr.batch=1e4;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronDropoutOCL;
    descr.count=prev_count;
    descr.probability=0.1f;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 3
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverData;
    descr.window=BarDescr;
    descr.count=HistoryBars;
      {
       uint temp[]={StackSize,StackSize,Quantiles};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.probability=1.0f;
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverRankTCM;
    descr.window=BarDescr * (2 * Quantiles+1);
    descr.count=EmbeddingSize;
@@ -477,17 +538,23 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
      {
       uint temp[]={StackSize,NHeads};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 5
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverForecastHead;
    descr.window=EmbeddingSize;
    descr.count=NForecast;
@@ -495,18 +562,24 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
      {
       uint temp[]={Blocks,NHeads};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iStateRawForecastLayer=5;
 
 //--- layer 6
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverForecastToken;
    descr.window=EmbeddingSize;
    descr.count=NForecast;
@@ -514,7 +587,9 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iStateTokenLayer=6;
 
 //--- forecast Decoder
@@ -522,17 +597,23 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=NForecast * EmbeddingSize;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -542,11 +623,15 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=2 * EmbeddingSize;
@@ -556,11 +641,15 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 3
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -570,18 +659,24 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBatchNormOCL;
    descr.count=NForecast * BarDescr;
    descr.batch=1e4;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    return(true);
   }
@@ -599,13 +694,17 @@ bool CreateDescriptions(CArrayObj *&actor,
      {
       actor=new CArrayObj();
       if(!actor)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!critic)
      {
       critic=new CArrayObj();
       if(!critic)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- actor
@@ -613,36 +712,48 @@ bool CreateDescriptions(CArrayObj *&actor,
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    uint prev_count=descr.count=AccountDescr;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iLatentLayer=0;
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NScenarios * EmbeddingSize;
    descr.activation=GELU;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronMomADMPI;
    descr.window=EmbeddingSize;
    descr.count=StackSize;
      {
       uint temp[]={NScenarios,ForecastTokenDim,NForecast};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.probability=TopK;
    descr.step=NHeads;
@@ -651,12 +762,16 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iLatentLayer=2;
 
 //--- layer 3
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=1;
    descr.window=EmbeddingSize;
@@ -666,20 +781,28 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NActions;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 5
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NActions / 3;
    descr.window=3;
@@ -688,24 +811,32 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=SIGMOID;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- critic
    critic.Clear();
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NActions;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronMHCrossFAT;
      {
       uint temp[]={3,                      // Inputs window
@@ -714,14 +845,18 @@ bool CreateDescriptions(CArrayObj *&actor,
                      EmbeddingSize           // Embedding size
                     };
       if(ArrayCopy(descr.windows,temp)<(int)temp.Size())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
      {
       uint temp[]={NActions / 3,           // Query units
                      NForecast               // Cross units
                     };
       if(ArrayCopy(descr.units,temp)<(int)temp.Size())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.step=NHeads;                      // Heads
    descr.batch=1e4;
@@ -730,11 +865,15 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=None;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=NActions / 3;
    descr.window=3;
@@ -744,11 +883,15 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=NActions / 3;
    descr.window=EmbeddingSize;
@@ -758,29 +901,39 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 5
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=LatentCount;
    descr.activation=SIGMOID;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 6
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=NRewards;
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    return(true);
   }
@@ -799,7 +952,7 @@ bool IsNewBar(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for CloseByDirection.       |
+//| CloseByDirection - Close positions of the specified type         |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -870,7 +1023,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for ClosePartial.           |
+//| ClosePartial - Close part of the position volume                 |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {
@@ -903,7 +1056,7 @@ bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   }
 #endif
 //+------------------------------------------------------------------+
-//| CDeal                                                            |
+//| CDeal - Represent a recorded trading deal                        |
 //+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
@@ -918,6 +1071,9 @@ public:
    double             point;
    //---
                      CDeal(void);
+//+------------------------------------------------------------------+
+//| ~CDeal - Use automatic member cleanup                            |
+//+------------------------------------------------------------------+
                     ~CDeal(void) {};
    //---
    vector<float>Action(datetime current,double ask,double bid,int period_seconds);
@@ -979,14 +1135,20 @@ vector<float>CDeal::Action(datetime current,double ask,double bid,int period_sec
    return(result);
   }
 //+------------------------------------------------------------------+
-//| CDeals                                                           |
+//| CDeals - Manage recorded trading deals                           |
 //+------------------------------------------------------------------+
 class CDeals
   {
 protected:
    CArrayObj Deals;
 public:
+//+------------------------------------------------------------------+
+//| CDeals - Start with an empty deal collection                     |
+//+------------------------------------------------------------------+
                      CDeals(void) { Deals.Clear(); }
+//+------------------------------------------------------------------+
+//| ~CDeals - Clear the stored deal collection                       |
+//+------------------------------------------------------------------+
                     ~CDeals(void) { Deals.Clear(); }
    //---
    bool              LoadDeals(string file_name,string symbol,double point);
@@ -1000,7 +1162,7 @@ bool CDeals::LoadDeals(string file_name,string symbol,double point)
    if(file_name==NULL||!FileIsExist(file_name,FILE_COMMON))
      {
       PrintFormat("File %s not exist",file_name);
-      ReturnFalse;
+      ReturnFalse
      }
    if(symbol==NULL)
      {
@@ -1013,7 +1175,7 @@ bool CDeals::LoadDeals(string file_name,string symbol,double point)
    if(handle==INVALID_HANDLE)
      {
       PrintFormat("Error of open file %s: %d",file_name,GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    FileSeek(handle,0,SEEK_SET);
    while(!FileIsEnding(handle))
@@ -1038,7 +1200,7 @@ bool CDeals::LoadDeals(string file_name,string symbol,double point)
       if(!deal)
         {
          PrintFormat("Error of create new deal object: %d",GetLastError());
-         ReturnFalse;
+         ReturnFalse
         }
       deal.OpenTime=open_time;
       deal.CloseTime=close_time;
@@ -1078,7 +1240,7 @@ bool CDeals::LoadDeals(string file_name,string symbol,double point)
       if(!Deals.Add(deal))
         {
          PrintFormat("Error of add new deal: %d",GetLastError());
-         ReturnFalse;
+         ReturnFalse
         }
      }
 //---
@@ -1116,7 +1278,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
    int total_bars=(start_bar+HistoryBars+(!!forecast ? NForecast : 0));
    if(!state||!time||start_bar<0||
       total_bars>int(Rates.Size()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    matrix<float>mState=matrix<float>::Zeros(BarDescr,HistoryBars);
    vector<float>vForecast=vector<float>::Zeros(NForecast * BarDescr);
@@ -1132,7 +1296,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       float macd=(float)MACD.Main(b+bar);
       float sign=(float)MACD.Signal(b+bar);
       if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       //---
       mState[0,b]=(float)(Rates[b+bar].close-open);
       mState[1,b]=(float)(Rates[b+bar].high-open);
@@ -1144,13 +1310,19 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       mState[7,b]=macd;
       mState[8,b]=sign;
       if(!time.Add(float(Rates[b+bar].time)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!state.AssignArray(mState))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(time.GetIndex()>=0)
       if(!time.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    if(!forecast)
       return(true);
 //---
@@ -1163,7 +1335,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       float macd=(float)MACD.Main(bar-b);
       float sign=(float)MACD.Signal(bar-b);
       if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       //---
       int shift=(NForecast-b) * BarDescr;
       vForecast[shift]=(float)(Rates[bar-b].close-open);
@@ -1178,7 +1352,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
      }
 //---
    if(!forecast.AssignArray(vForecast))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    return(true);
   }
@@ -1264,7 +1440,7 @@ const vector<float>SampleAccount(CBufferFloat *state,datetime time,double max_ba
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for CheckAction.            |
+//| CheckAction - Simulate the account response to an action         |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action,double balance,uint start_position)
   {
@@ -1551,19 +1727,10 @@ public:
 //+------------------------------------------------------------------+
 //| Bind                                                             |
 //+------------------------------------------------------------------+
-   bool              Bind(CBufferFloat *source)
-     {
-      if(!source||source.GetIndex()<0)
-         ReturnFalse;
-      if(Output!=source)
-         DeleteObj(Output);
-      Output=source;
-
-      return(true);
-     }
+   bool              Bind(CBufferFloat *source);
 //--- implements Unbind.
 //+------------------------------------------------------------------+
-//| Unbind                                                           |
+//| Unbind - Process unbind                                          |
 //+------------------------------------------------------------------+
    void              Unbind(void)
      {
@@ -1571,14 +1738,32 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//| Device-only composition adapter, all operations reuse existing   |
+//| Bind - Bind the borrowed device buffer                           |
 //+------------------------------------------------------------------+
+bool CD2SkillBufferView::Bind(CBufferFloat *source)
+  {
+   if(!source||source.GetIndex()<0)
+     {
+      ReturnFalse
+     }
+   if(Output!=source)
+     {
+      DeleteObj(Output)
+     }
+   Output=source;
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| CD2SkillDeviceOps - Compose D2Skill operations on the device     |
+//+------------------------------------------------------------------+
+//--- Device-only composition adapter, all operations reuse existing
 class CD2SkillDeviceOps : public CNeuronBaseOCL
   {
 public:
 //--- implements Bind.
 //+------------------------------------------------------------------+
-//| Bind                                                             |
+//| Bind - Check bind                                                |
 //+------------------------------------------------------------------+
    bool              Bind(COpenCLMy *open_cl)
      {
@@ -1590,47 +1775,19 @@ public:
 //+------------------------------------------------------------------+
 //| Copy                                                             |
 //+------------------------------------------------------------------+
-   bool              Copy(CBufferFloat *source,CBufferFloat *destination,const uint total)
-     {
-      if(!source||!destination||source.Total()!=int(total)||
-         destination.Total()!=int(total)||source.GetIndex()<0||
-         destination.GetIndex()<0||source.GetOpenCL()!=OpenCL||
-         destination.GetOpenCL()!=OpenCL)
-         ReturnFalse;
-      //---
-      return(CopyBufferRaw(source,destination,total));
-     }
+   bool              Copy(CBufferFloat *source,CBufferFloat *destination,const uint total);
 //+------------------------------------------------------------------+
 //| Join2                                                            |
 //+------------------------------------------------------------------+
    bool              Join2(CBufferFloat *first,const uint first_total,CBufferFloat *second,
-                           const uint second_total,CBufferFloat *destination)
-     {
-      if(!first||!second||!destination||first.Total()!=int(first_total)||
-         second.Total()!=int(second_total)||
-         destination.Total()!=int(first_total+second_total)||first.GetIndex()<0||
-         second.GetIndex()<0||destination.GetIndex()<0)
-         ReturnFalse;
-
-      return(Concat(first,second,destination,first_total,second_total,1));
-     }
+                           const uint second_total,CBufferFloat *destination);
 //+------------------------------------------------------------------+
 //| Join4                                                            |
 //+------------------------------------------------------------------+
    bool              Join4(CBufferFloat *first,CBufferFloat *second,CBufferFloat *third,
-                           CBufferFloat *fourth,CBufferFloat *destination,const uint block)
-     {
-      if(!first||!second||!third||!fourth||!destination||
-         first.Total()!=int(block)||second.Total()!=int(block)||
-         third.Total()!=int(block)||fourth.Total()!=int(block)||
-         destination.Total()!=int(4 * block)||first.GetIndex()<0||second.GetIndex()<0||
-         third.GetIndex()<0||fourth.GetIndex()<0||destination.GetIndex()<0)
-         ReturnFalse;
-
-      return(Concat(first,second,third,fourth,destination,block,block,block,block,1));
-     }
+                           CBufferFloat *fourth,CBufferFloat *destination,const uint block);
 //+------------------------------------------------------------------+
-//| Subtract                                                         |
+//| Subtract - Subtract the second buffer                            |
 //+------------------------------------------------------------------+
    bool              Subtract(CBufferFloat *first,CBufferFloat *second,CBufferFloat *destination,
                               const uint dimension)
@@ -1638,7 +1795,7 @@ public:
       return(Different(first,second,destination,dimension));
      }
 //+------------------------------------------------------------------+
-//| BroadcastSum                                                     |
+//| BroadcastSum - Add the broadcast buffer                          |
 //+------------------------------------------------------------------+
    bool              BroadcastSum(CBufferFloat *vector_in,CBufferFloat *matrix_in,
                                   CBufferFloat *destination,const uint dimension,const uint variables)
@@ -1646,7 +1803,7 @@ public:
       return(SumVecMatrix(vector_in,matrix_in,destination,dimension,variables));
      }
 //+------------------------------------------------------------------+
-//| Add                                                              |
+//| Add - Add the two buffers                                        |
 //+------------------------------------------------------------------+
    bool              Add(CBufferFloat *first,CBufferFloat *second,CBufferFloat *destination,
                          const uint dimension)
@@ -1654,7 +1811,7 @@ public:
       return(SumAndNormalize(first,second,destination,dimension,false,0,0,0,1.0f));
      }
 //+------------------------------------------------------------------+
-//| Split2                                                           |
+//| Split2 - Split the source into two buffers                       |
 //+------------------------------------------------------------------+
    bool              Split2(CBufferFloat *first,CBufferFloat *second,CBufferFloat *source,
                             const uint first_total,const uint second_total)
@@ -1662,6 +1819,54 @@ public:
       return(DeConcat(first,second,source,first_total,second_total,1));
      }
   };
+//+------------------------------------------------------------------+
+//| Copy - Copy a compatible device buffer                           |
+//+------------------------------------------------------------------+
+bool CD2SkillDeviceOps::Copy(CBufferFloat *source,CBufferFloat *destination,const uint total)
+  {
+   if(!source||!destination||source.Total()!=int(total)||
+      destination.Total()!=int(total)||source.GetIndex()<0||
+      destination.GetIndex()<0||source.GetOpenCL()!=OpenCL||
+      destination.GetOpenCL()!=OpenCL)
+     {
+      ReturnFalse
+     }
+   //---
+   return(CopyBufferRaw(source,destination,total));
+  }
+//+------------------------------------------------------------------+
+//| Join2 - Concatenate two device buffers                           |
+//+------------------------------------------------------------------+
+bool CD2SkillDeviceOps::Join2(CBufferFloat *first,const uint first_total,CBufferFloat *second,
+                              const uint second_total,CBufferFloat *destination)
+  {
+   if(!first||!second||!destination||first.Total()!=int(first_total)||
+      second.Total()!=int(second_total)||
+      destination.Total()!=int(first_total+second_total)||first.GetIndex()<0||
+      second.GetIndex()<0||destination.GetIndex()<0)
+     {
+      ReturnFalse
+     }
+
+   return(Concat(first,second,destination,first_total,second_total,1));
+  }
+//+------------------------------------------------------------------+
+//| Join4 - Concatenate four device buffers                          |
+//+------------------------------------------------------------------+
+bool CD2SkillDeviceOps::Join4(CBufferFloat *first,CBufferFloat *second,CBufferFloat *third,
+                              CBufferFloat *fourth,CBufferFloat *destination,const uint block)
+  {
+   if(!first||!second||!third||!fourth||!destination||
+      first.Total()!=int(block)||second.Total()!=int(block)||
+      third.Total()!=int(block)||fourth.Total()!=int(block)||
+      destination.Total()!=int(4 * block)||first.GetIndex()<0||second.GetIndex()<0||
+      third.GetIndex()<0||fourth.GetIndex()<0||destination.GetIndex()<0)
+     {
+      ReturnFalse
+     }
+
+   return(Concat(first,second,third,fourth,destination,block,block,block,block,1));
+  }
 //---
 CNet                    D2SkillMarket;
 CNet                    D2SkillTarget;
@@ -1710,15 +1915,15 @@ bool                   D2SkillD2RecreateIncompatibleCheckpoint=false;
 int                    D2SkillD2UtilityMode=D2Skill_D2_UTILITY_PAIRED_HINDSIGHT;
 ulong                  D2SkillD2PairedUtilityUpdates=0;
 //+------------------------------------------------------------------+
-//| Reports completed terminal utility updates for online            |
-//| calibration.                                                     |
+//| D2SkillOnlineCalibrationHasClosedUtilityUpdates - Check updates  |
 //+------------------------------------------------------------------+
+//--- Reports completed terminal utility updates for online calibration.
 bool D2SkillOnlineCalibrationHasClosedUtilityUpdates(void)
   {
    return(D2SkillD2PairedUtilityUpdates>0);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillRequiresBankGradientBackward.                  |
+//| D2SkillRequiresBankGradientBackward - Check gradient backward    |
 //+------------------------------------------------------------------+
 bool D2SkillRequiresBankGradientBackward(void)
   {
@@ -1730,17 +1935,18 @@ bool D2SkillRequiresBankGradientBackward(void)
           D2SkillD2ExecutionMode==D2_ONLINE_CALIBRATION);
   }
 //+------------------------------------------------------------------+
-//| Configures D2Skill execution without preprocessor injection.     |
+//| D2SkillConfigureRuntime - Configure runtime                      |
 //+------------------------------------------------------------------+
+//--- Configures D2Skill execution without preprocessor injection.
 bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage,const ENUM_D2SKILL_BANK_MODE mode,
                              const ENUM_D2SKILL_MODE execution_mode,
-                              const bool utility_aware,const double min_utility,
-                              const double utility_scale,
-                              const bool online_direction_update=false,
-                              const bool online_critic_update=false,
-                              const ED2SkillRepresentation representation=D2SkillDirectionMagnitude,
-                              const bool reset_banks_on_representation_mismatch=false,
-                              const bool recreate_incompatible_checkpoint=false)
+                             const bool utility_aware,const double min_utility,
+                             const double utility_scale,
+                             const bool online_direction_update=false,
+                             const bool online_critic_update=false,
+                             const ED2SkillRepresentation representation=D2SkillDirectionMagnitude,
+                             const bool reset_banks_on_representation_mismatch=false,
+                             const bool recreate_incompatible_checkpoint=false)
   {
    if(stage<D2Skill_D2_STAGE_BASE||stage>D2Skill_D2_STAGE_ONLINE||
       mode<D2Skill_D2_MODE_BASE||mode>D2Skill_D2_MODE_FULL||
@@ -1748,7 +1954,9 @@ bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage,const ENUM_D2SKILL_B
       representation<D2SkillFullResidual||representation>D2SkillDirectionMagnitude||
       !MathIsValidNumber(min_utility)||!MathIsValidNumber(utility_scale)||
       min_utility<-1.0||min_utility>1.0||utility_scale<0.0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2SkillD2Stage=stage;
    D2SkillD2Mode=mode;
    D2SkillD2ExecutionMode=execution_mode;
@@ -1764,13 +1972,16 @@ bool D2SkillConfigureRuntime(const ENUM_D2SKILL_STAGE stage,const ENUM_D2SKILL_B
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Configures optional forecast recovery diagnostics.               |
+//| D2SkillConfigureForecastRun - Configure forecast run             |
 //+------------------------------------------------------------------+
+//--- Configures optional forecast recovery diagnostics.
 bool D2SkillConfigureForecastRun(const bool recovery_smoke,
                                  const uint recovery_batches,const uint recovery_age)
   {
    if(recovery_smoke&&(recovery_batches==0||recovery_age==0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2SkillRecoverySmoke=recovery_smoke;
    D2SkillRecoverySmokeBatches=recovery_batches;
    D2SkillRecoverySmokeAge=recovery_age;
@@ -1778,8 +1989,9 @@ bool D2SkillConfigureForecastRun(const bool recovery_smoke,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Device-resident snapshot data for one Actor trajectory branch.   |
+//| SD2SkillActorForwardState - Store SD 2 skill actor forward state |
 //+------------------------------------------------------------------+
+//--- Device-resident snapshot data for one Actor trajectory branch.
 struct SD2SkillActorForwardState
   {
    CNeuronScenarioCrossAttention *cross;
@@ -1799,23 +2011,29 @@ struct SD2SkillActorForwardState
    bool                          ready;
   };
 //+------------------------------------------------------------------+
-//| Creates a device buffer owned by local trajectory state.         |
+//| D2SkillPrepareForwardStateBuffer - Prepare forward state buffer  |
 //+------------------------------------------------------------------+
+//--- Creates a device buffer owned by local trajectory state.
 bool D2SkillPrepareForwardStateBuffer(CBufferFloat *source,CBufferFloat &snapshot,
                                       COpenCLMy *open_cl)
   {
    if(!source||!open_cl||source.Total()<=0||source.GetIndex()<0||
       source.GetOpenCL()!=open_cl)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    snapshot.BufferFree();
    if(!snapshot.BufferInit((uint)source.Total(),0.0f)||!snapshot.BufferCreate(open_cl))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(snapshot.Total()==source.Total()&&snapshot.GetIndex()>=0&&
           snapshot.GetOpenCL()==open_cl);
   }
 //+------------------------------------------------------------------+
-//| Copies an optional forward buffer without host readback.         |
+//| D2SkillCopyOptionalForwardState - Copy optional forward state    |
 //+------------------------------------------------------------------+
+//--- Copies an optional forward buffer without host readback.
 bool D2SkillCopyOptionalForwardState(CD2SkillDeviceOps &device,CBufferFloat *source,
                                      CBufferFloat &snapshot)
   {
@@ -1825,8 +2043,9 @@ bool D2SkillCopyOptionalForwardState(CD2SkillDeviceOps &device,CBufferFloat *sou
    return(device.Copy(source,GetPointer(snapshot),(uint)source.Total()));
   }
 //+------------------------------------------------------------------+
-//| Initializes the local device state for one Actor trajectory.     |
+//| D2SkillInitActorForwardState - Initialize actor forward state    |
 //+------------------------------------------------------------------+
+//--- Initializes the local device state for one Actor trajectory.
 bool D2SkillInitActorForwardState(SD2SkillActorForwardState &state,
                                   CNeuronScenarioCrossAttention *cross,
                                   COpenCLMy *open_cl)
@@ -1835,7 +2054,9 @@ bool D2SkillInitActorForwardState(SD2SkillActorForwardState &state,
    state.cross=cross;
    if(!state.cross||!open_cl||state.cross.IsCritic()||!state.cross.HasHistory()||
       state.cross.ForwardStateBatchBlocks()!=2||!state.device.Bind(open_cl))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronAddToStack *history=state.cross.GetHistoryStack();
    CBufferFloat      *first=state.cross.GetForwardStateBatchOptions(0);
    CBufferFloat      *second=state.cross.GetForwardStateBatchOptions(1);
@@ -1849,41 +2070,53 @@ bool D2SkillInitActorForwardState(SD2SkillActorForwardState &state,
       !D2SkillPrepareForwardStateBuffer(spike_first_previous,state.spike_first_previous,open_cl)||
       !D2SkillPrepareForwardStateBuffer(spike_second,state.spike_second_output,open_cl)||
       !D2SkillPrepareForwardStateBuffer(spike_second_previous,state.spike_second_previous,open_cl))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    state.first_has_options=(first!=NULL);
    state.second_has_options=(second!=NULL);
    if((state.first_has_options&&
        !D2SkillPrepareForwardStateBuffer(first,state.batch_first,open_cl))||
       (state.second_has_options&&
        !D2SkillPrepareForwardStateBuffer(second,state.batch_second,open_cl)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    state.batch_first_count=state.cross.GetForwardStateBatchCount(0);
    state.batch_second_count=state.cross.GetForwardStateBatchCount(1);
    if(state.batch_first_count<1||state.batch_second_count<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    state.ready=true;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Initializes local trajectory state from the D2 Actor topology.   |
+//| D2SkillInitActorForwardState - Initialize actor forward state    |
 //+------------------------------------------------------------------+
+//--- Initializes local trajectory state from the D2 Actor topology.
 bool D2SkillInitActorForwardState(SD2SkillActorForwardState &state,CNet &actor)
   {
    CNeuronBaseOCL *layer=actor.Layer(1);
    if(!layer||(layer.Type()!=defNeuronD2Skill&&
                  layer.Type()!=defNeuronScenarioCrossAttention))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(D2SkillInitActorForwardState(state,(CNeuronScenarioCrossAttention*)layer,
                                        actor.GetOpenCL()));
   }
 //+------------------------------------------------------------------+
-//| Captures forward state into a local trajectory branch.           |
+//| D2SkillCaptureActorForwardState - Capture actor forward state    |
 //+------------------------------------------------------------------+
+//--- Captures forward state into a local trajectory branch.
 bool D2SkillCaptureActorForwardState(SD2SkillActorForwardState &state)
   {
    if(!state.ready||!state.cross)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronAddToStack *history=state.cross.GetHistoryStack();
    CBufferFloat      *first=state.cross.GetForwardStateBatchOptions(0);
    CBufferFloat      *second=state.cross.GetForwardStateBatchOptions(1);
@@ -1894,7 +2127,9 @@ bool D2SkillCaptureActorForwardState(SD2SkillActorForwardState &state)
    if(!history||(state.first_has_options!=(first!=NULL))||
       (state.second_has_options!=(second!=NULL))||!spike_first||
       !spike_first_previous||!spike_second||!spike_second_previous)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    state.batch_first_count=state.cross.GetForwardStateBatchCount(0);
    state.batch_second_count=state.cross.GetForwardStateBatchCount(1);
    if(state.batch_first_count<1||state.batch_second_count<1||
@@ -1912,17 +2147,22 @@ bool D2SkillCaptureActorForwardState(SD2SkillActorForwardState &state)
                          (uint)state.spike_second_previous.Total())||
       !D2SkillCopyOptionalForwardState(state.device,first,state.batch_first)||
       !D2SkillCopyOptionalForwardState(state.device,second,state.batch_second))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Restores one local trajectory branch without host readback.      |
+//| D2SkillRestoreActorForwardState - Restore actor forward state    |
 //+------------------------------------------------------------------+
+//--- Restores one local trajectory branch without host readback.
 bool D2SkillRestoreActorForwardState(SD2SkillActorForwardState &state)
   {
    if(!state.ready||!state.cross)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronAddToStack *history=state.cross.GetHistoryStack();
    CBufferFloat      *first=state.cross.GetForwardStateBatchOptions(0);
    CBufferFloat      *second=state.cross.GetForwardStateBatchOptions(1);
@@ -1951,20 +2191,24 @@ bool D2SkillRestoreActorForwardState(SD2SkillActorForwardState &state)
                                     (uint)state.batch_second.Total()))||
       !state.cross.SetForwardStateBatchCount(0,state.batch_first_count)||
       !state.cross.SetForwardStateBatchCount(1,state.batch_second_count))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Confirms that a local trajectory branch was initialized.         |
+//| D2SkillActorForwardStateReady - Check forward state readiness    |
 //+------------------------------------------------------------------+
+//--- Confirms that a local trajectory branch was initialized.
 bool D2SkillActorForwardStateReady(const SD2SkillActorForwardState &state)
   {
    return(state.ready);
   }
 //+------------------------------------------------------------------+
-//| Returns whether this exact Actor state is eligible for pairing.  |
+//| D2SkillUsePairedHindsight - Check use paired hindsight           |
 //+------------------------------------------------------------------+
+//--- Returns whether this exact Actor state is eligible for pairing.
 bool D2SkillUsePairedHindsight(CD2Skill *skill,
                                SD2SkillActorForwardState &state)
   {
@@ -1974,8 +2218,9 @@ bool D2SkillUsePairedHindsight(CD2Skill *skill,
           skill.Ready()&&D2SkillActorForwardStateReady(state));
   }
 //+------------------------------------------------------------------+
-//| Restores an Actor pair capture and its exact configured D2 mode. |
+//| D2SkillRestorePairedActorState - Restore paired actor state      |
 //+------------------------------------------------------------------+
+//--- Restores an Actor pair capture and its exact configured D2 mode.
 bool D2SkillRestorePairedActorState(SD2SkillActorForwardState &state,
                                     CD2Skill *skill,
                                     const bool task_enabled,
@@ -2008,25 +2253,29 @@ uint ForecastRecoveryAge(void)
    return((uint)MathMax(1.0,MathRound(6240.0 * PeriodSeconds(PERIOD_H1) / seconds)));
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for ConfigureForecastRec... |
+//| ConfigureForecastRecoveryAge - Configure forecast recovery age   |
 //+------------------------------------------------------------------+
 bool ConfigureForecastRecoveryAge(void)
   {
    if(!D2SkillForecast||!D2SkillForecast.SetRecoveryAge(ForecastRecoveryAge()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    PrintFormat("D2Skill %s recovery_age=%u bars",(D2SkillRecoverySmoke ? "smoke" : "forecast"),
                D2SkillForecast.RecoveryAge());
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillInitTrainingBuffers.                           |
+//| D2SkillInitTrainingBuffers - Initialize training buffers         |
 //+------------------------------------------------------------------+
 bool D2SkillInitTrainingBuffers(void)
   {
    COpenCLMy *open_cl=D2SkillMarket.GetOpenCL();
    if(!open_cl||!D2SkillDevice.Bind(open_cl))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillFutureTranspose.Init(0,0,open_cl,NForecast,BarDescr,1,ADAM,BatchSize)||
       !D2SkillFuture.BufferInit((NForecast * BarDescr),0)||
       !D2SkillFuture.BufferCreate(open_cl)||
@@ -2038,7 +2287,9 @@ bool D2SkillInitTrainingBuffers(void)
       !D2SkillLatentTarget.BufferCreate(open_cl)||
       !D2SkillLatentDelta.BufferInit((BarDescr * NForecast * EmbeddingSize),0)||
       !D2SkillLatentDelta.BufferCreate(open_cl))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -2048,10 +2299,14 @@ bool D2SkillInitTrainingBuffers(void)
 bool D2SkillAddBase(CArrayObj *description,const uint count)
   {
    if(!description)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CLayerDescription *descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=count;
    descr.activation=None;
@@ -2059,27 +2314,31 @@ bool D2SkillAddBase(CArrayObj *description,const uint count)
    descr.batch=BatchSize;
    if(description.Add(descr))
       return(true);
-   DeleteObjAndFalse(descr);
+   DeleteObjAndFalse(descr)
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillNormalizeDescriptionBatch.                     |
+//| D2SkillNormalizeDescriptionBatch - Normalize description batch   |
 //+------------------------------------------------------------------+
 bool D2SkillNormalizeDescriptionBatch(CArrayObj *description)
   {
    if(!description)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<description.Total(); i++)
      {
       CLayerDescription *layer=(CLayerDescription*)description.At(i);
       if(!layer)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       layer.batch=BatchSize;
      }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCreateDescriptions.                            |
+//| D2SkillCreateDescriptions - Create descriptions                  |
 //+------------------------------------------------------------------+
 bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
   {
@@ -2088,10 +2347,10 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
 //--- function if.
    if(!CreateStateDescriptions(market,legacy_decoder))
      {
-      DeleteObj(legacy_decoder);
-      ReturnFalse;
+      DeleteObj(legacy_decoder)
+      ReturnFalse
      }
-   DeleteObj(legacy_decoder);
+   DeleteObj(legacy_decoder)
 
 //--- keep exactly CogDriver layers 0..4 (RankTCM is the boundary).
    int layer=market.Total()-1;
@@ -2105,42 +2364,58 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
       if(!descr||descr.type!=defNeuronCogDriverRankTCM)
         {
          if(!market.Delete(layer))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          layer--;
         }
       else
          break;
      }
    if(market.Total()<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillNormalizeDescriptionBatch(market))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- createBuffers already stores state feature-major as
 //--- [BarDescr,HistoryBars], which is CogDriverData's required input layout.
    if(!market.Delete(layer)||!market.Delete(layer-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CLayerDescription *descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronCogDriverData;
    descr.window=HistoryBars;
    descr.count=BarDescr;
      {
       uint units[]={StackSize,StackSize,Quantiles};
       if(ArrayCopy(descr.units,units,0,0,units.Size())<int(units.Size()))
-         DeleteObjAndFalse(descr);
+        {
+         DeleteObjAndFalse(descr)
+        }
      }
    descr.probability=1.0f;
    descr.activation=None;
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!market.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronCogDriverRankTCM;
    descr.window=HistoryBars * (2 * Quantiles+1);
    descr.count=EmbeddingSize;
@@ -2148,17 +2423,23 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
      {
       uint units[]={StackSize,NHeads};
       if(ArrayCopy(descr.units,units,0,0,units.Size())<int(units.Size()))
-         DeleteObjAndFalse(descr);
+        {
+         DeleteObjAndFalse(descr)
+        }
      }
    descr.activation=None;
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!market.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronScenarioForecast;
    descr.count=NScenarios;
    descr.variables=TopK;
@@ -2169,24 +2450,32 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!market.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    if(!target)
       target=new CArrayObj();
    else
       target.Clear();
    if(!target)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    target.FreeMode(true);
 
 //--- detached Target Encoder: one normalized future trajectory per BarDescr
 //--- variable.  ConvOCL zero-fills the unavailable edge of each window, so
 //--- window=3 preserves NForecast positions without an auxiliary pad buffer.
    if(!D2SkillAddBase(target,(BarDescr * NForecast)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronPeriodNorm;
    descr.count=1;
    descr.window=NForecast;
@@ -2195,11 +2484,15 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=3;
@@ -2210,11 +2503,15 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -2225,11 +2522,15 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=2 * EmbeddingSize;
@@ -2240,11 +2541,15 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronPeriodNorm;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -2253,7 +2558,9 @@ bool D2SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    return(true);
   }
@@ -2267,19 +2574,21 @@ bool D2SkillCreateNetworks(void)
 //--- function if.
    if(!D2SkillCreateDescriptions(market,target))
      {
-      DeleteObj(market);
-      DeleteObj(target);
-      ReturnFalse;
+      DeleteObj(market)
+      DeleteObj(target)
+      ReturnFalse
      }
    const bool market_created=D2SkillMarket.Create(market);
    PrintFormat("D2Skill Create market=%s batch=%u",(market_created ? "OK" : "FAIL"),uint(BatchSize));
    const bool target_created=(market_created&&D2SkillTarget.Create(target));
    PrintFormat("D2Skill Create target=%s",(target_created ? "OK" : "FAIL"));
    const bool created=(market_created&&target_created);
-   DeleteObj(market);
-   DeleteObj(target);
+   DeleteObj(market)
+   DeleteObj(target)
    if(!created)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- CNet::Create initializes its OpenCL program.  Build each network first,
 //--- then move its device buffers to the Market context; otherwise a later
@@ -2290,7 +2599,7 @@ bool D2SkillCreateNetworks(void)
    if(!D2SkillInitTrainingBuffers())
      {
       Print("D2Skill init: training buffers=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
    D2SkillForecast=(CNeuronScenarioForecast*)D2SkillMarket.Layer(-1);
 
@@ -2298,10 +2607,12 @@ bool D2SkillCreateNetworks(void)
    if(!D2SkillForecast||D2SkillForecast.Type()!=defNeuronScenarioForecast)
      {
       Print("D2Skill init: forecast layer=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
    if(!ConfigureForecastRecoveryAge())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2SkillTarget.TrainMode(false);
    D2SkillMarket.TrainMode(true);
 
@@ -2320,7 +2631,7 @@ bool D2SkillValidateShapes(const bool training=true)
      {
       PrintFormat("D2Skill shape: market input expected=%d actual=%d",HistoryBars * BarDescr,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    layer=D2SkillMarket.Layer(4);
    buffer=(layer ? layer.getOutput() : NULL);
@@ -2330,7 +2641,7 @@ bool D2SkillValidateShapes(const bool training=true)
      {
       PrintFormat("D2Skill shape: market RankTCM expected=%d actual=%d",BarDescr * EmbeddingSize,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
@@ -2344,7 +2655,7 @@ bool D2SkillValidateShapes(const bool training=true)
         {
          PrintFormat("D2Skill shape: target input expected=%d actual=%d",BarDescr * NForecast,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=D2SkillTarget.Layer(1);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2354,7 +2665,7 @@ bool D2SkillValidateShapes(const bool training=true)
         {
          PrintFormat("D2Skill shape: target PeriodNorm expected=%d actual=%d",BarDescr * NForecast,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=D2SkillTarget.Layer(2);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2364,7 +2675,7 @@ bool D2SkillValidateShapes(const bool training=true)
         {
          PrintFormat("D2Skill shape: target Conv3 expected=%d actual=%d",BarDescr * NForecast * EmbeddingSize,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=D2SkillTarget.Layer(3);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2374,7 +2685,7 @@ bool D2SkillValidateShapes(const bool training=true)
         {
          PrintFormat("D2Skill shape: target Conv2 expected=%d actual=%d",BarDescr * NForecast * 2 * EmbeddingSize,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=D2SkillTarget.Layer(4);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2384,7 +2695,7 @@ bool D2SkillValidateShapes(const bool training=true)
         {
          PrintFormat("D2Skill shape: target final Conv expected=%d actual=%d",BarDescr * NForecast * EmbeddingSize,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=D2SkillTarget.Layer(-1);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2394,7 +2705,7 @@ bool D2SkillValidateShapes(const bool training=true)
         {
          PrintFormat("D2Skill shape: target output PeriodNorm expected=%d actual=%d",BarDescr * NForecast * EmbeddingSize,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       buffer=D2SkillFutureTranspose.getOutput();
 
@@ -2403,7 +2714,7 @@ bool D2SkillValidateShapes(const bool training=true)
         {
          PrintFormat("D2Skill shape: future transpose expected=%d actual=%d",BarDescr * NForecast,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
      }
    layer=D2SkillMarket.Layer(-1);
@@ -2414,7 +2725,7 @@ bool D2SkillValidateShapes(const bool training=true)
      {
       PrintFormat("D2Skill shape: Scenario Z expected=%d actual=%d",NScenarios * BarDescr * NForecast * EmbeddingSize,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    buffer=D2SkillForecast.GetU();
 
@@ -2423,7 +2734,7 @@ bool D2SkillValidateShapes(const bool training=true)
      {
       PrintFormat("D2Skill shape: Scenario U expected=%d actual=%d",NScenarios * BarDescr * NForecast,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    buffer=D2SkillForecast.GetPi();
 
@@ -2432,7 +2743,7 @@ bool D2SkillValidateShapes(const bool training=true)
      {
       PrintFormat("D2Skill shape: Scenario Pi expected=%d actual=%d",NScenarios,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    if(D2SkillForecast.Variables()!=BarDescr||D2SkillForecast.Scenarios()!=NScenarios||
       D2SkillForecast.Horizon()!=NForecast||D2SkillForecast.Dimension()!=EmbeddingSize||
@@ -2444,7 +2755,7 @@ bool D2SkillValidateShapes(const bool training=true)
                   D2SkillForecast.Variables(),BarDescr,D2SkillForecast.Scenarios(),NScenarios,
                   D2SkillForecast.Horizon(),NForecast,D2SkillForecast.Dimension(),EmbeddingSize,
                   D2SkillForecast.ActiveTrajectories(),TopK);
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -2479,13 +2790,19 @@ ulong D2SkillHashFile(ulong hash,const string file_name)
 
    const ulong length=FileSize(handle);
    if(length==0||length>ulong(INT_MAX))
-     { FileClose(handle); return(0); }
+     {
+      FileClose(handle);
+      return(0);
+     }
    uchar bytes[];
    if(ArrayResize(bytes,(int)length)!=(int)length||
 
 //--- read file payload as bytes after successful allocation.
       FileReadArray(handle,bytes,0,(int)length)!=(int)length)
-     { FileClose(handle); return(0); }
+     {
+      FileClose(handle);
+      return(0);
+     }
    FileClose(handle);
    for(int i=0; i<(int)length; i++)
       hash=D2SkillHashUInt(hash,(ulong)bytes[i]);
@@ -2493,8 +2810,9 @@ ulong D2SkillHashFile(ulong hash,const string file_name)
    return(hash);
   }
 //+------------------------------------------------------------------+
-//| Exact signature of the unified Market/Scenario inference grap... |
+//| D2SkillForecastSignature - Return the forecast signature         |
 //+------------------------------------------------------------------+
+//--- Exact signature of the unified Market/Scenario inference grap...
 ulong D2SkillForecastSignature(void)
   {
    if(!D2SkillForecast)
@@ -2519,7 +2837,7 @@ ulong D2SkillForecastSignature(void)
    return(hash);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillForecastTrainingSignature.                     |
+//| D2SkillForecastTrainingSignature - Return                        |
 //+------------------------------------------------------------------+
 ulong D2SkillForecastTrainingSignature(const ulong forecast_signature)
   {
@@ -2534,15 +2852,21 @@ ulong D2SkillForecastTrainingSignature(const ulong forecast_signature)
 bool D2SkillWriteManifest(const uint completed_epochs)
   {
    if(!D2SkillForecast)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const ulong signature=D2SkillForecastSignature();
    const ulong target_hash=D2SkillHashFile(ulong(1469598103934665603),D2Skill_TARGET_FILE);
    const ulong training_signature=D2SkillForecastTrainingSignature(signature);
    if(signature==0||target_hash==0||training_signature==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int handle=FileOpen(D2Skill_MANIFEST_FILE,FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    FileWrite(handle,"format=D2Skill_FORECAST");
    FileWrite(handle,StringFormat("version=%u",D2Skill_FORMAT_VERSION));
    FileWrite(handle,StringFormat("forecast_type=%d",defNeuronScenarioForecast));
@@ -2577,7 +2901,9 @@ bool D2SkillSaveCheckpoint(const uint completed_epochs)
    const datetime now=TimeCurrent();
    if(!D2SkillMarket.Save(D2Skill_MARKET_FILE,0,0,0,now,true)||
       !D2SkillTarget.Save(D2Skill_TARGET_FILE,0,0,0,now,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(D2SkillWriteManifest(completed_epochs));
   }
@@ -2594,7 +2920,7 @@ bool D2SkillInitIndicators(void)
   }
 bool D2SkillLoadForecastTraining(void);
 //+------------------------------------------------------------------+
-//| Creates or initializes D2SkillForecastStudy.                     |
+//| CreateD2SkillForecastStudy - Create d 2 skill forecast study     |
 //+------------------------------------------------------------------+
 bool CreateD2SkillForecastStudy(void)
   {
@@ -2620,7 +2946,7 @@ bool CreateD2SkillForecastStudy(void)
       if(!D2SkillCreateNetworks())
         {
          PrintFormat("D2Skill init: forecast create=FAIL error=%d",GetLastError());
-         ReturnFalse;
+         ReturnFalse
         }
      }
 
@@ -2628,14 +2954,14 @@ bool CreateD2SkillForecastStudy(void)
    if(!D2SkillValidateShapes())
      {
       Print("D2Skill init: shapes=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(!D2SkillInitIndicators())
      {
       PrintFormat("D2Skill init: indicators=FAIL error=%d",GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    PrintFormat("D2Skill init: forecast=%s completed_epochs=%u batches=%I64u invalid=%I64u",
                (resumed ? "RESUMED" : "NEW"),D2SkillCompletedEpochs,D2SkillBatches,D2SkillInvalidBatches);
@@ -2645,13 +2971,13 @@ bool CreateD2SkillForecastStudy(void)
    if(!EventChartCustom(ChartID(),1,0,0,"Init"))
      {
       PrintFormat("D2Skill init: chart event=FAIL error=%d",GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements ReleaseD2SkillForecastStudy.                          |
+//| ReleaseD2SkillForecastStudy - Release d 2 skill forecast study   |
 //+------------------------------------------------------------------+
 void ReleaseD2SkillForecastStudy(const int reason)
   {
@@ -2661,7 +2987,7 @@ void ReleaseD2SkillForecastStudy(const int reason)
    D2SkillReady=false;
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillPrepareLatentTarget.                           |
+//| D2SkillPrepareLatentTarget - Prepare latent target               |
 //+------------------------------------------------------------------+
 bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
   {
@@ -2669,17 +2995,23 @@ bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
       D2SkillFuture.Total()!=(NForecast * BarDescr)||D2SkillFuture.GetIndex()<0||
       D2SkillLatentTarget.Total()!=(BarDescr * NForecast * EmbeddingSize)||D2SkillLatentTarget.GetIndex()<0||
       D2SkillLatentDelta.Total()!=(BarDescr * NForecast * EmbeddingSize)||D2SkillLatentDelta.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- D2SkillFuture is decoder-native [H,B].  The existing transpose changes
 //--- only this device layout to Target-native [B,H]; Market keeps its original
 //--- [BarDescr,HistoryBars] representation and is never transposed.
    if(!D2SkillFutureView.Bind(GetPointer(D2SkillFuture)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool transposed=D2SkillFutureTranspose.FeedForward(D2SkillFutureView.AsObject());
    D2SkillFutureView.Unbind();
    if(!transposed)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *target_input=D2SkillTarget.Layer(0);
    CNeuronBaseOCL *future_latent=D2SkillTarget.Layer(-1);
    if(!target_input||target_input.getOutput().Total()!=(BarDescr * NForecast)||
@@ -2687,10 +3019,14 @@ bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
       !D2SkillDevice.Copy(D2SkillFutureTranspose.getOutput(),target_input.getOutput(),
                           BarDescr * NForecast)||
       !D2SkillTarget.feedForward(GetPointer(D2SkillTarget),0,(CBufferFloat*)NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!future_latent||future_latent.getOutput().Total()!=(BarDescr * NForecast * EmbeddingSize)||
       future_latent.getOutputIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- forecast loss compares full future Z against full generator Z. Codebook
 //--- EMA alone receives the detached delta future-current.
@@ -2698,11 +3034,15 @@ bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
                           BarDescr * NForecast * EmbeddingSize)||
       !D2SkillDevice.Subtract(GetPointer(D2SkillLatentZero),market_latent,
                               GetPointer(D2SkillLatentNegativeMarket),EmbeddingSize))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillDevice.BroadcastSum(GetPointer(D2SkillLatentNegativeMarket),
                                   future_latent.getOutput(),GetPointer(D2SkillLatentDelta),
                                   EmbeddingSize,BarDescr))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -2712,13 +3052,17 @@ bool D2SkillPrepareLatentTarget(CBufferFloat *market_latent)
 bool D2SkillProbeNet(CNet &net,CBufferFloat *probe_state,double &latent[],const bool restore_training)
   {
    if(!probe_state||ArrayResize(latent,(BarDescr * EmbeddingSize))!=(BarDescr * EmbeddingSize))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- measure both epoch boundaries in inference mode from an empty recurrent
 //--- state.  Clear again afterwards so the diagnostic forward cannot seed the
 //--- first training batch or inherit the final training batch state.
    if(!net.TrainMode(false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bool result=net.Clear();
    if(result)
       result=net.feedForward(probe_state,1,false,(CBufferFloat*)NULL);
@@ -2770,15 +3114,18 @@ string FormatScenarioCounts(const uint &counts[])
    return(result+"]");
   }
 //+------------------------------------------------------------------+
-//| Smoke-only responsibility audit; all tensor reads are host-side  |
+//| D2SkillCollectRecoverySmoke - Collect recovery smoke             |
 //+------------------------------------------------------------------+
+//--- Smoke-only responsibility audit; all tensor reads are host-side
 bool D2SkillCollectRecoverySmoke(ulong &hits[],double &responsibility_sum[],double &scale_sum[],
                                  double &absolute_sum[],double &absolute_over_scale_sum[])
   {
    if(!D2SkillForecast||ArraySize(hits)!=NScenarios||ArraySize(responsibility_sum)!=NScenarios||
       ArraySize(scale_sum)!=NScenarios||ArraySize(absolute_sum)!=NScenarios||
       ArraySize(absolute_over_scale_sum)!=NScenarios)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *responsibilities=D2SkillForecast.GetResponsibilities();
    CBufferFloat *confidence=D2SkillForecast.GetConfidence();
    CBufferFloat *target=D2SkillForecast.GetTarget();
@@ -2789,12 +3136,16 @@ bool D2SkillCollectRecoverySmoke(ulong &hits[],double &responsibility_sum[],doub
       confidence.Total()!=confidence_total||target.Total()!=target_total||
       forecast.Total()!=NScenarios * target_total||!responsibilities.BufferRead()||!confidence.BufferRead()||
       !target.BufferRead()||!forecast.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint scenario=0; scenario<NScenarios; scenario++)
      {
       const double responsibility=responsibilities[scenario];
       if(!MathIsValidNumber(responsibility)||responsibility<0.0)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(responsibility>0.0)
          hits[scenario]++;
       responsibility_sum[scenario] += responsibility;
@@ -2806,7 +3157,9 @@ bool D2SkillCollectRecoverySmoke(ulong &hits[],double &responsibility_sum[],doub
          const double scale=MathMax(0.001,MathMin(10.0,confidence[int(scenario) * BarDescr * NForecast+token]));
          const double absolute_error=MathAbs(target[coordinate]-forecast[int(scenario) * target_total+coordinate]);
          if(!MathIsValidNumber(scale)||!MathIsValidNumber(absolute_error))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          scale_sum[scenario] += responsibility * scale;
          absolute_sum[scenario] += responsibility * absolute_error;
          absolute_over_scale_sum[scenario] += responsibility * absolute_error / scale;
@@ -2827,10 +3180,14 @@ bool D2SkillLogRecoverySmoke(const ulong &hits[],const double &responsibility_su
       ArraySize(scale_sum)!=NScenarios||ArraySize(absolute_sum)!=NScenarios||
       ArraySize(absolute_over_scale_sum)!=NScenarios||
       ArraySize(recovered)!=NScenarios||ArraySize(age_zero)!=NScenarios)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CScenarioCodebook *codebook=D2SkillForecast.GetCodebook();
    if(!codebook)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *ages=codebook.GetInactivityAge();
    CBufferFloat *counts=codebook.GetEMACounts();
    CBufferFloat *usage=codebook.GetUsage();
@@ -2838,12 +3195,16 @@ bool D2SkillLogRecoverySmoke(const ulong &hits[],const double &responsibility_su
    if(!ages||!counts||!usage||!inactive||ages.Total()!=NScenarios||counts.Total()!=NScenarios||
       usage.Total()!=NScenarios||inactive.Total()!=NScenarios||!ages.BufferRead()||!counts.BufferRead()||
       !usage.BufferRead()||!inactive.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint scenario=0; scenario<NScenarios; scenario++)
      {
       if(!MathIsValidNumber(ages[scenario])||!MathIsValidNumber(counts[scenario])||
          !MathIsValidNumber(usage[scenario])||!MathIsValidNumber(inactive[scenario]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       const double denominator=responsibility_sum[scenario] * double(BarDescr * NForecast * EmbeddingSize);
       const double mean_scale=(denominator>0.0 ? scale_sum[scenario] / denominator : 0.0);
       const double mean_absolute=(denominator>0.0 ? absolute_sum[scenario] / denominator : 0.0);
@@ -2864,9 +3225,13 @@ bool D2SkillTrainBatch(const int position)
 //--- build exactly the same X<=t state as CreateBuffers(position,...,future),
 //--- but do not touch any future sample until Market and Scenario are complete.
    if(!CreateBuffers(position+NForecast,GetPointer(D2SkillState),GetPointer(D2SkillTime),NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillMarket.feedForward(GetPointer(D2SkillState),1,false,(CBufferFloat*)NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- -1 is ScenarioForecast; the detached target is measured from the
 //--- preceding RankTCM latent z_t.
@@ -2874,13 +3239,19 @@ bool D2SkillTrainBatch(const int position)
    CBufferFloat   *market_latent=(market_layer ? market_layer.getOutput() : NULL);
    if(!market_latent||
       market_latent.Total()!=(BarDescr * EmbeddingSize)||market_latent.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- only now is any future window presented to the detached Target Encoder.
    if(!CreateBuffers(position,GetPointer(D2SkillState),GetPointer(D2SkillTime),GetPointer(D2SkillFuture)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillPrepareLatentTarget(market_latent))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const ulong responsibility_started=GetMicrosecondCount();
 
 //--- function if.
@@ -2890,26 +3261,41 @@ bool D2SkillTrainBatch(const int position)
    //--- the transient control-valid flag false, so stale batch_control is ignored.
       if(D2SkillForecast.LastBatchControlValid()&&!D2SkillForecast.CommitBatchDiagnostics())
          PrintFormat("%s -> %d invalid diagnostic commit failed",__FUNCTION__,__LINE__);
-      ReturnFalse;
+      ReturnFalse
      }
    const ulong responsibility_elapsed=GetMicrosecondCount()-responsibility_started;
    if(!D2SkillForecast.CommitBatchDiagnostics())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- the unified CNet updates ScenarioForecast and all preceding Market layers.
    if(!D2SkillMarket.backPropGradient((CBufferFloat*)NULL,(CBufferFloat*)NULL,-1,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2SkillResponsibilityMicroseconds += responsibility_elapsed;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Current-epoch progress uses the existing 12-float device summ... |
+//| D2SkillShowForecastProgress - Show forecast progress             |
 //+------------------------------------------------------------------+
+//--- Current-epoch progress uses the existing 12-float device summ...
 void D2SkillShowForecastProgress(const double percent,const ulong failed_batches)
   {
-   double lmix,router,trajectory,confidence,latent,observation;
-   double valid,invalid,entropy,distance,inactive,recovered;
+   double lmix;
+   double router;
+   double trajectory;
+   double confidence;
+   double latent;
+   double observation;
+   double valid;
+   double invalid;
+   double entropy;
+   double distance;
+   double inactive;
+   double recovered;
    if(D2SkillForecast&&D2SkillForecast.ReadEpochDiagnostics(lmix,router,trajectory,confidence,
          latent,observation,valid,invalid,entropy,distance,inactive,recovered)&&valid>0.0)
      {
@@ -2933,7 +3319,10 @@ void TrainD2SkillForecast(void)
    int bars=CopyRates(Symb.Name(),TimeFrame,0,start,Rates);
    if(bars<=0||!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-     { PrintFormat("%s -> %d",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
+      return;
+     }
    int  wait=-1;
    bool calculated=false;
    do
@@ -2945,16 +3334,25 @@ void TrainD2SkillForecast(void)
      }
    while(!calculated&&wait<100);
    if(!calculated)
-     { PrintFormat("%s -> %d data unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d data unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
    if(!ArraySetAsSeries(Rates,true))
-     { PrintFormat("%s -> %d data unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d data unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    bars -= end+HistoryBars+NForecast;
    if(bars<0)
-     { PrintFormat("%s -> %d insufficient history",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d insufficient history",__FUNCTION__,__LINE__);
+      return;
+     }
 
 //--- with a forecast buffer CreateBuffers(position,...) starts Market state at
 //--- position+H.  Reproduce that exact X<=t mapping with NULL, which also keeps
@@ -2964,7 +3362,10 @@ void TrainD2SkillForecast(void)
 
 //--- gets Pointer.
                      GetPointer(D2SkillProbeTime),NULL))
-     { PrintFormat("%s -> %d fixed probe unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d fixed probe unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    uint        ticks=GetTickCount();
    bool        stop=false;
    const uint  passes=(D2SkillRecoverySmoke ? 1 : uint(MathMax(Epochs,0)));
@@ -2985,20 +3386,34 @@ void TrainD2SkillForecast(void)
 
    //--- all temporary smoke buffers must resize to NScenarios.
           ArrayResize(smoke_absolute_over_scale_sum,NScenarios)!=NScenarios))
-        { PrintFormat("%s -> %d smoke counter allocation failed",__FUNCTION__,__LINE__); break; }
+        {
+         PrintFormat("%s -> %d smoke counter allocation failed",__FUNCTION__,__LINE__);
+         break;
+        }
       ArrayInitialize(smoke_hits,0);
       ArrayInitialize(smoke_responsibility_sum,0.0);
       ArrayInitialize(smoke_scale_sum,0.0);
       ArrayInitialize(smoke_absolute_sum,0.0);
       ArrayInitialize(smoke_absolute_over_scale_sum,0.0);
       if(!D2SkillMarket.Clear()||!D2SkillTarget.Clear())
-        { PrintFormat("%s -> %d clear failed",__FUNCTION__,__LINE__); break; }
+        {
+         PrintFormat("%s -> %d clear failed",__FUNCTION__,__LINE__);
+         break;
+        }
       D2SkillTarget.TrainMode(false);
       double latent_before[],latent_after[];
       if(!D2SkillProbeNet(D2SkillMarket,GetPointer(D2SkillProbeState),latent_before,true))
-        { PrintFormat("%s -> %d fixed probe forward failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d fixed probe forward failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       if(!D2SkillForecast.ResetEpochDiagnostics())
-        { PrintFormat("%s -> %d diagnostic reset failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d diagnostic reset failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       D2SkillResponsibilityMicroseconds=0;
       for(int position=start-HistoryBars-NForecast-1; position>=end&&!IsStopped()&&!stop; position--)
         {
@@ -3023,7 +3438,11 @@ void TrainD2SkillForecast(void)
            {
             if(!D2SkillCollectRecoverySmoke(smoke_hits,smoke_responsibility_sum,smoke_scale_sum,
                                             smoke_absolute_sum,smoke_absolute_over_scale_sum))
-              { PrintFormat("%s -> %d smoke responsibility read failed",__FUNCTION__,__LINE__); stop=true; break; }
+              {
+               PrintFormat("%s -> %d smoke responsibility read failed",__FUNCTION__,__LINE__);
+               stop=true;
+               break;
+              }
             smoke_batches++;
             if(smoke_batches>=smoke_limit)
                break;
@@ -3037,12 +3456,26 @@ void TrainD2SkillForecast(void)
             ticks=GetTickCount();
            }
         }
-      double lmix,lrouter,ltrajectory,lconfidence,latent,observation;
-      double valid_value,invalid_value,entropy,distance,inactive_value,recovered_value;
+      double lmix;
+      double lrouter;
+      double ltrajectory;
+      double lconfidence;
+      double latent;
+      double observation;
+      double valid_value;
+      double invalid_value;
+      double entropy;
+      double distance;
+      double inactive_value;
+      double recovered_value;
       if(!D2SkillForecast.BuildEpochCodebookDiagnostics()||
          !D2SkillForecast.ReadEpochDiagnostics(lmix,lrouter,ltrajectory,lconfidence,latent,observation,
                valid_value,invalid_value,entropy,distance,inactive_value,recovered_value))
-        { PrintFormat("%s -> %d diagnostic read failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d diagnostic read failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       const ulong valid=(ulong)MathRound(valid_value);
       const ulong invalid=(ulong)MathRound(invalid_value);
       const uint  inactive=(uint)MathRound(inactive_value);
@@ -3050,25 +3483,48 @@ void TrainD2SkillForecast(void)
       uint        recovered_by_scenario[];
       uint        age_zero_by_scenario[];
       if(!D2SkillForecast.ReadEpochRecoveryEvents(recovered_by_scenario))
-        { PrintFormat("%s -> %d recovery-event read failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d recovery-event read failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       if(!D2SkillForecast.ReadEpochAgeZeroEvents(age_zero_by_scenario))
-        { PrintFormat("%s -> %d age-zero-event read failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d age-zero-event read failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       ulong recovery_sum=0;
       for(int i=0; i<ArraySize(recovered_by_scenario); i++)
          recovery_sum += recovered_by_scenario[i];
       if(recovery_sum!=(ulong)recovered)
-        { PrintFormat("%s -> %d recovery-event mismatch total=%I64u diagnostics=%u",__FUNCTION__,__LINE__,recovery_sum,recovered); stop=true; break; }
+        {
+         PrintFormat("%s -> %d recovery-event mismatch total=%I64u diagnostics=%u",__FUNCTION__,__LINE__,recovery_sum,recovered);
+         stop=true;
+         break;
+        }
       if(D2SkillRecoverySmoke&&valid!=smoke_batches)
-        { PrintFormat("%s -> %d smoke valid mismatch valid=%I64u collected=%I64u",__FUNCTION__,__LINE__,valid,smoke_batches); stop=true; break; }
+        {
+         PrintFormat("%s -> %d smoke valid mismatch valid=%I64u collected=%I64u",__FUNCTION__,__LINE__,valid,smoke_batches);
+         stop=true;
+         break;
+        }
       D2SkillBatches += valid;
       D2SkillInvalidBatches += invalid;
       if(valid==0)
-        { stop=true; break; }
+        {
+         stop=true;
+         break;
+        }
 
    //--- target is an independently initialized inference-only encoder.  It is
    //--- never copied from Market and is absent from every backward/update path.
       if(!D2SkillProbeNet(D2SkillMarket,GetPointer(D2SkillProbeState),latent_after,true))
-        { PrintFormat("%s -> %d Market epoch probe failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d Market epoch probe failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       const double latent_drift=D2SkillProbeDrift(latent_before,latent_after);
       PrintFormat("D2Skill epoch=%d batches=%I64u L_mix=%.8f L_router=%.8f L_trajectory=%.8f L_confidence=%.8f NLL_confidence=%.8f usage_entropy=%.8f pairwise_codebook=%.8f invalid=%I64u latent_drift=%.8f inactive=%u recovered=%u recovered_by_scenario=%s responsibility_ms=%.3f",
                   epoch+1,valid,lmix / valid,lrouter / valid,ltrajectory / valid,latent / valid,
@@ -3078,9 +3534,17 @@ void TrainD2SkillForecast(void)
       if(D2SkillRecoverySmoke&&!D2SkillLogRecoverySmoke(smoke_hits,smoke_responsibility_sum,smoke_scale_sum,
             smoke_absolute_sum,smoke_absolute_over_scale_sum,
             recovered_by_scenario,age_zero_by_scenario))
-        { PrintFormat("%s -> %d smoke state log failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d smoke state log failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       if(!D2SkillRecoverySmoke&&!D2SkillSaveCheckpoint(epoch+1))
-        { PrintFormat("%s -> %d checkpoint failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d checkpoint failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       if(D2SkillRecoverySmoke)
          PrintFormat("D2Skill smoke complete valid=%I64u recovery_age=%u checkpoint=SKIPPED",valid,
                      D2SkillForecast.RecoveryAge());
@@ -3101,8 +3565,9 @@ void TrainD2SkillForecast(void)
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| Actor-Critic inference and composition helpers Implements ORI... |
+//| D2SkillManifestValue - Return the manifest value                 |
 //+------------------------------------------------------------------+
+//--- Actor-Critic inference and composition helpers Implements ORI...
 string D2SkillManifestValue(const string file_name,const string key)
   {
    int handle=FileOpen(file_name,FILE_READ | FILE_TXT | FILE_ANSI | FILE_COMMON | FILE_SHARE_READ);
@@ -3128,8 +3593,7 @@ string D2SkillManifestValue(const string file_name,const string key)
    return(value);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateForecastManifestHeader. Static         |
-//| checkp...                                                        |
+//| D2SkillValidateForecastManifestHeader - Check manifest fields    |
 //+------------------------------------------------------------------+
 bool D2SkillValidateForecastManifestHeader(void)
   {
@@ -3152,14 +3616,18 @@ bool D2SkillValidateForecastManifestHeader(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateForecastManifest.                      |
+//| D2SkillValidateForecastManifest - Validate forecast manifest     |
 //+------------------------------------------------------------------+
 bool D2SkillValidateForecastManifest(const ulong signature,const bool training=false)
   {
    if(signature==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillValidateForecastManifestHeader())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #define D2Skill_MANIFEST_EQ(KEY,VALUE) if(D2SkillManifestValue(D2Skill_MANIFEST_FILE,KEY)!=(VALUE)) ReturnFalse
    D2Skill_MANIFEST_EQ("contract_signature",StringFormat("%I64u",D2SkillForecast.ContractSignature()));
    D2Skill_MANIFEST_EQ("forecast_signature",StringFormat("%I64u",signature));
@@ -3175,13 +3643,15 @@ bool D2SkillValidateForecastManifest(const ulong signature,const bool training=f
          D2SkillManifestValue(D2Skill_MANIFEST_FILE,"completed_epochs")==""||
          D2SkillManifestValue(D2Skill_MANIFEST_FILE,"training_batches")==""||
          D2SkillManifestValue(D2Skill_MANIFEST_FILE,"invalid_batches")=="")
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 #undef D2Skill_MANIFEST_EQ
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCaptureFrozenBuffer.                           |
+//| D2SkillCaptureFrozenBuffer - Capture frozen buffer               |
 //+------------------------------------------------------------------+
 bool D2SkillCaptureFrozenBuffer(CBufferFloat *source,CBufferFloat &baseline)
   {
@@ -3193,22 +3663,28 @@ bool D2SkillCaptureFrozenBuffer(CBufferFloat *source,CBufferFloat &baseline)
 bool D2SkillFrozenBufferEqual(CBufferFloat *source,CBufferFloat &baseline)
   {
    if(!source||!source.BufferRead()||source.Total()!=baseline.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<source.Total(); i++)
       if(source[i]!=baseline[i])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCaptureFrozenForecastBaseline.                 |
+//| D2SkillCaptureFrozenForecastBaseline - Capture                   |
 //+------------------------------------------------------------------+
 bool D2SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast=NULL)
   {
    CNeuronScenarioForecast *current=(forecast ? forecast : D2SkillForecast);
    D2SkillFrozenBaselineReady=false;
    if(!current||!current.GetCodebook())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *generator=current.GetGenerator().GetWeightsConv();
    CBufferFloat *router=current.GetRouter().GetWeightsConv();
    CBufferFloat *confidence=current.GetConfidenceHead().GetWeightsConv();
@@ -3225,19 +3701,23 @@ bool D2SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast=NULL
       !D2SkillCaptureFrozenBuffer(current.GetCodebook().GetUsage(),D2SkillFrozenUsage)||
       !D2SkillCaptureFrozenBuffer(current.GetCodebook().GetInactive(),D2SkillFrozenInactive)||
       !D2SkillCaptureFrozenBuffer(current.GetCodebook().GetInactivityAge(),D2SkillFrozenInactivityAge))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2SkillFrozenBaselineReady=true;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenWeightsExact.                      |
+//| D2SkillVerifyFrozenWeightsExact - Verify frozen weights exact    |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast=NULL)
   {
    CNeuronScenarioForecast *current=(forecast ? forecast : D2SkillForecast);
    if(!D2SkillFrozenBaselineReady||!current)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *generator=current.GetGenerator().GetWeightsConv();
    CBufferFloat *router=current.GetRouter().GetWeightsConv();
    CBufferFloat *confidence=current.GetConfidenceHead().GetWeightsConv();
@@ -3250,13 +3730,15 @@ bool D2SkillVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast=NULL)
            D2SkillFrozenBufferEqual(confidence,D2SkillFrozenConfidenceWeights));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenCodebookExact.                     |
+//| D2SkillVerifyFrozenCodebookExact - Verify frozen codebook exact  |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast=NULL)
   {
    CNeuronScenarioForecast *current=(forecast ? forecast : D2SkillForecast);
    if(!D2SkillFrozenBaselineReady||!current||!current.GetCodebook())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(D2SkillFrozenBufferEqual(current.GetCodebook().GetPrototypes(),D2SkillFrozenPrototypes)&&
            D2SkillFrozenBufferEqual(current.GetCodebook().GetEMASums(),D2SkillFrozenEMASums)&&
            D2SkillFrozenBufferEqual(current.GetCodebook().GetEMACounts(),D2SkillFrozenEMACounts)&&
@@ -3265,14 +3747,14 @@ bool D2SkillVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast=NULL)
            D2SkillFrozenBufferEqual(current.GetCodebook().GetInactivityAge(),D2SkillFrozenInactivityAge));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillVerifyFrozenForecastExact.                     |
+//| D2SkillVerifyFrozenForecastExact - Verify frozen forecast exact  |
 //+------------------------------------------------------------------+
 bool D2SkillVerifyFrozenForecastExact(CNeuronScenarioForecast *forecast=NULL)
   {
    return(D2SkillVerifyFrozenWeightsExact(forecast)&&D2SkillVerifyFrozenCodebookExact(forecast));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadForecastInference.                         |
+//| D2SkillLoadForecastInference - Load forecast inference           |
 //+------------------------------------------------------------------+
 bool D2SkillLoadForecastInference(void)
   {
@@ -3285,7 +3767,7 @@ bool D2SkillLoadForecastInference(void)
    if(!D2SkillMarket.Load(D2Skill_MARKET_FILE,error,undefine,forecast,studied,true))
      {
       Print("D2Skill inference: model load=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
    D2SkillForecast=(CNeuronScenarioForecast*)D2SkillMarket.Layer(-1);
 
@@ -3293,23 +3775,25 @@ bool D2SkillLoadForecastInference(void)
    if(!D2SkillForecast||D2SkillForecast.Type()!=defNeuronScenarioForecast)
      {
       Print("D2Skill inference: forecast layer=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
    if(!ConfigureForecastRecoveryAge())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- function if.
    if(D2SkillForecast.GetTopK()!=TopK)
      {
       PrintFormat("D2Skill inference: TopK expected=%d actual=%d",TopK,D2SkillForecast.GetTopK());
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- only the Market/Forecast path. Target and its future-window b...
    if(!D2SkillValidateShapes(false))
      {
       Print("D2Skill inference: shape audit=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
    D2SkillMarket.TrainMode(false);
    const ulong signature=D2SkillForecastSignature();
@@ -3318,58 +3802,73 @@ bool D2SkillLoadForecastInference(void)
    if(!D2SkillValidateForecastManifest(signature))
      {
       Print("D2Skill inference: manifest=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(!D2SkillCaptureFrozenForecastBaseline())
      {
       Print("D2Skill inference: frozen baseline=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
    D2SkillLastSignature=signature;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Full forecast-training restore. Target is required here becau... |
+//| D2SkillLoadForecastTraining - Load forecast training             |
 //+------------------------------------------------------------------+
+//--- Full forecast-training restore. Target is required here becau...
 bool D2SkillLoadForecastTraining(void)
   {
    if(!FileIsExist(D2Skill_MANIFEST_FILE,FILE_COMMON)||
       !FileIsExist(D2Skill_MARKET_FILE,FILE_COMMON)||!FileIsExist(D2Skill_TARGET_FILE,FILE_COMMON))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- avoid a partial CNet::Load before the fallback random graph i...
    if(!D2SkillValidateForecastManifestHeader())
      {
       Print("D2Skill restore: manifest static contract=FAIL");
-      ReturnFalse;
+      ReturnFalse
      }
    float    error=0,undefine=0,forecast=0;
    datetime studied=0;
    if(!D2SkillMarket.Load(D2Skill_MARKET_FILE,error,undefine,forecast,studied,true)||
       !D2SkillTarget.Load(D2Skill_TARGET_FILE,error,undefine,forecast,studied,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2SkillTarget.SetOpenCL(D2SkillMarket.GetOpenCL());
    D2SkillForecast=(CNeuronScenarioForecast*)D2SkillMarket.Layer(-1);
    if(!D2SkillForecast||D2SkillForecast.Type()!=defNeuronScenarioForecast)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!ConfigureForecastRecoveryAge())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- these are transient training tensors and are intentionally absent from
 //--- *.nnw. Recreate them before the common shape audit.
    if(!D2SkillInitTrainingBuffers()||!D2SkillValidateShapes())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const ulong signature=D2SkillForecastSignature();
    if(!D2SkillValidateForecastManifest(signature,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const string completed=D2SkillManifestValue(D2Skill_MANIFEST_FILE,"completed_epochs");
    const string batches=D2SkillManifestValue(D2Skill_MANIFEST_FILE,"training_batches");
    const string invalid=D2SkillManifestValue(D2Skill_MANIFEST_FILE,"invalid_batches");
    if(completed==""||batches==""||invalid=="")
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2SkillCompletedEpochs=(uint)StringToInteger(completed);
    D2SkillBatches=(ulong)StringToInteger(batches);
    D2SkillInvalidBatches=(ulong)StringToInteger(invalid);
@@ -3386,7 +3885,10 @@ bool D2SkillAddCross(CArrayObj *description,const bool critic,const bool d2=fals
   {
    CLayerDescription *descr=new CLayerDescription();
    if(!description||!descr)
-     { DeleteObj(descr); ReturnFalse; }
+     {
+      DeleteObj(descr)
+      ReturnFalse
+     }
    descr.type=(d2&&!critic ? defNeuronD2Skill : defNeuronScenarioCrossAttention);
    descr.count=NScenarios;
    descr.variables=(critic ? 5 : 3);
@@ -3401,8 +3903,8 @@ bool D2SkillAddCross(CArrayObj *description,const bool critic,const bool d2=fals
    if(description.Add(descr))
       return(true);
 
-   DeleteObj(descr);
-   ReturnFalse;
+   DeleteObj(descr)
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
 //| D2SkillAddConv - implements D2SkillAddConv.                      |
@@ -3412,7 +3914,10 @@ bool D2SkillAddConv(CArrayObj *description,const uint count,const uint window,co
   {
    CLayerDescription *descr=new CLayerDescription();
    if(!description||!descr)
-     { DeleteObj(descr); ReturnFalse; }
+     {
+      DeleteObj(descr)
+      ReturnFalse
+     }
    descr.type=defNeuronConvOCL;
    descr.count=count;
    descr.window=window;
@@ -3425,11 +3930,11 @@ bool D2SkillAddConv(CArrayObj *description,const uint count,const uint window,co
    if(description.Add(descr))
       return(true);
 
-   DeleteObj(descr);
-   ReturnFalse;
+   DeleteObj(descr)
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| Creates or initializes D2SkillActorCriticDescriptions.           |
+//| CreateD2SkillActorCriticDescriptions - Create                    |
 //+------------------------------------------------------------------+
 bool CreateD2SkillActorCriticDescriptions(CArrayObj *&actor,CArrayObj *&critic)
   {
@@ -3437,8 +3942,8 @@ bool CreateD2SkillActorCriticDescriptions(CArrayObj *&actor,CArrayObj *&critic)
    critic=new CArrayObj();
    if(!actor||!critic)
      {
-      DeleteObj(actor);
-      DeleteObjAndFalse(critic);
+      DeleteObj(actor)
+      DeleteObjAndFalse(critic)
      }
    actor.FreeMode(true);
    critic.FreeMode(true);
@@ -3448,21 +3953,21 @@ bool CreateD2SkillActorCriticDescriptions(CArrayObj *&actor,CArrayObj *&critic)
       !D2SkillAddConv(actor,1,(3 * EmbeddingSize),EmbeddingSize,1,GELU)||
       !D2SkillAddConv(actor,1,EmbeddingSize,3,2,SIGMOID))
      {
-      DeleteObj(actor);
-      DeleteObjAndFalse(critic);
+      DeleteObj(actor)
+      DeleteObjAndFalse(critic)
      }
    if(!D2SkillAddBase(critic,AccountDescr+NActions)||!D2SkillAddCross(critic,true)||
       !D2SkillAddConv(critic,1,(5 * EmbeddingSize),EmbeddingSize,1,GELU)||
       !D2SkillAddConv(critic,1,EmbeddingSize,1,1,None))
      {
-      DeleteObj(actor);
-      DeleteObjAndFalse(critic);
+      DeleteObj(actor)
+      DeleteObjAndFalse(critic)
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidatePolicyShape.                           |
+//| D2SkillValidatePolicyShape - Validate policy shape               |
 //+------------------------------------------------------------------+
 bool D2SkillValidatePolicyShape(CNet &net,const bool critic)
   {
@@ -3474,21 +3979,29 @@ bool D2SkillValidatePolicyShape(CNet &net,const bool critic)
       cross.Horizon()!=NForecast||cross.Latent()!=EmbeddingSize||
       cross.Queries()!=(critic ? 5 : 3)||cross.IsCritic()!=critic||
       cross.HistorySize()!=StackSize||cross.HistoryTopK()!=TopK)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *output_layer=net.Layer(3);
    CBufferFloat   *buffer=(output_layer ? output_layer.getOutput() : NULL);
    if(!buffer||buffer.Total()!=(critic ? 1 : NActions))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *input_layer=net.Layer(0);
    buffer=(input_layer ? input_layer.getOutput() : NULL);
    if(!buffer||
       buffer.Total()!=int(AccountDescr+(critic ? NActions : 0)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *cross_layer=net.Layer(1);
    buffer=(cross_layer ? cross_layer.getOutput() : NULL);
    if(!buffer||
       buffer.Total()!=int(critic ? (5 * EmbeddingSize) : (3 * EmbeddingSize)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -3499,7 +4012,9 @@ bool D2SkillForwardForecast(const int position,CBufferFloat *state,CBufferFloat 
   {
    if(!D2SkillForecast||!CreateBuffers(position,state,time,NULL)||
       !D2SkillMarket.feedForward(state,1,false,(CBufferFloat*)NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *z=D2SkillForecast.GetZ(),*u=D2SkillForecast.GetU(),*pi=D2SkillForecast.GetPi();
    return(z!=NULL&&u!=NULL&&pi!=NULL&&z.Total()==NScenarios * BarDescr * NForecast * EmbeddingSize&&
            u.Total()==NScenarios * BarDescr * NForecast&&
@@ -3514,14 +4029,18 @@ bool BuildCriticInput(CBufferFloat *account,CBufferFloat *action,CBufferFloat *c
       account.GetIndex()<0||action.GetIndex()<0||
       (!combined.BufferInit(AccountDescr+NActions,0))||
       (combined.GetIndex()<0&&!combined.BufferCreate(D2SkillMarket.GetOpenCL())))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillDevice.Bind(D2SkillMarket.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(D2SkillDevice.Join2(account,AccountDescr,action,NActions,combined));
   }
 //+------------------------------------------------------------------+
-//| Implements EvaluateAction. lot instead of the former balance-... |
+//| EvaluateAction - Evaluate action                                 |
 //+------------------------------------------------------------------+
 double EvaluateAction(CBufferFloat *action,const double balance,const uint position)
   {
@@ -3546,8 +4065,9 @@ double EvaluateAction(CBufferFloat *action,const double balance,const uint posit
    return(reward * (min_lot / virtual_lot));
   }
 //+------------------------------------------------------------------+
-//| Builds TeacherAction. raw future window here; the live Market... |
+//| BuildTeacherAction - Build teacher action                        |
 //+------------------------------------------------------------------+
+//--- Builds TeacherAction. raw future window here; the live Market...
 bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *action,double &reward)
   {
    reward=0;
@@ -3558,16 +4078,17 @@ bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *a
      {
       PrintFormat("BuildTeacherAction input position=%d rates=%d account=%d action=%d",
                   position,Rates.Size(),(account ? account.Total() :-1),(action ? action.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
-   CBufferFloat teacher_state,teacher_time;
+   CBufferFloat teacher_state;
+   CBufferFloat teacher_time;
 
 //--- function if.
    if(!CreateBuffers(position,GetPointer(teacher_state),GetPointer(teacher_time),GetPointer(D2SkillFuture)))
      {
       PrintFormat("BuildTeacherAction CreateBuffers position=%d future=%d index=%d",
                   position,D2SkillFuture.Total(),D2SkillFuture.GetIndex());
-      ReturnFalse;
+      ReturnFalse
      }
    vector<float>account_values;
 
@@ -3575,7 +4096,7 @@ bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *a
    if(account.GetData(account_values)!=AccountDescr)
      {
       PrintFormat("BuildTeacherAction account data total=%d index=%d",account.Total(),account.GetIndex());
-      ReturnFalse;
+      ReturnFalse
      }
    const vector<float>teacher=OraculAction(account_values,GetPointer(D2SkillFuture));
 
@@ -3583,28 +4104,28 @@ bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *a
    if(teacher.Size()!=NActions)
      {
       PrintFormat("BuildTeacherAction oracle size=%d expected=%d",teacher.Size(),NActions);
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(!action.AssignArray(teacher))
      {
       Print("BuildTeacherAction action AssignArray");
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(action.GetIndex()<0&&!action.BufferCreate(D2SkillMarket.GetOpenCL()))
      {
       PrintFormat("BuildTeacherAction action BufferCreate total=%d index=%d",action.Total(),action.GetIndex());
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(action.GetIndex()>=0&&!action.BufferWrite())
      {
       PrintFormat("BuildTeacherAction action BufferWrite total=%d index=%d",action.Total(),action.GetIndex());
-      ReturnFalse;
+      ReturnFalse
      }
    reward=EvaluateAction(action,MathMax(0.0,double(account_values[0]) * EtalonBalance),(uint)position);
 
@@ -3612,36 +4133,47 @@ bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *a
    if(!MathIsValidNumber(reward))
      {
       PrintFormat("BuildTeacherAction reward invalid %.8f",reward);
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| A valid random policy action expands Critic coverage only. Bu... |
+//| BuildRandomAction - Build random action                          |
 //+------------------------------------------------------------------+
+//--- A valid random policy action expands Critic coverage only. Bu...
 bool BuildRandomAction(const int position,CBufferFloat *account,CBufferFloat *action,double &reward)
   {
    reward=0;
    if(!account||!action||position<0||position>=int(Rates.Size())||
       account.Total()!=AccountDescr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    vector<float>account_values;
    if(account.GetData(account_values)!=AccountDescr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double balance=MathMax(0.0,double(account_values[0]) * EtalonBalance);
    double       margin=0;
    if(balance<=0||!OrderCalcMargin(ORDER_TYPE_BUY,Symb.Name(),1,Rates[position].open,margin)||margin<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double min_lot=Symb.LotsMin();
    const double max_lot=MathMin(Symb.LotsMax(),balance / (2.0 * margin));
    if(min_lot<=0||max_lot<min_lot)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double stop_points=MathMax(Symb.StopsLevel(),10);
    const double min_tp=stop_points / MathMax(MaxTP,1);
    const double min_sl=(stop_points+Symb.Spread()) / MathMax(MaxSL,1);
    if(min_tp>=1.0||min_sl>=1.0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double uniform=MathRand() / 32767.0;
    const double lot=MathMin(max_lot,NormalizeLot(min_lot+(max_lot-min_lot) * uniform));
    const double tp=min_tp+(1.0-min_tp) * (MathRand() / 32767.0);
@@ -3654,11 +4186,17 @@ bool BuildRandomAction(const int position,CBufferFloat *account,CBufferFloat *ac
    values[1]=values[4]=float(tp);
    values[2]=values[5]=float(sl);
    if(!action.AssignArray(values))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(action.GetIndex()<0&&!action.BufferCreate(D2SkillMarket.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(action.GetIndex()>=0&&!action.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    reward=EvaluateAction(action,balance,(uint)position);
 
    return(MathIsValidNumber(reward));
@@ -3670,11 +4208,15 @@ bool D2SkillClampAction(CBufferFloat *source,CBufferFloat *target)
   {
    if(!source||!target||!source.BufferRead()||source.Total()!=NActions||
       !target.BufferInit(NActions,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint i=0; i<NActions; i++)
      {
       if(!MathIsValidNumber(source[i])||!target.Update(i,float(MathMax(0.0,MathMin(1.0,double(source[i]))))))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(target.GetIndex()<0||target.BufferWrite());
@@ -3685,15 +4227,21 @@ bool D2SkillClampAction(CBufferFloat *source,CBufferFloat *target)
 bool D2SkillWriteACManifest(const ulong forecast_signature)
   {
    if(forecast_signature==0||forecast_signature!=D2SkillLastSignature)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const ulong actor_hash=D2SkillHashFile(ulong(1469598103934665603),D2Skill_ACTOR_FILE);
    const ulong q1_hash=D2SkillHashFile(ulong(1469598103934665603),D2Skill_Q1_FILE);
    const ulong q2_hash=D2SkillHashFile(ulong(1469598103934665603),D2Skill_Q2_FILE);
    if(actor_hash==0||q1_hash==0||q2_hash==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int handle=FileOpen(D2Skill_AC_MANIFEST_FILE,FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    FileWrite(handle,"format=D2Skill_ACTOR_CRITIC");
    FileWrite(handle,StringFormat("version=%u",D2Skill_AC_FORMAT_VERSION));
    FileWrite(handle,StringFormat("d2_representation=%u",D2SkillD2Representation));
@@ -3718,7 +4266,7 @@ bool D2SkillWriteACManifest(const ulong forecast_signature)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateACManifest.                            |
+//| D2SkillValidateManifestRepresentation - Validate                 |
 //+------------------------------------------------------------------+
 bool D2SkillValidateManifestRepresentation(const string manifest_file,
                                            const bool allow_bank_reset,
@@ -3731,13 +4279,13 @@ bool D2SkillValidateManifestRepresentation(const string manifest_file,
       actual!=IntegerToString(D2SkillDirectionMagnitude))
      {
       PrintFormat("D2Skill policy manifest: invalid d2_representation=%s",actual);
-      ReturnFalse;
+      ReturnFalse
      }
    mismatch=(actual!=expected);
    if(mismatch&&!allow_bank_reset)
      {
       PrintFormat("D2Skill policy manifest: d2_representation expected=%s actual=%s",expected,actual);
-      ReturnFalse;
+      ReturnFalse
      }
    if(mismatch)
       PrintFormat("D2Skill policy manifest: d2_representation expected=%s actual=%s; bank reset requested",
@@ -3746,7 +4294,7 @@ bool D2SkillValidateManifestRepresentation(const string manifest_file,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillValidateACManifestFile.                        |
+//| D2SkillValidateACManifestFile - Validate AC manifest file        |
 //+------------------------------------------------------------------+
 bool D2SkillValidateACManifestFile(const bool required,const string manifest_file,
                                    const bool allow_bank_reset)
@@ -3761,7 +4309,9 @@ bool D2SkillValidateACManifestFile(const bool required,const string manifest_fil
    bool representation_mismatch=false;
    if(!D2SkillValidateManifestRepresentation(manifest_file,allow_bank_reset,
                                               representation_mismatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2Skill_AC_MANIFEST_EQ("forecast_signature",StringFormat("%I64u",D2SkillLastSignature));
    D2Skill_AC_MANIFEST_EQ("actor_context",IntegerToString((3 * EmbeddingSize)));
    D2Skill_AC_MANIFEST_EQ("critic_context",IntegerToString((5 * EmbeddingSize)));
@@ -3782,66 +4332,75 @@ bool D2SkillValidateACManifestFile(const bool required,const string manifest_fil
    if(D2SkillManifestValue(manifest_file,"generation")=="")
      {
       Print("D2Skill policy manifest: generation is absent");
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| D2SkillValidateACManifest - implements D2SkillValidateACManifest |
-//| (D2SkillValidateACManifest).                                     |
+//| D2SkillValidateACManifest - Validate the actor-critic manifest   |
 //+------------------------------------------------------------------+
 bool D2SkillValidateACManifest(const bool required)
   {
    return(D2SkillValidateACManifestFile(required,D2Skill_AC_MANIFEST_FILE,false));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadPolicyNet. Shared Actor-Critic lifecycle   |
-//| ...                                                              |
+//| D2SkillConfigureBankRepresentation - Configure the skill banks   |
 //+------------------------------------------------------------------+
 bool D2SkillConfigureBankRepresentation(CD2SkillBank *task,CD2SkillBank *step)
   {
    if(!task||!step)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool task_mismatch=(task.Representation()!=D2SkillD2Representation);
    const bool step_mismatch=(step.Representation()!=D2SkillD2Representation);
    if((task_mismatch||step_mismatch)&&!D2SkillD2ResetBanksOnRepresentationMismatch)
      {
       PrintFormat("D2Skill representation mismatch expected=%d task=%d step=%d",
                   D2SkillD2Representation,task.Representation(),step.Representation());
-      ReturnFalse;
+      ReturnFalse
      }
    if((task_mismatch&&!task.ResetDurableState())||
       (step_mismatch&&!step.ResetDurableState()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    task.SetRepresentation(D2SkillD2Representation);
    step.SetRepresentation(D2SkillD2Representation);
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| A newly created policy has no durable checkpoint state to keep.  |
+//| D2SkillSetNewBankRepresentation - Set new bank representation    |
 //+------------------------------------------------------------------+
+//--- A newly created policy has no durable checkpoint state to keep.
 bool D2SkillSetNewBankRepresentation(CD2SkillBank *task,CD2SkillBank *step)
   {
    if(!task||!step)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    task.SetRepresentation(D2SkillD2Representation);
    step.SetRepresentation(D2SkillD2Representation);
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillSetNewPolicyRepresentation.                    |
+//| D2SkillSetNewPolicyRepresentation - Set                          |
 //+------------------------------------------------------------------+
 bool D2SkillSetNewPolicyRepresentation(CNet &net)
   {
    CNeuronBaseOCL *layer=net.Layer(1);
    if(!layer||layer.Type()!=defNeuronD2Skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2Skill *skill=(CD2Skill*)layer;
    if(!skill||!skill.Ready()||!skill.TaskBank()||!skill.StepBank())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(D2SkillSetNewBankRepresentation(skill.TaskBank(),skill.StepBank()));
   }
@@ -3862,7 +4421,11 @@ bool D2SkillCreatePolicySet(CNet &actor,CNet &q1,CNet &q2)
   {
    CArrayObj *actor_descr=NULL,*critic_descr=NULL;
    if(!CreateD2SkillActorCriticDescriptions(actor_descr,critic_descr))
-     { DeleteObj(actor_descr); DeleteObj(critic_descr); ReturnFalse; }
+     {
+      DeleteObj(actor_descr)
+      DeleteObj(critic_descr)
+      ReturnFalse
+     }
    bool result=actor.Create(actor_descr);
    if(result)
       actor.SetOpenCL(D2SkillMarket.GetOpenCL());
@@ -3874,8 +4437,8 @@ bool D2SkillCreatePolicySet(CNet &actor,CNet &q1,CNet &q2)
       result=q2.Create(critic_descr);
    if(result)
       q2.SetOpenCL(D2SkillMarket.GetOpenCL());
-   DeleteObj(actor_descr);
-   DeleteObj(critic_descr);
+   DeleteObj(actor_descr)
+   DeleteObj(critic_descr)
 
 //--- function if.
    if(result)
@@ -3904,12 +4467,15 @@ void D2SkillD2BankFlags(bool &task_enabled,bool &step_enabled)
                     D2SkillD2Mode==D2Skill_D2_MODE_FULL));
   }
 //+------------------------------------------------------------------+
-//| Selects the only utility interpretation accepted by this run.    |
+//| D2SkillConfigureD2UtilityMode - Configure d 2 utility mode       |
 //+------------------------------------------------------------------+
+//--- Selects the only utility interpretation accepted by this run.
 bool D2SkillConfigureD2UtilityMode(const int utility_mode)
   {
    if(utility_mode!=D2Skill_D2_UTILITY_PAIRED_HINDSIGHT)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    D2SkillD2UtilityMode=utility_mode;
    D2SkillD2PairedUtilityUpdates=0;
    Print("D2Skill D2 utility_source=paired_terminal");
@@ -3923,21 +4489,29 @@ bool D2SkillEnableD2Banks(CNet &actor)
   {
    CNeuronBaseOCL *layer=actor.Layer(1);
    if(!layer||layer.Type()!=defNeuronD2Skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2Skill *skill=(CD2Skill*)layer;
    if(!skill||!skill.Ready())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bool task_enabled=false;
    bool step_enabled=false;
    D2SkillD2BankFlags(task_enabled,step_enabled);
    if(!skill.SetMode(D2SkillD2ExecutionMode)||
       !skill.SetOnlineDirectionUpdate(D2SkillD2OnlineDirectionUpdate)||
       !skill.Enable(task_enabled,step_enabled))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2SkillBank *task=skill.TaskBank();
    CD2SkillBank *step=skill.StepBank();
    if(!task||!step)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillConfigureBankRepresentation(task,step)||
       !task.SetThresholds(0.65f,0.0f)||!step.SetThresholds(0.65f,0.0f)||
       !task.SetLifecycle(3,32,256)||!step.SetLifecycle(3,32,256)||
@@ -3947,7 +4521,9 @@ bool D2SkillEnableD2Banks(CNet &actor)
                              (float)MathMin(1.0,MathMax(-1.0,D2SkillD2MinUtility)))||
       !step.SetUtilityPolicy(D2SkillD2UtilityAware,
                              (float)MathMin(1.0,MathMax(-1.0,D2SkillD2MinUtility))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    PrintFormat("D2Skill D2 stage=%d mode=%d execution=%d task=%s step=%s utility=%s scale=%.3f direction_ema=%s",
                D2SkillD2Stage,D2SkillD2Mode,D2SkillD2ExecutionMode,(task_enabled ? "on" : "off"),
                (step_enabled ? "on" : "off"),
@@ -3957,25 +4533,34 @@ bool D2SkillEnableD2Banks(CNet &actor)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Applies one normalized utility observation to selected banks.    |
+//| D2SkillApplyD2Utility - Apply d 2 utility                        |
 //+------------------------------------------------------------------+
+//--- Applies one normalized utility observation to selected banks.
 bool D2SkillApplyD2Utility(CNet &actor,const double value,bool &applied)
   {
    applied=false;
    if((D2SkillD2ExecutionMode!=D2_EVALUATE&&
        D2SkillD2ExecutionMode!=D2_ONLINE_CALIBRATION)||
       !MathIsValidNumber(value))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *layer=actor.Layer(1);
    if(!layer||layer.Type()!=defNeuronD2Skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2Skill *skill=(CD2Skill*)layer;
    if(!skill||!skill.Ready())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double normalized=MathMax(-1.0,MathMin(1.0,
                                      value * D2SkillD2UtilityScale / MathMax(EtalonBalance,1.0)));
    if(!MathIsValidNumber(normalized))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bool task_enabled=false;
    bool step_enabled=false;
    bool task_applied=false;
@@ -3983,18 +4568,22 @@ bool D2SkillApplyD2Utility(CNet &actor,const double value,bool &applied)
    D2SkillD2BankFlags(task_enabled,step_enabled);
    if(task_enabled)
       if(!skill.TaskUtility((float)normalized,task_applied))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    if(step_enabled)
       if(!skill.StepUtility((float)normalized,step_applied))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    applied=(task_applied||step_applied);
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Applies paired hindsight delta JSkill-JBase to selected skills.  |
-//| Utility is separate from Actor gradients and pseudo-residuals.   |
+//| D2SkillUpdateD2UtilityDelta - Update d 2 utility delta           |
 //+------------------------------------------------------------------+
+//--- Applies paired hindsight delta JSkill-JBase to selected skills. Utility is separate from Actor gradients and pseudo-residuals.
 bool D2SkillUpdateD2UtilityDelta(CNet &actor,const double delta_j,bool &applied)
   {
    applied=false;
@@ -4005,16 +4594,20 @@ bool D2SkillUpdateD2UtilityDelta(CNet &actor,const double delta_j,bool &applied)
 
    if(D2SkillD2UtilityMode!=D2Skill_D2_UTILITY_PAIRED_HINDSIGHT||
       !MathIsValidNumber(delta_j))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillApplyD2Utility(actor,delta_j,applied))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(applied)
       D2SkillD2PairedUtilityUpdates++;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillUpdateD2UtilityDelta.                          |
+//| D2SkillUpdateD2UtilityDelta - Update d 2 utility delta           |
 //+------------------------------------------------------------------+
 bool D2SkillUpdateD2UtilityDelta(CNet &actor,const double delta_j)
   {
@@ -4023,22 +4616,28 @@ bool D2SkillUpdateD2UtilityDelta(CNet &actor,const double delta_j)
    return(D2SkillUpdateD2UtilityDelta(actor,delta_j,applied));
   }
 //+------------------------------------------------------------------+
-//| Resets only the selected D2Skill episode influence state.        |
+//| D2SkillResetEpisodeInfluence - Reset episode influence           |
 //+------------------------------------------------------------------+
+//--- Resets only the selected D2Skill episode influence state.
 bool D2SkillResetEpisodeInfluence(CNet &actor)
   {
    CNeuronBaseOCL *layer=actor.Layer(1);
    if(!layer||layer.Type()!=defNeuronD2Skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2Skill *skill=(CD2Skill*)layer;
    if(!skill.Ready()||!skill.ResetEpisodeInfluence())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Closes the offline episode through paired utility then reset.    |
+//| D2SkillCloseOfflineEpisode - Close offline episode               |
 //+------------------------------------------------------------------+
+//--- Closes the offline episode through paired utility then reset.
 bool D2SkillCloseOfflineEpisode(CNet &actor,const bool paired_active,
                                 const bool pair_terminal,const bool episode_limit,
                                 const SD2SkillEpisodeOutcome &base,
@@ -4058,16 +4657,20 @@ bool D2SkillCloseOfflineEpisode(CNet &actor,const bool paired_active,
       if(!D2SkillValidatePairedEpisode(base,skill)||
          !D2SkillComputePairedEpisodeDelta(base,skill,terminal_delta)||
          !D2SkillUpdateD2UtilityDelta(actor,terminal_delta,utility_applied))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!D2SkillResetEpisodeInfluence(actor))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    influence_reset=true;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillCanCreatePolicyCheckpoint.                     |
+//| D2SkillCanCreatePolicyCheckpoint - Create can policy checkpoint  |
 //+------------------------------------------------------------------+
 bool D2SkillCanCreatePolicyCheckpoint(const bool manifest_exists,const bool allow_create)
   {
@@ -4077,7 +4680,7 @@ bool D2SkillCanCreatePolicyCheckpoint(const bool manifest_exists,const bool allo
    return(D2SkillD2RecreateIncompatibleCheckpoint);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadOrCreatePolicySetFile.                     |
+//| D2SkillLoadOrCreatePolicySetFile - Load                          |
 //+------------------------------------------------------------------+
 bool D2SkillLoadOrCreatePolicySetFile(CNet &actor,CNet &q1,CNet &q2,
                                       const bool allow_create,const string manifest_file)
@@ -4096,27 +4699,35 @@ bool D2SkillLoadOrCreatePolicySetFile(CNet &actor,CNet &q1,CNet &q2,
       if(!loaded&&!D2SkillCanCreatePolicyCheckpoint(true,allow_create))
         {
          Print("D2Skill policy restore=FAIL; incompatible checkpoint recreation is disabled");
-         ReturnFalse;
+         ReturnFalse
         }
      }
    else
       if(!D2SkillCanCreatePolicyCheckpoint(false,allow_create))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    if(!loaded)
      {
       if(manifest_exists)
          Print("D2Skill policy restore=FAIL; recreating incompatible policy set by explicit input");
       if(!D2SkillCreatePolicySet(actor,q1,q2))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    actor.SetOpenCL(D2SkillMarket.GetOpenCL());
    q1.SetOpenCL(D2SkillMarket.GetOpenCL());
    q2.SetOpenCL(D2SkillMarket.GetOpenCL());
    if(!D2SkillValidatePolicyShape(actor,false)||!D2SkillValidatePolicyShape(q1,true)||
       !D2SkillValidatePolicyShape(q2,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillEnableD2Banks(actor))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    actor.TrainMode(true);
    q1.TrainMode(true);
    q2.TrainMode(true);
@@ -4124,7 +4735,7 @@ bool D2SkillLoadOrCreatePolicySetFile(CNet &actor,CNet &q1,CNet &q2,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadOrCreatePolicySet.                         |
+//| D2SkillLoadOrCreatePolicySet - Load or create policy set         |
 //+------------------------------------------------------------------+
 bool D2SkillLoadOrCreatePolicySet(CNet &actor,CNet &q1,CNet &q2,
                                   const bool allow_create)
@@ -4133,8 +4744,9 @@ bool D2SkillLoadOrCreatePolicySet(CNet &actor,CNet &q1,CNet &q2,
                                             D2Skill_AC_MANIFEST_FILE));
   }
 //+------------------------------------------------------------------+
-//| Configures the Actor-Critic write permissions for the D2 mode.   |
+//| D2SkillConfigureActorCriticUpdates - Configure                   |
 //+------------------------------------------------------------------+
+//--- Configures the Actor-Critic write permissions for the D2 mode.
 bool D2SkillConfigureActorCriticUpdates(CNet &actor,CNet &q1,CNet &q2)
   {
 //--- D2_DISABLED retains its ordinary Actor-Critic baseline.  Online
@@ -4158,7 +4770,7 @@ bool D2SkillConfigureActorCriticUpdates(CNet &actor,CNet &q1,CNet &q2)
          critic_weights=D2SkillD2OnlineCriticUpdate;
          break;
       default:
-         ReturnFalse;
+         ReturnFalse
      }
 
 //--- CNet preserves TrainMode and full gradient routing.  Only its explicit
@@ -4166,7 +4778,9 @@ bool D2SkillConfigureActorCriticUpdates(CNet &actor,CNet &q1,CNet &q2)
    if(!actor.SetWeightsUpdate(actor_weights)||!q1.SetWeightsUpdate(critic_weights)||
       !q2.SetWeightsUpdate(critic_weights)||!D2SkillMarket.SetWeightsUpdate(false)||
       !D2SkillMarket.TrainMode(false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -4177,7 +4791,9 @@ bool D2SkillSavePolicySet(CNet &actor,CNet &q1,CNet &q2)
   {
    if(!D2SkillVerifyFrozenWeightsExact()||!D2SkillVerifyFrozenCodebookExact()||
       D2SkillForecastSignature()!=D2SkillLastSignature)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const datetime now=TimeCurrent();
    return(actor.Save(D2Skill_ACTOR_FILE,0,0,0,now,true)&&
            q1.Save(D2Skill_Q1_FILE,q1.getRecentAverageError(),0,0,now,true)&&
@@ -4185,19 +4801,25 @@ bool D2SkillSavePolicySet(CNet &actor,CNet &q1,CNet &q2)
            D2SkillWriteACManifest(D2SkillLastSignature));
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillLoadInferenceActor.                            |
+//| D2SkillLoadInferenceActor - Load inference actor                 |
 //+------------------------------------------------------------------+
 bool D2SkillLoadInferenceActor(CNet &actor)
   {
    if(!D2SkillValidateACManifestFile(true,D2Skill_AC_MANIFEST_FILE,
                                      D2SkillD2ResetBanksOnRepresentationMismatch)||
       !D2SkillLoadPolicyNet(actor,D2Skill_ACTOR_FILE))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    actor.SetOpenCL(D2SkillMarket.GetOpenCL());
    if(!D2SkillValidatePolicyShape(actor,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillEnableD2Banks(actor))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    actor.TrainMode(false);
 
    return(true);
@@ -4211,7 +4833,9 @@ bool ReadAction(CNet &net,CBufferFloat *target)
 //--- the final actor layer is allowed to be host-only, therefore its live
 //--- output must not be read through CBufferFloat::BufferRead().
    if(!target)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- CNet::getResults reuses a valid result object.  Passing target directly
 //--- avoids an allocation and the subsequent CPU-to-CPU AssignArray copy.
@@ -4221,48 +4845,66 @@ bool ReadAction(CNet &net,CBufferFloat *target)
    return(output==target&&target.Total()==NActions);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillAdvanceAccountTime.                            |
+//| D2SkillAdvanceAccountTime - Advance account time                 |
 //+------------------------------------------------------------------+
 bool D2SkillAdvanceAccountTime(CBufferFloat *current,const datetime next_time,CBufferFloat *next)
   {
    if(!current||!next||current.Total()!=AccountDescr||
       (current.GetIndex()>=0&&!current.BufferRead())||
       !next.BufferInit(AccountDescr,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint i=0; i<9; i++)
       if(!next.Update(i,current[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    double x=next_time / (double)(D'2024.01.01'-D'2023.01.01');
    if(!next.Update(9,float(MathSin(x!=0 ? 2.0 * M_PI*x : 0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    x=next_time / (double)PeriodSeconds(PERIOD_MN1);
    if(!next.Update(10,float(MathCos(x!=0 ? 2.0 * M_PI*x : 0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    x=next_time / (double)PeriodSeconds(PERIOD_W1);
    if(!next.Update(11,float(MathSin(x!=0 ? 2.0 * M_PI*x : 0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    x=next_time / (double)PeriodSeconds(PERIOD_D1);
    if(!next.Update(12,float(MathSin(x!=0 ? 2.0 * M_PI*x : 0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(next.GetIndex()<0||next.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillForwardForecastState.                          |
+//| D2SkillForwardForecastState - Check forward forecast state       |
 //+------------------------------------------------------------------+
 bool D2SkillForwardForecastState(CBufferFloat *state)
   {
 //--- CNet accepts a host-only input buffer and uploads it through its first
 //--- layer.  Do not require a device allocation from the caller here.
    if(!D2SkillForecast||!state||state.Total()!=HistoryBars * BarDescr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!D2SkillMarket.feedForward(state,1,false,(CBufferFloat*)NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *z=D2SkillForecast.GetZ(),*u=D2SkillForecast.GetU(),*pi=D2SkillForecast.GetPi();
    if(!z||!u||!pi||z.Total()!=NScenarios * BarDescr * NForecast * EmbeddingSize||
       u.Total()!=NScenarios * BarDescr * NForecast||pi.Total()!=NScenarios||
       z.GetIndex()<0||u.GetIndex()<0||pi.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -4275,7 +4917,9 @@ bool D2SkillBuildLiveAccount(const double previous_balance,const double previous
   {
    if(!account||!MathIsValidNumber(previous_balance)||
       !MathIsValidNumber(previous_equity)||previous_balance<=0||previous_equity<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    double buy_profit=0,sell_profit=0,position_discount=0;
    buy_value=0;
    sell_value=0;
@@ -4286,7 +4930,10 @@ bool D2SkillBuildLiveAccount(const double previous_balance,const double previous
          continue;
       const double profit=PositionGetDouble(POSITION_PROFIT);
       if((int)PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)
-        { buy_value += PositionGetDouble(POSITION_VOLUME); buy_profit += profit; }
+        {
+         buy_value += PositionGetDouble(POSITION_VOLUME);
+         buy_profit += profit;
+        }
       else
         { sell_value += PositionGetDouble(POSITION_VOLUME); sell_profit += profit; }
       position_discount += (current-PositionGetInteger(POSITION_TIME)) *
@@ -4314,7 +4961,9 @@ bool D2SkillBuildLiveAccount(const double previous_balance,const double previous
    values[12]=float(MathSin(x!=0 ? 2.0 * M_PI*x : 0));
    for(uint i=0; i<AccountDescr; i++)
       if(!MathIsValidNumber(values[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(account.AssignArray(values)&&(account.GetIndex()<0||account.BufferWrite()));
   }
@@ -4333,7 +4982,9 @@ bool D2SkillRefreshLiveMarket(CBufferFloat *state,CBufferFloat *time_state)
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars)||
       RSI.BarsCalculated()<bars||CCI.BarsCalculated()<bars||
       ATR.BarsCalculated()<bars||MACD.BarsCalculated()<bars)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
@@ -4344,8 +4995,9 @@ bool D2SkillRefreshLiveMarket(CBufferFloat *state,CBufferFloat *time_state)
    return(CreateBuffers(0,state,time_state,(CBufferFloat*)NULL));
   }
 //+------------------------------------------------------------------+
-//| Checks ExecutableOrder. One execution contract for historical... |
+//| IsExecutableOrder - Check executable order                       |
 //+------------------------------------------------------------------+
+//--- Checks ExecutableOrder. One execution contract for historical...
 bool IsExecutableOrder(const double lot,const double tp_fraction,const double sl_fraction)
   {
    const double stops=(MathMax(Symb.StopsLevel(),1)+Symb.Spread()) * Symb.Point();
@@ -4369,10 +5021,14 @@ bool D2SkillValidateAction(CBufferFloat *action)
   {
    if(!action||action.Total()!=NActions||
       (action.GetIndex()>=0&&!action.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint i=0; i<NActions; i++)
       if(!MathIsValidNumber(action[i])||action[i]<0||action[i]>1)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -4385,16 +5041,23 @@ bool D2SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_valu
    margin_penalty=0;
    market_closed=false;
    if(!D2SkillValidateAction(action))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- canonical CogDriver mutual exclusion and broker constraints.
    if(action[0]>=action[3])
-     { action.Update(0,action[0]-action[3]); action.Update(3,0); }
+     {
+      action.Update(0,action[0]-action[3]);
+      action.Update(3,0);
+     }
    else
      { action.Update(3,action[3]-action[0]); action.Update(0,0); }
    const double min_lot=Symb.LotsMin();
    if(!IsExecutableOrder(action[0],action[1],action[2]))
-     { if(buy_value>0) CloseByDirection(POSITION_TYPE_BUY); }
+     {
+      if(buy_value>0) CloseByDirection(POSITION_TYPE_BUY);
+     }
    else
      {
       const double lot=NormalizeLot(action[0]);
@@ -4423,7 +5086,7 @@ bool D2SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_valu
             if(retcode!=10019)
               {
                PrintFormat("D2Skill buy execution failed: retcode=%u %s",retcode,Trade.ResultRetcodeDescription());
-               ReturnFalse;
+               ReturnFalse
               }
 
       //--- preserve CogDriver's insufficient-margin feedback, but keep the
@@ -4432,7 +5095,9 @@ bool D2SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_valu
            }
      }
    if(!IsExecutableOrder(action[3],action[4],action[5]))
-     { if(sell_value>0) CloseByDirection(POSITION_TYPE_SELL); }
+     {
+      if(sell_value>0) CloseByDirection(POSITION_TYPE_SELL);
+     }
    else
      {
       const double lot=NormalizeLot(action[3]);
@@ -4461,7 +5126,7 @@ bool D2SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_valu
             if(retcode!=10019)
               {
                PrintFormat("D2Skill sell execution failed: retcode=%u %s",retcode,Trade.ResultRetcodeDescription());
-               ReturnFalse;
+               ReturnFalse
               }
             margin_penalty -= 100.0 * (lot-sell_value);
            }
@@ -4470,8 +5135,7 @@ bool D2SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_valu
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillExecuteAction. Inference callers do not        |
-//| train...                                                         |
+//| D2SkillExecuteAction - Execute the simulated trading action      |
 //+------------------------------------------------------------------+
 bool D2SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_value)
   {
@@ -4495,7 +5159,9 @@ bool PolicyBackward(CNet &actor,CNet &critic,CBufferFloat *actor_target,
       !actor_target.BufferInit(1,1.0f)||
       (actor_target.GetIndex()<0&&!actor_target.BufferCreate(D2SkillMarket.GetOpenCL()))||
       !D2SkillDevice.Add(critic_output.getOutput(),actor_target,actor_target,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    critic.TrainMode(false);
    bool         result=critic.backProp(actor_target,scenario_net,scenario_layer);
    CBufferFloat account_gradient;
@@ -4511,27 +5177,32 @@ bool PolicyBackward(CNet &actor,CNet &critic,CBufferFloat *actor_target,
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Finalizes projected balance before writing terminal account      |
-//| state.                                                           |
+//| D2SkillFinalizeAccountBalance - Finalize account balance         |
 //+------------------------------------------------------------------+
+//--- Finalizes projected balance before writing terminal account state.
 bool D2SkillFinalizeAccountBalance(const double balance,const double realized,
                                    const double min_balance,double &next_balance,
                                    bool &terminal)
   {
    if(!MathIsValidNumber(balance)||!MathIsValidNumber(realized)||
       !MathIsValidNumber(min_balance)||min_balance<0.0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double projected_balance=balance+realized;
    if(!MathIsValidNumber(projected_balance))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    terminal=(projected_balance<=min_balance);
    next_balance=(terminal ? min_balance : projected_balance);
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| One historical-bar account transition.  CheckAction remains the  |
+//| AdvanceAccount - Advance account                                 |
 //+------------------------------------------------------------------+
+//--- One historical-bar account transition.  CheckAction remains the
 bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int position,
                     const double min_balance,CBufferFloat *next,double &reward,bool &terminal)
   {
@@ -4541,16 +5212,22 @@ bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int positio
       current.Total()!=AccountDescr||action.Total()!=NActions||
       (current.GetIndex()>=0&&!current.BufferRead())||
       (action.GetIndex()>=0&&!action.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double balance=MathMax(0.0,double(current[0]) * EtalonBalance);
    reward=EvaluateAction(action,balance,(uint)position);
    if(!MathIsValidNumber(reward))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double buy=MathMax(0.0,double(action[0]-action[3]));
    const double sell=MathMax(0.0,double(action[3]-action[0]));
    double       margin=0;
    if(!OrderCalcMargin(ORDER_TYPE_BUY,Symb.Name(),1,Rates[position].open,margin))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double min_lot=Symb.LotsMin();
 
 //--- function if.
@@ -4647,12 +5324,16 @@ bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int positio
    double next_balance=0.0;
    bool   balance_terminal=false;
    if(!D2SkillFinalizeAccountBalance(balance,realized,min_balance,next_balance,balance_terminal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double current_equity=balance+double(current[6]) * balance+double(current[7]) * balance;
    const double next_equity=next_balance+next_buy_profit+next_sell_profit;
    if(!D2SkillAdvanceAccountTime(current,Rates[position-1].time,next)||
       (next.GetIndex()>=0&&!next.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!next.Update(0,float(next_balance / EtalonBalance))||
       !next.Update(1,float((next_balance-balance) / MathMax(balance,1.0)))||
       !next.Update(2,float(next_equity / MathMax(balance,1.0)))||
@@ -4661,7 +5342,9 @@ bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int positio
       !next.Update(6,float(next_buy_profit / MathMax(next_balance,1.0)))||
       !next.Update(7,float(next_sell_profit / MathMax(next_balance,1.0)))||
       !next.Update(8,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    terminal=(balance_terminal||next_equity<margin * min_lot);
 
    return(next.GetIndex()<0||next.BufferWrite());

@@ -92,7 +92,8 @@ int OnInit()
    if(!MACD.Create(Symb.Name(),TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice))
       return(INIT_FAILED);
 //---
-   float temp1,temp2;
+   float temp1;
+   float temp2;
    if(!Actor.Load(ACTOR+".nnw",dError,temp1,temp2,dtStudied,false)||
       !Critic.Load(CRITIC+".nnw",dError,temp1,temp2,dtStudied,false))
       return(INIT_FAILED);
@@ -195,7 +196,7 @@ void Train(void)
    for(int iter=0; (iter<Iterations&&!IsStopped()); iter ++)
      {
       int error_code;
-      int shift=(int)(fmin(fabs(Math::MathRandomNormal(0,1,error_code)),1) * (total)+SessionSize);
+      int shift=(int)(fmin(fabs(MathRandomNormal(0,1,error_code)),1) * (total)+SessionSize);
       States.Clear();
       for(int batch=0; batch<SessionSize; batch++)
         {
@@ -247,7 +248,7 @@ void Train(void)
             delete State;
             continue;
            }
-         if(!Actor.feedForward(GetPointer(State),12,true))
+         if(!Actor.feedForward(GetPointer(State),12,true,(CBufferFloat*)NULL))
            {
             delete State;
             ExpertRemove();
@@ -325,20 +326,20 @@ void Train(void)
       for(int batch=SessionSize-1; batch>=0; batch--)
         {
          State=States.At(batch);
-         if(!Actor.feedForward(State)||
-            !Critic.feedForward(State))
+         if(!Actor.feedForward(State,1,true,(CBufferFloat*)NULL)||
+            !Critic.feedForward(State,1,true,(CBufferFloat*)NULL))
            {
             ExpertRemove();
             return;
            }
          Critic.getResults(TempData);
-         float value=TempData.At(TempData. Maximum(0,3));
+         float value=TempData.At(((CArrayFloat*)TempData).Maximum(0,3));
          if(!TempData.Update((int)vActions[batch],rewards[SessionSize-batch-1]))
            {
             ExpertRemove();
             return;
            }
-         if(!Critic.backProp(TempData))
+         if(!Critic.backProp(TempData,(CBufferFloat*)NULL))
            {
             ExpertRemove();
             return;
@@ -349,7 +350,7 @@ void Train(void)
             ExpertRemove();
             return;
            }
-         if(!Actor.backProp(TempData))
+         if(!Actor.backProp(TempData,(CBufferFloat*)NULL))
            {
             ExpertRemove();
             return;
@@ -375,7 +376,7 @@ int GetAction(CBufferFloat* probability)
    prob=prob.CumSum();
    prob=prob / prob.Max();
    int   err_code;
-   float random=(float)Math::MathRandomNormal(0.5,0.5,err_code);
+   float random=(float)MathRandomNormal(0.5,0.5,err_code);
    if(random>=1)
       return((int)prob.Size()-1);
 

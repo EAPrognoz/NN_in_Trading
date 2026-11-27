@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                            AlphaQCM_Contract.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef ALPHAQCM_CONTRACT_MQH
 #define ALPHAQCM_CONTRACT_MQH

@@ -1,3 +1,9 @@
+//+------------------------------------------------------------------+
+//|                                                  unsupervised.cl |
+//|                                                          K-means |
+//|                                              Copyright 2022, DNG |
+//|                           https://www.mql5.com/ru/articles/10947 |
+//+------------------------------------------------------------------+
 /// \file
 /// \brief unsupervised.cl
 /// Library consist OpenCL kernels

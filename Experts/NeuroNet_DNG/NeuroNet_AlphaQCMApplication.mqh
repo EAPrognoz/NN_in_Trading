@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                 NeuroNet_AlphaQCMApplication.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_APPLICATION_MQH
 #define NEURONET_ALPHAQCM_APPLICATION_MQH
@@ -40,18 +41,16 @@ private:
    ulong             processed_bars;
 
 public:
+//+------------------------------------------------------------------+
+//| CAlphaQCMApplication - Initialize the object state               |
+//+------------------------------------------------------------------+
    CAlphaQCMApplication():qcm(NULL),checkpoint_stage(0),working_boundary(0),
                      resume_boundary(0),blocked_action_boundary(0),publication_checked_boundary(0),
                      publication_only(false),pool_warmup_staged(false),signal_seen(false),rewarm_required(false),
                      protective_flat_pending(false),
                      recoverable_fault(false),recovery_saving(false),init_started(0),ready_at(0),save_ms(0),
                      decisions(0),processed_bars(0),save_retry_pending(false) {}
-   virtual bool      ReconcileDeals(datetime now) override
-     {
-      if(training&&(!qcm||agent!=qcm))
-         ReturnFalse;
-      return(CAlphaQCMApplicationBase::ReconcileDeals(now));
-     }
+   virtual bool      ReconcileDeals(datetime now) override;
    virtual bool      Config(float &config[]) override;
    bool              InitializeModel(const string path,const bool train,const bool common,bool &exists);
    bool              Init(bool train,bool offline);
@@ -85,13 +84,27 @@ public:
   };
 
 //+------------------------------------------------------------------+
+//| ReconcileDeals - Guard the training model before reconciliation  |
+//+------------------------------------------------------------------+
+bool CAlphaQCMApplication::ReconcileDeals(datetime now)
+  {
+   if(training&&(!qcm||agent!=qcm))
+     {
+      ReturnFalse
+     }
+   return(CAlphaQCMApplicationBase::ReconcileDeals(now));
+  }
+
+//+------------------------------------------------------------------+
 //| Config - Extend the shared model configuration                   |
 //+------------------------------------------------------------------+
 bool CAlphaQCMApplication::Config(float &config[])
   {
    if(!CAlphaQCMApplicationBase::Config(config)||ArraySize(config)!=AG_CFG_SIZE||
       ArrayResize(config,AQCM_CFG_SIZE)!=AQCM_CFG_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    config[AQCM_CFG_BATCH]=(float)AQCM_PROFILE_BATCH;
    config[AQCM_CFG_CANDIDATES]=(float)AQCM_PROFILE_CANDIDATES;
    config[AQCM_CFG_QUANTILES]=(float)AQCM_PROFILE_QUANTILES;
@@ -120,40 +133,54 @@ bool CAlphaQCMApplication::InitializeModel(const string path,const bool train,co
   {
    const ulong started=GetTickCount64();
    if(!SelectiveOpenCL)
-      ReturnFalseEx("AlphaQCM requires its selective GPU runtime");
+     {
+      ReturnFalseEx("AlphaQCM requires its selective GPU runtime")
+     }
    exists=FileIsExist(path,common?FILE_COMMON:0);
    if(!train&&!exists)
-      ReturnFalseEx("AlphaQCM inference requires a checkpoint");
+     {
+      ReturnFalseEx("AlphaQCM inference requires a checkpoint")
+     }
    AlphaQCMLoadMode=train?AQCM_TRAIN:AQCM_INFER;
    if(!Config(AlphaQCMExpectedConfig))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!AlphaQCMRuntime.Begin()||!model.UseOpenCLRuntime(GetPointer(AlphaQCMRuntime)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    float error=0,undefined=0,forecast=0;
    datetime stamp=0;
    if(exists)
      {
       if(!model.Load(path,error,undefined,forecast,stamp,common))
-         ReturnFalseEx("AlphaQCM checkpoint load failed: "+path);
+        {
+         ReturnFalseEx("AlphaQCM checkpoint load failed: "+path)
+        }
      }
    else
      {
       CArrayObj description;
       CLayerDescription *in=new CLayerDescription();
       if(!in)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!description.Add(in))
         {
          delete in;
-         ReturnFalse;
+         ReturnFalse
         }
       CLayerDescription *out=new CLayerDescription();
       if(!out)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!description.Add(out))
         {
          delete out;
-         ReturnFalse;
+         ReturnFalse
         }
       in.type=defNeuronBaseOCL;
       in.count=AG_CHANNELS*window+AG_ACCOUNT_SIZE;
@@ -170,20 +197,28 @@ bool CAlphaQCMApplication::InitializeModel(const string path,const bool train,co
       out.step=AG_LOOKBACK;
       out.layers=AG_MAX_TOKENS;
       if(!model.Create(GetPointer(description)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!model.Layer(0)||model.Layer(0).Type()!=defNeuronBaseOCL||!model.Layer(1)||CheckPointer(model.Layer(2))!=POINTER_INVALID||
       model.Layer(1).Type()!=defNeuronAlphaQCMOCL||
       model.Layer(1).Neurons()!=AG_OUTPUT_SIZE)
-      ReturnFalseEx("Incompatible AlphaQCM model geometry");
+     {
+      ReturnFalseEx("Incompatible AlphaQCM model geometry")
+     }
    qcm=(CNeuronAlphaQCMOCL*)model.Layer(1);
    // The donor's ledger calls AdjustReward only on these same trade rows.
    agent=qcm;
    if(!exists&&!qcm.Configure(AlphaQCMExpectedConfig,Seed))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    ENUM_TIMEFRAMES timeframe=TimeFrame==PERIOD_CURRENT?_Period:TimeFrame;
    if(!AlphaQCMRuntime.Build()||!qcm.AfterBuild(!exists)||!qcm.CausalIdentity(_Symbol,timeframe))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    resume_boundary=(datetime)qcm.CausalWatermark();
    event_id=qcm.LastServiceEvent();
    decision_id=qcm.LastServiceDecision();
@@ -205,16 +240,18 @@ bool CAlphaQCMApplication::Init(bool train,bool offline)
    finance_started=TimeCurrent();
    if(window<AG_LOOKBACK+MathMax(AG_IC_WINDOW+AG_HORIZON,AG_NORM_WINDOW))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(train&&!offline&&!MQLInfoInteger(MQL_TESTER))
      {
       Print("StudyOnline requires Strategy Tester");
-      ReturnFalse;
+      ReturnFalse
      }
    bool exists=false;
    if(!InitializeModel(ModelFile,train,true,exists))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    qcm.SetBoundedLearner(offline);
    if(!offline)
      {
@@ -235,16 +272,16 @@ bool CAlphaQCMApplication::Init(bool train,bool offline)
       inputs>INT_MAX||metadata>INT_MAX||(long)window<(long)lookback+MathMax((long)ic+horizon,(long)norm)||
       model.Layer(0).Neurons()!=AG_CHANNELS*window+AG_ACCOUNT_SIZE)
      {
-      ReturnFalse;
+      ReturnFalse
      }
    warmup_bars=(int)MathMax(window,required);
    if(!model.TrainMode(train))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(ArrayResize(context,(int)metadata)!=(int)metadata||ArrayResize(input_values,(int)inputs)!=(int)inputs)
      {
-      ReturnFalse;
+      ReturnFalse
      }
    ArrayInitialize(context,0);
    ArrayInitialize(input_values,0);
@@ -254,14 +291,14 @@ bool CAlphaQCMApplication::Init(bool train,bool offline)
      {
       if(Start>=End||Epochs<1||MinBalance<=0||MaxBalance<MinBalance)
         {
-         ReturnFalse;
+         ReturnFalse
         }
       capital=Deposit();
       // Include enough real prehistory; CopyRates never synthesizes missing bars.
       int start_shift=iBarShift(_Symbol,TimeFrame,Start,false);
       if(start_shift<0)
         {
-         ReturnFalse;
+         ReturnFalse
         }
       int last_shift=MathMax(1,iBarShift(_Symbol,TimeFrame,End-1,false));
       int earliest=start_shift;
@@ -273,11 +310,13 @@ bool CAlphaQCMApplication::Init(bool train,bool offline)
         }
       long requested=(long)earliest+warmup_bars-last_shift+1;
       if(requested<1||requested>INT_MAX)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       int copied=CopyRates(_Symbol,TimeFrame,last_shift,(int)requested,history);
       if(copied<=0)
         {
-         ReturnFalse;
+         ReturnFalse
         }
       cursor=0;
       while(cursor<copied&&history[cursor].time<Start)
@@ -286,7 +325,7 @@ bool CAlphaQCMApplication::Init(bool train,bool offline)
         }
       if(cursor<window||cursor>=copied||history[cursor].time>=End)
         {
-         ReturnFalse;
+         ReturnFalse
         }
       epoch=1;
      }
@@ -296,12 +335,12 @@ bool CAlphaQCMApplication::Init(bool train,bool offline)
    finance_boundary_msc=(long)finance_started*1000;
    if(!money.Init(offline,capital))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(!training&&qcm.ActiveCount()<1)
      {
       Print("AlphaQCM Test requires a checkpoint with a published Active Pool");
-      ReturnFalse;
+      ReturnFalse
      }
    if(training)
       PrintFormat("AlphaQCM initial V=%I64u U=%I64u target_syncs=%I64u prepared_revision=%I64u active_generation=%I64u trade_updates=%I64u",
@@ -329,7 +368,7 @@ bool CAlphaQCMApplication::Context(int phase,int flags,datetime boundary)
    context[AG_CTX_REFERENCE]=(float)money.reference;
    if(!service.AssignArray(context)||!(service.GetIndex()<0?service.BufferCreate(model.GetOpenCL()):service.BufferWrite()))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    qcm.Phase(phase);
 
@@ -368,14 +407,14 @@ bool CAlphaQCMApplication::Forward(int phase,int flags,datetime boundary)
   {
    if(failed)
      {
-      ReturnFalse;
+      ReturnFalse
      }
    ulong start=GetMicrosecondCount();
    if(!Context(phase,flags,boundary)||!raw.AssignArray(input_values)||!model.feedForward(GetPointer(raw),1,false,GetPointer(service)))
      {
       recoverable_fault=simulated&&qcm.CanRecover();
       Fault("native forward failed; status="+ComputationStatus());
-      ReturnFalse;
+      ReturnFalse
      }
    ulong elapsed=GetMicrosecondCount()-start;
    forward_us+=elapsed;
@@ -385,7 +424,7 @@ bool CAlphaQCMApplication::Forward(int phase,int flags,datetime boundary)
      {
       recoverable_fault=simulated&&qcm.CanRecover();
       Fault("native computation failed; status="+ComputationStatus());
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -406,11 +445,11 @@ bool CAlphaQCMApplication::Train(bool drain)
       if(!qcm.PrepareUpdate())
         {
          Fault("native PPO preparation failed");
-         ReturnFalse;
+         ReturnFalse
         }
       if(!Forward(AG_BACKWARD,0,LastBarTime))
         {
-         ReturnFalse;
+         ReturnFalse
         }
       CBufferFloat echo;
       float        zeros[];
@@ -420,7 +459,7 @@ bool CAlphaQCMApplication::Train(bool drain)
       if(!echo.AssignArray(zeros)||!model.backProp(GetPointer(echo),GetPointer(service)))
         {
          Fault("native PPO backward failed");
-         ReturnFalse;
+         ReturnFalse
         }
       updates++;
       if(qcm.TradeUpdates()>previous_trade_updates)
@@ -463,10 +502,12 @@ bool CAlphaQCMApplication::Feedback(bool terminal,bool ready,bool ruin,datetime 
      {
       Fault("INCOMPLETE_DATA: pre-feedback cash reconciliation failed");
 
-      ReturnFalse;
+      ReturnFalse
      }
    if(!qcm.IssueEvent(event_id))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    context[AG_CTX_MONEY_CONFIRMED]=(!money.pending&&!money.reconciling&&!money.unknown_request)?1.0f:0.0f;
    context[AG_CTX_TERMINAL]=terminal?1.0f:0.0f;
    context[AG_CTX_NEXT_READY]=ready?1.0f:0.0f;
@@ -474,14 +515,14 @@ bool CAlphaQCMApplication::Feedback(bool terminal,bool ready,bool ruin,datetime 
    context[AG_CTX_REWARD]=(float)(interval_reward-(invalid?AG_INVALID_PENALTY:0)-MathPow(trade_gamma,MathMax(delta-1,0))*(ruin?AG_RUIN_PENALTY:0));
    if(!Forward(AG_FLUSH,terminal?AG_FLAG_END:0,boundary))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(qcm.Status()!=AG_WAIT&&!money.pending&&!money.reconciling&&!money.unknown_request&&(terminal||ready))
      {
       if(!SealInterval(boundary))
         {
          Fault("financial interval ledger allocation failed");
-         ReturnFalse;
+         ReturnFalse
         }
       policy_cash+=money.equity-start_equity;
       reported_equity=money.equity;
@@ -523,7 +564,9 @@ bool CAlphaQCMApplication::AdvanceProtectiveFlat()
    if(!SymbolInfoTick(_Symbol,quote))
       return(true);
    if(!money.Snapshot(quote.bid,quote.ask,quote.time))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(money.volume!=0||money.pending||money.unknown_request)
       return(true);
 
@@ -532,7 +575,7 @@ bool CAlphaQCMApplication::AdvanceProtectiveFlat()
    if(!ReconcileDeals(quote.time))
      {
       Fault("INCOMPLETE_DATA: protective cash reconciliation failed");
-      ReturnFalse;
+      ReturnFalse
      }
    if(money.pending||MathAbs(ledger_volume-money.volume)>AG_LOT_EPSILON)
       return(true);
@@ -540,7 +583,9 @@ bool CAlphaQCMApplication::AdvanceProtectiveFlat()
      {
       RealMoneySample(true);
       if(!Feedback(true,false,false,quote.time))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(open_decision)
          return(true);
      }
@@ -548,12 +593,16 @@ bool CAlphaQCMApplication::AdvanceProtectiveFlat()
       if(training)
         {
          if(!qcm.IssueEvent(event_id))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          context[AG_CTX_TERMINAL]=1.0f;
          context[AG_CTX_MONEY_CONFIRMED]=1.0f;
          context[AG_CTX_NEXT_READY]=0.0f;
          if(!Forward(AG_FLUSH,0,quote.time))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          context[AG_CTX_TERMINAL]=0.0f;
          context[AG_CTX_MONEY_CONFIRMED]=0.0f;
         }
@@ -568,18 +617,22 @@ bool CAlphaQCMApplication::AdvanceProtectiveFlat()
 //+------------------------------------------------------------------+
 //| StageHistory - Stage closed market history                       |
 //+------------------------------------------------------------------+
-// Stage closed OHLCV only. The pool owns the device copy for both
-// independent Active rewarm and preparation of a candidate publication.
+//--- Stage closed OHLCV only. The pool owns the device copy for both
+//--- independent Active rewarm and preparation of a candidate publication.
 bool CAlphaQCMApplication::StageHistory(MqlRates &bars[],int end,bool &valid)
   {
    valid=false;
    if(end<warmup_bars)
       return(true);
    if(end>ArraySize(bars)||warmup_bars<window||warmup_bars>INT_MAX/5)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    float history_values[];
    if(ArrayResize(history_values,5*warmup_bars)!=5*warmup_bars)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0;i<warmup_bars;i++)
      {
       MqlRates bar=bars[end-warmup_bars+i];
@@ -606,23 +659,29 @@ bool CAlphaQCMApplication::AdvancePoolWarmup()
    if(pool_warmup_end<window||pool_warmup_end>end)
      {
       Fault("invalid pinned pool warmup cursor");
-      ReturnFalse;
+      ReturnFalse
      }
    if(!pool_warmup_staged)
      {
       bool valid=false;
       if(!StageHistory(pool_warmup_rates,end,valid))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!valid)
         {
          if(!qcm.AbortPoolWarmup())
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          ClearPoolWarmup();
          return(true);
         }
       if(!Pack(pool_warmup_rates,end,pool_warmup_boundary,false)||
          !Forward(AG_PREPARE,AG_FLAG_WARMUP|AG_FLAG_RESET_WORK,pool_warmup_boundary))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       pool_warmup_staged=qcm.NeedsPoolWarmup();
       if(!pool_warmup_staged)
         {
@@ -635,14 +694,16 @@ bool CAlphaQCMApplication::AdvancePoolWarmup()
    if(!simulated&&iTime(_Symbol,TimeFrame,0)!=pool_warmup_boundary)
      {
       if(!qcm.AbortPoolWarmup())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       ClearPoolWarmup();
       publication_only=true;
       return(true);
      }
    if(!Forward(AG_PREPARE,AG_FLAG_WARMUP|AG_FLAG_END,pool_warmup_boundary))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    bool published=qcm.Status()==AG_PUBLISHED;
    if(published)
@@ -702,7 +763,9 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
       if(pool_warmup_boundary==boundary)
          return(AdvancePoolWarmup());
       if(!qcm.AbortPoolWarmup())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       ClearPoolWarmup();
       publication_only=true;
      }
@@ -713,13 +776,15 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
          if(!qcm.ContinueBootstrap())
            {
             Fault("pinned bootstrap failed; status="+ComputationStatus());
-            ReturnFalse;
+            ReturnFalse
            }
          if(qcm.BootstrapPending())
             return(true);
         }
       if(!qcm.FinishSearch(true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       working_boundary=0;
       publication_only=true;
      }
@@ -727,7 +792,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
      {
       if(!Train())
         {
-         ReturnFalse;
+         ReturnFalse
         }
 
       return(true);
@@ -768,19 +833,25 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
      {
       bool valid=false;
       if(!StageHistory(bars,end,valid))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!valid)
          return(SkipBoundary(boundary));
      }
    if(observed_boundary==boundary&&open_decision)
      {
       if(!Forward(AG_OBSERVE,AG_FLAG_VALUE,boundary))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(qcm.Status()!=AG_OK)
          return(SkipBoundary(boundary));
       RealMoneySample();
       if(!Feedback(false,true,false,boundary))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(open_decision)
          return(true);
      }
@@ -811,7 +882,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
            }
          if(!Forward(AG_OBSERVE,flags,at))
            {
-            ReturnFalse;
+            ReturnFalse
            }
          if(qcm.Status()==AG_OK)
            {
@@ -832,14 +903,14 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
             if(!training&&!signal_seen)
               {
                Fault("NO_VALID_RESULT: checkpoint Active is unusable after causal rewarm");
-               ReturnFalse;
+               ReturnFalse
               }
            }
          if(!simulated)
            {
             if(blocked_action_boundary!=boundary&&!AdvanceProtectiveFlat())
               {
-               ReturnFalse;
+               ReturnFalse
               }
             if(protective_flat_pending)
                return(true);
@@ -859,7 +930,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
                last_equity=money.equity;
                if(!Feedback(true,false,false,boundary))
                  {
-                  ReturnFalse;
+                  ReturnFalse
                  }
               }
             else
@@ -867,13 +938,15 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
                  {
                   service_rebase=true;
                   if(!qcm.IssueEvent(event_id))
-                     ReturnFalse;
+                    {
+                     ReturnFalse
+                    }
                   context[AG_CTX_TERMINAL]=1.0f;
                   context[AG_CTX_MONEY_CONFIRMED]=1.0f;
                   context[AG_CTX_NEXT_READY]=0.0f;
                   if(!Forward(AG_FLUSH,0,boundary))
                     {
-                     ReturnFalse;
+                     ReturnFalse
                     }
                   context[AG_CTX_TERMINAL]=0.0f;
                   context[AG_CTX_MONEY_CONFIRMED]=0.0f;
@@ -893,7 +966,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
                RealMoneySample();
                if(!Feedback(false,true,false,boundary))
                  {
-                  ReturnFalse;
+                  ReturnFalse
                  }
                 if(open_decision)
                    return(true);
@@ -909,7 +982,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
         {
          if(!Train())
            {
-            ReturnFalse;
+            ReturnFalse
            }
          if(simulated||qcm.HasTraining())
            {
@@ -922,7 +995,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
            {
             recoverable_fault=qcm.CanRecover();
              Fault("search update failed; status="+ComputationStatus());
-            ReturnFalse;
+            ReturnFalse
            }
          return(true);
         }
@@ -930,7 +1003,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
         {
          if(!qcm.AbortPoolWarmup())
            {
-            ReturnFalse;
+            ReturnFalse
            }
          pool_warmup_end=0;
          preparation_done=true;
@@ -942,7 +1015,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
          if(ArrayCopy(pool_warmup_rates,bars,0,end-warmup_bars,warmup_bars)!=warmup_bars)
            {
             Fault("pool warmup snapshot allocation failed");
-            ReturnFalse;
+            ReturnFalse
            }
          pool_warmup_boundary=boundary;
          pool_warmup_end=window;
@@ -956,7 +1029,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
          int flags=publication_only?AQCM_FLAG_PUBLICATION_ONLY:0;
          if(!Forward(AG_PREPARE,flags,boundary))
            {
-            ReturnFalse;
+            ReturnFalse
            }
          working_boundary=qcm.Status()==AG_WORKING?boundary:0;
          if(working_boundary!=0)
@@ -968,27 +1041,33 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
          if(!simulated&&iTime(_Symbol,TimeFrame,0)!=boundary)
            {
             if(qcm.NeedsPoolWarmup()&&!qcm.AbortPoolWarmup())
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
             publication_only=true;
             return(true);
            }
          if(qcm.NeedsPoolWarmup()&&end>=warmup_bars)
            {
             if(ArrayCopy(pool_warmup_rates,bars,0,end-warmup_bars,warmup_bars)!=warmup_bars)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
             pool_warmup_boundary=boundary;
             pool_warmup_end=window;
             return(AdvancePoolWarmup());
            }
          if(qcm.NeedsPoolWarmup()&&!qcm.AbortPoolWarmup())
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          if(qcm.Status()==AG_WAIT)
            {
             return(SkipBoundary(boundary));
            }
          if(!Train())
            {
-            ReturnFalse;
+            ReturnFalse
            }
          if(qcm.HasTraining())
            {
@@ -1024,7 +1103,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
       if(!ReconcileDeals(current.time))
         {
          Fault("INCOMPLETE_DATA: pre-action cash reconciliation failed");
-         ReturnFalse;
+         ReturnFalse
         }
       if(iTime(_Symbol,TimeFrame,0)!=boundary)
         {
@@ -1054,17 +1133,19 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
    reported_equity=money.equity;
    money.Commit();
    if(!qcm.IssueDecision(decision_id))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!Forward(training?AG_ACT:AG_INFER,0,boundary))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(!simulated&&iTime(_Symbol,TimeFrame,0)!=boundary)
      {
       if(training&&qcm.Status()==AG_ACTION_READY&&!qcm.DiscardDecision())
         {
          Fault("stale native decision cancellation failed");
-         ReturnFalse;
+         ReturnFalse
         }
       service_rebase=true;
       publication_only=training;
@@ -1096,17 +1177,19 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
       !model.GetOpenCL().BufferRead(output.GetIndex(),action,0,0,AG_OUTPUT_SIZE))
      {
       Fault("OPENCL_ERROR: trading action read failed");
-      ReturnFalse;
+      ReturnFalse
      }
    SAlphaQCMTarget target;
    if(!money.Map(action,bid,ask,target))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(!simulated&&iTime(_Symbol,TimeFrame,0)!=boundary)
      {
       if(training&&!qcm.DiscardDecision())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       service_rebase=true;
       publication_only=training;
       return(true);
@@ -1143,7 +1226,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
       if(!qcm.DiscardDecision())
         {
          Fault("native decision cancellation failed");
-         ReturnFalse;
+         ReturnFalse
         }
       open_decision=false;
       service_rebase=true;
@@ -1154,7 +1237,9 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
    if(!simulated&&(partial_failure||target.invalid))
      {
       if(!AdvanceProtectiveFlat())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(protective_flat_pending)
          return(true);
      }
@@ -1176,7 +1261,9 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
          interval_reward+=MathPow(trade_gamma,MathMax(delta-1,0))*(money.equity-last_equity)/money.reference;
          last_equity=money.equity;
          if(!Feedback(true,false,false,boundary)||!Train())
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
    if(simulated&&training&&target.invalid&&!money.pending&&!money.reconciling&&money.volume==0)
@@ -1185,7 +1272,7 @@ bool CAlphaQCMApplication::Boundary(MqlRates &bars[],int end,datetime boundary,d
       last_equity=money.equity;
       if(!Feedback(true,false,false,boundary)||!Train())
         {
-         ReturnFalse;
+         ReturnFalse
         }
      }
    ulong elapsed=GetMicrosecondCount()-begin;
@@ -1204,25 +1291,33 @@ bool CAlphaQCMApplication::SavePhase(int phase)
    if(!training||failed||!qcm||qcm.Type()!=defNeuronAlphaQCMOCL||
       qcm.Status()==AG_CORRUPTED||qcm.Status()==AG_TECHNICAL||
       qcm.Status()>=AQCM_RESOURCE_UNSUPPORTED||!qcm.SafeToSave()||phase<0||phase>2)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    ulong begin=GetTickCount64();
    string temp=ModelFile+".tmp",backup=ModelFile+".bak";
    if(phase==0)
      {
       checkpoint_stage=0;
       if(!model.Save(temp,0,0,0,TimeCurrent(),true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       checkpoint_stage=1;
       save_ms+=GetTickCount64()-begin;
       return(true);
      }
    if(checkpoint_stage!=phase)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(phase==1)
      {
       CNet verify;
       if(!verify.UseOpenCLRuntime(model.GetOpenCL()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       int previous=AlphaQCMLoadMode;
       AlphaQCMLoadMode=AQCM_VERIFY;
       float a=0,b=0,c=0;
@@ -1233,19 +1328,23 @@ bool CAlphaQCMApplication::SavePhase(int phase)
          verify.Layer(0).Neurons()!=AG_CHANNELS*window+AG_ACCOUNT_SIZE||
          !verify.Layer(1)||CheckPointer(verify.Layer(2))!=POINTER_INVALID||verify.Layer(1).Type()!=defNeuronAlphaQCMOCL||
          verify.Layer(1).Neurons()!=AG_OUTPUT_SIZE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       checkpoint_stage=2;
       save_ms+=GetTickCount64()-begin;
       return(true);
      }
    bool had=FileIsExist(ModelFile,FILE_COMMON);
    if(had&&!FileCopy(ModelFile,FILE_COMMON,backup,FILE_COMMON|FILE_REWRITE))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!FileMove(temp,FILE_COMMON,ModelFile,FILE_COMMON|FILE_REWRITE))
      {
       if(had&&!FileCopy(backup,FILE_COMMON,ModelFile,FILE_COMMON|FILE_REWRITE))
          Print("AlphaQCM checkpoint restore failed: ",GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    checkpoint_stage=0;
    save_ms+=GetTickCount64()-begin;
@@ -1261,7 +1360,7 @@ bool CAlphaQCMApplication::Save()
      {
       if(!SavePhase(phase))
         {
-         ReturnFalse;
+         ReturnFalse
         }
      }
 
@@ -1332,7 +1431,9 @@ bool CAlphaQCMApplication::FinishTestReport()
    if(Finalized)
       return(true);
    if(training||failed)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    MqlTick quote;
    bool complete=false;
    if(SymbolInfoTick(_Symbol,quote))
@@ -1358,7 +1459,9 @@ bool CAlphaQCMApplication::FinishTestReport()
 bool CAlphaQCMApplication::FinishExcluded(bool save,datetime time)
   {
    if(training&&!qcm.FinishSearch(!stop_requested))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(training&&open_decision)
      {
       excluded++;
@@ -1367,7 +1470,7 @@ bool CAlphaQCMApplication::FinishExcluded(bool save,datetime time)
       if(!qcm.DiscardDecision())
         {
          Fault("unfinished decision cancellation failed");
-         ReturnFalse;
+         ReturnFalse
         }
       open_decision=false;
       invalid=false;
@@ -1380,7 +1483,7 @@ bool CAlphaQCMApplication::FinishExcluded(bool save,datetime time)
          if(!qcm.CancelTraining())
            {
             Fault("unfinished finalization cancellation failed");
-            ReturnFalse;
+            ReturnFalse
            }
         }
       else
@@ -1388,12 +1491,14 @@ bool CAlphaQCMApplication::FinishExcluded(bool save,datetime time)
          // DISCARD preserves ready predecessors' recorded bootstrap and ends GAE
          // at their buffer edge. It never invents money or a value for the open row.
          if(!Forward(AG_FLUSH,AG_FLAG_DISCARD|AG_FLAG_END,time)||!Train(true))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
    if(save&&!Save())
      {
-      ReturnFalse;
+      ReturnFalse
      }
    Finalized=true;
    Print("AlphaQCM terminal money unresolved; unfinished sample excluded; coherent weights retained");
@@ -1467,7 +1572,7 @@ bool CAlphaQCMApplication::Finish(bool ruin,bool save,bool final_pass,bool prepa
    if(!simulated&&!ReconcileDeals(time))
      {
       Fault("INCOMPLETE_DATA: terminal cash reconciliation failed");
-      ReturnFalse;
+      ReturnFalse
      }
    settled=settled&&!money.pending&&!money.reconciling&&!money.unknown_request&&money.volume==0;
    if(!settled)
@@ -1489,7 +1594,9 @@ bool CAlphaQCMApplication::Finish(bool ruin,bool save,bool final_pass,bool prepa
       if(stop_requested)
         {
          if(!qcm.DiscardDecision())
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          excluded++;
          excluded_cash+=money.equity-start_equity;
          reported_equity=money.equity;
@@ -1500,11 +1607,13 @@ bool CAlphaQCMApplication::Finish(bool ruin,bool save,bool final_pass,bool prepa
       else
         if(!Feedback(true,false,ruin,time))
         {
-         ReturnFalse;
+         ReturnFalse
         }
      }
    if(training&&!training_done&&!qcm.FinishSearch(!stop_requested))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(prepare_only)
      {
       return(true);
@@ -1513,12 +1622,12 @@ bool CAlphaQCMApplication::Finish(bool ruin,bool save,bool final_pass,bool prepa
      {
       if(!qcm.CancelTraining())
         {
-         ReturnFalse;
+         ReturnFalse
         }
      }
    if(training&&!training_done&&!stop_requested&&!Train(true))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(training&&!training_done&&!stop_requested)
      {
@@ -1526,7 +1635,9 @@ bool CAlphaQCMApplication::Finish(bool ruin,bool save,bool final_pass,bool prepa
       context[AG_CTX_MONEY_CONFIRMED]=1.0f;
       context[AG_CTX_NEXT_READY]=0.0f;
       if(!Forward(AG_FLUSH,AG_FLAG_END,time)||!Train(true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       context[AG_CTX_TERMINAL]=context[AG_CTX_MONEY_CONFIRMED]=0.0f;
      }
    if(!open_decision)
@@ -1536,7 +1647,7 @@ bool CAlphaQCMApplication::Finish(bool ruin,bool save,bool final_pass,bool prepa
      }
    if(save&&!Save())
      {
-      ReturnFalse;
+      ReturnFalse
      }
    Finalized=true;
    string profit_factor=money.gross_loss>0?DoubleToString(money.gross_profit/money.gross_loss,6):"undefined (no realized losses)";
@@ -1748,7 +1859,7 @@ void CAlphaQCMApplication::StudyFinishProgress()
 //+------------------------------------------------------------------+
 //| BeginStudyFinish - Start the Study finalizer                     |
 //+------------------------------------------------------------------+
-// Finish reasons: end=1, stop=2, opening ruin=3, bar ruin=4.
+//--- Finish reasons: end=1, stop=2, opening ruin=3, bar ruin=4.
 bool CAlphaQCMApplication::BeginStudyFinish(int reason,bool ruin)
   {
    study_finish_reason=reason;
@@ -1782,7 +1893,7 @@ bool CAlphaQCMApplication::StudyFinishStep()
       if(!qcm.DrainSearchStep())
         {
          recoverable_fault=qcm.CanRecover();
-         ReturnFalse;
+         ReturnFalse
         }
       StudyFinishProgress();
       return(true);
@@ -1791,7 +1902,7 @@ bool CAlphaQCMApplication::StudyFinishStep()
      {
       if(!qcm.CancelTraining())
         {
-         ReturnFalse;
+         ReturnFalse
         }
       context[AG_CTX_TERMINAL]=context[AG_CTX_MONEY_CONFIRMED]=0.0f;
       study_finish_stage=5;
@@ -1806,7 +1917,7 @@ bool CAlphaQCMApplication::StudyFinishStep()
      {
       if(!Finish(study_finish_ruin,false,false,true))
         {
-         ReturnFalse;
+         ReturnFalse
         }
       study_finish_batch_total=qcm.TrainingTotal();
       study_finish_batch_completed=qcm.TrainingCompleted();
@@ -1820,7 +1931,7 @@ bool CAlphaQCMApplication::StudyFinishStep()
             study_finish_batch_total=qcm.TrainingTotal();
             if(!Train())
               {
-               ReturnFalse;
+               ReturnFalse
               }
             study_finish_batch_completed=qcm.HasTraining()?qcm.TrainingCompleted():study_finish_batch_total;
            }
@@ -1838,7 +1949,7 @@ bool CAlphaQCMApplication::StudyFinishStep()
             datetime time=(datetime)(snapshot_msc/1000);
             if(!Forward(AG_FLUSH,AG_FLAG_END,time))
               {
-               ReturnFalse;
+               ReturnFalse
               }
             study_finish_batch_total=qcm.TrainingTotal();
             study_finish_batch_completed=qcm.TrainingCompleted();
@@ -1851,7 +1962,7 @@ bool CAlphaQCMApplication::StudyFinishStep()
                context[AG_CTX_TERMINAL]=context[AG_CTX_MONEY_CONFIRMED]=0.0f;
                if(!Finish(study_finish_ruin,false,false,false,true))
                  {
-                  ReturnFalse;
+                  ReturnFalse
                  }
                Finalized=false;
                bool save=stop_requested||study_finish_reason==2||
@@ -1946,11 +2057,15 @@ bool CAlphaQCMApplication::StudyStep()
    if(failed)
      {
       if(!recoverable_fault||!qcm.CanRecover())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!stop_requested)
          return(true);
       if(!qcm.ResumeRecovery())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       failed=false;
       recoverable_fault=false;
       recovery_saving=true;
@@ -1963,7 +2078,9 @@ bool CAlphaQCMApplication::StudyStep()
    if(stop_requested)
      {
       if(qcm.NeedsPoolWarmup()&&!qcm.AbortPoolWarmup())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       ClearPoolWarmup();
       // An opening gap may already have been reconciled before a bounded
       // search/PPO operation returned. Finish this bar under its existing
@@ -1976,7 +2093,7 @@ bool CAlphaQCMApplication::StudyStep()
          if(!money.Bar(last))
            {
             Fault("Study stop could not finish the protected virtual bar");
-            ReturnFalse;
+            ReturnFalse
            }
          cursor++;
           processed_bars++;
@@ -1998,7 +2115,7 @@ bool CAlphaQCMApplication::StudyStep()
       if(!money.PathPoint(bar.open,bar.spread*money.point,bar.time))
         {
          Fault("virtual opening-gap reconciliation failed");
-         ReturnFalse;
+         ReturnFalse
         }
       virtual_open_boundary=bar.time;
       bool gap_ruin=money.equity<=AG_EQUITY_FLOOR*money.reference;
@@ -2016,7 +2133,7 @@ bool CAlphaQCMApplication::StudyStep()
      }
    if(!money.Snapshot(bar.open,bar.open+bar.spread*money.point,bar.time))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(open_decision)
      {
@@ -2025,7 +2142,7 @@ bool CAlphaQCMApplication::StudyStep()
      }
    if(!Boundary(history,cursor,bar.time,bar.open,bar.open+bar.spread*money.point))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(!cycle_complete)
      {
@@ -2045,7 +2162,7 @@ bool CAlphaQCMApplication::StudyStep()
      }
    if(!money.Bar(bar))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    cursor++;
    processed_bars++;

@@ -126,9 +126,9 @@ int OnInit()
          return(INIT_FAILED);
         }
      }
-   DeleteObj(encoder);
-   DeleteObj(actor);
-   DeleteObj(critic);
+   DeleteObj(encoder)
+   DeleteObj(actor)
+   DeleteObj(critic)
 //---
    cEncoder.TrainMode(true);
    cActor.TrainMode(true);
@@ -481,7 +481,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
 
    if(time.GetIndex()>=0)
       if(!time.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 //---
    return(true);
   }

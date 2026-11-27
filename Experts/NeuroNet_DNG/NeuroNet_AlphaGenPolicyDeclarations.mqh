@@ -26,7 +26,6 @@ protected:
    CBufferFloat m_cOnes;
    CBufferFloat m_cScalar;
    int          m_iRows;
-   virtual float GenerateWeight(void)override;
 
 public:
    CNeuronAlphaGenDenseOCL(void);
@@ -42,6 +41,9 @@ public:
    bool         Apply(void);
    bool         SaveState(const int handle);
    bool         LoadState(const int handle,COpenCLMy*context);
+
+protected:
+   virtual float GenerateWeight(void)override;
   };
 //+------------------------------------------------------------------+
 //| CNeuronAlphaGenPolicyLSTMOCL - Define class interface            |
@@ -50,13 +52,12 @@ class CNeuronAlphaGenPolicyLSTMOCL:public CNeuronAlphaGenLSTMOCL
   {
 protected:
    uint m_iRandom;
-   virtual float GenerateWeight(void)override;
 
 public:
    CNeuronAlphaGenPolicyLSTMOCL(void);
    void Seed(const uint seed);
 //+------------------------------------------------------------------+
-//| RecurrentWeightsIndex                                            |
+//| RecurrentWeightsIndex - Return the recurrent weights index       |
 //+------------------------------------------------------------------+
    int  RecurrentWeightsIndex(void)
      {
@@ -66,6 +67,9 @@ public:
    bool Check(CNeuronAlphaGenEvaluatorOCL*evaluator);
    bool SaveState(const int handle);
    bool LoadState(const int handle,COpenCLMy*context);
+
+protected:
+   virtual float GenerateWeight(void)override;
   };
 //+------------------------------------------------------------------+
 //| CNeuronAlphaGenPolicyOCL - Define class interface                |
@@ -81,6 +85,14 @@ protected:
    uint         m_iRandom;
    bool         m_bReady;
    int          m_iMode;
+
+public:
+   CNeuronAlphaGenPolicyOCL(void);
+   CBufferFloat *Sample(void);
+   CBufferFloat *Action(void);
+   CBufferFloat *Metadata(void);
+
+protected:
    float        Uniform(void);
    int          EmbeddingDim(void);
    int          SearchHidden(void);
@@ -95,12 +107,6 @@ protected:
    bool ReLU(CNeuronBaseOCL*layer,const int mode);
    bool SaveCommon(const int handle);
    bool LoadCommon(const int handle,COpenCLMy*context);
-
-public:
-   CNeuronAlphaGenPolicyOCL(void);
-   CBufferFloat *Sample(void);
-   CBufferFloat *Action(void);
-   CBufferFloat *Metadata(void);
   };
 //+------------------------------------------------------------------+
 //| CNeuronAlphaGenSearchPolicyOCL - Define class interface          |
@@ -117,7 +123,6 @@ protected:
    CBufferFloat                 m_cEmbeddedGradient;
    CBufferFloat                 *m_cTokens;
    int                          m_iLength;
-   bool                         Workspace(void);
 
 public:
    CNeuronAlphaGenSearchPolicyOCL(void);
@@ -129,6 +134,9 @@ public:
    bool Apply(void);
    bool Save(const int handle);
    bool Load(const int handle,COpenCLMy*context);
+
+protected:
+   bool                         Workspace(void);
   };
 //+------------------------------------------------------------------+
 //| CNeuronAlphaGenTradingPolicyOCL - Define class interface         |

@@ -11,7 +11,7 @@
 //---
 #define MaxMutation     0.5f
 //+------------------------------------------------------------------+
-//| CNetGenetic                                                      |
+//| CNetGenetic - Support genetic operators on a neural network      |
 //+------------------------------------------------------------------+
 class CNetGenetic : public CNet
   {
@@ -21,14 +21,6 @@ protected:
    vectorf v_Rewards;
    matrixf m_Weights;
    matrixf m_WeightsConv;
-
-   //---
-   virtual bool      CreatePopulation(void);
-   virtual int       GetAction(CBufferFloat * probability);
-   virtual bool      GetWeights(uint layer);
-   float             NextGenerationWeight(matrixf &array,uint shift,vectorf &probability);
-   float             GenerateWeight(uint total);
-
 public:
                      CNetGenetic();
                     ~CNetGenetic();
@@ -43,22 +35,30 @@ public:
    //---
    virtual bool              CopyModel(CArrayLayer *source,uint model);
    virtual bool              Detach(void);
+protected:
+
+   //---
+   virtual bool      CreatePopulation(void);
+   virtual int       GetAction(CBufferFloat * probability);
+   virtual bool      GetWeights(uint layer);
+   float             NextGenerationWeight(matrixf &array,uint shift,vectorf &probability);
+   float             GenerateWeight(uint total);
   };
 //+------------------------------------------------------------------+
-//| CNetGenetic                                                      |
+//| CNetGenetic - Support genetic operators on a neural network      |
 //+------------------------------------------------------------------+
 CNetGenetic::CNetGenetic() :  i_PopulationSize(100)
   {
    SetPopulationSize(i_PopulationSize);
   }
 //+------------------------------------------------------------------+
-//| ~CNetGenetic                                                     |
+//| ~CNetGenetic - Release owned resources                           |
 //+------------------------------------------------------------------+
 CNetGenetic::~CNetGenetic()
   {
   }
 //+------------------------------------------------------------------+
-//| Create                                                           |
+//| Create - Check create                                            |
 //+------------------------------------------------------------------+
 bool CNetGenetic::Create(CArrayObj *Description,uint population_size)
   {
@@ -73,7 +73,7 @@ bool CNetGenetic::Create(CArrayObj *Description,uint population_size)
    return(CreatePopulation());
   }
 //+------------------------------------------------------------------+
-//| SetPopulationSize                                                |
+//| SetPopulationSize - Set population size                          |
 //+------------------------------------------------------------------+
 bool CNetGenetic::SetPopulationSize(uint size)
   {
@@ -84,7 +84,7 @@ bool CNetGenetic::SetPopulationSize(uint size)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CNetGenetic::Load(string file_name,uint population_size,bool common=true)
   {
@@ -99,7 +99,7 @@ bool CNetGenetic::Load(string file_name,uint population_size,bool common=true)
    return(CreatePopulation());
   }
 //+------------------------------------------------------------------+
-//| CreatePopulation                                                 |
+//| CreatePopulation - Create population                             |
 //+------------------------------------------------------------------+
 bool CNetGenetic::CreatePopulation(void)
   {
@@ -380,7 +380,7 @@ bool CNetGenetic::CreatePopulation(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| feedForward                                                      |
+//| feedForward - Compute the layer output                           |
 //+------------------------------------------------------------------+
 bool CNetGenetic::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true)
   {
@@ -416,7 +416,9 @@ bool CNetGenetic::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true)
          return(false);
      }
    if(!inputs.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    CNeuronBaseOCL *current_ocl;
    for(int l=1; l<layers.Total(); l++)
@@ -439,7 +441,7 @@ bool CNetGenetic::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Rewards                                                          |
+//| Rewards - Check rewards                                          |
 //+------------------------------------------------------------------+
 bool CNetGenetic::Rewards(CArrayFloat *rewards)
   {
@@ -467,7 +469,7 @@ bool CNetGenetic::Rewards(CArrayFloat *rewards)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| GetAction                                                        |
+//| GetAction - Get action                                           |
 //+------------------------------------------------------------------+
 int CNetGenetic::GetAction(CBufferFloat * probability)
   {
@@ -489,7 +491,7 @@ int CNetGenetic::GetAction(CBufferFloat * probability)
    return(-1);
   }
 //+------------------------------------------------------------------+
-//| NextGeneration                                                   |
+//| NextGeneration - Check next generation                           |
 //+------------------------------------------------------------------+
 bool CNetGenetic::NextGeneration(float quantile,float mutation,float &average,float &maximum)
   {
@@ -552,7 +554,7 @@ bool CNetGenetic::NextGeneration(float quantile,float mutation,float &average,fl
    return(true);
   }
 //+------------------------------------------------------------------+
-//| NextGenerationWeight                                             |
+//| NextGenerationWeight - Return the next generation weight         |
 //+------------------------------------------------------------------+
 float CNetGenetic::NextGenerationWeight(matrixf &array,uint shift,vectorf &probability)
   {
@@ -567,7 +569,7 @@ float CNetGenetic::NextGenerationWeight(matrixf &array,uint shift,vectorf &proba
    return(GenerateWeight((uint)array.Cols()));
   }
 //+------------------------------------------------------------------+
-//| GetWeights                                                       |
+//| GetWeights - Get weights                                         |
 //+------------------------------------------------------------------+
 bool CNetGenetic::GetWeights(uint layer)
   {
@@ -616,7 +618,7 @@ bool CNetGenetic::GetWeights(uint layer)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| SaveModel                                                        |
+//| SaveModel - Save model                                           |
 //+------------------------------------------------------------------+
 bool CNetGenetic::SaveModel(string file_name,int model,bool common=true)
   {
@@ -641,7 +643,7 @@ bool CNetGenetic::SaveModel(string file_name,int model,bool common=true)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| CopyModel                                                        |
+//| CopyModel - Copy model                                           |
 //+------------------------------------------------------------------+
 bool CNetGenetic::CopyModel(CArrayLayer *source,uint model)
   {
@@ -676,7 +678,7 @@ bool CNetGenetic::CopyModel(CArrayLayer *source,uint model)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Detach                                                           |
+//| Detach - Check detach                                            |
 //+------------------------------------------------------------------+
 bool CNetGenetic::Detach(void)
   {
@@ -696,7 +698,7 @@ bool CNetGenetic::Detach(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| GenerateWeight                                                   |
+//| GenerateWeight - Generate weight                                 |
 //+------------------------------------------------------------------+
 float CNetGenetic::GenerateWeight(uint total)
   {

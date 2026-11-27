@@ -25,7 +25,7 @@
 #define                    MaxTP          1000
 #define                    MaxReplayBuffer 500
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -40,14 +40,18 @@ struct SState
    bool              Load(int file_handle);
 
 //--- overloading
-   void              operator=(const SState &obj)
-     {
-      ArrayCopy(state,obj.state);
-      ArrayCopy(account,obj.account);
-      ArrayCopy(action,obj.action);
-      ArrayCopy(log_prob,obj.log_prob);
-     }
+   void              operator=(const SState &obj);
   };
+//+------------------------------------------------------------------+
+//| operator= - Copies state data.                                   |
+//+------------------------------------------------------------------+
+void SState::operator=(const SState &obj)
+  {
+   ArrayCopy(state,obj.state);
+   ArrayCopy(account,obj.account);
+   ArrayCopy(action,obj.action);
+   ArrayCopy(log_prob,obj.log_prob);
+  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -66,7 +70,9 @@ SState::SState(void)
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    int total=ArraySize(state);
    if(FileWriteInteger(file_handle,total)<sizeof(int))
@@ -107,7 +113,9 @@ bool SState::Save(int file_handle)
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
    if(FileIsEnding(file_handle))
       return(false);
 //---
@@ -151,7 +159,7 @@ bool SState::Load(int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| STrajectory - Store a simulated trading trajectory               |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
@@ -170,7 +178,7 @@ struct STrajectory
    bool              Load(int file_handle);
   };
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| STrajectory - Initialize an empty trajectory                     |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
    DiscountFactor(DiscFactor),
@@ -187,7 +195,9 @@ STrajectory::STrajectory(void)  :   Total(0),
 bool STrajectory::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    if(!CumCounted)
       CumRevards();
@@ -213,7 +223,9 @@ bool STrajectory::Save(int file_handle)
 bool STrajectory::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    Total=FileReadInteger(file_handle);
    if(Total>=ArraySize(Revards))
@@ -232,7 +244,7 @@ bool STrajectory::Load(int file_handle)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CumRevards.           |
+//| CumRevards - Accumulate discounted trajectory rewards            |
 //+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {
@@ -622,7 +634,7 @@ bool IsNewBar(void)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CloseByDirection.     |
+//| CloseByDirection - Close positions of the specified type         |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -694,7 +706,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for ClosePartial.         |
+//| ClosePartial - Close part of the position volume                 |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {

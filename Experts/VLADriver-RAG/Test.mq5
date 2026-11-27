@@ -145,8 +145,8 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-   DeleteObj(Result);
-   DeleteObj(bAction);
+   DeleteObj(Result)
+   DeleteObj(bAction)
   }
 //+------------------------------------------------------------------+
 //| OnTick - expert tick function                                    |
@@ -322,7 +322,7 @@ void OnTick()
      }
   }
 //+------------------------------------------------------------------+
-//| FillStack                                                        |
+//| FillStack - Populate the training stack                          |
 //+------------------------------------------------------------------+
 bool FillStack(void)
   {
@@ -330,36 +330,52 @@ bool FillStack(void)
    int end=0;
    int bars=CopyRates(Symb.Name(),TimeFrame,2,start,Rates);
    if(bars<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(RSI.BarsCalculated()<bars||
       CCI.BarsCalculated()<bars||
       ATR.BarsCalculated()<bars||
       MACD.BarsCalculated()<bars)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
    if(!ArraySetAsSeries(Rates,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bars -= end+HistoryBars;
    if(bars<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    vector<float>result,target,neg_target;
    uint ticks=GetTickCount();
    uint tester_print=0;
    if(!cActor.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!cStateEncoder.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    cStateEncoder.TrainMode(false);
    for(int posit=start-HistoryBars-1; posit>=end; posit--)
      {
       if(!CreateBuffers(posit,GetPointer(bState),GetPointer(bTime),NULL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       vector<float>account=vector<float>::Zeros(AccountDescr);
       account[0]=float(AccountInfoDouble(ACCOUNT_BALANCE) / EtalonBalance);
       account[2]=1;
@@ -373,18 +389,24 @@ bool FillStack(void)
       x=time / (double)PeriodSeconds(PERIOD_D1);
       account[12]=(float)MathSin(x!=0 ? 2.0 * M_PI * x : 0);
       if(!bContext.AssignArray(account))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!cStateEncoder.feedForward((CBufferFloat*)GetPointer(bState),1,false,(CBufferFloat*)NULL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!RAGMemory.Retrieve(GetPointer(cStateEncoder),StateScenarioLayer))
         {
          PrintFormat("%s -> %d RAG retrieval failed",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
       // Feed Forward.
       if(!cActor.feedForward((CBufferFloat*)GetPointer(bContext),1,false,
                              GetPointer(cStateEncoder),StateScenarioLayer))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(GetTickCount()-ticks>500)
         {
          double percent=(1.0-double(posit-end) / (start-end-HistoryBars-NForecast))  * 100.0;

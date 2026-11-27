@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
-//| NeuroNet.cl                                                      |
-//| Copyright 2024, DNG                                              |
-//| https://www.mql5.com/ru/users/dng                                |
+//|                                                      NeuroNet.cl |
+//|                                                     NeuroNet_DNG |
+//|                                              Copyright 2024, DNG |
+//|                                https://www.mql5.com/ru/users/dng |
+//|                            https://www.mql5.com/ru/articles/8435 |
 //+------------------------------------------------------------------+
 /// \file
 /// \brief NeuroNet.cl
-/// Library consist OpenCL kernels
 /// \author <A HREF="https://www.mql5.com/en/users/dng"> DNG </A>
 /// \copyright Copyright 2019, DNG
-//---
 //--- by default some GPU doesn't support floats
 //--- cl_khr_fp64 directive is used to enable work with floats
 //--- #pragma OPENCL EXTENSION cl_khr_fp64 : enable
@@ -19025,7 +19025,10 @@ __kernel void ScenarioResponsibilities(__global float*target,
          const int row=scenarios-left-1;
 
          if(remainder<row)
-           {right=left+1+remainder;break;}
+           {
+            right=left+1+remainder;
+            break;
+           }
          remainder-=row;
         }
       float square_sum=0.0f;
@@ -22107,7 +22110,10 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
       (expected_calculation_contract!=2U&&expected_calculation_contract!=3U&&
        expected_calculation_contract!=4U)||
       (expected_calculation_contract==2U?currency_digits!=0U:currency_digits>8U))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
    const ulong expected_account=(ulong)K*H*4;
    const ulong expected_instrument=expected_account+24;
    const ulong expected_limits=expected_instrument+48;
@@ -22119,7 +22125,10 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
    if(expected_account!=off_account||expected_instrument!=off_instrument||
       expected_limits!=off_limits||expected_execution!=off_execution||expected_count!=off_count||
       expected_calendar!=off_calendar||expected_active!=off_active||expected_active+M!=total)
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    __global const float *account=account_override;
    __global const float *profile_account=account_profile;
@@ -22128,19 +22137,31 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
 
    for(int i=0;i<24;i++)
       if(!isfinite(account[i])||!isfinite(limits[i]))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
    for(int i=0;i<48;i++)
       if(!isfinite(instrument[i]))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
    for(uint m=0;m<M;m++)
       if(!DPCCBoolean(context[off_active+m]))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
    if(!DPCCInteger(limits[20],0.0f,511.0f)||limits[21]!=money_scale||limits[22]!=2.0f||
       limits[23]!=0.0f||instrument[30]!=(float)expected_calculation_contract||instrument[39]!=0.0f||account[23]!=0.0f)
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if(expected_calculation_contract==3U&&
       (((int)instrument[11]!=DPCC_CALC_FOREX&&(int)instrument[11]!=DPCC_CALC_FOREX_NOLEV)||
@@ -22148,15 +22169,24 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
        instrument[15]!=0.0f||instrument[16]!=0.0f||
        instrument[46]!=0.0f||instrument[47]!=0.0f||
        instrument[12]!=1.0f||instrument[13]!=1.0f||instrument[14]!=profile_account[16]))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    for(int i=11;i<19;i++)
       if(limits[i]<0.0f)
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
    if(limits[19]<0.0f||limits[14]>=instrument[5]*0.5f||
       limits[15]>=instrument[1]*0.5f)
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
    const uint mask=(uint)limits[20];
 
    if(((mask&1U)&&limits[0]<0.0f)||((mask&4U)&&limits[2]<0.0f)||
@@ -22164,7 +22194,10 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
       ((mask&64U)&&limits[6]<0.0f)||
       ((mask&128U)&&(limits[7]<0.0f||limits[8]<limits[7]))||
       ((mask&256U)&&(limits[9]<0.0f||limits[10]<limits[9])))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if(instrument[0]<=0.0f||instrument[1]<=0.0f||instrument[2]<=0.0f||
       instrument[3]<=0.0f||instrument[4]<instrument[3]||instrument[5]<=0.0f||
@@ -22180,33 +22213,57 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
       instrument[36]<0.0f||instrument[36]>max_quote_age||instrument[37]<0.0f||
       instrument[38]<0.0f||!DPCCBoolean(instrument[43])||
       !DPCCBoolean(instrument[46])||!DPCCBoolean(instrument[47])||instrument[45]<0.0f)
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if(instrument[27]==1.0f&&instrument[28]==1.0f&&instrument[25]>instrument[26])
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
    const int mode=(int)instrument[11];
 
    if((mode==DPCC_CALC_FOREX||mode==DPCC_CALC_CFDLEVERAGE)&&instrument[19]<=0.0f)
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if((DPCCTickMode(mode)||mode==DPCC_CALC_CFDINDEX)&&
       (instrument[20]<=0.0f||instrument[21]<=0.0f))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if(DPCCTickMode(mode)&&instrument[15]<=0.0f)
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if((mode==DPCC_CALC_STOCKS||mode==DPCC_CALC_MOEX_STOCKS)&&expected_basis!=1)
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if(expected_basis==1&&(instrument[37]>max_last_age||!DPCCPriceValid(instrument[33],instrument)))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if(DPCCBondMode(mode))
      {
       if(instrument[22]<=0.0f||instrument[44]<=0.0f||
          (native_continuation==0U&&account[2]!=0.0f))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
       //--- account24 has no entry interest; only an explicit State33 carries it.
       if(native_continuation!=0U)
@@ -22222,17 +22279,26 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
             (expected_basis==0U&&account[26]!=account[15])||
             (account[2]==0.0f?(account[3]!=0.0f||account[25]!=0.0f):
              (!DPCCPriceValid(account[3],instrument)||account[30]<0.0f)))
-            {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+           {
+            if(failure_line)*failure_line=(uint)__LINE__;
+            return(DPCC_STATUS_INVALID);
+           }
         }
      }
 
    if(mode==DPCC_CALC_COLLATERAL&&(instrument[24]<0.0f||instrument[24]>1.0f||
       account[2]<0.0f||account[17]!=0.0f||account[18]!=0.0f))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if((instrument[46]==1.0f&&instrument[15]<=0.0f)||
       (instrument[47]==1.0f&&instrument[16]<=0.0f))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if(!DPCCBoolean(account[17])||!DPCCBoolean(account[18])||!DPCCBoolean(account[19])||
       !DPCCBoolean(account[20])||!DPCCBoolean(account[22])||account[6]<0.0f||
@@ -22243,7 +22309,10 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
       (account[2]==0.0f&&(account[17]!=0.0f||account[18]!=0.0f))||
       (account[19]==1.0f&&account[2]!=0.0f)||
       (account[20]==1.0f&&account[8]<account[1]))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
    const float free_margin=account[1]-account[10]-account[11];
    const float money_tolerance=limits[16]+limits[17]*fmax(fabs(free_margin),fabs(account[12]));
 
@@ -22251,11 +22320,17 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
       return(DPCC_STATUS_NUMERIC);
 
    if(fabs(account[12]-free_margin)>money_tolerance)
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    if((account[17]==1.0f&&!DPCCPriceValid(account[4],instrument))||
       (account[18]==1.0f&&!DPCCPriceValid(account[5],instrument)))
-      {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+     {
+      if(failure_line)*failure_line=(uint)__LINE__;
+      return(DPCC_STATUS_INVALID);
+     }
 
    float frozen_delta=0.0f;
 
@@ -22267,36 +22342,57 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
       const float          count_float=context[off_count+h];
 
       if(!DPCCInteger(count_float,0.0f,(float)E))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
       const uint count=(uint)count_float;
 
       for(int i=0;i<4;i++)
          if(!DPCCPriceValid(ohlc[i],instrument))
-            {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+           {
+            if(failure_line)*failure_line=(uint)__LINE__;
+            return(DPCC_STATUS_INVALID);
+           }
 
       if((observed_open!=0&&(ohlc[1]!=ohlc[0]||ohlc[2]!=ohlc[0]||ohlc[3]!=ohlc[0]))||
          (observed_open==0&&(ohlc[1]<ohlc[0]||ohlc[1]<ohlc[3]||ohlc[2]>ohlc[0]||
           ohlc[2]>ohlc[3]||ohlc[2]>ohlc[1])))
 
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
       for(int i=0;i<24;i++)
          if(!isfinite(execution[i]))
-            {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+           {
+            if(failure_line)*failure_line=(uint)__LINE__;
+            return(DPCC_STATUS_INVALID);
+           }
 
       for(int i=0;i<13;i++)
          if(execution[i]<0.0f)
-            {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+           {
+            if(failure_line)*failure_line=(uint)__LINE__;
+            return(DPCC_STATUS_INVALID);
+           }
 
       if(expected_calculation_contract==3U&&
          (execution[13]!=1.0f||execution[14]!=1.0f||execution[15]!=1.0f))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
       if(expected_calculation_contract==4U&&
          (execution[14]<execution[13]||execution[15]<execution[23]||
           execution[13]!=reference_execution[13]||execution[14]!=reference_execution[14]||
           execution[15]!=reference_execution[15]||execution[23]!=reference_execution[23]))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
       if(execution[13]<=0.0f||execution[14]<=0.0f||execution[15]<=0.0f||
          execution[18]<=0.0f||execution[19]<0.0f||
@@ -22305,11 +22401,17 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
          (expected_calculation_contract==4U?execution[23]<=0.0f:execution[23]!=0.0f)||
          execution[18]!=reference_execution[18]||
          execution[19]!=reference_execution[19]||execution[22]!=reference_execution[22])
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
       if(observed_open!=0&&(execution[1]!=execution[0]||execution[2]!=execution[0]||
          execution[3]!=execution[0]||execution[17]!=execution[16]))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
       if(h==0)
          frozen_delta=execution[20];
@@ -22317,7 +22419,10 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
       if(execution[20]!=frozen_delta||execution[20]!=reference_execution[20]||
          (expected_adapter==0&&execution[20]!=0.0f)||
          (expected_adapter==1&&fabs(profile_account[15]-instrument[33]-execution[20])>limits[15]))
-         {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+        {
+         if(failure_line)*failure_line=(uint)__LINE__;
+         return(DPCC_STATUS_INVALID);
+        }
 
       for(int vertex=0;vertex<4;vertex++)
         {
@@ -22325,7 +22430,10 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
 
          if(!DPCCPriceValid(ohlc[vertex]+spread,instrument)||
             !DPCCPriceValid(ohlc[vertex]-execution[20],instrument))
-            {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+           {
+            if(failure_line)*failure_line=(uint)__LINE__;
+            return(DPCC_STATUS_INVALID);
+           }
         }
       __global const float *calendar=context+off_calendar+((size_t)k*H+h)*E*6;
       __global const float *reference_calendar=context+off_calendar+(size_t)h*E*6;
@@ -22338,7 +22446,10 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
 
          for(int i=0;i<6;i++)
             if(!isfinite(item[i])||(event>=count&&item[i]!=0.0f))
-               {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+              {
+               if(failure_line)*failure_line=(uint)__LINE__;
+               return(DPCC_STATUS_INVALID);
+              }
 
          if(event>=count)
             continue;
@@ -22352,7 +22463,10 @@ int DPCCValidateRolloutContext(__global const float*context,__global const float
             (item[1]==1.0f&&(item[2]!=0.0f||item[3]!=0.0f||item[4]!=0.0f))||
             item[0]<previous_offset||(item[0]==previous_offset&&item[1]<previous_type)||
             item[0]!=reference_calendar[event*6]||item[1]!=reference_calendar[event*6+1])
-            {if(failure_line)*failure_line=(uint)__LINE__;return(DPCC_STATUS_INVALID);}
+           {
+            if(failure_line)*failure_line=(uint)__LINE__;
+            return(DPCC_STATUS_INVALID);
+           }
          previous_offset=item[0];
          previous_type=item[1];
         }
@@ -24898,7 +25012,7 @@ __kernel void DPCCSharedAffineInputGradient(__global const float*weights,
    input_gradient[index]=status==0?sum:0.0f;
   }
 //+------------------------------------------------------------------+
-//| DPCCSharedAffineForwardPreflight -...                            |
+//| DPCCSharedAffineForwardPreflight - Flag invalid affine outputs   |
 //+------------------------------------------------------------------+
 __kernel void DPCCSharedAffineForwardPreflight(__global const float*weights,
                                                __global const float *input,__global float*flags,
@@ -26263,7 +26377,11 @@ __kernel void DPCCCompositeSummary(__global const float*projection,
       const float valid=eligible[m];
 
       if(!isfinite(valid)||(valid!=0&&valid!=1)||(active==0&&valid==1))error=3;
-      if(error==0){summary[row+10]=active;summary[row+11]=valid;}
+      if(error==0)
+        {
+         summary[row+10]=active;
+         summary[row+11]=valid;
+        }
      }
    flags[m]=(float)error;
   }
@@ -26322,10 +26440,18 @@ __kernel void DPCCCompositeSnapshotIdentity(__global const float*context,
    ulong hash=(ulong)14695981039346656037UL;
    hash^=(ulong)count;hash*=(ulong)1099511628211UL;
 
-   for(uint i=0;i<count;i++){hash^=(ulong)as_uint(context[i]);hash*=(ulong)1099511628211UL;}
+   for(uint i=0;i<count;i++)
+     {
+      hash^=(ulong)as_uint(context[i]);
+      hash*=(ulong)1099511628211UL;
+     }
    hash^=(ulong)13;hash*=(ulong)1099511628211UL;
 
-   for(uint i=0;i<13;i++){hash^=(ulong)as_uint(account[i]);hash*=(ulong)1099511628211UL;}
+   for(uint i=0;i<13;i++)
+     {
+      hash^=(ulong)as_uint(account[i]);
+      hash*=(ulong)1099511628211UL;
+     }
    result[0]=hash;
   }
 
@@ -26344,14 +26470,20 @@ __kernel void DPCCCompositePad(__global const float*returns,
    const uint m=get_global_id(0);if(m>=M)return;
 
    if(K==0||K>N||N>64||(N&(N-1))!=0||!isfinite(tolerance)||tolerance<0||tolerance>=1)
-      {eligible[m]=0;flags[m]=4;return;}
+     {
+      eligible[m]=0;
+      flags[m]=4;
+      return;
+     }
    uint error=0;float total=0;
 
    for(uint k=0;k<K;k++)
-     {const float p=context[piOffset+k];
+     {
+      const float p=context[piOffset+k];
 
        if(!isfinite(p)||p<0)error=3;
-       total+=p;}
+       total+=p;
+     }
 
    if(!isfinite(total)||total<=0||fabs(total-1)>tolerance)error=3;
    const float a=R[activeOffset+m];
@@ -26368,7 +26500,11 @@ __kernel void DPCCCompositePad(__global const float*returns,
       float p=0;
 
       if(valid&&k<K)
-        {z=returns[m*K+k];p=context[piOffset+k];if(!isfinite(z))error=5;}
+        {
+         z=returns[m*K+k];
+         p=context[piOffset+k];
+         if(!isfinite(z))error=5;
+        }
       support[m*N+k]=(isfinite(z)?z:0);mass[m*N+k]=p;
      }
    eligible[m]=(error==0&&valid)?1:0;flags[m]=(float)error;
@@ -26379,82 +26515,152 @@ __kernel void DPCCCompositePad(__global const float*returns,
 //+------------------------------------------------------------------+
 //| DPCCCompositePublish - Implement DPCCCompositePublish            |
 //+------------------------------------------------------------------+
-__kernel void DPCCCompositePublish(__global const float*plans,
-                                   __global const float *eligible,__global const float*scores,
-                                   __global const float *z,__global const float*p,__global const float*order,
-                                   __global const float *fqfdiag,__global float*selected,__global float*output,
-                                   __global float       *receipt,const uint M,const uint H,const uint N,
-                                   const int            risk_type,const float risk_parameter,const float mean_weight,
-                                   const float          tolerance)
+__kernel void DPCCCompositePublish(__global const float *plans,
+                                   __global const float *eligible,__global const float *scores,
+                                   __global const float *z,__global const float *p,__global const float *order,
+                                   __global const float *fqfdiag,__global float *selected,__global float *output,
+                                   __global float *receipt,const uint M,const uint H,const uint N,
+                                   const int risk_type,const float risk_parameter,const float mean_weight,
+                                   const float tolerance)
   {
-   if(get_global_id(0)!=0)return;
-   for(uint i=0;i<H*6;i++)selected[i]=0;
-   for(uint i=0;i<6;i++)output[i]=0;
-   if(M==0||H==0||N==0||N>64||(N&(N-1))!=0)
-      {receipt[0]=4;receipt[1]=-1;receipt[2]=0;receipt[3]=0;return;}
-   uint error=0,count=0;int winner=-1;float best=0;
-
-   for(uint m=0;m<M;m++)
+   if(get_global_id(0)!=0)
+      return;
+   for(uint i=0; i<H * 6; i++)
+      selected[i]=0;
+   for(uint i=0; i<6; i++)
+      output[i]=0;
+   if(M==0||H==0||N==0||N>64||(N & (N-1))!=0)
      {
-      if(!isfinite(eligible[m])||(eligible[m]!=0&&eligible[m]!=1)){error=5;continue;}
-      if(eligible[m]!=1)continue;
-      const uint d=m*6;
+      receipt[0]=4;
+      receipt[1]=-1;
+      receipt[2]=0;
+      receipt[3]=0;
+      return;
+     }
+   uint error=0,count=0;
+   int winner=-1;
+   float best=0;
 
-      for(uint i=0;i<6;i++)if(!isfinite(fqfdiag[d+i]))error=5;
+   for(uint m=0; m<M; m++)
+     {
+      if(!isfinite(eligible[m])||(eligible[m]!=0&&eligible[m]!=1))
+        {
+         error=5;
+         continue;
+        }
+      if(eligible[m]!=1)
+         continue;
+      const uint d=m * 6;
+
+      for(uint i=0; i<6; i++)
+         if(!isfinite(fqfdiag[d+i]))
+            error=5;
       if(!isfinite(scores[m])||!isfinite(fqfdiag[d+2])||fabs(fqfdiag[d+2]-1)>tolerance||
-         fqfdiag[d+3]<0||fqfdiag[d+5]!=0){error=5;continue;}
-      float prefix[64],next[64],terms[64];uint seen[64];
+         fqfdiag[d+3]<0||fqfdiag[d+5]!=0)
+        {
+         error=5;
+         continue;
+        }
+      float prefix[64],next[64],terms[64];
+      uint seen[64];
 
-      for(uint k=0;k<N;k++)seen[k]=0;
+      for(uint k=0; k<N; k++)
+         seen[k]=0;
       float total=0;
 
-      for(uint k=0;k<N;k++)
+      for(uint k=0; k<N; k++)
         {
-         const uint i=m*N+k;const float q=order[i];
+         const uint i=m * N+k;
+         const float q=order[i];
 
-         if(!isfinite(z[i])||!isfinite(p[i])||p[i]<0||!isfinite(q)||q<0||q>=N||q!=floor(q))error=5;
-         else{const uint original=(uint)q;if(seen[original])error=5;seen[original]=1;}
+         if(!isfinite(z[i])||!isfinite(p[i])||p[i]<0||!isfinite(q)||q<0||q>=N||q!=floor(q))
+            error=5;
+         else
+           {
+            const uint original=(uint)q;
+            if(seen[original])
+               error=5;
+            seen[original]=1;
+           }
 
-         if(k&&(z[i]<z[i-1]||(z[i]==z[i-1]&&q<order[i-1])))error=5;
-         prefix[k]=p[i];total+=p[i];
+         if(k&&(z[i]<z[i-1]||(z[i]==z[i-1]&&q<order[i-1])))
+            error=5;
+         prefix[k]=p[i];
+         total+=p[i];
         }
 
-      if(!isfinite(total)||total<=0||fabs(total-1)>tolerance){error=5;continue;}
+      if(!isfinite(total)||total<=0||fabs(total-1)>tolerance)
+        {
+         error=5;
+         continue;
+        }
       //--- reproduce the native parallel CDF, with explicit overflow checks.
-      for(uint offset=1;offset<N;offset<<=1)
-        {for(uint k=0;k<N;k++)next[k]=prefix[k]+(k>=offset?prefix[k-offset]:0);
+      for(uint offset=1; offset<N; offset<<=1)
+        {
+         for(uint k=0; k<N; k++)
+            next[k]=prefix[k]+(k>=offset ? prefix[k-offset] : 0);
 
-         for(uint k=0;k<N;k++){prefix[k]=next[k];if(!isfinite(prefix[k]))error=5;}}
+         for(uint k=0; k<N; k++)
+           {
+            prefix[k]=next[k];
+            if(!isfinite(prefix[k]))
+               error=5;
+           }
+        }
       const float actualMass=prefix[N-1];
 
-      if(!isfinite(actualMass)||actualMass<=0){error=5;continue;}
-      const float inverse=1.0f/actualMass;
-
-      for(uint k=0;k<N;k++)
+      if(!isfinite(actualMass)||actualMass<=0)
         {
-         const float hi=clamp(prefix[k]*inverse,0.0f,1.0f);
-         const float lo=k?clamp(prefix[k-1]*inverse,0.0f,1.0f):0;
+         error=5;
+         continue;
+        }
+      const float inverse=1.0f / actualMass;
+
+      for(uint k=0; k<N; k++)
+        {
+         const float hi=clamp(prefix[k] * inverse,0.0f,1.0f);
+         const float lo=k ? clamp(prefix[k-1] * inverse,0.0f,1.0f) : 0;
          const float weight=fmax(SRMCumulative(hi,risk_type,risk_parameter,mean_weight)-
-             SRMCumulative(lo,risk_type,risk_parameter,mean_weight),0.0f);
-         terms[k]=weight*z[m*N+k];if(!isfinite(weight)||!isfinite(terms[k]))error=5;
+                                      SRMCumulative(lo,risk_type,risk_parameter,mean_weight),
+                                   0.0f);
+         terms[k]=weight * z[m * N+k];
+         if(!isfinite(weight)||!isfinite(terms[k]))
+            error=5;
         }
 
-      for(uint width=N/2;width;width/=2)
-         for(uint k=0;k<width;k++){terms[k]+=terms[k+width];if(!isfinite(terms[k]))error=5;}
+      for(uint width=N / 2; width; width /=2)
+         for(uint k=0; k<width; k++)
+           {
+            terms[k]+=terms[k+width];
+            if(!isfinite(terms[k]))
+               error=5;
+           }
       //--- native neutral-zero guards cannot authorize a corrupted computation.
-      if(scores[m]==0&&terms[0]!=0)error=5;
-      for(uint i=0;i<H*6;i++)if(!isfinite(plans[m*H*6+i]))error=5;
+      if(scores[m]==0&&terms[0]!=0)
+         error=5;
+      for(uint i=0; i<H * 6; i++)
+         if(!isfinite(plans[m * H * 6+i]))
+            error=5;
       count++;
 
-      if(winner<0||scores[m]>best){winner=(int)m;best=scores[m];}
+      if(winner<0||scores[m]>best)
+        {
+         winner=(int)m;
+         best=scores[m];
+        }
      }
-   receipt[0]=(float)(error?error:(winner<0?1:0));receipt[1]=(float)winner;
-   receipt[2]=(winner<0?0:best);receipt[3]=(float)count;
+   receipt[0]=(float)(error ? error : (winner<0 ? 1 : 0));
+   receipt[1]=(float)winner;
+   receipt[2]=(winner<0 ? 0 : best);
+   receipt[3]=(float)count;
 
-   if(error||winner<0)return;
-   for(uint i=0;i<H*6;i++)selected[i]=plans[(uint)winner*H*6+i];
+   if(error||winner<0)
+      return;
+   for(uint i=0; i<H * 6; i++)
+      selected[i]=plans[(uint)winner * H * 6+i];
    //--- dATA03 [BuyVolume,BuyTP,BuySL,SellVolume,SellTP,SellSL], first h=0.
-   for(uint i=0;i<6;i++)output[i]=selected[i];
+   for(uint i=0; i<6; i++)
+      output[i]=selected[i];
   }
 
 //--- exact mean EPSILON_MSE; one work item performs complete numeric admission.
@@ -27150,71 +27356,126 @@ __kernel void DPCCDenoiserFrameLayout(__global const float*key,
 //+------------------------------------------------------------------+
 //| Read-only AC-SRM candidate rows.                                 |
 //+------------------------------------------------------------------+
-inline void DPCCQBad(__global float*f,uint r){atomic_or((volatile __global uint*)(f+r),0x3f800000U);}
-inline float DPCCQFinite(float v,__global float*f,uint r){if(!isfinite(v)){DPCCQBad(f,r);return(0.0f);}return(v);}
+inline void DPCCQBad(__global float*f,uint r)
+  {
+   atomic_or((volatile __global uint*)(f+r),0x3f800000U);
+  }
+inline float DPCCQFinite(float v,__global float *f,uint r)
+  {
+   if(!isfinite(v))
+     {
+      DPCCQBad(f,r);
+      return(0.0f);
+     }
+   return(v);
+  }
 //+------------------------------------------------------------------+
 //| DPCCQRowsDense - Implement DPCCQRowsDense                        |
 //+------------------------------------------------------------------+
-__kernel void DPCCQRowsDense(__global const float*w,__global const float*x,__global float*y,__global float*f,
+__kernel void DPCCQRowsDense(__global const float *w,__global const float *x,__global float *y,__global float *f,
                              const uint ni,const uint no,const uint shared,const int act)
- {
- const uint n=get_global_id(0),r=get_global_id(1);float s=0.0f;
+  {
+   const uint n=get_global_id(0),r=get_global_id(1);
+   float s=0.0f;
 
- for(uint i=0;i<ni;i++){float a=DPCCQFinite(x[(shared?0:r*ni)+i],f,r),b=DPCCQFinite(w[n*(ni+1)+i],f,r);
- if(a!=0.0f)s+=IsNaNOrInf(a*b,0.0f);if(!isfinite(a*b)||!isfinite(s))DPCCQBad(f,r);}
- s+=DPCCQFinite(w[n*(ni+1)+ni],f,r);y[r*no+n]=fActivation(DPCCQFinite(s,f,r),act);
- }
+   for(uint i=0; i<ni; i++)
+     {
+      float a=DPCCQFinite(x[(shared ? 0 : r * ni)+i],f,r),b=DPCCQFinite(w[n * (ni+1)+i],f,r);
+      if(a!=0.0f)
+         s+=IsNaNOrInf(a * b,0.0f);
+      if(!isfinite(a * b)||!isfinite(s))
+         DPCCQBad(f,r);
+     }
+   s+=DPCCQFinite(w[n * (ni+1)+ni],f,r);
+   y[r * no+n]=fActivation(DPCCQFinite(s,f,r),act);
+  }
 //+------------------------------------------------------------------+
 //| DPCCQRowsConv - Implement DPCCQRowsConv                          |
 //+------------------------------------------------------------------+
-__kernel void DPCCQRowsConv(__global const float*w,__global const float*x,__global float*y,__global float*f,
+__kernel void DPCCQRowsConv(__global const float *w,__global const float *x,__global float *y,__global float *f,
                             const uint ni,const uint units,const uint vars,const uint win,const uint step,const uint filters,const int act)
- {
- const uint n=get_global_id(0);
- const uint r=get_global_id(1);
- const uint per=units*filters;
- const uint v=n/per;
- const uint u=(n%per)/filters;
- const uint o=n%filters;
- const uint base=(v*filters+o)*(win+1),start=u*step;float s=0.0f;
+  {
+   const uint n=get_global_id(0);
+   const uint r=get_global_id(1);
+   const uint per=units * filters;
+   const uint v=n / per;
+   const uint u=(n % per) / filters;
+   const uint o=n % filters;
+   const uint base=(v * filters+o) * (win+1),start=u * step;
+   float s=0.0f;
 
- for(uint i=0;i<win&&start+i<ni;i++){float a=DPCCQFinite(x[(r*vars+v)*ni+start+i],f,r),b=DPCCQFinite(w[base+i],f,r);
- if(a!=0.0f)s+=IsNaNOrInf(a*b,0.0f);if(!isfinite(a*b)||!isfinite(s))DPCCQBad(f,r);}
- s+=DPCCQFinite(w[base+win],f,r);y[r*vars*per+n]=fActivation(DPCCQFinite(s,f,r),act);
- }
+   for(uint i=0; i<win&&start+i<ni; i++)
+     {
+      float a=DPCCQFinite(x[(r * vars+v) * ni+start+i],f,r),b=DPCCQFinite(w[base+i],f,r);
+      if(a!=0.0f)
+         s+=IsNaNOrInf(a * b,0.0f);
+      if(!isfinite(a * b)||!isfinite(s))
+         DPCCQBad(f,r);
+     }
+   s+=DPCCQFinite(w[base+win],f,r);
+   y[r * vars * per+n]=fActivation(DPCCQFinite(s,f,r),act);
+  }
 //+------------------------------------------------------------------+
 //| DPCCQRowsMultiWindow - Implement DPCCQRowsMultiWindow            |
 //+------------------------------------------------------------------+
-__kernel void DPCCQRowsMultiWindow(__global const float*w,__global const float*x,__global const int*windows,
-                                   __global float *y,__global float*f,const uint ni,const uint no,const uint vars,const uint count,const uint filters,const int act)
- {
- const uint n=get_global_id(0);
- const uint r=get_global_id(1);
- const uint per=no/vars;
- const uint v=n/per;
- const uint pos=n%per;
- const uint block=filters*count;
- const uint wid=(pos%block)/filters,o=pos%filters;uint shift=0,edge=0,stride=0;
+__kernel void DPCCQRowsMultiWindow(__global const float *w,__global const float *x,__global const int *windows,
+                                   __global float *y,__global float *f,const uint ni,const uint no,const uint vars,const uint count,const uint filters,const int act)
+  {
+   const uint n=get_global_id(0);
+   const uint r=get_global_id(1);
+   const uint per=no / vars;
+   const uint v=n / per;
+   const uint pos=n % per;
+   const uint block=filters * count;
+   const uint wid=(pos % block) / filters,o=pos % filters;
+   uint shift=0,edge=0,stride=0;
 
- for(uint j=0;j<count;j++){if(j<wid){shift+=windows[j];edge+=(windows[j]+1)*filters;}stride+=windows[j];}
- shift+=(pos/block)*stride;const uint win=windows[wid];edge+=o*(win+1);float s=DPCCQFinite(w[edge+win],f,r);
+   for(uint j=0; j<count; j++)
+     {
+      if(j<wid)
+        {
+         shift+=windows[j];
+         edge+=(windows[j]+1) * filters;
+        }
+      stride+=windows[j];
+     }
+   shift+=(pos / block) * stride;
+   const uint win=windows[wid];
+   edge+=o * (win+1);
+   float s=DPCCQFinite(w[edge+win],f,r);
 
- for(uint i=0;i<win&&shift+i<ni;i++){float a=DPCCQFinite(x[(r*vars+v)*ni+shift+i],f,r),b=DPCCQFinite(w[edge+i],f,r);
- if(a!=0.0f)s+=IsNaNOrInf(a*b,0.0f);if(!isfinite(a*b)||!isfinite(s))DPCCQBad(f,r);}
- y[r*no+n]=fActivation(DPCCQFinite(s,f,r),act);
- }
+   for(uint i=0; i<win&&shift+i<ni; i++)
+     {
+      float a=DPCCQFinite(x[(r * vars+v) * ni+shift+i],f,r),b=DPCCQFinite(w[edge+i],f,r);
+      if(a!=0.0f)
+         s+=IsNaNOrInf(a * b,0.0f);
+      if(!isfinite(a * b)||!isfinite(s))
+         DPCCQBad(f,r);
+     }
+   y[r * no+n]=fActivation(DPCCQFinite(s,f,r),act);
+  }
 //+------------------------------------------------------------------+
 //| DPCCQRowsBatchNorm - Implement DPCCQRowsBatchNorm                |
 //+------------------------------------------------------------------+
-__kernel void DPCCQRowsBatchNorm(__global const float*x,__global const float*o,__global float*y,__global float*f,
+__kernel void DPCCQRowsBatchNorm(__global const float *x,__global const float *o,__global float *y,__global float *f,
                                  const uint width,const uint stride,const int act,const uint bypass)
- {
- const uint n=get_global_id(0),r=get_global_id(1),s=n*stride;float v=DPCCQFinite(x[r*width+n],f,r);
+  {
+   const uint n=get_global_id(0),r=get_global_id(1),s=n * stride;
+   float v=DPCCQFinite(x[r * width+n],f,r);
 
- if(bypass){y[r*width+n]=v;return;}float mean=DPCCQFinite(o[s],f,r),variance=DPCCQFinite(o[s+1],f,r);
- if(variance<=0.0f)variance=1.0f;float gamma=DPCCQFinite(o[s+3],f,r);if(gamma==0.0f)gamma=1.0f;
- y[r*width+n]=fActivation(DPCCQFinite(gamma*(v-mean)/sqrt(variance)+DPCCQFinite(o[s+4],f,r),f,r),act);
- }
+   if(bypass)
+     {
+      y[r * width+n]=v;
+      return;
+     }
+   float mean=DPCCQFinite(o[s],f,r),variance=DPCCQFinite(o[s+1],f,r);
+   if(variance<=0.0f)
+      variance=1.0f;
+   float gamma=DPCCQFinite(o[s+3],f,r);
+   if(gamma==0.0f)
+      gamma=1.0f;
+   y[r * width+n]=fActivation(DPCCQFinite(gamma * (v-mean) / sqrt(variance)+DPCCQFinite(o[s+4],f,r),f,r),act);
+  }
 //+------------------------------------------------------------------+
 //| DPCCQRowsSpike - Implement DPCCQRowsSpike                        |
 //+------------------------------------------------------------------+
@@ -27232,34 +27493,62 @@ __kernel void DPCCQRowsSpike(__global const float*x,__global const float*prev,__
 //+------------------------------------------------------------------+
 //| DPCCQRowsMap - Implement DPCCQRowsMap                            |
 //+------------------------------------------------------------------+
-__kernel void DPCCQRowsMap(__global const float*a,__global const float*b,__global float*y,__global float*f,
+__kernel void DPCCQRowsMap(__global const float *a,__global const float *b,__global float *y,__global float *f,
                            const uint width,const uint sa,const uint sb,const uint oa,const uint ob,const uint mode)
- {
- const uint n=get_global_id(0),r=get_global_id(1);float x=DPCCQFinite(a[r*sa+oa+n],f,r),v=x;
+  {
+   const uint n=get_global_id(0),r=get_global_id(1);
+   float x=DPCCQFinite(a[r * sa+oa+n],f,r),v=x;
 
- if(mode){float z=DPCCQFinite(b[r*sb+ob+n],f,r);v=(mode==1?x+z:x*z);}y[r*width+n]=DPCCQFinite(v,f,r);
- }
+   if(mode)
+     {
+      float z=DPCCQFinite(b[r * sb+ob+n],f,r);
+      v=(mode==1 ? x+z : x * z);
+     }
+   y[r * width+n]=DPCCQFinite(v,f,r);
+  }
 //+------------------------------------------------------------------+
 //| DPCCQRowsAttention - Implement DPCCQRowsAttention                |
 //+------------------------------------------------------------------+
-__kernel void DPCCQRowsAttention(__global const float*q,__global const float*t,__global const float*pi,
-                                 __global float *y,__global float*lse,__global float*f,const uint queries,const uint scenarios,const uint steps,const uint dim)
- {
- const uint n=get_global_id(0);
- const uint r=get_global_id(1);
- const uint d=n%dim;
- const uint k=(n/dim)%scenarios;
- const uint h=n/(dim*scenarios);
- const uint qb=((r*queries+h)*scenarios+k)*dim;float maximum=-INFINITY;
+__kernel void DPCCQRowsAttention(__global const float *q,__global const float *t,__global const float *pi,
+                                 __global float *y,__global float *lse,__global float *f,const uint queries,const uint scenarios,const uint steps,const uint dim)
+  {
+   const uint n=get_global_id(0);
+   const uint r=get_global_id(1);
+   const uint d=n % dim;
+   const uint k=(n / dim) % scenarios;
+   const uint h=n / (dim * scenarios);
+   const uint qb=((r * queries+h) * scenarios+k) * dim;
+   float maximum=-INFINITY;
 
- for(uint u=0;u<steps;u++){float s=0.0f;for(uint j=0;j<dim;j++)s+=DPCCQFinite(q[qb+j]*t[(k*steps+u)*dim+j],f,r);
- maximum=fmax(maximum,s/sqrt((float)dim));}float mass=0.0f,v=0.0f;
+   for(uint u=0; u<steps; u++)
+     {
+      float s=0.0f;
+      for(uint j=0; j<dim; j++)
+         s+=DPCCQFinite(q[qb+j] * t[(k * steps+u) * dim+j],f,r);
+      maximum=fmax(maximum,s / sqrt((float)dim));
+     }
+   float mass=0.0f,v=0.0f;
 
- for(uint u=0;u<steps;u++){float s=0.0f;for(uint j=0;j<dim;j++)s+=DPCCQFinite(q[qb+j]*t[(k*steps+u)*dim+j],f,r);
- float p=exp(s/sqrt((float)dim)-maximum);mass+=p;v+=p*DPCCQFinite(t[(k*steps+u)*dim+d],f,r);}
- float gate=DPCCQFinite(pi[k],f,r);if(!(mass>0.0f)||gate<0.0f){DPCCQBad(f,r);y[qb+d]=0.0f;}
- else y[qb+d]=DPCCQFinite(v/mass*gate,f,r);if(d==0)lse[(r*queries+h)*scenarios+k]=DPCCQFinite(log(mass)+maximum,f,r);
- }
+   for(uint u=0; u<steps; u++)
+     {
+      float s=0.0f;
+      for(uint j=0; j<dim; j++)
+         s+=DPCCQFinite(q[qb+j] * t[(k * steps+u) * dim+j],f,r);
+      float p=exp(s / sqrt((float)dim)-maximum);
+      mass+=p;
+      v+=p * DPCCQFinite(t[(k * steps+u) * dim+d],f,r);
+     }
+   float gate=DPCCQFinite(pi[k],f,r);
+   if(!(mass>0.0f)||gate<0.0f)
+     {
+      DPCCQBad(f,r);
+      y[qb+d]=0.0f;
+     }
+   else
+      y[qb+d]=DPCCQFinite(v / mass * gate,f,r);
+   if(d==0)
+      lse[(r * queries+h) * scenarios+k]=DPCCQFinite(log(mass)+maximum,f,r);
+  }
 //+------------------------------------------------------------------+
 //| DPCCQRowsSoftmax - Implement DPCCQRowsSoftmax                    |
 //+------------------------------------------------------------------+
@@ -27283,12 +27572,21 @@ __kernel void DPCCQRowsCosine(__global const float*p,__global float*y,__global f
 //+------------------------------------------------------------------+
 //| DPCCQRowsValidate - Implement DPCCQRowsValidate                  |
 //+------------------------------------------------------------------+
-__kernel void DPCCQRowsValidate(__global const float*q,__global const float*p,__global float*f,const uint width,const float tolerance)
- {
- const uint r=get_global_id(0);float mass=0.0f;for(uint i=0;i<width;i++){float a=q[r*width+i],b=p[r*width+i];
+__kernel void DPCCQRowsValidate(__global const float *q,__global const float *p,__global float *f,const uint width,const float tolerance)
+  {
+   const uint r=get_global_id(0);
+   float mass=0.0f;
+   for(uint i=0; i<width; i++)
+     {
+      float a=q[r * width+i],b=p[r * width+i];
 
- if(!isfinite(a)||!isfinite(b)||b<0.0f)DPCCQBad(f,r);mass+=b;}if(!isfinite(mass)||fabs(mass-1.0f)>=tolerance)DPCCQBad(f,r);
- }
+      if(!isfinite(a)||!isfinite(b)||b<0.0f)
+         DPCCQBad(f,r);
+      mass+=b;
+     }
+   if(!isfinite(mass)||fabs(mass-1.0f)>=tolerance)
+      DPCCQBad(f,r);
+  }
 //+------------------------------------------------------------------+
 //| DPCCQRowsJoin - Implement DPCCQRowsJoin                          |
 //+------------------------------------------------------------------+
@@ -27299,15 +27597,31 @@ __kernel void DPCCQRowsJoin(__global const float*a,__global const float*p,__glob
 //+------------------------------------------------------------------+
 //| DPCCQRowsRank - Implement DPCCQRowsRank                          |
 //+------------------------------------------------------------------+
-__kernel void DPCCQRowsRank(__global const float*q1,__global const float*q2,__global const float*allowed,
-                            __global const float *f,__global float*scores,__global float*selected,const uint rows)
- {
- uint best=rows;float value=-INFINITY;for(uint m=0;m<rows;m++){float s=fmin(q1[m],q2[m]);scores[m]=s;
+__kernel void DPCCQRowsRank(__global const float *q1,__global const float *q2,__global const float *allowed,
+                            __global const float *f,__global float *scores,__global float *selected,const uint rows)
+  {
+   uint best=rows;
+   float value=-INFINITY;
+   for(uint m=0; m<rows; m++)
+     {
+      float s=fmin(q1[m],q2[m]);
+      scores[m]=s;
 
- if(f[m]!=0.0f||!isfinite(q1[m])||!isfinite(q2[m])){selected[0]=-2.0f;return;}
- if(allowed[m]!=0.0f)continue;if(best==rows||s>value){best=m;value=s;}}
- selected[0]=(best==rows?-1.0f:(float)best);
- }
+      if(f[m]!=0.0f||!isfinite(q1[m])||!isfinite(q2[m]))
+        {
+         selected[0]=-2.0f;
+         return;
+        }
+      if(allowed[m]!=0.0f)
+         continue;
+      if(best==rows||s>value)
+        {
+         best=m;
+         value=s;
+        }
+     }
+   selected[0]=(best==rows ?-1.0f : (float)best);
+  }
 
 //--- aBI3 Action6 condition: I09 raw query followed by Z/logU tokens and Pi.
 //+------------------------------------------------------------------+
@@ -27643,34 +27957,47 @@ __kernel void HabiGaussianForward(__global const float*x,__global float*out,
 //+------------------------------------------------------------------+
 //| HabiGaussianBackward - Implement HabiGaussianBackward            |
 //+------------------------------------------------------------------+
-__kernel void HabiGaussianBackward(__global const float*self,
-                                   __global const float *peer,__global const float*reconstruction,
-                                   __global const float *chain,__global float*gradient_mu,
-                                   __global float       *gradient_xi,__global float*terms,__global float*flags,
-                                   int                  L,int mode,float beta)
+__kernel void HabiGaussianBackward(__global const float *self,
+                                   __global const float *peer,__global const float *reconstruction,
+                                   __global const float *chain,__global float *gradient_mu,
+                                   __global float *gradient_xi,__global float *terms,__global float *flags,
+                                   int L,int mode,float beta)
   {
-   int   j=get_global_id(0);
+   int j=get_global_id(0);
    float gm=0;
    float ge=0;
    float kl=0;
 
-   if(mode==13){gm=reconstruction[j];ge=reconstruction[j+L];}
+   if(mode==13)
+     {
+      gm=reconstruction[j];
+      ge=reconstruction[j+L];
+     }
    else
      {
-      float mq=mode==12?self[j]:peer[j];
-      float mp=mode==12?peer[j]:self[j];
-      float lq=mode==12?self[j+L]:peer[j+L];
-      float lp=mode==12?peer[j+L]:self[j+L];
+      float mq=mode==12 ? self[j] : peer[j];
+      float mp=mode==12 ? peer[j] : self[j];
+      float lq=mode==12 ? self[j+L] : peer[j+L];
+      float lp=mode==12 ? peer[j+L] : self[j+L];
       float d=mq-mp;
       float ivp=exp(-lp);
       float ratio=exp(lq-lp);
-      kl=0.5f*(lp-lq+ratio+d*d*ivp-1.0f);
+      kl=0.5f * (lp-lq+ratio+d * d * ivp-1.0f);
 
-      if(mode==12){gm=reconstruction[j]-beta*d*ivp;
-                     ge=reconstruction[j+L]-0.5f*beta*(ratio-1.0f);}
-      else{gm=beta*d*ivp;ge=0.5f*beta*(ratio+d*d*ivp-1.0f);}
+      if(mode==12)
+        {
+         gm=reconstruction[j]-beta * d * ivp;
+         ge=reconstruction[j+L]-0.5f * beta * (ratio-1.0f);
+        }
+      else
+        {
+         gm=beta * d * ivp;
+         ge=0.5f * beta * (ratio+d * d * ivp-1.0f);
+        }
      }
-   gradient_mu[j]=gm;gradient_xi[j]=ge*chain[j];terms[j]=kl;
+   gradient_mu[j]=gm;
+   gradient_xi[j]=ge * chain[j];
+   terms[j]=kl;
    flags[j]=(!isfinite(gm)||!isfinite(gradient_xi[j])||!isfinite(kl));
   }
 //+------------------------------------------------------------------+

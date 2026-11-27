@@ -151,7 +151,8 @@ void Train(void)
    int  total_tr=ArraySize(Buffer);
    uint ticks=GetTickCount();
    vector<float>account,reward;
-   int bar,action;
+   int bar;
+   int action;
 //---
    for(int iter=0; (iter<Iterations&&!IsStopped()); iter ++)
      {

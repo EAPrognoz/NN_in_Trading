@@ -20,8 +20,19 @@ input int    UpdateTargets=TargetUpdate;
 input float  Tau=tau;
 input int    CheckpointTransitions=256;
 input double MinBalance=50.0;
-CNet Actor,TargetActor,Q1,Q2,TargetQ1,TargetQ2;
-CBufferFloat State,TimeState,Account,Action,CriticInput,TargetCriticInput,ScalarTarget;
+CNet Actor;
+CNet TargetActor;
+CNet Q1;
+CNet Q2;
+CNet TargetQ1;
+CNet TargetQ2;
+CBufferFloat State;
+CBufferFloat TimeState;
+CBufferFloat Account;
+CBufferFloat Action;
+CBufferFloat CriticInput;
+CBufferFloat TargetCriticInput;
+CBufferFloat ScalarTarget;
 //+------------------------------------------------------------------+
 //| Global variables                                                 |
 //+------------------------------------------------------------------+
@@ -34,7 +45,7 @@ bool         PolicyCheckpointPending=false;
 bool         PolicyCheckpointSafe=true;
 bool         ORIONOnlineInitialized=false;
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for ClearPreviousTransit... |
+//| ClearPreviousTransition - Clear previous transition              |
 //+------------------------------------------------------------------+
 bool ClearPreviousTransition(void)
   {
@@ -55,19 +66,24 @@ bool StorePrevious(void)
            (PreviousAccount.GetIndex()<0||PreviousAccount.BufferWrite()));
   }
 //+------------------------------------------------------------------+
-//| Target objects are runtime-only. They start as exact copies o... |
+//| LoadOnlineTargets - Load online targets                          |
 //+------------------------------------------------------------------+
+//--- Target objects are runtime-only. They start as exact copies o...
 bool LoadOnlineTargets(void)
   {
    if(!ORIONLoadPolicyNet(TargetActor,ORION_ACTOR_FILE)||
       !ORIONLoadPolicyNet(TargetQ1,ORION_Q1_FILE)||!ORIONLoadPolicyNet(TargetQ2,ORION_Q2_FILE))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    TargetActor.SetOpenCL(ORIONMarket.GetOpenCL());
    TargetQ1.SetOpenCL(ORIONMarket.GetOpenCL());
    TargetQ2.SetOpenCL(ORIONMarket.GetOpenCL());
    if(!ORIONValidatePolicyShape(TargetActor,false)||!ORIONValidatePolicyShape(TargetQ1,true)||
       !ORIONValidatePolicyShape(TargetQ2,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    TargetActor.TrainMode(false);
    TargetQ1.TrainMode(false);
    TargetQ2.TrainMode(false);
@@ -87,17 +103,23 @@ bool TrainPreviousTransition(const bool terminal)
    if(!terminal)
      {
       if(!TargetActor.feedForward(GetPointer(Account),1,false,GetPointer(ORIONMarket),-1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       CNeuronBaseOCL *target_context=TargetActor.Layer(0);
       CNeuronBaseOCL *target_actor_layer=TargetActor.Layer(3);
       if(!target_context||!target_actor_layer||
          !BuildCriticInput(target_context.getOutput(),target_actor_layer.getOutput(),GetPointer(TargetCriticInput))||
          !TargetQ1.feedForward(GetPointer(TargetCriticInput),1,false,GetPointer(ORIONMarket),-1)||
          !TargetQ2.feedForward(GetPointer(TargetCriticInput),1,false,GetPointer(ORIONMarket),-1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       CNeuronBaseOCL *target_q1_layer=TargetQ1.Layer(3),*target_q2_layer=TargetQ2.Layer(3);
       if(!target_q1_layer||!target_q2_layer)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    //--- TD target is consumed by CPU scalar arithmetic.  getResults is the
    //--- library CPU boundary and also supports a host-only final critic layer.
@@ -108,13 +130,13 @@ bool TrainPreviousTransition(const bool terminal)
    //--- function if.
       if(!qt1||!qt2||qt1.Total()!=1||qt2.Total()!=1)
         {
-         DeleteObj(qt1);
-         DeleteObjAndFalse(qt2);
+         DeleteObj(qt1)
+         DeleteObjAndFalse(qt2)
         }
       q1_target=double(qt1[0]);
       q2_target=double(qt2[0]);
-      DeleteObj(qt1);
-      DeleteObj(qt2);
+      DeleteObj(qt1)
+      DeleteObj(qt2)
      }
    double observed=(AccountInfoDouble(ACCOUNT_EQUITY)-PreviousEquity+
                       AccountInfoDouble(ACCOUNT_BALANCE)-PreviousBalance) * PreviousBalance / EtalonBalance+
@@ -126,42 +148,58 @@ bool TrainPreviousTransition(const bool terminal)
       const double point_cost=Symb.TickValue() / Symb.TickSize();
       if(State.Total()!=HistoryBars * BarDescr||Symb.LotsMin()<=0||
          !MathIsValidNumber(point_cost))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       const double loss=MathAbs(State[0]) * point_cost * Symb.LotsMin();
       observed -= loss * PreviousBalance / EtalonBalance;
      }
    const double target=observed+(terminal ? 0.0 : DiscFactor * MathMin(q1_target,q2_target));
    if(!MathIsValidNumber(target)||!ScalarTarget.BufferInit(1,0)||!ScalarTarget.Update(0,float(target)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- restore only the ordinary previous state. Forecast scenarios are rerun,
 //--- never cached or serialized.
    if(!CreateBuffers(1,GetPointer(State),GetPointer(TimeState),(CBufferFloat*)NULL)||
       !ORIONMarket.Clear()||
       !ORIONForwardForecastState(GetPointer(State)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *actor_context=Actor.Layer(0);
    CNeuronBaseOCL *actor_layer=Actor.Layer(3);
    if(!actor_context||!actor_layer||!BuildCriticInput(actor_context.getOutput(),actor_layer.getOutput(),GetPointer(CriticInput))||
       !Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(ORIONMarket),-1)||
       !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(ORIONMarket),-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(UpdatePolicy>0&&Transition>0&&Transition % (ulong)UpdatePolicy==0&&
       !PolicyBackward(Actor,Q1,GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!Q1.backProp(GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1)||
       !Q2.backProp(GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    PreviousMarginPenalty=0;
 
 //--- per-transition guard reads only the three small trainable weight buffers.
    if(!ORIONVerifyFrozenWeightsExact())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(UpdateTargets>0&&Transition>0&&Transition % (ulong)UpdateTargets==0)
       if(!TargetActor.WeightsUpdate(GetPointer(Actor),Tau)||
          !TargetQ1.WeightsUpdate(GetPointer(Q1),Tau)||
          !TargetQ2.WeightsUpdate(GetPointer(Q2),Tau))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -172,19 +210,40 @@ int OnInit(void)
   {
    ORIONOnlineInitialized=false;
    if(!ORIONInitIndicators())
-     { Print("ORION online init: indicators=FAIL"); return(INIT_FAILED); }
+     {
+      Print("ORION online init: indicators=FAIL");
+      return(INIT_FAILED);
+     }
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
-     { Print("ORION online init: trade filling=FAIL"); return(INIT_FAILED); }
+     {
+      Print("ORION online init: trade filling=FAIL");
+      return(INIT_FAILED);
+     }
    if(!ORIONLoadForecastInference())
-     { Print("ORION online init: forecast=FAIL"); return(INIT_FAILED); }
+     {
+      Print("ORION online init: forecast=FAIL");
+      return(INIT_FAILED);
+     }
    if(!ORIONLoadOrCreatePolicySet(Actor,Q1,Q2,false))
-     { Print("ORION online init: policy checkpoint=FAIL"); return(INIT_FAILED); }
+     {
+      Print("ORION online init: policy checkpoint=FAIL");
+      return(INIT_FAILED);
+     }
    if(!LoadOnlineTargets())
-     { Print("ORION online init: runtime targets=FAIL"); return(INIT_FAILED); }
+     {
+      Print("ORION online init: runtime targets=FAIL");
+      return(INIT_FAILED);
+     }
    if(!ORIONVerifyFrozenForecastExact())
-     { Print("ORION online init: frozen forecast=FAIL"); return(INIT_FAILED); }
+     {
+      Print("ORION online init: frozen forecast=FAIL");
+      return(INIT_FAILED);
+     }
    if(!ORIONMarket.Clear())
-     { Print("ORION online init: forecast clear=FAIL"); return(INIT_FAILED); }
+     {
+      Print("ORION online init: forecast clear=FAIL");
+      return(INIT_FAILED);
+     }
    PreviousBalance=AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity=AccountInfoDouble(ACCOUNT_EQUITY);
    ORIONOnlineInitialized=true;

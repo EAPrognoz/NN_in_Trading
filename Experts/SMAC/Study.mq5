@@ -379,7 +379,7 @@ void Train(void)
       vector<float>forecast=ForecastAccount(Buffer[tr].States[i].account,rewards1,prof_1l,Buffer[tr].States[i+1].account[7]);
       TargetState.AddArray(forecast);
       if(!critic.feedForward(GetPointer(Actor),LatentLayer,GetPointer(Actor))||
-         !Convolution.feedForward(GetPointer(TargetState),1 false,(CBufferFloat*)NULL))
+         !Convolution.feedForward(GetPointer(TargetState),1,false,(CBufferFloat*)NULL))
         {
          PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
          break;

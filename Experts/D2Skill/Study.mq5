@@ -65,29 +65,37 @@ SD2SkillEpisodeOutcome    BaselineEpisodeOutcome;
 SD2SkillEpisodeOutcome    SkillEpisodeOutcome;
 bool                      PairedEpisodeActive=false;
 //+------------------------------------------------------------------+
-//| Resets only D2Skill episode influence, preserving bank params.   |
+//| ResetD2SkillEpisodeInfluence - Reset d 2 skill episode influence |
 //+------------------------------------------------------------------+
+//--- Resets only D2Skill episode influence, preserving bank params.
 bool ResetD2SkillEpisodeInfluence(CNet &actor)
   {
    CNeuronBaseOCL *layer=actor.Layer(1);
    if(!layer||layer.Type()!=defNeuronD2Skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2Skill *skill=(CD2Skill*)layer;
    if(!skill.Ready()||!skill.ResetEpisodeInfluence())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Adds one simulated account transition to its own episode result. |
+//| AccumulateEpisodeOutcome - Accumulate episode outcome            |
 //+------------------------------------------------------------------+
+//--- Adds one simulated account transition to its own episode result.
 bool AccumulateEpisodeOutcome(SD2SkillEpisodeOutcome &outcome,
                               CBufferFloat *account,
                               const double reward)
   {
    if(!account||account.Total()!=AccountDescr||!MathIsValidNumber(reward)||
       (account.GetIndex()>=0&&!account.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double balance=MathMax(0.0,double(account[0]) * EtalonBalance);
    const double equity=MathMax(0.0,double(account[2]) * MathMax(balance,1.0));
    const double drawdown=MathMin(0.0,double(account[1]));
@@ -122,7 +130,9 @@ bool PrepareHistory(int &first_position,int &last_position)
    int bars=CopyRates(Symb.Name(),TimeFrame,0,start,Rates);
    if(bars<=0||!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int  wait=-1;
    bool calculated=false;
    do
@@ -134,13 +144,17 @@ bool PrepareHistory(int &first_position,int &last_position)
      }
    while(!calculated&&wait<100);
    if(!calculated)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
    if(!ArraySetAsSeries(Rates,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    first_position=end+1;
 
 //--- createBuffers(position,...,forecast) forms its state from
@@ -160,8 +174,9 @@ bool PolicyBackward(void)
    return(PolicyBackward(Actor,Q1,GetPointer(ActorObjective),GetPointer(D2SkillMarket),-1));
   }
 //+------------------------------------------------------------------+
-//| Builds one causal baseline/skill pair on the same state.         |
+//| BuildPairedTransition - Build paired transition                  |
 //+------------------------------------------------------------------+
+//--- Builds one causal baseline/skill pair on the same state.
 bool BuildPairedTransition(const int position,const bool trace_td,bool &terminal,
                            double &reward,double &delta_j,bool &paired,
                            bool &baseline_terminal)
@@ -194,7 +209,7 @@ bool BuildPairedTransition(const int position,const bool trace_td,bool &terminal
                                          false,false,"baseline_start"))
         {
          Print("TrainTransition stage=baseline_restore");
-         ReturnFalse;
+         ReturnFalse
         }
       if(!Actor.feedForward(GetPointer(BaselineAccount),1,false,GetPointer(D2SkillMarket),-1)||
          !ReadAction(Actor,GetPointer(BaselineAction))||
@@ -208,12 +223,15 @@ bool BuildPairedTransition(const int position,const bool trace_td,bool &terminal
                                         task_enabled,step_enabled,
                                         "baseline_failure");
          Print("TrainTransition stage=baseline_transition");
-         ReturnFalse;
+         ReturnFalse
         }
       if(!D2SkillRestorePairedActorState(ActorForwardState,skill,
                                          task_enabled,step_enabled,
                                          "baseline_to_skill"))
-        { Print("TrainTransition stage=restore_skill_state"); ReturnFalse; }
+        {
+         Print("TrainTransition stage=restore_skill_state");
+         ReturnFalse
+        }
      }
    if(!Actor.feedForward(GetPointer(Account),1,false,GetPointer(D2SkillMarket),-1)||
       !ReadAction(Actor,GetPointer(CurrentAction))||
@@ -227,7 +245,7 @@ bool BuildPairedTransition(const int position,const bool trace_td,bool &terminal
                                         task_enabled,step_enabled,
                                         "skill_failure");
       Print("TrainTransition stage=skill_transition");
-      ReturnFalse;
+      ReturnFalse
      }
    if(paired)
      {
@@ -238,7 +256,7 @@ bool BuildPairedTransition(const int position,const bool trace_td,bool &terminal
                                         task_enabled,step_enabled,
                                         "nonfinite_delta");
          Print("TrainTransition stage=paired_delta_nonfinite");
-         ReturnFalse;
+         ReturnFalse
         }
       if(trace_td)
          PrintFormat("D2Skill paired iteration=%d JBase=%.8f JSkill=%.8f DeltaJ=%.8f baseline_terminal=%s skill_terminal=%s",
@@ -258,14 +276,19 @@ bool TrainTransition(const int position,const int iteration,bool &skill_terminal
    pair_terminal=false;
    const bool trace_td=(iteration<8||iteration % 10000==0);
    if(!D2SkillForwardForecast(position,GetPointer(State),GetPointer(TimeState)))
-     { Print("TrainTransition stage=current_forecast"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=current_forecast");
+      ReturnFalse
+     }
    double reward=0;
    double delta_j=0;
    bool   paired=false;
    bool   baseline_terminal=false;
    if(!BuildPairedTransition(position,trace_td,skill_terminal,reward,delta_j,paired,
                              baseline_terminal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    pair_terminal=(paired&&D2SkillPairReachedTerminal(baseline_terminal,
                     skill_terminal));
    const double balance=MathMax(0.0,double(Account[0]) * EtalonBalance);
@@ -292,19 +315,34 @@ bool TrainTransition(const int position,const int iteration,bool &skill_terminal
                   (skill_terminal ? "true" : "false"));
    if(!MathIsValidNumber(target_value)||!ScalarTarget.BufferInit(1,0)||
       !ScalarTarget.Update(0,float(target_value)))
-     { Print("TrainTransition stage=scalar_target"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=scalar_target");
+      ReturnFalse
+     }
    CNeuronBaseOCL *context_layer=Actor.Layer(0);
    CNeuronBaseOCL *actor_layer=Actor.Layer(3);
    if(!context_layer||!actor_layer)
-     { Print("TrainTransition stage=actor_layer"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=actor_layer");
+      ReturnFalse
+     }
 
 //--- use the live device activation, not the CPU account object.
    if(!BuildCriticInput(context_layer.getOutput(),actor_layer.getOutput(),GetPointer(CriticInput)))
-     { Print("TrainTransition stage=critic_input"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=critic_input");
+      ReturnFalse
+     }
    if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(D2SkillMarket),-1))
-     { Print("TrainTransition stage=q1_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=q1_forward");
+      ReturnFalse
+     }
    if(!Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(D2SkillMarket),-1))
-     { Print("TrainTransition stage=q2_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=q2_forward");
+      ReturnFalse
+     }
 
 //--- function if.
    if(trace_td)
@@ -316,7 +354,10 @@ bool TrainTransition(const int position,const int iteration,bool &skill_terminal
       if(!q1_output||!q2_output||q1_output.GetIndex()<0||q2_output.GetIndex()<0||
          q1_output.Total()!=1||q2_output.Total()!=1||
          !q1_output.BufferRead()||!q2_output.BufferRead())
-        { Print("TrainTransition stage=current_q_read"); ReturnFalse; }
+        {
+         Print("TrainTransition stage=current_q_read");
+         ReturnFalse
+        }
       PrintFormat("D2Skill Q iteration=%d q1=%.8f q2=%.8f td_q1=%.8f td_q2=%.8f",
                   iteration,double(q1_output[0]),double(q2_output[0]),
                   target_value-double(q1_output[0]),target_value-double(q2_output[0]));
@@ -333,7 +374,10 @@ bool TrainTransition(const int position,const int iteration,bool &skill_terminal
       if(executable_action)
         {
          if(!PolicyBackward())
-           { Print("TrainTransition stage=policy_backward"); ReturnFalse; }
+           {
+            Print("TrainTransition stage=policy_backward");
+            ReturnFalse
+           }
          PolicyTransitions++;
         }
       else
@@ -341,14 +385,20 @@ bool TrainTransition(const int position,const int iteration,bool &skill_terminal
      }
    if(!Q1.backProp(GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1)||
       !Q2.backProp(GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1))
-     { Print("TrainTransition stage=critic_backward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=critic_backward");
+      ReturnFalse
+     }
 
 //--- the teacher uses realized future bars, not one selected Forecast scenario.
 //--- it is deliberately a second Critic-only sample: Q1/Q2 are stateless,
 //--- whereas Actor has already performed its only forward for this state.
    double teacher_reward=0;
    if(!BuildTeacherAction(position,GetPointer(Account),GetPointer(TeacherAction),teacher_reward))
-     { Print("TrainTransition stage=teacher_action"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_action");
+      ReturnFalse
+     }
 //---
    if(teacher_reward>0)
      {
@@ -361,7 +411,10 @@ bool TrainTransition(const int position,const int iteration,bool &skill_terminal
    //--- supervised Actor update reuses the current activation; it never advances
    //--- the history stack or invokes a second Actor forward.
       if(!Actor.backProp(GetPointer(TeacherAction),GetPointer(D2SkillMarket),-1))
-        { Print("TrainTransition stage=teacher_actor_backward"); ReturnFalse; }
+        {
+         Print("TrainTransition stage=teacher_actor_backward");
+         ReturnFalse
+        }
       TeacherTransitions++;
       TeacherRewardSum += teacher_reward;
      }
@@ -370,42 +423,69 @@ bool TrainTransition(const int position,const int iteration,bool &skill_terminal
 //--- is restricted to profitable oracle supervision above.
    if(!ScalarTarget.BufferInit(1,0)||!ScalarTarget.Update(0,float(teacher_reward))||
       !BuildCriticInput(context_layer.getOutput(),GetPointer(TeacherAction),GetPointer(CriticInput)))
-     { Print("TrainTransition stage=teacher_critic_input"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_critic_input");
+      ReturnFalse
+     }
    if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(D2SkillMarket),-1)||
       !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(D2SkillMarket),-1))
-     { Print("TrainTransition stage=teacher_critic_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_critic_forward");
+      ReturnFalse
+     }
    if(!Q1.backProp(GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1)||
       !Q2.backProp(GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1))
-     { Print("TrainTransition stage=teacher_critic_backward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_critic_backward");
+      ReturnFalse
+     }
    TeacherCriticTransitions++;
 
 //--- A second critic-only sample is uniformly random over executable lots and
 //--- stop distances.  It never runs Actor backward or advances policy history.
    double random_reward=0;
    if(!BuildRandomAction(position,GetPointer(Account),GetPointer(RandomAction),random_reward))
-     { Print("TrainTransition stage=random_action"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_action");
+      ReturnFalse
+     }
 
 //--- function if.
    if(random_reward>0)
      {
       if(!Actor.backProp(GetPointer(RandomAction),GetPointer(D2SkillMarket),-1))
-        { Print("TrainTransition stage=random_actor_backward"); ReturnFalse; }
+        {
+         Print("TrainTransition stage=random_actor_backward");
+         ReturnFalse
+        }
      }
    if(!ScalarTarget.BufferInit(1,0)||!ScalarTarget.Update(0,float(random_reward))||
       !BuildCriticInput(context_layer.getOutput(),GetPointer(RandomAction),GetPointer(CriticInput)))
-     { Print("TrainTransition stage=random_critic_input"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_critic_input");
+      ReturnFalse
+     }
    if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(D2SkillMarket),-1)||
       !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(D2SkillMarket),-1))
-     { Print("TrainTransition stage=random_critic_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_critic_forward");
+      ReturnFalse
+     }
    if(!Q1.backProp(GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1)||
       !Q2.backProp(GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1))
-     { Print("TrainTransition stage=random_critic_backward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_critic_backward");
+      ReturnFalse
+     }
    RandomCriticTransitions++;
 
 //--- only the three declared Forecast trainable buffers are read here. The
 //--- complete persistent Codebook is checked at checkpoint/lifecycle bounds.
    if(!D2SkillVerifyFrozenWeightsExact())
-     { Print("TrainTransition stage=frozen_forecast_check"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=frozen_forecast_check");
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -416,7 +496,10 @@ void TrainD2SkillActorCritic(void)
   {
    int first=0,last=0;
    if(!PrepareHistory(first,last))
-     { PrintFormat("%s -> %d history unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d history unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    uint shown=GetTickCount();
    int  completed_iterations=0;
    int  failed_iteration=-1;

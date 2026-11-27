@@ -66,8 +66,9 @@ double           OfflineFirstRejectedAction0=0;
 double           OfflineFirstRejectedAction3=0;
 double           OfflineFirstRejectedATR=0;
 //+------------------------------------------------------------------+
-//| Reset per-run offline RAG collection diagnostics.                |
+//| ResetOfflineRAGDiagnostics - Reset offline RAG diagnostics       |
 //+------------------------------------------------------------------+
+//--- Reset per-run offline RAG collection diagnostics.
 void ResetOfflineRAGDiagnostics(void)
   {
    OfflineCollectionChecks=0;
@@ -97,8 +98,9 @@ void ResetOfflineRAGDiagnostics(void)
    OfflineFirstRejectedATR=0;
   }
 //+------------------------------------------------------------------+
-//| Retain one compact sample without changing collection decisions. |
+//| CaptureOfflineRAGRejection - Capture offline RAG rejection       |
 //+------------------------------------------------------------------+
+//--- Retain one compact sample without changing collection decisions.
 void CaptureOfflineRAGRejection(const string reason,const uint position)
   {
    if(OfflineFirstRejectionCaptured)
@@ -115,8 +117,9 @@ void CaptureOfflineRAGRejection(const string reason,const uint position)
       OfflineFirstRejectedATR=ATR.Main(position);
   }
 //+------------------------------------------------------------------+
-//| Print one final concise collection summary.                      |
+//| PrintOfflineRAGDiagnostics - Print offline RAG diagnostics       |
 //+------------------------------------------------------------------+
+//--- Print one final concise collection summary.
 void PrintOfflineRAGDiagnostics(void)
   {
    if(OfflineDiagnosticsPrinted||(OfflineCollectionChecks==0&&OfflinePublishAttempts==0))
@@ -141,8 +144,9 @@ void PrintOfflineRAGDiagnostics(void)
                   OfflineFirstRejectedAction3,OfflineFirstRejectedATR);
   }
 //+------------------------------------------------------------------+
-//| Persist the immutable library-owned Base Memory snapshot.        |
+//| SaveOfflineBaseMemory - Save offline base memory                 |
 //+------------------------------------------------------------------+
+//--- Persist the immutable library-owned Base Memory snapshot.
 bool SaveOfflineBaseMemory(void)
   {
 // Do not replace a previously published image with an empty run.
@@ -152,8 +156,9 @@ bool SaveOfflineBaseMemory(void)
    return(RAGMemory.SavePublishedSnapshot(BaseMemorySnapshotPath));
   }
 //+------------------------------------------------------------------+
-//| Rebind the Actor immediately after COW snapshot publication.     |
+//| RebindOfflineRAGMemory - Check rebind offline RAG memory         |
 //+------------------------------------------------------------------+
+//--- Rebind the Actor immediately after COW snapshot publication.
 bool RebindOfflineRAGMemory(void)
   {
    if(cActor.BindRAGMemory(2,GetPointer(RAGMemory)))
@@ -161,11 +166,12 @@ bool RebindOfflineRAGMemory(void)
 
    PrintFormat("%s -> %d offline RAG Actor rebind failed",__FUNCTION__,__LINE__);
    ExpertRemove();
-   ReturnFalse;
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| Detach before the layer destroys an old COW inference buffer.    |
+//| DetachOfflineRAGMemory - Check detach offline RAG memory         |
 //+------------------------------------------------------------------+
+//--- Detach before the layer destroys an old COW inference buffer.
 bool DetachOfflineRAGMemory(void)
   {
    if(cActor.UnbindRAGMemory(2))
@@ -173,12 +179,12 @@ bool DetachOfflineRAGMemory(void)
 
    PrintFormat("%s -> %d offline RAG Actor detach failed",__FUNCTION__,__LINE__);
    ExpertRemove();
-   ReturnFalse;
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| Publish only records that were consumed into an immutable        |
-//| snapshot                                                         |
+//| PublishOfflineMemory - Publish offline memory                    |
 //+------------------------------------------------------------------+
+//--- Publish only records that were consumed into an immutable snapshot
 bool PublishOfflineMemory(const bool episode_closed=false)
   {
    const uint pending=RAGMemory.PendingRecordCount();
@@ -192,27 +198,27 @@ bool PublishOfflineMemory(const bool episode_closed=false)
    if(!DetachOfflineRAGMemory())
      {
       OfflinePublishFailures++;
-      ReturnFalse;
+      ReturnFalse
      }
    if(!RAGMemory.Publish(episode_closed))
      {
       if(!RebindOfflineRAGMemory())
         {
          OfflinePublishFailures++;
-         ReturnFalse;
+         ReturnFalse
         }
       OfflinePublishFailures++;
-      ReturnFalse;
+      ReturnFalse
      }
    if(!RebindOfflineRAGMemory())
      {
       OfflinePublishFailures++;
-      ReturnFalse;
+      ReturnFalse
      }
    if(!SaveOfflineBaseMemory())
      {
       OfflinePublishFailures++;
-      ReturnFalse;
+      ReturnFalse
      }
    OfflinePublishSuccesses++;
 

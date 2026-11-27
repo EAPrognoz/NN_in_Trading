@@ -1,3 +1,8 @@
+//+------------------------------------------------------------------+
+//|                                            AlphaGen_Contract.mqh |
+//|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/25872 |
+//+------------------------------------------------------------------+
 #ifndef ALPHAGEN_CONTRACT_MQH
 #define ALPHAGEN_CONTRACT_MQH
 //--- shared MQL5/OpenCL identifiers. Algorithm settings arrive in the config buffer.
@@ -356,3 +361,4 @@
 #define def_ag_AGContextMetadata_count 5
 #define def_ag_AGContextMetadata_fresh 6
 #endif
+//+------------------------------------------------------------------+

@@ -1,34 +1,47 @@
 //+------------------------------------------------------------------+
 //|                                    NeuroNet_AlphaQCMQuantile.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_QUANTILE_MQH
 #define NEURONET_ALPHAQCM_QUANTILE_MQH
 
 // The design is fixed at creation. SVD supplies the condition estimate.
 // A second pass of modified Gram-Schmidt orthogonalizes the four columns.
+//+------------------------------------------------------------------+
+//| AlphaQCMProjection - Build the orthogonal quantile projection    |
+//+------------------------------------------------------------------+
 bool AlphaQCMProjection(CBufferFloat &projection,COpenCLMy *context,const int points,int &status)
   {
    status=AQCM_NUMERIC_ERROR;
    if(!context||points<4)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    matrix design(points,4),q(points,4),r=matrix::Zeros(4,4);
    for(int k=0;k<points;k++)
      {
       int error=0;
       double z=MathQuantileNormal((k+0.5)/points,0.0,1.0,error);
       if(error||!MathIsValidNumber(z))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       design[k][0]=1; design[k][1]=z; design[k][2]=z*z-1; design[k][3]=z*(z*z-3);
      }
-   matrix u,v;
+   matrix u;
+   matrix v;
    vector singular;
    if(!design.SVD(u,v,singular)||singular.Size()!=4)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    double top=singular.Max(),bottom=singular.Min();
    if(!MathIsValidNumber(top)||!MathIsValidNumber(bottom)||bottom<=points*DBL_EPSILON*top||
       top/bottom>1.0e6)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    q=design;
    for(int j=0;j<4;j++)
      {
@@ -44,7 +57,9 @@ bool AlphaQCMProjection(CBufferFloat &projection,COpenCLMy *context,const int po
       for(int k=0;k<points;k++) norm+=q[k][j]*q[k][j];
       norm=MathSqrt(norm);
       if(!(norm>0)||!MathIsValidNumber(norm))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       r[j][j]=norm;
       for(int k=0;k<points;k++) q[k][j]/=norm;
      }
@@ -58,7 +73,7 @@ bool AlphaQCMProjection(CBufferFloat &projection,COpenCLMy *context,const int po
    if(!projection.BufferInit(points,0))
      {
       status=AQCM_RESOURCE_UNSUPPORTED;
-      ReturnFalse;
+      ReturnFalse
      }
    double check[4]={0,0,0,0};
    for(int k=0;k<points;k++)
@@ -67,21 +82,28 @@ bool AlphaQCMProjection(CBufferFloat &projection,COpenCLMy *context,const int po
       for(int j=0;j<4;j++) weight+=q[k][j]*dual[j];
       float stored=(float)weight;
       if(!MathIsValidNumber(stored)||!projection.Update(k,stored))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       for(int j=0;j<4;j++) check[j]+=(double)stored*(double)(float)design[k][j];
      }
    for(int j=0;j<4;j++)
       if(!MathIsValidNumber(check[j])||MathAbs(check[j]-(j==1?1.0:0.0))>1e-5)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    if(!projection.BufferCreate(context))
      {
       status=AQCM_RESOURCE_UNSUPPORTED;
-      ReturnFalse;
+      ReturnFalse
      }
    status=AG_OK;
    return(true);
   }
 
+//+------------------------------------------------------------------+
+//| AlphaQCMProjection - Build the orthogonal quantile projection    |
+//+------------------------------------------------------------------+
 bool AlphaQCMProjection(CBufferFloat &projection,COpenCLMy *context,const int points)
   {
    int status;
@@ -108,10 +130,25 @@ protected:
    bool         m_ready;
 
 public:
+//+------------------------------------------------------------------+
+//| CAlphaQCMObjective - Initialize the object state                 |
+//+------------------------------------------------------------------+
    CAlphaQCMObjective(void):OpenCL(NULL),m_chunk(0),m_status(AG_OK),m_ready(false) {}
+//+------------------------------------------------------------------+
+//| Status - Return the status                                       |
+//+------------------------------------------------------------------+
    int  Status(void) const { return(m_status); }
+//+------------------------------------------------------------------+
+//| QGradient - Return the q gradient                                |
+//+------------------------------------------------------------------+
    int  QGradient(void) const { return(m_qGradient.GetIndex()); }
+//+------------------------------------------------------------------+
+//| ZGradient - Return the z gradient                                |
+//+------------------------------------------------------------------+
    int  ZGradient(void) const { return(m_zGradient.GetIndex()); }
+//+------------------------------------------------------------------+
+//| PriorityLoss - Return the priority loss                          |
+//+------------------------------------------------------------------+
    int  PriorityLoss(void) const { return(m_priority.GetIndex()); }
    bool Prepare(COpenCLMy *context,AQCReplayBatch &batch,const int q,const int z,const int qt,const int zt,
                 const int rows,const int actions,const int n,const int nt,const float gamma,const float kappa,
@@ -125,6 +162,9 @@ protected:
    bool         Reserve(const int rows,const int actions,const int n,const int nt,const int logical);
   };
 
+//+------------------------------------------------------------------+
+//| Reserve - Reserve target, loss and gradient buffers              |
+//+------------------------------------------------------------------+
 bool CAlphaQCMObjective::Reserve(const int rows,const int actions,const int n,const int nt,const int logical)
   {
    const long r=(long)rows*n;
@@ -134,17 +174,24 @@ bool CAlphaQCMObjective::Reserve(const int rows,const int actions,const int n,co
       !AQCNetStorage(OpenCL,m_target,(long)rows*nt)||!AQCNetStorage(OpenCL,m_rows,r)||
       !AQCNetStorage(OpenCL,m_selected,r)||!AQCNetStorage(OpenCL,m_flags,2)||
       !AQCNetStorage(OpenCL,m_tileFlags,3L*(logical/rows)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(true);
   }
 
+//+------------------------------------------------------------------+
+//| Prepare - Build targets and loss gradients                       |
+//+------------------------------------------------------------------+
 bool CAlphaQCMObjective::Prepare(COpenCLMy *context,AQCReplayBatch &batch,const int q,const int z,
                                  const int qt,const int zt,const int rows,const int actions,const int n,const int nt,
                                  const float gamma,const float kappa,const int logical,const int base)
   {
    m_ready=false;
    if(!context||rows<1||n<1||nt<1||actions<3||!MathIsValidNumber(kappa)||kappa<=0||!MathIsValidNumber(gamma))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    OpenCL=context;
    const long r=(long)rows*n;
    int k=def_k_AQCTargetSelect;
@@ -155,7 +202,9 @@ bool CAlphaQCMObjective::Prepare(COpenCLMy *context,AQCReplayBatch &batch,const 
    setArgument(k,4,actions)
    setArgument(k,5,base)
    if(!AQCNetGroups(OpenCL,k,rows))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    k=def_k_AQCQResidual;
    setBuffer(k,0,q)
@@ -171,7 +220,9 @@ bool CAlphaQCMObjective::Prepare(COpenCLMy *context,AQCReplayBatch &batch,const 
    setArgument(k,10,logical)
    setArgument(k,11,base)
    if(!AQCNetRange(OpenCL,k,actions,rows))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    k=def_k_AQCQuantileTarget;
    setBuffer(k,0,zt)
@@ -183,7 +234,9 @@ bool CAlphaQCMObjective::Prepare(COpenCLMy *context,AQCReplayBatch &batch,const 
    setArgument(k,6,nt)
    setArgument(k,7,base)
    if(!AQCNetRange(OpenCL,k,nt,rows))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    k=def_k_AQCPairLoss;
    setBuffer(k,0,z)
@@ -200,7 +253,9 @@ bool CAlphaQCMObjective::Prepare(COpenCLMy *context,AQCReplayBatch &batch,const 
    setArgument(k,11,kappa)
    setArgument(k,12,base)
    if(!AQCNetGroups(OpenCL,k,(int)r))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    k=def_k_AQCExpandGrad;
    setBuffer(k,0,m_selected.GetIndex())
@@ -210,7 +265,9 @@ bool CAlphaQCMObjective::Prepare(COpenCLMy *context,AQCReplayBatch &batch,const 
    setArgument(k,4,n)
    setArgument(k,5,base)
    if(!AQCNetRange(OpenCL,k,actions,(int)r))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    k=def_k_AQCPriorityLoss;
    setBuffer(k,0,m_rows.GetIndex())
@@ -221,15 +278,22 @@ bool CAlphaQCMObjective::Prepare(COpenCLMy *context,AQCReplayBatch &batch,const 
    setArgument(k,5,logical)
    setArgument(k,6,base)
    if(!AQCNetGroups(OpenCL,k,rows))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_ready=true;
    return(true);
   }
 
+//+------------------------------------------------------------------+
+//| Preflight - Check the prepared loss values                       |
+//+------------------------------------------------------------------+
 bool CAlphaQCMObjective::Preflight(const int flags,const int offset)
   {
    if(!m_ready||flags<0||offset<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int k=def_k_AQCSpanCheck;
    for(int i=0;i<2;i++)
      {
@@ -239,7 +303,9 @@ bool CAlphaQCMObjective::Preflight(const int flags,const int offset)
       setArgument(k,3,m_qLoss.Total())
       setArgument(k,4,0)
       if(!AQCNetGroups(OpenCL,k,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    setBuffer(k,0,m_flags.GetIndex())
    setBuffer(k,1,flags)
@@ -248,6 +314,9 @@ bool CAlphaQCMObjective::Preflight(const int flags,const int offset)
    setArgument(k,4,1)
    return(AQCNetGroups(OpenCL,k,1));
   }
+//+------------------------------------------------------------------+
+//| Accumulate - Accumulate the replay minibatch gradients           |
+//+------------------------------------------------------------------+
 bool CAlphaQCMObjective::Accumulate(COpenCLMy *context,AQCReplayBatch &batch,CNet *qnet,CNet *znet,
                                     CNet *qtarget,CNet *ztarget,const int rows,const int actions,
                                     const int n,const int nt,const float gamma,const float kappa,
@@ -256,14 +325,18 @@ bool CAlphaQCMObjective::Accumulate(COpenCLMy *context,AQCReplayBatch &batch,CNe
    m_status=AG_TECHNICAL;
    if(!context||!qnet||!znet||!qtarget||!ztarget||rows<1||actions<3||n<1||nt<1||
       (long)rows*n>INT_MAX/actions||(long)rows*nt>INT_MAX/actions)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    OpenCL=context;
    CNeuronAlphaQCMEncoderOCL *q=(CNeuronAlphaQCMEncoderOCL *)qnet.Layer(1);
    CNeuronAlphaQCMEncoderOCL *z=(CNeuronAlphaQCMEncoderOCL *)znet.Layer(1);
    CNeuronAlphaQCMEncoderOCL *qt=(CNeuronAlphaQCMEncoderOCL *)qtarget.Layer(1);
    CNeuronAlphaQCMEncoderOCL *zt=(CNeuronAlphaQCMEncoderOCL *)ztarget.Layer(1);
    if(!q||!z||!qt||!zt)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    // Try the largest supported physical divisor. A successful reservation covers
    // all four graphs, both objectives and every backward buffer simultaneously.
@@ -275,7 +348,7 @@ bool CAlphaQCMObjective::Accumulate(COpenCLMy *context,AQCReplayBatch &batch,CNe
       if(chunk==1)
         {
          m_status=AQCM_RESOURCE_UNSUPPORTED;
-         ReturnFalseEx("RESOURCE_UNSUPPORTED: training workspace for one replay row");
+         ReturnFalseEx("RESOURCE_UNSUPPORTED: training workspace for one replay row")
         }
       chunk/=2;
       while(rows%chunk!=0) chunk--;
@@ -287,7 +360,9 @@ bool CAlphaQCMObjective::Accumulate(COpenCLMy *context,AQCReplayBatch &batch,CNe
      }
 
    if(!q.BeginUpdate()||!z.BeginUpdate())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const int tiles=rows/chunk;
    for(int tile=0;tile<tiles;tile++)
      {
@@ -306,7 +381,9 @@ bool CAlphaQCMObjective::Accumulate(COpenCLMy *context,AQCReplayBatch &batch,CNe
          !z.PrepareGradient(ZGradient())||!znet.backPropGradient((CBufferFloat *)NULL,(CBufferFloat *)NULL,-1,false)||
          !q.Preflight(m_tileFlags.GetIndex(),3*tile,last)||!z.Preflight(m_tileFlags.GetIndex(),3*tile+1,last)||
          !Preflight(m_tileFlags.GetIndex(),3*tile+2))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    int k=def_k_AQCSpanCheck;
    setBuffer(k,0,m_tileFlags.GetIndex())
@@ -315,7 +392,9 @@ bool CAlphaQCMObjective::Accumulate(COpenCLMy *context,AQCReplayBatch &batch,CNe
    setArgument(k,3,3*tiles)
    setArgument(k,4,1)
    if(!AQCNetGroups(context,k,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_status=AG_OK;
 
    return(true);

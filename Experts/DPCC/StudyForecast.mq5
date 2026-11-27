@@ -104,15 +104,16 @@ string                 EXTM05ProfileSHA="",EXTM05DonorSHA="";
 CDPCCStopButton        ExtStopButton;
 bool                   ExtM05StopSaveFailed=false;
 //+------------------------------------------------------------------+
-//| M05Enabled selects the direct-input M05 Market training path     |
+//| M05Enabled - selects the direct-input M05 Market training path   |
 //+------------------------------------------------------------------+
 bool M05Enabled(void)
   {
    return(InpUseM05);
   }
 //+------------------------------------------------------------------+
-//| Persist one whole phase boundary without a second OnDeinit save  |
+//| SaveM05Checkpoint - Save m 05 checkpoint                         |
 //+------------------------------------------------------------------+
+//--- Persist one whole phase boundary without a second OnDeinit save
 bool SaveM05Checkpoint(const string cause)
   {
    string     path="",reason="",publication_reason="";

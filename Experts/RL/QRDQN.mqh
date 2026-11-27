@@ -14,7 +14,7 @@
 //---
 #define defQRDQN             0x7791   ///<Neuron Net \details Identified class #CQRDQN
 //+------------------------------------------------------------------+
-//| CQRDQN                                                           |
+//| CQRDQN - Estimate action values with quantile regression         |
 //+------------------------------------------------------------------+
 class CQRDQN : protected CNet
   {
@@ -30,29 +30,32 @@ protected:
 public:
    /** Constructor */
                      CQRDQN(void);
+//+------------------------------------------------------------------+
+//| CQRDQN - Initialize the object state                             |
+//+------------------------------------------------------------------+
                      CQRDQN(CArrayObj *Description)  { Create(Description,iActions); }
    bool              Create(CArrayObj *Description,uint actions);
    /** Destructor */~CQRDQN(void);
 //+------------------------------------------------------------------+
-//| feedForward                                                      |
+//| feedForward - Compute the layer output                           |
 //+------------------------------------------------------------------+
    bool              feedForward(CArrayFloat *inputVals,int window=1,bool tem=true) ///< Feed Forward method.@param[in] prevLayer Pointer to previos layer. @param[in] window Window of input data. @param[in] tem Use Time Embedding.
      {
-      return(CNet::feedForward(inputVals,window,tem));
+      return(CNet::feedForward(inputVals,window,tem,(CBufferFloat*)NULL));
      }
    bool              backProp(CBufferFloat *targetVals,float discount,CArrayFloat *nextState=NULL,int window=1,bool tem=true);                   ///< Back propagation method. @param[in] targetVals Target values
    void              getResults(CBufferFloat *&resultVals);                ///< Method to get results of feed forward process.@param[out] resultVals Array of result values
    int               getAction(void);                ///< Method to get results of feed forward process.@param[out] resultVals Array of result values
    int               getSample(void);
 //+------------------------------------------------------------------+
-//| getRecentAverageError                                            |
+//| getRecentAverageError - Read the recent average error            |
 //+------------------------------------------------------------------+
    float             getRecentAverageError()
      {
       return(recentAverageError);
      } ///< Method to check quality of study. @return Average error
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
    bool              Save(string file_name,datetime time,bool common=true)
      {
@@ -65,21 +68,21 @@ public:
    virtual bool      Load(const int file_handle);
    //---
 //+------------------------------------------------------------------+
-//| Type                                                             |
+//| Type - Return the object type identifier                         |
 //+------------------------------------------------------------------+
    virtual int       Type(void)   const
      {
       return(defQRDQN);
      }///< Identificator of class.@return Type of class
 //+------------------------------------------------------------------+
-//| TrainMode                                                        |
+//| TrainMode - Set the training mode                                |
 //+------------------------------------------------------------------+
    virtual bool      TrainMode(bool flag)
      {
       return(CNet::TrainMode(flag));
      } ///< Set Training Mode Flag
 //+------------------------------------------------------------------+
-//| GetLayerOutput                                                   |
+//| GetLayerOutput - Read the layer output                           |
 //+------------------------------------------------------------------+
    virtual bool      GetLayerOutput(uint layer,CBufferFloat *&result) ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
      {
@@ -87,7 +90,7 @@ public:
      }
    //---
 //+------------------------------------------------------------------+
-//| SetUpdateTarget                                                  |
+//| SetUpdateTarget - Set update target                              |
 //+------------------------------------------------------------------+
    virtual void      SetUpdateTarget(uint batch)
      {
@@ -98,7 +101,7 @@ public:
    virtual bool      SetActions(uint actions);
   };
 //+------------------------------------------------------------------+
-//| CQRDQN                                                           |
+//| CQRDQN - Estimate action values with quantile regression         |
 //+------------------------------------------------------------------+
 CQRDQN::CQRDQN()  :  iNumbers(31),
                      iActions(2),
@@ -111,13 +114,13 @@ CQRDQN::CQRDQN()  :  iNumbers(31),
    Create(NULL,iActions);
   }
 //+------------------------------------------------------------------+
-//| ~CQRDQN                                                          |
+//| ~CQRDQN - Release owned resources                                |
 //+------------------------------------------------------------------+
 CQRDQN::~CQRDQN()
   {
   }
 //+------------------------------------------------------------------+
-//| Create                                                           |
+//| Create - Check create                                            |
 //+------------------------------------------------------------------+
 bool CQRDQN::Create(CArrayObj *Description,uint actions)
   {
@@ -143,7 +146,7 @@ bool CQRDQN::Create(CArrayObj *Description,uint actions)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| backProp                                                         |
+//| backProp - Check back prop                                       |
 //+------------------------------------------------------------------+
 bool CQRDQN::backProp(CBufferFloat *targetVals,float discount,CArrayFloat *nextState=NULL,int window=1,bool tem=true)
   {
@@ -157,7 +160,7 @@ bool CQRDQN::backProp(CBufferFloat *targetVals,float discount,CArrayFloat *nextS
 //---
    if(!!nextState)
      {
-      if(!cTargetNet.feedForward(nextState,window,tem))
+      if(!cTargetNet.feedForward(nextState,window,tem,(CBufferFloat*)NULL))
          return(false);
 
       vectorf temp;
@@ -209,10 +212,10 @@ bool CQRDQN::backProp(CBufferFloat *targetVals,float discount,CArrayFloat *nextS
    else
       iCountBackProp++;
 //---
-   return(CNet::backProp(targetVals));
+   return(CNet::backProp(targetVals,(CBufferFloat*)NULL));
   }
 //+------------------------------------------------------------------+
-//| getResults                                                       |
+//| getResults - Get results                                         |
 //+------------------------------------------------------------------+
 void CQRDQN::getResults(CBufferFloat *&resultVals)
   {
@@ -241,7 +244,7 @@ void CQRDQN::getResults(CBufferFloat *&resultVals)
 //---
   }
 //+------------------------------------------------------------------+
-//| getAction                                                        |
+//| getAction - Get action                                           |
 //+------------------------------------------------------------------+
 int CQRDQN::getAction(void)
   {
@@ -250,10 +253,10 @@ int CQRDQN::getAction(void)
    if(!temp)
       return(-1);
 //---
-   return(temp.Maximum(0,temp.Total()));
+   return(((CArrayFloat*)temp).Maximum(0,temp.Total()));
   }
 //+------------------------------------------------------------------+
-//| getSample                                                        |
+//| getSample - Get sample                                           |
 //+------------------------------------------------------------------+
 int CQRDQN::getSample(void)
   {
@@ -283,7 +286,7 @@ int CQRDQN::getSample(void)
 
    temp=temp.CumSum();
    int   err_code;
-   float random=(float)Math::MathRandomNormal(0.5,0.5,err_code);
+   float random=(float)MathRandomNormal(0.5,0.5,err_code);
    if(random>=1)
       return((int)temp.Size()-1);
 
@@ -294,14 +297,16 @@ int CQRDQN::getSample(void)
    return(-1);
   }
 //+------------------------------------------------------------------+
-//| UpdateTarget                                                     |
+//| UpdateTarget - Update target                                     |
 //+------------------------------------------------------------------+
 bool CQRDQN::UpdateTarget(string file_name)
   {
    if(!Save(file_name,0,false))
       return(false);
 
-   float error,undefine,forecast;
+   float error;
+   float undefine;
+   float forecast;
    datetime time;
    if(!cTargetNet.Load(file_name,error,undefine,forecast,time,false))
       return(false);
@@ -310,22 +315,22 @@ bool CQRDQN::UpdateTarget(string file_name)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CQRDQN::Save(const int file_handle)
   {
    if(!CNet::Save(file_handle))
-      return(false);
+     {
+      ReturnFalseEx("CNet::Save failed")
+     }
 
-   if(FileWriteInteger(file_handle,(int)iUpdateTarget)<INT_VALUE)
-      return(false);
-   if(FileWriteInteger(file_handle,(int)iActions)<INT_VALUE)
-      return(false);
+   dFileWriteUInt(file_handle,iUpdateTarget)
+   dFileWriteUInt(file_handle,iActions)
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CQRDQN::Load(const int file_handle)
   {
@@ -346,7 +351,7 @@ bool CQRDQN::Load(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| SetActions                                                       |
+//| SetActions - Set actions                                         |
 //+------------------------------------------------------------------+
 bool CQRDQN::SetActions(uint actions)
   {
@@ -370,11 +375,12 @@ bool CQRDQN::SetActions(uint actions)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CQRDQN::Load(string file_name,datetime &time,bool common=true)
   {
-   float undefine,forecast;
+   float undefine;
+   float forecast;
    if(!CNet::Load(file_name,recentAverageError,undefine,forecast,time,common))
       return(false);
 //---

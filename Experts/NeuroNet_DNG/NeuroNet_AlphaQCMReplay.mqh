@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                      NeuroNet_AlphaQCMReplay.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_REPLAY_MQH
 #define NEURONET_ALPHAQCM_REPLAY_MQH
@@ -25,7 +26,7 @@
 #define AQC_REPLAY_FILE_ROWS    256
 
 //+------------------------------------------------------------------+
-//| ENUM_AQC_REPLAY_STATUS - Replay transaction result                |
+//| ENUM_AQC_REPLAY_STATUS - Replay transaction result               |
 //+------------------------------------------------------------------+
 enum ENUM_AQC_REPLAY_STATUS
   {
@@ -39,7 +40,7 @@ enum ENUM_AQC_REPLAY_STATUS
   };
 
 //+------------------------------------------------------------------+
-//| AQCReplayBatch - Borrowed device views of one sampled minibatch   |
+//| AQCReplayBatch - Borrowed device views of one sampled minibatch  |
 //+------------------------------------------------------------------+
 struct AQCReplayBatch
   {
@@ -57,7 +58,7 @@ struct AQCReplayBatch
   };
 
 //+------------------------------------------------------------------+
-//| ENUM_AQC_REPLAY_BUFFER - Replay-owned typed OpenCL allocations    |
+//| ENUM_AQC_REPLAY_BUFFER - Replay-owned typed OpenCL allocations   |
 //+------------------------------------------------------------------+
 enum ENUM_AQC_REPLAY_BUFFER
   {
@@ -80,7 +81,7 @@ enum ENUM_AQC_REPLAY_BUFFER
   };
 
 //+------------------------------------------------------------------+
-//| CAlphaQCMReplay - GPU transition ring and prioritized sampling    |
+//| CAlphaQCMReplay - GPU transition ring and prioritized sampling   |
 //+------------------------------------------------------------------+
 class CAlphaQCMReplay
   {
@@ -144,9 +145,21 @@ public:
    bool Load(const int file,const int capacity,const int length,const int actions,
              const ulong next_candidate,const bool restore);
    bool Restore(void);
+//+------------------------------------------------------------------+
+//| Size - Return the size                                           |
+//+------------------------------------------------------------------+
    int Size(void) const { return(m_iSize); }
+//+------------------------------------------------------------------+
+//| Verified - Return the verified                                   |
+//+------------------------------------------------------------------+
    ulong Verified(void) const { return(m_uVerified); }
+//+------------------------------------------------------------------+
+//| Consistent - Check consistent                                    |
+//+------------------------------------------------------------------+
    bool Consistent(void) const { return(m_bConsistent); }
+//+------------------------------------------------------------------+
+//| LastStatus - Return the last status                              |
+//+------------------------------------------------------------------+
    ENUM_AQC_REPLAY_STATUS LastStatus(void) const { return(m_eStatus); }
 
 private:
@@ -164,7 +177,7 @@ private:
   };
 
 //+------------------------------------------------------------------+
-//| CAlphaQCMReplay - Start with no device allocations                 |
+//| CAlphaQCMReplay - Start with no device allocations               |
 //+------------------------------------------------------------------+
 CAlphaQCMReplay::CAlphaQCMReplay(void)
   {
@@ -174,7 +187,7 @@ CAlphaQCMReplay::CAlphaQCMReplay(void)
   }
 
 //+------------------------------------------------------------------+
-//| ~CAlphaQCMReplay - Release buffers before the borrowed runtime     |
+//| ~CAlphaQCMReplay - Release buffers before the borrowed runtime   |
 //+------------------------------------------------------------------+
 CAlphaQCMReplay::~CAlphaQCMReplay(void)
   {
@@ -182,7 +195,7 @@ CAlphaQCMReplay::~CAlphaQCMReplay(void)
   }
 
 //+------------------------------------------------------------------+
-//| ClearRestore - Release the checkpoint upload arrays               |
+//| ClearRestore - Release the checkpoint upload arrays              |
 //+------------------------------------------------------------------+
 void CAlphaQCMReplay::ClearRestore(void)
   {
@@ -194,7 +207,7 @@ void CAlphaQCMReplay::ClearRestore(void)
   }
 
 //+------------------------------------------------------------------+
-//| Clear - Revoke views and release resources                         |
+//| Clear - Revoke views and release resources                       |
 //+------------------------------------------------------------------+
 void CAlphaQCMReplay::Clear(void)
   {
@@ -234,38 +247,44 @@ void CAlphaQCMReplay::Clear(void)
 bool CAlphaQCMReplay::AllocateInteger(const ENUM_AQC_REPLAY_BUFFER slot,const long count,const int width)
   {
    if(count<1||count>INT_MAX/width)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_iBuffer[slot]=OpenCL.AddBuffer((uint)(count*width),CL_MEM_READ_WRITE);
    if(m_iBuffer[slot]<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| AllocateFloat - Allocate owned float storage                       |
+//| AllocateFloat - Allocate owned float storage                     |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::AllocateFloat(CBufferFloat &buffer,const long count)
   {
    if(count<1||count>INT_MAX/(int)sizeof(float)||
       !buffer.BufferInit((uint)count,0.0f)||!buffer.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| Fail - Keep the failure available to the application                |
+//| Fail - Keep the failure available to the application             |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::Fail(const ENUM_AQC_REPLAY_STATUS status,const string message)
   {
    m_eStatus=status;
-   ReturnFalseEx(message);
+   ReturnFalseEx(message)
   }
 
 //+------------------------------------------------------------------+
-//| Configure - Reserve the fixed ring and minibatch geometry           |
+//| Configure - Reserve the fixed ring and minibatch geometry        |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::Configure(COpenCLMy *context,const int capacity,const int length,const int actions,
                                 const int batch,const int current_quantiles,const int target_quantiles,
@@ -349,7 +368,7 @@ bool CAlphaQCMReplay::Configure(COpenCLMy *context,const int capacity,const int 
   }
 
 //+------------------------------------------------------------------+
-//| Run - Complete dependent dispatches before binding or reuse        |
+//| Run - Complete dependent dispatches before binding or reuse      |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::Run(const int kernel,const uint first,const uint second,const uint local)
   {
@@ -384,7 +403,7 @@ bool CAlphaQCMReplay::Run(const int kernel,const uint first,const uint second,co
   }
 
 //+------------------------------------------------------------------+
-//| BuildTree - Rebuild in fixed order or update unique touched nodes  |
+//| BuildTree - Rebuild in fixed order or update unique nodes        |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::BuildTree(const int size,const int changes)
   {
@@ -397,7 +416,9 @@ bool CAlphaQCMReplay::BuildTree(const int size,const int changes)
       setArgument(leaves,2,size)
       setArgument(leaves,3,m_iLeaves)
       if(!Run(leaves,m_iLeaves))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    setBuffer(level,0,m_cStagedTree.GetIndex())
@@ -414,14 +435,16 @@ bool CAlphaQCMReplay::BuildTree(const int size,const int changes)
      {
       setArgument(level,3,height)
       if(!Run(level,m_iLeaves>>height))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| MirrorTree - Publish staged nodes or discard tentative writes      |
+//| MirrorTree - Publish staged nodes or discard tentative writes    |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::MirrorTree(const bool publish,const int changes)
   {
@@ -441,7 +464,7 @@ bool CAlphaQCMReplay::MirrorTree(const bool publish,const int changes)
   }
 
 //+------------------------------------------------------------------+
-//| CheckStatus - Reduce per-item statuses without a payload readback  |
+//| CheckStatus - Reduce item statuses without payload readback      |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::CheckStatus(const int count)
   {
@@ -458,7 +481,9 @@ bool CAlphaQCMReplay::CheckStatus(const int count)
       setBuffer(k,1,output)
       setArgument(k,2,remaining)
       if(!Run(k,(uint)groups*m_uStatusLanes,0,m_uStatusLanes))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(groups==1)
          break;
       source=output;
@@ -475,7 +500,7 @@ bool CAlphaQCMReplay::CheckStatus(const int count)
   }
 
 //+------------------------------------------------------------------+
-//| CheckTree - Prove every live CDF interval has positive width       |
+//| CheckTree - Prove every live CDF interval has positive width     |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::CheckTree(const int size)
   {
@@ -503,13 +528,15 @@ bool CAlphaQCMReplay::CheckTree(const int size)
    setBuffer(k,1,m_iBuffer[AQC_RB_STATUS])
    setArgument(k,2,m_iLeaves)
    if(!Run(k,size)||!CheckStatus(size))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| Discard - Restore the staging mirror after a completed preflight   |
+//| Discard - Restore the staging mirror after a completed preflight |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::Discard(void)
   {
@@ -529,7 +556,7 @@ bool CAlphaQCMReplay::Discard(void)
   }
 
 //+------------------------------------------------------------------+
-//| Initialize - Build fresh or restored mirrors after OpenCL Build   |
+//| Initialize - Build fresh or restored mirrors after OpenCL Build  |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::Initialize(void)
   {
@@ -542,14 +569,16 @@ bool CAlphaQCMReplay::Initialize(void)
       return(Fail(AQC_REPLAY_RESOURCE,"Replay kernels require at least two lanes"));
 
    if(!BuildTree(m_iSize,0)||!CheckTree(m_iSize)||!MirrorTree(true,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bReady=true;
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| PublishEpisode - Publish one complete, confirmed FIFO episode     |
+//| PublishEpisode - Publish one complete, confirmed FIFO episode    |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::PublishEpisode(const int results,const int row,const int steps,const int rewards,
                                      const int reward_index,const ulong candidate_id,const ulong window_revision,
@@ -581,15 +610,19 @@ bool CAlphaQCMReplay::PublishEpisode(const int results,const int row,const int s
    setArgument(k,13,m_iLength)
    setArgument(k,14,m_iActions)
    if(!Run(k,steps))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_iDirty=steps;
    const int size=(int)MathMin(m_iSize+steps,m_iCapacity);
    if(!CheckStatus(steps)||!BuildTree(size,steps)||!CheckTree(size))
      {
       if(!Discard())
-         ReturnFalse;
-      ReturnFalse;
+        {
+         ReturnFalse
+        }
+      ReturnFalse
      }
 
    k=def_k_AQReplayPublishEpisode;
@@ -617,7 +650,9 @@ bool CAlphaQCMReplay::PublishEpisode(const int results,const int row,const int s
    m_bConsistent=false;
    m_eStatus=AQC_REPLAY_INCONSISTENT;
    if(!Run(k,steps,m_iLength+AQC_REPLAY_ROW_HEADER)||!MirrorTree(true,steps))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_iSize=size;
    m_iHead=(m_iHead+steps)%m_iCapacity;
@@ -629,7 +664,7 @@ bool CAlphaQCMReplay::PublishEpisode(const int results,const int row,const int s
   }
 
 //+------------------------------------------------------------------+
-//| Sample - Freeze a minibatch, gather state and generate tau        |
+//| Sample - Freeze a minibatch, gather state and generate tau       |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::Sample(const ulong seed,const ulong logical_id,const ulong accepted,AQCReplayBatch &batch)
   {
@@ -652,7 +687,9 @@ bool CAlphaQCMReplay::Sample(const ulong seed,const ulong logical_id,const ulong
    setArgument(k,9,seed)
    setArgument(k,10,logical_id)
    if(!Run(k,m_iBatch)||!CheckStatus(m_iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    k=def_k_AQReplayGather;
    setBuffer(k,0,m_iBuffer[AQC_RB_STATE])
@@ -669,7 +706,9 @@ bool CAlphaQCMReplay::Sample(const ulong seed,const ulong logical_id,const ulong
    setArgument(k,11,m_iLength)
    setArgument(k,12,m_iActions)
    if(!Run(k,m_iBatch,(uint)MathMax(m_iLength,m_iActions)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    k=def_k_AQReplayTau;
    setBuffer(k,0,m_cTau.GetIndex())
@@ -679,7 +718,9 @@ bool CAlphaQCMReplay::Sample(const ulong seed,const ulong logical_id,const ulong
    setArgument(k,4,seed)
    setArgument(k,5,logical_id)
    if(!Run(k,m_iBatch,(uint)MathMax(m_iQuantiles,m_iTargetQuantiles)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    batch.tokens=m_iBuffer[AQC_RB_TOKENS];
    batch.lengths=m_iBuffer[AQC_RB_LENGTHS];
@@ -698,7 +739,7 @@ bool CAlphaQCMReplay::Sample(const ulong seed,const ulong logical_id,const ulong
   }
 
 //+------------------------------------------------------------------+
-//| PreparePriorities - Preflight stale slots and prospective CDF     |
+//| PreparePriorities - Preflight stale slots and prospective CDF    |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::PreparePriorities(const int loss)
   {
@@ -707,7 +748,9 @@ bool CAlphaQCMReplay::PreparePriorities(const int loss)
       OpenCL.GetBufferSize(loss)<(ulong)m_iBatch*sizeof(float))
       return(Fail(AQC_REPLAY_PAYLOAD,"Replay priority preflight requires a frozen minibatch"));
    if(!Discard())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int k=def_k_AQReplayStagePriorities;
    setBuffer(k,0,m_iBuffer[AQC_RB_SELECTED])
@@ -722,14 +765,18 @@ bool CAlphaQCMReplay::PreparePriorities(const int loss)
    setArgument(k,9,m_iLeaves)
    setArgument(k,10,m_fPriorityEpsilon)
    if(!Run(k,m_iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_iDirty=m_iBatch;
    if(!CheckStatus(m_iBatch)||!BuildTree(m_iSize,m_iBatch)||!CheckTree(m_iSize))
      {
       if(!Discard())
-         ReturnFalse;
-      ReturnFalse;
+        {
+         ReturnFalse
+        }
+      ReturnFalse
      }
 
    m_eStatus=AQC_REPLAY_OK;
@@ -737,7 +784,7 @@ bool CAlphaQCMReplay::PreparePriorities(const int loss)
   }
 
 //+------------------------------------------------------------------+
-//| CommitPriorities - Publish one priority per unique frozen slot    |
+//| CommitPriorities - Publish one priority per unique frozen slot   |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::CommitPriorities(void)
   {
@@ -752,7 +799,9 @@ bool CAlphaQCMReplay::CommitPriorities(void)
    setBuffer(k,2,m_cPriorities.GetIndex())
    setArgument(k,3,m_iLeaves)
    if(!Run(k,m_iBatch)||!MirrorTree(true,m_iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_iDirty=0;
    m_bSnapshot=false;
@@ -762,19 +811,21 @@ bool CAlphaQCMReplay::CommitPriorities(void)
   }
 
 //+------------------------------------------------------------------+
-//| ReleaseBatch - Revoke views at a clean abort boundary             |
+//| ReleaseBatch - Revoke views at a clean abort boundary            |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::ReleaseBatch(void)
   {
    if(!Discard())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bSnapshot=false;
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| AQCReplayFileBytes - Size of the framed live-slot payload         |
+//| AQCReplayFileBytes - Size of the framed live-slot payload        |
 //+------------------------------------------------------------------+
 ulong AQCReplayFileBytes(const int size,const int length)
   {
@@ -823,28 +874,40 @@ bool AQCReplayFileRows(const int &payload[],const ulong &metadata[],const float 
          !MathIsValidNumber(priorities[row])||priorities[row]<=0.0f||
          !AQCReplayFileMask(low,high,actions)||!AQCReplayFileMask(next_low,next_high,actions)||
          (((action<32)?low:high)&((uint)1<<(action%32)))==0)
-         ReturnFalseEx("Invalid replay checkpoint record");
+        {
+         ReturnFalseEx("Invalid replay checkpoint record")
+        }
 
       const ulong candidate_id=metadata[meta+1];
       if(candidate_id>=next_candidate)
+        {
          ReturnFalseEx(StringFormat("Replay checkpoint slot %d uses candidate %I64u at or beyond next ID %I64u",
-                                   slot,candidate_id,next_candidate));
+                                   slot,candidate_id,next_candidate))
+        }
 
       if(action==2)
         {
          if(used<2||next_low!=0||next_high!=0)
-            ReturnFalseEx("Invalid terminal replay successor");
+           {
+            ReturnFalseEx("Invalid terminal replay successor")
+           }
         }
       else if(used>=length||rewards[row]!=0.0f||(next_low|next_high)==0)
-         ReturnFalseEx("Invalid nonterminal replay successor");
+        {
+         ReturnFalseEx("Invalid nonterminal replay successor")
+        }
 
       if(payload[state+AQC_REPLAY_ROW_HEADER]!=0)
-         ReturnFalseEx("Replay prefix must begin at BOS");
+        {
+         ReturnFalseEx("Replay prefix must begin at BOS")
+        }
       for(int t=1;t<length;++t)
         {
          const int token=payload[state+AQC_REPLAY_ROW_HEADER+t];
          if((t<used&&(token<=2||token>=actions))||(t>=used&&token!=1))
-            ReturnFalseEx("Invalid replay prefix token");
+           {
+            ReturnFalseEx("Invalid replay prefix token")
+           }
         }
      }
 
@@ -857,7 +920,9 @@ bool AQCReplayFileRows(const int &payload[],const ulong &metadata[],const float 
 bool CAlphaQCMReplay::Save(const int file)
   {
    if(file==INVALID_HANDLE||!m_bReady||!m_bConsistent||m_bSnapshot||m_iDirty!=0)
-      ReturnFalseEx("Replay is outside a checkpoint boundary");
+     {
+      ReturnFalseEx("Replay is outside a checkpoint boundary")
+     }
 
    const int stride=m_iLength+AQC_REPLAY_ROW_HEADER;
    const ulong bytes=AQCReplayFileBytes(m_iSize,m_iLength);
@@ -865,7 +930,9 @@ bool CAlphaQCMReplay::Save(const int file)
                    (uint)m_iActions,(uint)m_iSize,(uint)m_iHead,0};
    if(FileWriteArray(file,header,0,8)!=8||FileWriteLong(file,(long)m_uVerified)!=sizeof(ulong)||
       FileWriteLong(file,(long)bytes)!=sizeof(ulong))
-      ReturnFalseEx("Replay checkpoint header write failed");
+     {
+      ReturnFalseEx("Replay checkpoint header write failed")
+     }
 
    int payload[];
    ulong metadata[];
@@ -875,7 +942,9 @@ bool CAlphaQCMReplay::Save(const int file)
       ArrayResize(metadata,AQC_REPLAY_FILE_ROWS*AQC_REPLAY_META_WIDTH)!=AQC_REPLAY_FILE_ROWS*AQC_REPLAY_META_WIDTH||
       ArrayResize(rewards,AQC_REPLAY_FILE_ROWS)!=AQC_REPLAY_FILE_ROWS||
       ArrayResize(priorities,AQC_REPLAY_FILE_ROWS)!=AQC_REPLAY_FILE_ROWS)
-      ReturnFalseEx("Replay save staging allocation failed");
+     {
+      ReturnFalseEx("Replay save staging allocation failed")
+     }
 
    for(int first=0;first<m_iSize;first+=AQC_REPLAY_FILE_ROWS)
      {
@@ -889,23 +958,27 @@ bool CAlphaQCMReplay::Save(const int file)
          !OpenCL.BufferRead(m_cPriorities.GetIndex(),priorities,base*sizeof(float),0,rows)||
          FileWriteArray(file,payload,0,n)!=n||FileWriteArray(file,metadata,0,m)!=m||
          FileWriteArray(file,rewards,0,rows)!=rows||FileWriteArray(file,priorities,0,rows)!=rows)
-         ReturnFalseEx("Replay checkpoint block write failed");
+        {
+         ReturnFalseEx("Replay checkpoint block write failed")
+        }
      }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| Load - Read the same bounded blocks in all three load modes       |
+//| Load - Read the same bounded blocks in all three load modes      |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,const int actions,
-                          const ulong next_candidate,const bool restore)
+                           const ulong next_candidate,const bool restore)
   {
    if(file==INVALID_HANDLE||capacity<length||length<2||actions<3||actions>64||
       (long)capacity*((long)length+AQC_REPLAY_ROW_HEADER)>INT_MAX/(int)sizeof(int)||
       (long)capacity*AQC_REPLAY_META_WIDTH>INT_MAX/(int)sizeof(ulong)||
       (restore&&(!OpenCL||m_iCapacity!=capacity||m_iLength!=length||m_iActions!=actions||m_bReady)))
-      ReturnFalseEx("Replay checkpoint geometry is incompatible");
+     {
+      ReturnFalseEx("Replay checkpoint geometry is incompatible")
+     }
 
    ulong cursor=FileTell(file);
    const ulong total=FileSize(file);
@@ -915,7 +988,9 @@ bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,co
       FileReadArray(file,header,0,8)!=8||header[0]!=AQC_REPLAY_MAGIC||header[1]!=AQC_REPLAY_VERSION||
       header[2]!=(uint)capacity||header[3]!=(uint)length||header[4]!=(uint)actions||
       header[5]>(uint)capacity||header[6]>=(uint)capacity||header[7]!=0)
-      ReturnFalseEx("Invalid replay checkpoint header");
+     {
+      ReturnFalseEx("Invalid replay checkpoint header")
+     }
 
    const ulong verified=(ulong)FileReadLong(file);
    const ulong bytes=(ulong)FileReadLong(file);
@@ -925,7 +1000,9 @@ bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,co
    const int expected_size=(verified>=(ulong)capacity)?capacity:(int)verified;
    if(size!=expected_size||head!=(int)(verified%(ulong)capacity)||
       bytes!=AQCReplayFileBytes(size,length)||cursor>total||bytes>total-cursor)
-      ReturnFalseEx("Replay checkpoint payload is truncated or inconsistent");
+     {
+      ReturnFalseEx("Replay checkpoint payload is truncated or inconsistent")
+     }
 
    const int stride=length+AQC_REPLAY_ROW_HEADER;
    int payload[];
@@ -937,7 +1014,9 @@ bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,co
       if(ArrayResize(m_iSavedState,size*stride)!=size*stride||
          ArrayResize(m_uSavedMetadata,size*AQC_REPLAY_META_WIDTH)!=size*AQC_REPLAY_META_WIDTH||
          ArrayResize(m_fSavedRewards,size)!=size||ArrayResize(m_fSavedPriorities,size)!=size)
-         ReturnFalseEx("Replay restore staging allocation failed");
+        {
+         ReturnFalseEx("Replay restore staging allocation failed")
+        }
      }
 
    for(int first=0;first<size;first+=AQC_REPLAY_FILE_ROWS)
@@ -949,17 +1028,23 @@ bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,co
          FileReadArray(file,rewards,0,rows)!=rows||FileReadArray(file,priorities,0,rows)!=rows||
          !AQCReplayFileRows(payload,metadata,rewards,priorities,first,rows,capacity,
                             length,actions,size,head,verified,next_candidate))
-         ReturnFalseEx("Invalid replay checkpoint block");
+        {
+         ReturnFalseEx("Invalid replay checkpoint block")
+        }
 
       if(restore&&(ArrayCopy(m_iSavedState,payload,first*stride,0,n)!=n||
                    ArrayCopy(m_uSavedMetadata,metadata,first*AQC_REPLAY_META_WIDTH,0,m)!=m||
                    ArrayCopy(m_fSavedRewards,rewards,first,0,rows)!=rows||
                    ArrayCopy(m_fSavedPriorities,priorities,first,0,rows)!=rows))
-         ReturnFalseEx("Replay restore staging copy failed");
+        {
+         ReturnFalseEx("Replay restore staging copy failed")
+        }
      }
 
    if(FileTell(file)!=cursor+bytes)
-      ReturnFalseEx("Replay checkpoint framing mismatch");
+     {
+      ReturnFalseEx("Replay checkpoint framing mismatch")
+     }
 
    m_iSize=size;
    m_iHead=head;
@@ -969,12 +1054,14 @@ bool CAlphaQCMReplay::Load(const int file,const int capacity,const int length,co
   }
 
 //+------------------------------------------------------------------+
-//| Restore - Upload TRAIN payload after Build then rebuild the CDF   |
+//| Restore - Upload TRAIN payload after Build then rebuild the CDF  |
 //+------------------------------------------------------------------+
 bool CAlphaQCMReplay::Restore(void)
   {
    if(!OpenCL||!m_bRestoring||m_bReady)
-      ReturnFalseEx("Replay restore state is invalid");
+     {
+      ReturnFalseEx("Replay restore state is invalid")
+     }
 
    if(m_iSize>0)
      {
@@ -984,7 +1071,9 @@ bool CAlphaQCMReplay::Restore(void)
          !OpenCL.BufferWrite(m_iBuffer[AQC_RB_METADATA],m_uSavedMetadata,0,0,metadata)||
          !OpenCL.BufferWrite(m_cRewards.GetIndex(),m_fSavedRewards,0,0,m_iSize)||
          !OpenCL.BufferWrite(m_cPriorities.GetIndex(),m_fSavedPriorities,0,0,m_iSize))
-         ReturnFalseEx("Replay restore upload failed");
+        {
+         ReturnFalseEx("Replay restore upload failed")
+        }
      }
 
    ClearRestore();

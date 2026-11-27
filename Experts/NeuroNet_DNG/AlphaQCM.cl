@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                                      AlphaQCM.cl |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 // One group owns each causal prefix. A token chunk ends before rebinding
 // the kernel. Results use AGPoolEvaluateBatch's immutable packed layout.
@@ -55,7 +56,7 @@ inline float AQCMGenDot(float sum,__local float *partial,int parts)
    float result=partial[base]+partial[base+1];
    if(parts==4)
       result+=partial[base+2]+partial[base+3];
-   // All peers finish reading this tile before reuse.
+// All peers finish reading this tile before reuse.
    barrier(CLK_LOCAL_MEM_FENCE);
    return result;
   }
@@ -168,8 +169,8 @@ __kernel void AQCMGenerate(__global const float *cfg,
    int candidate=base+group;
    ulong id=first_id+(ulong)candidate;
    const int A=AG_VOCABULARY,stride=4+A;
-   // Two recurrent caches, shared embed/gates, dense/product/projection scratch,
-   // two action rows, and the independent typed stacks used by AGMaskToken.
+// Two recurrent caches, shared embed/gates, dense/product/projection scratch,
+// two action rows, and the independent typed stacks used by AGMaskToken.
    int work_stride=15*hidden+embed+1+2*A+2*points*hidden+3*(length+1)*A;
    __global float *q_state=workspace+(size_t)group*work_stride;
    __global float *z_state=q_state+5*hidden;
@@ -197,18 +198,19 @@ __kernel void AQCMGenerate(__global const float *cfg,
          for(int d=lane;d<10*hidden;d+=lanes)
             q_state[d]=0.0f;
      }
-   else if(lane==0)
-     {
-      choice=AG_STOP;
-      if(result[0]==0.0f&&status[candidate]==0.0f)
+   else
+      if(lane==0)
         {
-         float token=result[1+(begin-1)*stride];
-         if(isfinite(token)&&token>=AG_STOP&&token<(float)A&&token==trunc(token))
-            choice=(int)token;
-         else
-            status[candidate]=(float)(4*begin+1);
+         choice=AG_STOP;
+         if(result[0]==0.0f&&status[candidate]==0.0f)
+           {
+            float token=result[1+(begin-1)*stride];
+            if(isfinite(token)&&token>=AG_STOP&&token<(float)A&&token==trunc(token))
+               choice=(int)token;
+            else
+               status[candidate]=(float)(4*begin+1);
+           }
         }
-     }
    barrier(CLK_LOCAL_MEM_FENCE|CLK_GLOBAL_MEM_FENCE);
    if(cfg[AG_CFG_MAX_TOKENS]!=(float)length||cfg[AG_CFG_EMBEDDING]!=(float)embed||
       cfg[AG_CFG_SEARCH_HIDDEN]!=(float)hidden||!(cfg[AG_CFG_POSITION_SCALE]>0.0f)||
@@ -290,47 +292,49 @@ __kernel void AQCMGenerate(__global const float *cfg,
          if(counts[1]==0||row[4+AG_BOS]!=0.0f||row[4+AG_PAD]!=0.0f||
             (t==length-1&&(counts[1]!=1||row[4+AG_STOP]!=1.0f)))
             status[candidate]=(float)(4*t+1);
-         else if(!isfinite(best[1]))
-            status[candidate]=(float)(4*t+2);
          else
-           {
-            int selected=winner[1];
-            if(warmup||AQCPhiloxUnit(AQCPhiloxWord(seed,AQC_STREAM_EPSILON,id,(ulong)(uint)t<<32))<epsilon)
-              {
-               int rank=AQCMGenRank(seed,warmup?AQC_STREAM_WARMUP:AQC_STREAM_LEGAL,id,t,(uint)counts[1]);
-               selected=-1;
-               if(rank>=0)
-                 {
-                  int node=1;
-                  while(node<lanes)
-                    {
-                     node*=2;
-                     if(rank>=counts[node])
-                       {
-                        rank-=counts[node];
-                        node++;
-                       }
-                    }
-                  int first=(node-lanes)*A/lanes,last=(node-lanes+1)*A/lanes;
-                  for(int a=first;a<last;a++)
-                     if(row[4+a]!=0.0f&&rank--==0)
-                       {
-                        selected=a;
-                        break;
-                       }
-                 }
-              }
-            if(selected<AG_STOP||selected>=A||row[4+selected]!=1.0f)
-               status[candidate]=(float)(4*t+1);
+            if(!isfinite(best[1]))
+               status[candidate]=(float)(4*t+2);
             else
               {
-               choice=selected;
-               row[0]=(float)selected;
-               if(selected==AG_STOP)
-                  result[0]=(float)(t+1);
+               int selected=winner[1];
+               if(warmup||AQCPhiloxUnit(AQCPhiloxWord(seed,AQC_STREAM_EPSILON,id,(ulong)(uint)t<<32))<epsilon)
+                 {
+                  int rank=AQCMGenRank(seed,warmup?AQC_STREAM_WARMUP:AQC_STREAM_LEGAL,id,t,(uint)counts[1]);
+                  selected=-1;
+                  if(rank>=0)
+                    {
+                     int node=1;
+                     while(node<lanes)
+                       {
+                        node*=2;
+                        if(rank>=counts[node])
+                          {
+                           rank-=counts[node];
+                           node++;
+                          }
+                       }
+                     int first=(node-lanes)*A/lanes,last=(node-lanes+1)*A/lanes;
+                     for(int a=first;a<last;a++)
+                        if(row[4+a]!=0.0f&&rank--==0)
+                          {
+                           selected=a;
+                           break;
+                          }
+                    }
+                 }
+               if(selected<AG_STOP||selected>=A||row[4+selected]!=1.0f)
+                  status[candidate]=(float)(4*t+1);
+               else
+                 {
+                  choice=selected;
+                  row[0]=(float)selected;
+                  if(selected==AG_STOP)
+                     result[0]=(float)(t+1);
+                 }
               }
-           }
         }
       barrier(CLK_LOCAL_MEM_FENCE|CLK_GLOBAL_MEM_FENCE);
      }
   }
+//+------------------------------------------------------------------+

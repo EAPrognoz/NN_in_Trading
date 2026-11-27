@@ -14,11 +14,15 @@
 bool CNeuronAlphaGenEvaluatorOCL::Configure(COpenCLMy*context,const float&config[])
   {
    if(!context||ArraySize(config)!=AG_CFG_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<AG_CFG_SIZE;i++)
       if(!MathIsValidNumber(config[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    m_iWindow=(int)config[AG_CFG_W];
    m_iMaxTokens=(int)config[AG_CFG_MAX_TOKENS];
@@ -32,7 +36,9 @@ bool CNeuronAlphaGenEvaluatorOCL::Configure(COpenCLMy*context,const float&config
       m_iWindow<config[AG_CFG_LOOKBACK]+
       MathMax(config[AG_CFG_IC_WINDOW]+config[AG_CFG_HORIZON],config[AG_CFG_NORM_WINDOW])||
       stack>INT_MAX||mask>INT_MAX||fit>INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronBaseOCL::Init(0,0,context,m_iWindow,ADAM,1)||!m_cConfig.AssignArray(config)||
       !m_cConfig.BufferCreate(OpenCL)||!m_cMask.BufferInit(AG_VOCABULARY,0)||!m_cMask.BufferCreate(OpenCL)||
@@ -42,7 +48,9 @@ bool CNeuronAlphaGenEvaluatorOCL::Configure(COpenCLMy*context,const float&config
       !m_cRowStatus.BufferInit(m_iWindow,0)||!m_cRowStatus.BufferCreate(OpenCL)||
       !m_cFitWork.BufferInit((int)fit,0)||!m_cFitWork.BufferCreate(OpenCL)||!m_cNumeric.BufferInit(2+AG_NUMERIC_GROUPS,0)||
       !m_cNumeric.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -52,7 +60,9 @@ bool CNeuronAlphaGenEvaluatorOCL::Configure(COpenCLMy*context,const float&config
 bool CNeuronAlphaGenEvaluatorOCL::Mask(CBufferFloat*tokens,const int length)
   {
    if(!tokens||length<0||length>=m_iMaxTokens||tokens.Total()<MathMax(length,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 #ifdef ALPHAGEN_OPENCL_QUEUE_PROBES
 
@@ -73,7 +83,7 @@ bool CNeuronAlphaGenEvaluatorOCL::Mask(CBufferFloat*tokens,const int length)
      {
       PrintFormat("AlphaGen PRE-MASK queue failed: AGMask not submitted; prefix=%d max=%d token_count=%d token_buffer=%d mask_count=%d work_count=%d",
                   length,m_iMaxTokens,tokens.Total(),tokens.GetIndex(),m_cMask.Total(),m_cMaskWork.Total());
-      ReturnFalse;
+      ReturnFalse
      }
    float marker[1]={-1};
 
@@ -84,7 +94,7 @@ bool CNeuronAlphaGenEvaluatorOCL::Mask(CBufferFloat*tokens,const int length)
      {
       PrintFormat("AlphaGen PRE-MASK marker failed: AGMask not submitted; prefix=%d read=%d error=%d marker=%.9g expected=%d",
                   length,(int)probe_read,GetLastError(),marker[0],m_iMaxTokens);
-      ReturnFalse;
+      ReturnFalse
      }
 #endif
    setBuffer(def_k_AGMask,def_ag_AGMask_tokens,tokens.GetIndex())
@@ -103,7 +113,7 @@ bool CNeuronAlphaGenEvaluatorOCL::Mask(CBufferFloat*tokens,const int length)
      {
       PrintFormat("AlphaGen MASK failed after successful queue probe: prefix=%d max=%d token_count=%d token_buffer=%d mask_count=%d work_count=%d expected_work=%d",
                   length,m_iMaxTokens,tokens.Total(),tokens.GetIndex(),m_cMask.Total(),m_cMaskWork.Total(),AG_VOCABULARY*(m_iMaxTokens+1)*3);
-      ReturnFalse;
+      ReturnFalse
      }
 #endif
    return(true);
@@ -115,7 +125,9 @@ bool CNeuronAlphaGenEvaluatorOCL::Evaluate(CBufferFloat*market,CBufferFloat*toke
   {
    if(!market||!tokens||market.Total()<5*m_iWindow||length<2||length>m_iMaxTokens||
       tokens.Total()<length)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGEvaluate,def_ag_AGEvaluate_market,market.GetIndex())
    setBuffer(def_k_AGEvaluate,def_ag_AGEvaluate_tokens,tokens.GetIndex())
@@ -128,7 +140,9 @@ bool CNeuronAlphaGenEvaluatorOCL::Evaluate(CBufferFloat*market,CBufferFloat*toke
    uint lanes=OpenCL.AlphaGenGroupSize(def_k_AGEvaluate,128,1);
 
    if(lanes==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint offset[]={0};
    uint global[]={lanes};
@@ -148,7 +162,9 @@ bool CNeuronAlphaGenEvaluatorOCL::Standardize(CBufferFloat*source,CBufferFloat*v
    if(!source||!validity||!normalized||!statistics||offset<0||count<1||
       count>source.Total()-offset||count>validity.Total()-offset||normalized.Total()<count||
       stats_offset<0||statistics.Total()-stats_offset<AG_STAT_FIELDS)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGStandardize,def_ag_AGStandardize_input,source.GetIndex())
    setBuffer(def_k_AGStandardize,def_ag_AGStandardize_validity,validity.GetIndex())
@@ -174,7 +190,9 @@ bool CNeuronAlphaGenEvaluatorOCL::Ridge(CBufferFloat*columns,CBufferFloat*target
    if(!columns||!target||!weights||!metrics||count<1||factors<1||factors>m_iCapacity||
       (long)count*factors>columns.Total()||target.Total()<count||weights.Total()<factors||
       metrics.Total()<3)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGRidge,def_ag_AGRidge_z,columns.GetIndex())
    setBuffer(def_k_AGRidge,def_ag_AGRidge_target,target.GetIndex())
@@ -197,7 +215,9 @@ bool CNeuronAlphaGenEvaluatorOCL::Ridge(CBufferFloat*columns,CBufferFloat*target
 bool CNeuronAlphaGenEvaluatorOCL::GAE(CBufferFloat*rollout,const int count,const bool categorical)
   {
    if(!rollout||count<1||(long)count*AG_GAE_FIELDS>rollout.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGGAE,def_ag_AGGAE_rollout,rollout.GetIndex())
    setArgument(def_k_AGGAE,def_ag_AGGAE_count,count)
@@ -223,10 +243,14 @@ bool CNeuronAlphaGenEvaluatorOCL::Numeric(CBufferFloat*source,const bool reset)
 bool CNeuronAlphaGenEvaluatorOCL::NumericBatch(CBufferFloat*source,CBufferFloat*b,CBufferFloat*c,CBufferFloat*d,const bool reset)
   {
    if(!source||source.Total()<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((b&&b.Total()<1)||(c&&c.Total()<1)||(d&&d.Total()<1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGNumeric,4,b?b.GetIndex():source.GetIndex())
    setArgument(def_k_AGNumeric,5,b?b.Total():0)
@@ -241,7 +265,9 @@ bool CNeuronAlphaGenEvaluatorOCL::NumericBatch(CBufferFloat*source,CBufferFloat*
    uint lanes=OpenCL.AlphaGenGroupSize(def_k_AGNumeric,64,1);
 
    if(lanes==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint offset[]={0};
    uint global[]={lanes*AG_NUMERIC_GROUPS};
@@ -264,7 +290,9 @@ bool CNeuronAlphaGenEvaluatorOCL::NumericOK(void)
    float status[1];
 
    if(!OpenCL.BufferRead(m_cNumeric.GetIndex(),status,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(status[0]==AG_OK);
   }
@@ -275,10 +303,14 @@ bool CNeuronAlphaGenLSTMOCL::Configure(COpenCLMy*context,const int inputs,const 
   {
    if(!context||inputs<1||hidden<1||capacity<1||(long)capacity*hidden*6>INT_MAX||
       (long)(inputs+hidden+1)*hidden*4>INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronLSTMOCL::Init(0,0,context,hidden,ADAM,1)||!SetInputs(inputs))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(RestoreWorkspace(context,capacity));
   }
@@ -289,7 +321,9 @@ bool CNeuronAlphaGenLSTMOCL::RestoreWorkspace(COpenCLMy*context,const int capaci
   {
    if(context!=OpenCL||capacity<1||m_iInputs<1||m_iVariables!=1||
       (long)capacity*Neurons()*6>INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int hidden=(int)Neurons();
 
@@ -302,7 +336,7 @@ bool CNeuronAlphaGenLSTMOCL::RestoreWorkspace(COpenCLMy*context,const int capaci
      {
       PrintFormat("AlphaGen LSTM local memory insufficient: required=%I64d available=%I64d",
                   state_bytes,local_bytes);
-      ReturnFalse;
+      ReturnFalse
      }
 
    if(!m_cTape.BufferInit(capacity*hidden*6,0)||!m_cTape.BufferCreate(OpenCL)||
@@ -310,7 +344,9 @@ bool CNeuronAlphaGenLSTMOCL::RestoreWorkspace(COpenCLMy*context,const int capaci
       !m_cSequence.BufferInit(capacity*hidden,0)||!m_cSequence.BufferCreate(OpenCL)||
       !m_cSequenceGradient.BufferInit(capacity*hidden,0)||!m_cSequenceGradient.BufferCreate(OpenCL)||
       !m_cBPTTWork.BufferInit(capacity*hidden*4,0)||!m_cBPTTWork.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -320,7 +356,9 @@ bool CNeuronAlphaGenLSTMOCL::RestoreWorkspace(COpenCLMy*context,const int capaci
 bool CNeuronAlphaGenLSTMOCL::Sequence(CBufferFloat*source,const int length)
   {
    if(!source||length<1||length>m_iCapacity||(long)length*m_iInputs>source.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_iLength=length;
    setBuffer(def_k_AGLSTMForward,def_ag_AGLSTMForward_input,source.GetIndex())
@@ -333,12 +371,16 @@ bool CNeuronAlphaGenLSTMOCL::Sequence(CBufferFloat*source,const int length)
    setBuffer(def_k_AGLSTMForward,def_ag_AGLSTMForward_output,m_cSequence.GetIndex())
    if(!OpenCL.SetArgumentLocalMemory(def_k_AGLSTMForward,def_ag_AGLSTMForward_state,
                                     (int)((long)Neurons()*22*sizeof(float))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint lanes=OpenCL.AlphaGenGroupSize(def_k_AGLSTMForward,128,4);
 
    if(lanes==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint offset[]={0};
    uint global[]={lanes};
@@ -355,7 +397,9 @@ bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat*source,CBufferFloat*input_gra
   {
    if(!source||!input_gradient||m_iLength<1||(long)m_iLength*m_iInputs>source.Total()||
       (long)m_iLength*m_iInputs>input_gradient.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int first=horizon>0&&horizon<m_iLength?m_iLength-horizon:0;
    setArgument(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_first,first)
@@ -373,7 +417,9 @@ bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat*source,CBufferFloat*input_gra
    long state_bytes=(long)Neurons()*6*sizeof(float);
 
    if(!OpenCL.GetLocalMemorySize(local_bytes)||local_bytes<=state_bytes)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    long max_columns=(local_bytes-state_bytes)/(4*sizeof(float));
    int  tile_columns=(int)MathMin((long)m_iInputs+Neurons(),max_columns);
@@ -382,13 +428,17 @@ bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat*source,CBufferFloat*input_gra
    if(tile_columns<1||scratch_bytes>INT_MAX||
       !OpenCL.SetArgumentLocalMemory(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_scratch,
                                     (int)scratch_bytes))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setArgument(def_k_AGLSTMBackward,def_ag_AGLSTMBackward_tile_columns,tile_columns)
    uint lanes=OpenCL.AlphaGenGroupSize(def_k_AGLSTMBackward,256,4);
 
    if(lanes==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint offset[]={0};
    uint global[]={lanes};
@@ -407,7 +457,9 @@ bool CNeuronAlphaGenLSTMOCL::Backward(CBufferFloat*source,CBufferFloat*input_gra
    lanes=OpenCL.AlphaGenGroupSize(def_k_AGLSTMWeightGradient,64,1);
 
    if(lanes==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint count=(uint)((m_iInputs+Neurons()+1)*Neurons()*4);
 
@@ -444,10 +496,14 @@ bool CNeuronAlphaGenLSTMOCL::ResetAnchor(void)
   {
    for(int i=0;i<m_cAnchor.Total();i++)
       if(!m_cAnchor.Update(i,0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!m_cAnchor.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -466,7 +522,9 @@ bool CNeuronAlphaGenLSTMOCL::SetAnchor(CBufferFloat*anchor)
 bool CNeuronAlphaGenLSTMOCL::CommitAnchor(void)
   {
    if(m_iLength<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGSequence,def_ag_AGSequence_input,m_cTape.GetIndex())
    setBuffer(def_k_AGSequence,def_ag_AGSequence_output,m_cAnchor.GetIndex())

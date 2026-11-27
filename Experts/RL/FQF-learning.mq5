@@ -138,7 +138,7 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train                                                            |
+//| Train - Train the neural networks                                |
 //+------------------------------------------------------------------+
 void Train(void)
   {

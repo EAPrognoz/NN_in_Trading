@@ -71,7 +71,9 @@ bool PrepareHistory(int &first_position,int &last_position)
    int bars=CopyRates(Symb.Name(),TimeFrame,0,start,Rates);
    if(bars<=0||!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int  wait=-1;
    bool calculated=false;
    do
@@ -83,13 +85,17 @@ bool PrepareHistory(int &first_position,int &last_position)
      }
    while(!calculated&&wait<100);
    if(!calculated)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
    if(!ArraySetAsSeries(Rates,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    first_position=end+1;
 
 //--- createBuffers(position,...,forecast) forms its state from
@@ -116,11 +122,20 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
    terminal=false;
    const bool trace_td=(iteration<8||iteration % 10000==0);
    if(!ORIONForwardForecast(position,GetPointer(State),GetPointer(TimeState)))
-     { Print("TrainTransition stage=current_forecast"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=current_forecast");
+      ReturnFalse
+     }
    if(!Actor.feedForward(GetPointer(Account),1,false,GetPointer(ORIONMarket),-1))
-     { Print("TrainTransition stage=actor_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=actor_forward");
+      ReturnFalse
+     }
    if(!ReadAction(Actor,GetPointer(CurrentAction)))
-     { Print("TrainTransition stage=read_action"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=read_action");
+      ReturnFalse
+     }
    const double balance=MathMax(0.0,double(Account[0]) * EtalonBalance);
    const double buy_lot=MathMax(0.0,double(CurrentAction[0]-CurrentAction[3]));
    const double sell_lot=MathMax(0.0,double(CurrentAction[3]-CurrentAction[0]));
@@ -133,7 +148,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
 
 //--- gets Pointer.
                       GetPointer(NextAccount),reward,terminal))
-     { Print("TrainTransition stage=advance_account"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=advance_account");
+      ReturnFalse
+     }
    const double target_value=reward;
    if(trace_td)
       PrintFormat("ORION return iteration=%d reward=%.8f target=%.8f balance=%.2f equity=%.2f "
@@ -144,19 +162,34 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
                   double(NextAccount[4]),double(NextAccount[5]),(terminal ? "true" : "false"));
    if(!MathIsValidNumber(target_value)||!ScalarTarget.BufferInit(1,0)||
       !ScalarTarget.Update(0,float(target_value)))
-     { Print("TrainTransition stage=scalar_target"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=scalar_target");
+      ReturnFalse
+     }
    CNeuronBaseOCL *context_layer=Actor.Layer(0);
    CNeuronBaseOCL *actor_layer=Actor.Layer(3);
    if(!context_layer||!actor_layer)
-     { Print("TrainTransition stage=actor_layer"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=actor_layer");
+      ReturnFalse
+     }
 
 //--- use the live device activation, not the CPU account object.
    if(!BuildCriticInput(context_layer.getOutput(),actor_layer.getOutput(),GetPointer(CriticInput)))
-     { Print("TrainTransition stage=critic_input"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=critic_input");
+      ReturnFalse
+     }
    if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(ORIONMarket),-1))
-     { Print("TrainTransition stage=q1_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=q1_forward");
+      ReturnFalse
+     }
    if(!Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(ORIONMarket),-1))
-     { Print("TrainTransition stage=q2_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=q2_forward");
+      ReturnFalse
+     }
 
 //--- function if.
    if(trace_td)
@@ -168,7 +201,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
       if(!q1_output||!q2_output||q1_output.GetIndex()<0||q2_output.GetIndex()<0||
          q1_output.Total()!=1||q2_output.Total()!=1||
          !q1_output.BufferRead()||!q2_output.BufferRead())
-        { Print("TrainTransition stage=current_q_read"); ReturnFalse; }
+        {
+         Print("TrainTransition stage=current_q_read");
+         ReturnFalse
+        }
       PrintFormat("ORION Q iteration=%d q1=%.8f q2=%.8f td_q1=%.8f td_q2=%.8f",
                   iteration,double(q1_output[0]),double(q2_output[0]),
                   target_value-double(q1_output[0]),target_value-double(q2_output[0]));
@@ -187,7 +223,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
       if(executable_action)
         {
          if(!PolicyBackward())
-           { Print("TrainTransition stage=policy_backward"); ReturnFalse; }
+           {
+            Print("TrainTransition stage=policy_backward");
+            ReturnFalse
+           }
          PolicyTransitions++;
         }
       else
@@ -195,14 +234,20 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
      }
    if(!Q1.backProp(GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1)||
       !Q2.backProp(GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1))
-     { Print("TrainTransition stage=critic_backward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=critic_backward");
+      ReturnFalse
+     }
 
 //--- the teacher uses realized future bars, not one selected Forecast scenario.
 //--- it is deliberately a second Critic-only sample: Q1/Q2 are stateless,
 //--- whereas Actor has already performed its only forward for this state.
    double teacher_reward=0;
    if(!BuildTeacherAction(position,GetPointer(Account),GetPointer(TeacherAction),teacher_reward))
-     { Print("TrainTransition stage=teacher_action"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_action");
+      ReturnFalse
+     }
 
 //--- function if.
    if(teacher_reward>0)
@@ -216,7 +261,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
    //--- supervised Actor update reuses the current activation; it never advances
    //--- the history stack or invokes a second Actor forward.
       if(!Actor.backProp(GetPointer(TeacherAction),GetPointer(ORIONMarket),-1))
-        { Print("TrainTransition stage=teacher_actor_backward"); ReturnFalse; }
+        {
+         Print("TrainTransition stage=teacher_actor_backward");
+         ReturnFalse
+        }
       TeacherTransitions++;
       TeacherRewardSum += teacher_reward;
      }
@@ -225,42 +273,69 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
 //--- is restricted to profitable oracle supervision above.
    if(!ScalarTarget.BufferInit(1,0)||!ScalarTarget.Update(0,float(teacher_reward))||
       !BuildCriticInput(context_layer.getOutput(),GetPointer(TeacherAction),GetPointer(CriticInput)))
-     { Print("TrainTransition stage=teacher_critic_input"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_critic_input");
+      ReturnFalse
+     }
    if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(ORIONMarket),-1)||
       !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(ORIONMarket),-1))
-     { Print("TrainTransition stage=teacher_critic_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_critic_forward");
+      ReturnFalse
+     }
    if(!Q1.backProp(GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1)||
       !Q2.backProp(GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1))
-     { Print("TrainTransition stage=teacher_critic_backward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_critic_backward");
+      ReturnFalse
+     }
    TeacherCriticTransitions++;
 
 //--- A second critic-only sample is uniformly random over executable lots and
 //--- stop distances.  It never runs Actor backward or advances policy history.
    double random_reward=0;
    if(!BuildRandomAction(position,GetPointer(Account),GetPointer(RandomAction),random_reward))
-     { Print("TrainTransition stage=random_action"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_action");
+      ReturnFalse
+     }
 
 //--- function if.
    if(random_reward>0)
      {
       if(!Actor.backProp(GetPointer(RandomAction),GetPointer(ORIONMarket),-1))
-        { Print("TrainTransition stage=random_actor_backward"); ReturnFalse; }
+        {
+         Print("TrainTransition stage=random_actor_backward");
+         ReturnFalse
+        }
      }
    if(!ScalarTarget.BufferInit(1,0)||!ScalarTarget.Update(0,float(random_reward))||
       !BuildCriticInput(context_layer.getOutput(),GetPointer(RandomAction),GetPointer(CriticInput)))
-     { Print("TrainTransition stage=random_critic_input"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_critic_input");
+      ReturnFalse
+     }
    if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(ORIONMarket),-1)||
       !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(ORIONMarket),-1))
-     { Print("TrainTransition stage=random_critic_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_critic_forward");
+      ReturnFalse
+     }
    if(!Q1.backProp(GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1)||
       !Q2.backProp(GetPointer(ScalarTarget),GetPointer(ORIONMarket),-1))
-     { Print("TrainTransition stage=random_critic_backward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_critic_backward");
+      ReturnFalse
+     }
    RandomCriticTransitions++;
 
 //--- only the three declared Forecast trainable buffers are read here. The
 //--- complete persistent Codebook is checked at checkpoint/lifecycle bounds.
    if(!ORIONVerifyFrozenWeightsExact())
-     { Print("TrainTransition stage=frozen_forecast_check"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=frozen_forecast_check");
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -271,7 +346,10 @@ void TrainORIONActorCritic(void)
   {
    int first=0,last=0;
    if(!PrepareHistory(first,last))
-     { PrintFormat("%s -> %d history unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d history unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    uint shown=GetTickCount();
    int  completed_iterations=0;
    int  failed_iteration=-1;
@@ -308,7 +386,11 @@ void TrainORIONActorCritic(void)
       completed_iterations++;
       if((NextAccount.GetIndex()>=0&&!NextAccount.BufferRead())||!Account.AssignArray(GetPointer(NextAccount))||
          (Account.GetIndex()>=0&&!Account.BufferWrite()))
-        { failed_iteration=iteration; failed_position=position; break; }
+        {
+         failed_iteration=iteration;
+         failed_position=position;
+         break;
+        }
       position--;
       episode++;
 

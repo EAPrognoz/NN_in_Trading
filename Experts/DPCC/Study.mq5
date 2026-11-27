@@ -106,8 +106,9 @@ double EXTDPCCTeacherScoreSum=0.0;
 double EXTDPCCLastReward=0.0;
 double EXTDPCCLastTeacherScore=0.0;
 //+------------------------------------------------------------------+
-//| Initialize source, model graphs, and optional weights-only state |
+//| DPCCStudyInitialize - Initialize study                           |
 //+------------------------------------------------------------------+
+//--- Initialize source, model graphs, and optional weights-only state
 bool DPCCStudyInitialize(string &reason)
   {
    reason="";
@@ -227,8 +228,9 @@ bool DPCCStudyInitialize(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Emit the existing read-only Study preflight receipt              |
+//| DPCCStudyLogPreflight - Log study preflight                      |
 //+------------------------------------------------------------------+
+//--- Emit the existing read-only Study preflight receipt
 void DPCCStudyLogPreflight(void)
   {
    Print("DPCC_STUDY_PREFLIGHT_COMPLETE rows=",ArraySize(g_dpcc_input_source.decision_bars),
@@ -248,8 +250,9 @@ void DPCCStudyLogPreflight(void)
             " sha256=",g_dpcc_input_source.source_hashes[i]);
   }
 //+------------------------------------------------------------------+
-//| Render Study progress and committed learning metrics             |
+//| DPCCStudyRenderProgress - Render study progress                  |
 //+------------------------------------------------------------------+
+//--- Render Study progress and committed learning metrics
 void DPCCStudyRenderProgress(const int rows,const int active_row)
   {
    const ulong target_updates=g_dpcc_update_target;
@@ -291,8 +294,9 @@ void DPCCStudyRenderProgress(const int rows,const int active_row)
    ChartRedraw(0);
   }
 //+------------------------------------------------------------------+
-//| Save only current policy weights and Adam moments                |
+//| DPCCStudySaveTrainingState - Save study training state           |
 //+------------------------------------------------------------------+
+//--- Save only current policy weights and Adam moments
 bool DPCCStudySaveTrainingState(const string cause)
   {
    if(g_dpcc_completed==0)
@@ -309,9 +313,9 @@ bool DPCCStudySaveTrainingState(const string cause)
    return(saved);
   }
 //+------------------------------------------------------------------+
-//| Publish completed Study output only at an accepted phase         |
-//| boundary                                                         |
+//| DPCCStudyFinalize - Publish completed output at a phase boundary |
 //+------------------------------------------------------------------+
+//--- Publish completed Study output only at an accepted phase boundary
 void DPCCStudyFinalize(void)
   {
    EventKillTimer();
@@ -406,8 +410,9 @@ void OnDeinit(const int reason)
    g_dpcc_stop_button.Delete();
   }
 //+------------------------------------------------------------------+
-//| Initialize once, then process at most one history bar per timer  |
+//| OnTimer - Handle the timer event                                 |
 //+------------------------------------------------------------------+
+//--- Initialize once, then process at most one history bar per timer
 void OnTimer(void)
   {
    if(!g_dpcc_initialized)

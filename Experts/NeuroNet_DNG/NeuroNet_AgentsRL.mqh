@@ -41,50 +41,66 @@ bool CNeuronFQF::Init(uint numOutputs,
                      )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,actions,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetActivationFunction(None);
 
 //---
    if(!cFraction.Init(0,myIndex,open_cl,actions*quantiles,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cFraction.SetActivationFunction(None);
 
 //---
    if(!cSoftMax.Init(0,myIndex,open_cl,actions*quantiles,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cSoftMax.SetHeads(actions);
    cSoftMax.SetActivationFunction(None);
 
 //---
    if(!cCosine.Init(numInputs,myIndex,open_cl,actions*quantiles,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cCosine.SetActivationFunction(None);
 
 //---
    if(!cCosineEmbeding.Init(0,myIndex,open_cl,numInputs,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cCosineEmbeding.SetActivationFunction(LReLU);
 
 //---
    if(!cQuantile0.Init(4*actions*quantiles,myIndex,open_cl,numInputs,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cQuantile0.SetActivationFunction(None);
 
 //---
    if(!cQuantile1.Init(actions*quantiles,myIndex,open_cl,4*actions*quantiles,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cQuantile1.SetActivationFunction(LReLU);
 
 //---
    if(!cQuantile2.Init(0,myIndex,open_cl,actions*quantiles,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cQuantile2.SetActivationFunction(None);
 
@@ -97,10 +113,14 @@ bool CNeuronFQF::Init(uint numOutputs,
 bool CNeuronFQF::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cFraction.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cSoftMax.FeedForward(GetPointer(cFraction)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
@@ -108,43 +128,55 @@ bool CNeuronFQF::feedForward(CNeuronBaseOCL*NeuronOCL)
       uint global_work_size[2];
       global_work_size[1]=Output.Total();
       global_work_size[0]=cSoftMax.Neurons()/global_work_size[1];
-      setBuffer(def_k_FQF_Cosine,def_k_fqf_cosine_softmax,cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_Cosine,def_k_fqf_cosine_outputs,cCosine.getOutputIndex());
+      setBuffer(def_k_FQF_Cosine,def_k_fqf_cosine_softmax,cSoftMax.getOutputIndex())
+      setBuffer(def_k_FQF_Cosine,def_k_fqf_cosine_outputs,cCosine.getOutputIndex())
       kernelExecute(def_k_FQF_Cosine,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!cCosine.getOutput().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
 //---
    if(!cCosineEmbeding.FeedForward(GetPointer(cCosine)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!ElementMult(NeuronOCL.getOutput(),cCosineEmbeding.getOutput(),cQuantile0.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cQuantile1.FeedForward(GetPointer(cQuantile0)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cQuantile2.FeedForward(GetPointer(cQuantile1)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
       uint global_work_offset[1]={0};
       uint global_work_size[1]={Neurons()};
-      setBuffer(def_k_FQF_Output,def_k_fqfout_quantiles,cQuantile2.getOutputIndex());
-      setBuffer(def_k_FQF_Output,def_k_fqfout_delta_taus,cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_Output,def_k_fqfout_output,getOutputIndex());
-      setArgument(def_k_FQF_Output,def_k_fqfout_total,(int)(cQuantile2.Neurons()/global_work_size[0]));
+      setBuffer(def_k_FQF_Output,def_k_fqfout_quantiles,cQuantile2.getOutputIndex())
+      setBuffer(def_k_FQF_Output,def_k_fqfout_delta_taus,cSoftMax.getOutputIndex())
+      setBuffer(def_k_FQF_Output,def_k_fqfout_output,getOutputIndex())
+      setArgument(def_k_FQF_Output,def_k_fqfout_total,(int)(cQuantile2.Neurons()/global_work_size[0]))
       kernelExecute(def_k_FQF_Output,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!Output.BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -157,68 +189,84 @@ bool CNeuronFQF::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFQF::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!Gradient||!Output)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={cSoftMax.Neurons()/Neurons(),Neurons()};
-      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_quantiles,cQuantile2.getOutputIndex());
-      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_taus,cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_output_gr,getGradientIndex());
-      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_quantiles_gr,cQuantile2.getGradientIndex());
-      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_taus_gr,cSoftMax.getGradientIndex());
+      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_quantiles,cQuantile2.getOutputIndex())
+      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_taus,cSoftMax.getOutputIndex())
+      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_output_gr,getGradientIndex())
+      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_quantiles_gr,cQuantile2.getGradientIndex())
+      setBuffer(def_k_FQF_OutputGradient,def_k_fqfoutgr_taus_gr,cSoftMax.getGradientIndex())
       kernelExecute(def_k_FQF_OutputGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!cQuantile2.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
 //---
    if(!cQuantile1.CalcHiddenGradients(cQuantile2.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile0.CalcHiddenGradients(cQuantile1.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={cCosineEmbeding.Neurons(),1};
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_state_enbeding,NeuronOCL.getOutputIndex());
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_taus_embedding,cCosineEmbeding.getOutputIndex());
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_quantiles_gr,cQuantile0.getGradientIndex());
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_state_gr,NeuronOCL.getGradientIndex());
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_taus_gr,cCosineEmbeding.getGradientIndex());
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_state_enbeding,NeuronOCL.getOutputIndex())
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_taus_embedding,cCosineEmbeding.getOutputIndex())
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_quantiles_gr,cQuantile0.getGradientIndex())
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_state_gr,NeuronOCL.getGradientIndex())
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_taus_gr,cCosineEmbeding.getGradientIndex())
       kernelExecute(def_k_FQF_QuantileGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!NeuronOCL.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
 //---
    if(!cCosine.CalcHiddenGradients(cCosineEmbeding.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={cSoftMax.Neurons()/Neurons(),Neurons()};
-      setBuffer(def_k_FQF_CosineGradient,def_k_fqfcosgr_softmax,cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_CosineGradient,def_k_fqfcosgr_output_gr,cCosine.getGradientIndex());
-      setBuffer(def_k_FQF_CosineGradient,def_k_fqfcosgr_softmax_gr,cSoftMax.getGradientIndex());
+      setBuffer(def_k_FQF_CosineGradient,def_k_fqfcosgr_softmax,cSoftMax.getOutputIndex())
+      setBuffer(def_k_FQF_CosineGradient,def_k_fqfcosgr_output_gr,cCosine.getGradientIndex())
+      setBuffer(def_k_FQF_CosineGradient,def_k_fqfcosgr_softmax_gr,cSoftMax.getGradientIndex())
       kernelExecute(def_k_FQF_CosineGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!cSoftMax.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
 //---
    if(!cFraction.CalcHiddenGradients(cSoftMax.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -231,16 +279,24 @@ bool CNeuronFQF::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFQF::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cFraction.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCosineEmbeding.UpdateInputWeights(GetPointer(cCosine)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile1.UpdateInputWeights(GetPointer(cQuantile0)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile2.UpdateInputWeights(GetPointer(cQuantile1)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -255,7 +311,9 @@ bool CNeuronFQF::SaveParametersOnly(const int file_handle)
       !CNeuronBaseOCL::SaveDPCCBaseParametersOnly(file_handle)||
       FileWriteInteger(file_handle,7,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)cSoftMax.Heads(),INT_VALUE)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,cFraction.Type(),INT_VALUE)!=INT_VALUE||
       !cFraction.SaveParametersOnly(file_handle)||
@@ -271,7 +329,9 @@ bool CNeuronFQF::SaveParametersOnly(const int file_handle)
       !cQuantile1.SaveParametersOnly(file_handle)||
       FileWriteInteger(file_handle,cQuantile2.Type(),INT_VALUE)!=INT_VALUE||
       !cQuantile2.SaveParametersOnly(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -283,13 +343,17 @@ bool CNeuronFQF::LoadParametersOnly(const int file_handle,const bool apply)
    if(file_handle==INVALID_HANDLE||
       (Type()!=defNeuronFQF&&Type()!=defNeuronACSRM)||
       !CNeuronBaseOCL::LoadDPCCBaseParametersOnly(file_handle,apply))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
 
    if(FileReadInteger(file_handle,INT_VALUE)!=7||
       FileReadInteger(file_handle,INT_VALUE)!=(int)cSoftMax.Heads()||GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle,INT_VALUE)!=cFraction.Type()||
       !cFraction.LoadParametersOnly(file_handle,apply)||
@@ -305,7 +369,9 @@ bool CNeuronFQF::LoadParametersOnly(const int file_handle,const bool apply)
       !cQuantile1.LoadParametersOnly(file_handle,apply)||
       FileReadInteger(file_handle,INT_VALUE)!=cQuantile2.Type()||
       !cQuantile2.LoadParametersOnly(file_handle,apply)||GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -319,7 +385,9 @@ bool CNeuronFQF::SaveDPCCPolicyTrainingStateOnly(const int file_handle)
       !SaveDPCCPolicyTrainingBaseOnly(file_handle)||
       FileWriteInteger(file_handle,7,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)cSoftMax.Heads(),INT_VALUE)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,cFraction.Type(),INT_VALUE)!=INT_VALUE||
       !cFraction.SaveDPCCPolicyTrainingStateOnly(file_handle)||
@@ -335,7 +403,9 @@ bool CNeuronFQF::SaveDPCCPolicyTrainingStateOnly(const int file_handle)
       !cQuantile1.SaveDPCCPolicyTrainingStateOnly(file_handle)||
       FileWriteInteger(file_handle,cQuantile2.Type(),INT_VALUE)!=INT_VALUE||
       !cQuantile2.SaveDPCCPolicyTrainingStateOnly(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -347,13 +417,17 @@ bool CNeuronFQF::LoadDPCCPolicyTrainingStateOnly(const int file_handle,const boo
    if(file_handle==INVALID_HANDLE||
       (Type()!=defNeuronFQF&&Type()!=defNeuronACSRM)||
       !LoadDPCCPolicyTrainingBaseOnly(file_handle,apply))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
 
    if(FileReadInteger(file_handle,INT_VALUE)!=7||
       FileReadInteger(file_handle,INT_VALUE)!=(int)cSoftMax.Heads()||GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle,INT_VALUE)!=cFraction.Type()||
       !cFraction.LoadDPCCPolicyTrainingStateOnly(file_handle,apply)||
@@ -369,7 +443,9 @@ bool CNeuronFQF::LoadDPCCPolicyTrainingStateOnly(const int file_handle,const boo
       !cQuantile1.LoadDPCCPolicyTrainingStateOnly(file_handle,apply)||
       FileReadInteger(file_handle,INT_VALUE)!=cQuantile2.Type()||
       !cQuantile2.LoadDPCCPolicyTrainingStateOnly(file_handle,apply)||GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -380,7 +456,9 @@ bool CNeuronFQF::AppendDPCCPolicyTrainingFingerprint(ulong&fingerprint)
   {
    if((Type()!=defNeuronFQF&&Type()!=defNeuronACSRM)||
       !AppendDPCCPolicyTrainingBaseFingerprint(fingerprint))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    fingerprint=(fingerprint^ulong(7))*ulong(1099511628211);
    fingerprint=(fingerprint^ulong(cSoftMax.Heads()))*ulong(1099511628211);
@@ -392,7 +470,9 @@ bool CNeuronFQF::AppendDPCCPolicyTrainingFingerprint(ulong&fingerprint)
       !cQuantile0.AppendDPCCPolicyTrainingFingerprint(fingerprint)||
       !cQuantile1.AppendDPCCPolicyTrainingFingerprint(fingerprint)||
       !cQuantile2.AppendDPCCPolicyTrainingFingerprint(fingerprint))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -402,28 +482,44 @@ bool CNeuronFQF::AppendDPCCPolicyTrainingFingerprint(ulong&fingerprint)
 bool CNeuronFQF::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cFraction.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cSoftMax.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCosine.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCosineEmbeding.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile0.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile1.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile2.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -434,35 +530,51 @@ bool CNeuronFQF::Save(const int file_handle)
 bool CNeuronFQF::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle)!=cFraction.Type()||
       !cFraction.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle)!=cSoftMax.Type()||
       !cSoftMax.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle)!=cCosine.Type()||
       !cCosine.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle)!=cCosineEmbeding.Type()||
       !cCosineEmbeding.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle)!=cQuantile0.Type()||
       !cQuantile0.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle)!=cQuantile1.Type()||
       !cQuantile1.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle)!=cQuantile2.Type()||
       !cQuantile2.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -586,11 +698,15 @@ bool CNeuronACSRM::Init(uint numOutputs,
    m_last_srm_invalid=false;
 
    if(!CNeuronFQF::Init(numOutputs,myIndex,open_cl,actions,quantiles,numInputs,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_input_gradient_scratch.BufferInit(cCosineEmbeding.Neurons(),0)||
       !m_input_gradient_scratch.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -625,28 +741,36 @@ bool CNeuronACSRM::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronACSRM::propagateACSRMGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!Gradient||!Output)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- quantile branch: cQuantile2 -> cQuantile1 -> cQuantile0
    if(!cQuantile1.CalcHiddenGradients(cQuantile2.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile0.CalcHiddenGradients(cQuantile1.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- value-path input gradient and the embedding feature gradients
      {
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={cCosineEmbeding.Neurons(),1};
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_state_enbeding,NeuronOCL.getOutputIndex());
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_taus_embedding,cCosineEmbeding.getOutputIndex());
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_quantiles_gr,cQuantile0.getGradientIndex());
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_state_gr,NeuronOCL.getGradientIndex());
-      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_taus_gr,cCosineEmbeding.getGradientIndex());
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_state_enbeding,NeuronOCL.getOutputIndex())
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_taus_embedding,cCosineEmbeding.getOutputIndex())
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_quantiles_gr,cQuantile0.getGradientIndex())
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_state_gr,NeuronOCL.getGradientIndex())
+      setBuffer(def_k_FQF_QuantileGradient,def_k_fqfqgr_taus_gr,cCosineEmbeding.getGradientIndex())
       kernelExecute(def_k_FQF_QuantileGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!NeuronOCL.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -658,11 +782,15 @@ bool CNeuronACSRM::propagateACSRMGradients(CNeuronBaseOCL*NeuronOCL)
                     cCosineEmbeding.getGradient(),
                     cCosineEmbeding.getGradient(),
                     cCosineEmbeding.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- cosine features backward (the connection matrix lives in cCosine)
    if(!cCosine.CalcHiddenGradients(cCosineEmbeding.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- probability gradient at the soft-max output: ::FQF_CosineGradientSRM
 //--- accumulates the quantile-branch contribution on top of the direct
@@ -670,20 +798,24 @@ bool CNeuronACSRM::propagateACSRMGradients(CNeuronBaseOCL*NeuronOCL)
      {
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={cSoftMax.Neurons()/Neurons(),Neurons()};
-      setBuffer(def_k_FQF_CosineGradientSRM,def_k_fqfcosgr_softmax,cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_CosineGradientSRM,def_k_fqfcosgr_output_gr,cCosine.getGradientIndex());
-      setBuffer(def_k_FQF_CosineGradientSRM,def_k_fqfcosgr_softmax_gr,cSoftMax.getGradientIndex());
+      setBuffer(def_k_FQF_CosineGradientSRM,def_k_fqfcosgr_softmax,cSoftMax.getOutputIndex())
+      setBuffer(def_k_FQF_CosineGradientSRM,def_k_fqfcosgr_output_gr,cCosine.getGradientIndex())
+      setBuffer(def_k_FQF_CosineGradientSRM,def_k_fqfcosgr_softmax_gr,cSoftMax.getGradientIndex())
       kernelExecute(def_k_FQF_CosineGradientSRM,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!cSoftMax.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
 //--- fraction head: soft-max input gradient (cFraction.Gradient) plus the
 //--- cFraction weight gradients
    if(!cFraction.CalcHiddenGradients(cSoftMax.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- probability branch to the shared input. The full derivative is
 //---   d rho / d x = (value path) + (dP/dx)^T g_P
@@ -702,7 +834,9 @@ bool CNeuronACSRM::propagateACSRMGradients(CNeuronBaseOCL*NeuronOCL)
          (uint)m_input_gradient_scratch.Total()<inputs||
          NeuronOCL.Neurons()!=inputs||
          CheckPointer(NeuronOCL.getWeights())==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       uint global_work_offset[2]={0,0};
       uint global_work_size[2];
@@ -713,31 +847,33 @@ bool CNeuronACSRM::propagateACSRMGradients(CNeuronBaseOCL*NeuronOCL)
       global_work_size[1]=(uint)MathMin(MathMin((outputs+3)/4,OpenCL.GetMaxLocalSize(1)),
                                         defFQF_LOCAL_ARRAY_SIZE);
       uint local_work_size[2]={1,global_work_size[1]};
-      setBuffer(def_k_FQF_FractionGradient,def_k_fqffg_matrix_w,NeuronOCL.getWeightsIndex());
-      setBuffer(def_k_FQF_FractionGradient,def_k_fqffg_matrix_g,cFraction.getGradientIndex());
-      setBuffer(def_k_FQF_FractionGradient,def_k_fqffg_matrix_ig,m_input_gradient_scratch.GetIndex());
-      setArgument(def_k_FQF_FractionGradient,def_k_fqffg_outputs,(int)outputs);
+      setBuffer(def_k_FQF_FractionGradient,def_k_fqffg_matrix_w,NeuronOCL.getWeightsIndex())
+      setBuffer(def_k_FQF_FractionGradient,def_k_fqffg_matrix_g,cFraction.getGradientIndex())
+      setBuffer(def_k_FQF_FractionGradient,def_k_fqffg_matrix_ig,m_input_gradient_scratch.GetIndex())
+      setArgument(def_k_FQF_FractionGradient,def_k_fqffg_outputs,(int)outputs)
       kernelExecuteLoc(def_k_FQF_FractionGradient,global_work_offset,global_work_size,local_work_size)
 
    //--- neuronOCL.Gradient = value_path + fraction_branch
         {
          uint sum_work_offset[1]={0};
          uint sum_work_size[1]={inputs};
-         setBuffer(def_k_MatrixSum,def_k_sum_matrix1,NeuronOCL.getGradientIndex());
-         setBuffer(def_k_MatrixSum,def_k_sum_matrix2,m_input_gradient_scratch.GetIndex());
-         setBuffer(def_k_MatrixSum,def_k_sum_matrix_out,NeuronOCL.getGradientIndex());
-         setArgument(def_k_MatrixSum,def_k_sum_dimension,1);
-         setArgument(def_k_MatrixSum,def_k_sum_multiplyer,1.0f);
-         setArgument(def_k_MatrixSum,def_k_sum_shift_in1,0);
-         setArgument(def_k_MatrixSum,def_k_sum_shift_in2,0);
-         setArgument(def_k_MatrixSum,def_k_sum_shift_out,0);
-         setBuffer(def_k_MatrixSum,def_k_sum_numeric_flags,NeuronOCL.getGradientIndex());
-         setArgument(def_k_MatrixSum,def_k_sum_flags_enabled,0);
+         setBuffer(def_k_MatrixSum,def_k_sum_matrix1,NeuronOCL.getGradientIndex())
+         setBuffer(def_k_MatrixSum,def_k_sum_matrix2,m_input_gradient_scratch.GetIndex())
+         setBuffer(def_k_MatrixSum,def_k_sum_matrix_out,NeuronOCL.getGradientIndex())
+         setArgument(def_k_MatrixSum,def_k_sum_dimension,1)
+         setArgument(def_k_MatrixSum,def_k_sum_multiplyer,1.0f)
+         setArgument(def_k_MatrixSum,def_k_sum_shift_in1,0)
+         setArgument(def_k_MatrixSum,def_k_sum_shift_in2,0)
+         setArgument(def_k_MatrixSum,def_k_sum_shift_out,0)
+         setBuffer(def_k_MatrixSum,def_k_sum_numeric_flags,NeuronOCL.getGradientIndex())
+         setArgument(def_k_MatrixSum,def_k_sum_flags_enabled,0)
          kernelExecute(def_k_MatrixSum,sum_work_offset,sum_work_size)
         }
 #ifdef  _DEBUG
       if(!NeuronOCL.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -756,35 +892,53 @@ bool CNeuronACSRM::calcDistributionTargetGradients(CNeuronBaseOCL*NeuronOCL,
    m_distribution_gradient_ready=false;
 
    if(!NeuronOCL||!OpenCL||!Gradient||!Output)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(probability_weight<0||value_weight<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!MathIsValidNumber(target)||!MathIsValidNumber(probability_weight)||!MathIsValidNumber(value_weight))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(cSoftMax.getOutput())==POINTER_INVALID||CheckPointer(cSoftMax.getGradient())==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(cQuantile2.getOutput())==POINTER_INVALID||CheckPointer(cQuantile2.getGradient())==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(cSoftMax.Neurons()!=cQuantile2.Neurons()||cSoftMax.Neurons()==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(Neurons()!=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint quantiles=cSoftMax.Neurons()/Neurons();
 
    if(quantiles==0||quantiles>defFQF_LOCAL_ARRAY_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const long max_work_group=OpenCL.GetMaxWorkGroupSize();
 
    if(max_work_group>0&&(long)quantiles>max_work_group)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- the kernel performs local reductions over get_local_size(0); the local
 //--- group must cover the whole distribution so the geometry is [N,1]/[N,1]
@@ -792,17 +946,19 @@ bool CNeuronACSRM::calcDistributionTargetGradients(CNeuronBaseOCL*NeuronOCL,
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={quantiles,Neurons()};
       uint local_work_size[2]={quantiles,1};
-      setBuffer(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_quantiles,cQuantile2.getOutputIndex());
-      setBuffer(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_probabilities,cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_quantiles_gr,cQuantile2.getGradientIndex());
-      setBuffer(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_probabilities_gr,cSoftMax.getGradientIndex());
-      setArgument(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_target,target);
-      setArgument(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_probability_weight,probability_weight);
-      setArgument(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_value_weight,value_weight);
+      setBuffer(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_quantiles,cQuantile2.getOutputIndex())
+      setBuffer(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_probabilities,cSoftMax.getOutputIndex())
+      setBuffer(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_quantiles_gr,cQuantile2.getGradientIndex())
+      setBuffer(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_probabilities_gr,cSoftMax.getGradientIndex())
+      setArgument(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_target,target)
+      setArgument(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_probability_weight,probability_weight)
+      setArgument(def_k_FQF_DistributionTargetGradient,def_k_fqfdtg_value_weight,value_weight)
       kernelExecuteLoc(def_k_FQF_DistributionTargetGradient,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
       if(!cQuantile2.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -819,46 +975,62 @@ bool CNeuronACSRM::calcDistributionTargetGradients(CNeuronBaseOCL*NeuronOCL,
 bool CNeuronACSRM::Sample(CBufferFloat*result,CBufferFloat*random,const uint tasks)
   {
    if(!OpenCL||!result||!random)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(result.GetOpenCL()!=OpenCL||random.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tasks==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- n quantiles inside one independent distribution
    const uint quantiles=(Neurons()>0?cQuantile2.Neurons()/Neurons():0);
 
    if(quantiles==0||quantiles>defFQF_LOCAL_ARRAY_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const long max_work_group=OpenCL.GetMaxWorkGroupSize();
 
    if(max_work_group>0&&(long)quantiles>max_work_group)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- both distribution buffers must cover exactly tasks * N elements
    if((uint)cSoftMax.getOutput().Total()!=tasks*quantiles||
       (uint)cQuantile2.getOutput().Total()!=tasks*quantiles)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((uint)random.Total()<tasks||(uint)result.Total()<tasks)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={quantiles,tasks};
       uint local_work_size[2]={quantiles,1};
-      setBuffer(def_k_FQF_Sample,def_k_fqfs_quantiles,cQuantile2.getOutputIndex());
-      setBuffer(def_k_FQF_Sample,def_k_fqfs_probabilities,cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_Sample,def_k_fqfs_random,random.GetIndex());
-      setBuffer(def_k_FQF_Sample,def_k_fqfs_result,result.GetIndex());
+      setBuffer(def_k_FQF_Sample,def_k_fqfs_quantiles,cQuantile2.getOutputIndex())
+      setBuffer(def_k_FQF_Sample,def_k_fqfs_probabilities,cSoftMax.getOutputIndex())
+      setBuffer(def_k_FQF_Sample,def_k_fqfs_random,random.GetIndex())
+      setBuffer(def_k_FQF_Sample,def_k_fqfs_result,result.GetIndex())
       kernelExecuteLoc(def_k_FQF_Sample,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
       if(!result.BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -881,10 +1053,14 @@ bool CNeuronACSRM::SRMForward(CBufferFloat*result,
    m_last_srm_invalid=false;
 
    if(!OpenCL||!result)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(result.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- spec 33: parameter validation per risk measure
    switch(risk_type)
@@ -894,80 +1070,110 @@ bool CNeuronACSRM::SRMForward(CBufferFloat*result,
       case defSRM_CVAR:
 
          if(risk_parameter<=0.0f||risk_parameter>1.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          break;
       case defSRM_MEAN_CVAR:
 
          if(risk_parameter<=0.0f||risk_parameter>1.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(mean_weight<0.0f||mean_weight>1.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          break;
       case defSRM_EXPONENTIAL:
 
          if(risk_parameter<0.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          break;
       case defSRM_DUAL_POWER:
 
          if(risk_parameter<1.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          break;
       default:
-         ReturnFalse;
+         ReturnFalse
      }
 
    if(!MathIsValidNumber(risk_parameter)||!MathIsValidNumber(mean_weight))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tasks==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- n quantiles and result sizing
    if((uint)result.Total()<tasks)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint quantiles=(Neurons()>0?cSoftMax.Neurons()/Neurons():0);
 
    if(quantiles==0||quantiles>defFQF_LOCAL_ARRAY_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const long max_work_group=OpenCL.GetMaxWorkGroupSize();
 
    if(max_work_group>0&&(long)quantiles>max_work_group)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- spec 17: AC-SRM Stage 03 pins Actions == 1, distribution head == 1
    if(Neurons()!=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- rank-sensitive measures consume the monotone rearrangement; the
 //--- bitonic v1 network requires N = 2^k
    const bool rank_sensitive=(risk_type!=defSRM_MEAN);
 
    if(rank_sensitive&&((quantiles&(quantiles-1))!=0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- spec 12/18: invalid distributions are rejected BEFORE the SRM launch
 //--- and never interpreted as a valid protective zero
    m_last_srm_invalid=!ValidateDistributionForSRM(tasks,risk_type,risk_parameter,mean_weight,true);
 
    if(m_last_srm_invalid)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(rank_sensitive)
      {
       if(!EnsureRearrangeBuffers(tasks,quantiles))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!MonotoneRearrange(GetPointer(m_ordered_quantiles),GetPointer(m_ordered_probabilities),
                             GetPointer(m_rearrange_order),GetPointer(m_rearrange_diagnostics),tasks))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -977,16 +1183,18 @@ bool CNeuronACSRM::SRMForward(CBufferFloat*result,
       uint      local_work_size[2]={quantiles,1};
       const int q_index=(rank_sensitive?m_ordered_quantiles.GetIndex():cQuantile2.getOutputIndex());
       const int p_index=(rank_sensitive?m_ordered_probabilities.GetIndex():cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_SRMForward,def_k_fqfsrm_quantiles,q_index);
-      setBuffer(def_k_FQF_SRMForward,def_k_fqfsrm_probabilities,p_index);
-      setBuffer(def_k_FQF_SRMForward,def_k_fqfsrm_result,result.GetIndex());
-      setArgument(def_k_FQF_SRMForward,def_k_fqfsrm_risk_type,(int)risk_type);
-      setArgument(def_k_FQF_SRMForward,def_k_fqfsrm_risk_parameter,risk_parameter);
-      setArgument(def_k_FQF_SRMForward,def_k_fqfsrm_mean_weight,mean_weight);
+      setBuffer(def_k_FQF_SRMForward,def_k_fqfsrm_quantiles,q_index)
+      setBuffer(def_k_FQF_SRMForward,def_k_fqfsrm_probabilities,p_index)
+      setBuffer(def_k_FQF_SRMForward,def_k_fqfsrm_result,result.GetIndex())
+      setArgument(def_k_FQF_SRMForward,def_k_fqfsrm_risk_type,(int)risk_type)
+      setArgument(def_k_FQF_SRMForward,def_k_fqfsrm_risk_parameter,risk_parameter)
+      setArgument(def_k_FQF_SRMForward,def_k_fqfsrm_mean_weight,mean_weight)
       kernelExecuteLoc(def_k_FQF_SRMForward,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
       if(!result.BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -1010,10 +1218,14 @@ bool CNeuronACSRM::SRMGradient(CBufferFloat*result_gradient,
 
    if(!OpenCL||!result_gradient||
       !cQuantile2.getGradient()||!cSoftMax.getGradient())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(result_gradient.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- spec 40: parameter validation per risk measure (same as SRMForward)
    switch(risk_type)
@@ -1023,81 +1235,114 @@ bool CNeuronACSRM::SRMGradient(CBufferFloat*result_gradient,
       case defSRM_CVAR:
 
          if(risk_parameter<=0.0f||risk_parameter>1.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          break;
       case defSRM_MEAN_CVAR:
 
          if(risk_parameter<=0.0f||risk_parameter>1.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(mean_weight<0.0f||mean_weight>1.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          break;
       case defSRM_EXPONENTIAL:
 
          if(risk_parameter<0.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          break;
       case defSRM_DUAL_POWER:
 
          if(risk_parameter<1.0f)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          break;
       default:
-         ReturnFalse;
+         ReturnFalse
      }
 
    if(!MathIsValidNumber(risk_parameter)||!MathIsValidNumber(mean_weight))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((uint)result_gradient.Total()<tasks)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint quantiles=(Neurons()>0?cSoftMax.Neurons()/Neurons():0);
 
    if(quantiles==0||quantiles>defFQF_LOCAL_ARRAY_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const long max_work_group=OpenCL.GetMaxWorkGroupSize();
 
    if(max_work_group>0&&(long)quantiles>max_work_group)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- spec 17: AC-SRM Stage 03 pins Actions == 1, distribution head == 1
    if(Neurons()!=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const bool rank_sensitive=(risk_type!=defSRM_MEAN);
 
    if(rank_sensitive&&((quantiles&(quantiles-1))!=0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- spec 12/18: invalid distributions (and an invalid upstream gradient)
 //--- are rejected BEFORE the SRM gradient launch; a protective zero is
 //--- never treated as a valid break-even outcome
    if(result_gradient.GetIndex()>=0&&!result_gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint u=0;u<tasks&&u<(uint)result_gradient.Total();u++)
       if(!MathIsValidNumber(result_gradient[u]))
-        {m_last_srm_invalid=true;ReturnFalse;}
+        {
+         m_last_srm_invalid=true;
+         ReturnFalse
+        }
    m_last_srm_invalid=!ValidateDistributionForSRM(tasks,risk_type,risk_parameter,mean_weight,false);
 
    if(m_last_srm_invalid)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(rank_sensitive)
      {
       if(!EnsureRearrangeBuffers(tasks,quantiles))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!MonotoneRearrange(GetPointer(m_ordered_quantiles),GetPointer(m_ordered_probabilities),
                             GetPointer(m_rearrange_order),GetPointer(m_rearrange_diagnostics),tasks))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -1109,14 +1354,14 @@ bool CNeuronACSRM::SRMGradient(CBufferFloat*result_gradient,
       const int p_index=(rank_sensitive?m_ordered_probabilities.GetIndex():cSoftMax.getOutputIndex());
       const int qg_index=(rank_sensitive?m_ordered_quantiles_gradient.GetIndex():cQuantile2.getGradientIndex());
       const int pg_index=(rank_sensitive?m_ordered_probabilities_gradient.GetIndex():cSoftMax.getGradientIndex());
-      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_quantiles,q_index);
-      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_probabilities,p_index);
-      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_result_gradient,result_gradient.GetIndex());
-      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_quantiles_gradient,qg_index);
-      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_probabilities_gradient,pg_index);
-      setArgument(def_k_FQF_SRMGradient,def_k_fqfsrmg_risk_type,(int)risk_type);
-      setArgument(def_k_FQF_SRMGradient,def_k_fqfsrmg_risk_parameter,risk_parameter);
-      setArgument(def_k_FQF_SRMGradient,def_k_fqfsrmg_mean_weight,mean_weight);
+      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_quantiles,q_index)
+      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_probabilities,p_index)
+      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_result_gradient,result_gradient.GetIndex())
+      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_quantiles_gradient,qg_index)
+      setBuffer(def_k_FQF_SRMGradient,def_k_fqfsrmg_probabilities_gradient,pg_index)
+      setArgument(def_k_FQF_SRMGradient,def_k_fqfsrmg_risk_type,(int)risk_type)
+      setArgument(def_k_FQF_SRMGradient,def_k_fqfsrmg_risk_parameter,risk_parameter)
+      setArgument(def_k_FQF_SRMGradient,def_k_fqfsrmg_mean_weight,mean_weight)
       //+------------------------------------------------------------------+
       //| kernelExecuteLoc - Implement kernelExecuteLoc                    |
       //+------------------------------------------------------------------+
@@ -1125,13 +1370,20 @@ bool CNeuronACSRM::SRMGradient(CBufferFloat*result_gradient,
       if(rank_sensitive&&
          !RearrangeGradient(GetPointer(m_ordered_quantiles_gradient),GetPointer(m_ordered_probabilities_gradient),
                             GetPointer(m_rearrange_order),cQuantile2.getGradient(),cSoftMax.getGradient(),tasks))
-        {m_last_srm_invalid=true;ReturnFalse;}
+        {
+         m_last_srm_invalid=true;
+         ReturnFalse
+        }
 #ifdef  _DEBUG
       if(!cQuantile2.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cSoftMax.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -1183,55 +1435,73 @@ bool CNeuronACSRM::MonotoneRearrange(CBufferFloat*ordered_quantiles,CBufferFloat
                                      CBufferFloat *order,CBufferFloat*diagnostics,const uint tasks)
   {
    if(!OpenCL||!ordered_quantiles||!ordered_probabilities||!order||!diagnostics)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(ordered_quantiles.GetOpenCL()!=OpenCL||ordered_probabilities.GetOpenCL()!=OpenCL||
       order.GetOpenCL()!=OpenCL||diagnostics.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tasks==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(Neurons()!=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint quantiles=(Neurons()>0?cQuantile2.Neurons()/Neurons():0);
 
    if(quantiles==0||quantiles>defFQF_LOCAL_ARRAY_SIZE||
       (quantiles&(quantiles-1))!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const long max_work_group=OpenCL.GetMaxWorkGroupSize();
 
    if(max_work_group>0&&(long)quantiles>max_work_group)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((uint)cSoftMax.getOutput().Total()!=tasks*quantiles||
       (uint)cQuantile2.getOutput().Total()!=tasks*quantiles)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((uint)ordered_quantiles.Total()<tasks*quantiles||
       (uint)ordered_probabilities.Total()<tasks*quantiles||
       (uint)order.Total()<tasks*quantiles||
       (uint)diagnostics.Total()<tasks*defFQF_DIAGNOSTIC_FLOATS)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={quantiles,tasks};
       uint local_work_size[2]={quantiles,1};
-      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_quantiles,cQuantile2.getOutputIndex());
-      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_probabilities,cSoftMax.getOutputIndex());
-      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_ordered_quantiles,ordered_quantiles.GetIndex());
-      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_ordered_probabilities,ordered_probabilities.GetIndex());
-      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_order,order.GetIndex());
-      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_diagnostics,diagnostics.GetIndex());
+      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_quantiles,cQuantile2.getOutputIndex())
+      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_probabilities,cSoftMax.getOutputIndex())
+      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_ordered_quantiles,ordered_quantiles.GetIndex())
+      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_ordered_probabilities,ordered_probabilities.GetIndex())
+      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_order,order.GetIndex())
+      setBuffer(def_k_FQF_MonotoneRearrange,def_k_fqfmon_diagnostics,diagnostics.GetIndex())
       kernelExecuteLoc(def_k_FQF_MonotoneRearrange,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
       if(!ordered_quantiles.BufferRead()||!ordered_probabilities.BufferRead()||
          !order.BufferRead()||!diagnostics.BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
    m_rearrangement_ready=(order==GetPointer(m_rearrange_order));
@@ -1251,41 +1521,59 @@ bool CNeuronACSRM::RearrangeGradient(CBufferFloat*ordered_quantiles_gradient,
   {
    if(!OpenCL||!ordered_quantiles_gradient||!ordered_probabilities_gradient||
       !order||!quantiles_gradient||!probabilities_gradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(ordered_quantiles_gradient.GetOpenCL()!=OpenCL||ordered_probabilities_gradient.GetOpenCL()!=OpenCL||
       order.GetOpenCL()!=OpenCL||quantiles_gradient.GetOpenCL()!=OpenCL||
       probabilities_gradient.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tasks==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint quantiles=(Neurons()>0?cQuantile2.Neurons()/Neurons():0);
 
    if(quantiles==0||quantiles>defFQF_LOCAL_ARRAY_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- the permutation must be exactly [0..N-1] (checked before launch)
    if((uint)order.Total()<tasks*quantiles)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((uint)quantiles_gradient.Total()<tasks*quantiles||
       (uint)probabilities_gradient.Total()<tasks*quantiles)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((uint)ordered_quantiles_gradient.Total()<tasks*quantiles||
       (uint)ordered_probabilities_gradient.Total()<tasks*quantiles)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- permutation validity contract: order entries are a bijection of 0..N-1
    if(order.GetIndex()>=0&&!order.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    bool seen[];
 
    if(!ArrayResize(seen,(int)quantiles))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint tt=0;tt<tasks;tt++)
      {
@@ -1298,12 +1586,18 @@ bool CNeuronACSRM::RearrangeGradient(CBufferFloat*ordered_quantiles_gradient,
          const double raw_order=double(order[idx]);
 
          if(!MathIsValidNumber(raw_order))
-           {m_last_srm_invalid=true;ReturnFalse;}
+           {
+            m_last_srm_invalid=true;
+            ReturnFalse
+           }
          const int o=(int)MathRound(raw_order);
 
          if(MathAbs(raw_order-double(o))>1.0e-6||
             o<0||o>=(int)quantiles||seen[o])
-           {m_last_srm_invalid=true;ReturnFalse;}
+           {
+            m_last_srm_invalid=true;
+            ReturnFalse
+           }
          seen[o]=true;
         }
      }
@@ -1312,15 +1606,17 @@ bool CNeuronACSRM::RearrangeGradient(CBufferFloat*ordered_quantiles_gradient,
      {
       uint global_work_offset[2]={0,0};
       uint global_work_size[2]={quantiles,tasks};
-      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_ordered_quantiles_gradient,ordered_quantiles_gradient.GetIndex());
-      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_ordered_probabilities_gradient,ordered_probabilities_gradient.GetIndex());
-      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_order,order.GetIndex());
-      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_quantiles_gradient,quantiles_gradient.GetIndex());
-      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_probabilities_gradient,probabilities_gradient.GetIndex());
+      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_ordered_quantiles_gradient,ordered_quantiles_gradient.GetIndex())
+      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_ordered_probabilities_gradient,ordered_probabilities_gradient.GetIndex())
+      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_order,order.GetIndex())
+      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_quantiles_gradient,quantiles_gradient.GetIndex())
+      setBuffer(def_k_FQF_RearrangeGradient,def_k_fqfrg_probabilities_gradient,probabilities_gradient.GetIndex())
       kernelExecute(def_k_FQF_RearrangeGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!quantiles_gradient.BufferRead()||!probabilities_gradient.BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -1339,27 +1635,39 @@ bool CNeuronACSRM::ValidateDistributionForSRM(const uint tasks,const int risk_ty
    m_last_spectral_break=0;
 
    if(!OpenCL||!cSoftMax.getOutput()||!cQuantile2.getOutput())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tasks==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint quantiles=(Neurons()>0?cSoftMax.Neurons()/Neurons():0);
 
    if(quantiles==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *z=cQuantile2.getOutput();
    CBufferFloat *p=cSoftMax.getOutput();
 
    if(z.Total()<(int)(tasks*quantiles)||p.Total()<(int)(tasks*quantiles))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(z.GetIndex()>=0&&!z.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(p.GetIndex()>=0&&!p.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    bool valid=true;
 
@@ -1374,21 +1682,32 @@ bool CNeuronACSRM::ValidateDistributionForSRM(const uint tasks,const int risk_ty
          const double pi=double(p[idx]);
 
          if(!MathIsValidNumber(q))
-           {m_last_invalid_quantile++;valid=false;}
+           {
+            m_last_invalid_quantile++;
+            valid=false;
+           }
 
          if(!MathIsValidNumber(pi)||pi<0.0)
-           {m_last_invalid_probability++;valid=false;}
+           {
+            m_last_invalid_probability++;
+            valid=false;
+           }
 
          if(MathIsValidNumber(pi)&&pi>0.0)
             mass+=pi;
         }
 
       if(MathAbs(mass-1.0)>defFQF_PROBABILITY_TOLERANCE)
-        {m_last_invalid_mass++;valid=false;}
+        {
+         m_last_invalid_mass++;
+         valid=false;
+        }
      }
 
    if(!valid)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- spectral monotonicity: Phi(tau_high) >= Phi(tau_low) - eps for the
 //--- same normalized CDF consumed by ::FQF_SRMForward; CVaR/Mean-CVaR
@@ -1404,7 +1723,11 @@ bool CNeuronACSRM::ValidateDistributionForSRM(const uint tasks,const int risk_ty
          S+=MathMax(0.0,double(p[tt*quantiles+k]));
 
       if(!(S>1.0e-37))
-        {m_last_invalid_mass++;valid=false;break;}
+        {
+         m_last_invalid_mass++;
+         valid=false;
+         break;
+        }
       double tau_low=0.0;
       double cum=0.0;
 
@@ -1416,7 +1739,10 @@ bool CNeuronACSRM::ValidateDistributionForSRM(const uint tasks,const int risk_ty
          const float phi_low=ACSSRMCumulativeCPU((float)tau_low,risk_type,risk_parameter,mean_weight);
 
          if(phi_high<phi_low-defFQF_SPECTRAL_EPS)
-           {valid=false;break;}
+           {
+            valid=false;
+            break;
+           }
 
          if(count_kink&&MathAbs(double(tau_high)-double(risk_parameter))<defFQF_KINK_EPS)
             m_last_spectral_break++;
@@ -1529,13 +1855,17 @@ bool CNeuronACSRM::Load(const int file_handle)
    m_rearrangement_ready=false;
 
    if(!CNeuronFQF::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_input_gradient_scratch.BufferFree();
 
    if(!m_input_gradient_scratch.BufferInit(cCosineEmbeding.Neurons(),0)||
       !m_input_gradient_scratch.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -1593,19 +1923,25 @@ bool CNeuronACSRM::SupportsOpenCLChecked(void)const
 bool CNeuronACSRM::SetOpenCLChecked(COpenCLMy*obj)
   {
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_distribution_gradient_ready=false;
    m_rearrangement_ready=false;
 
    if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cFraction.SetOpenCLChecked(obj)||!cSoftMax.SetOpenCLChecked(obj)||
       !cCosine.SetOpenCLChecked(obj)||!cCosineEmbeding.SetOpenCLChecked(obj)||
       !cQuantile0.SetOpenCLChecked(obj)||!cQuantile1.SetOpenCLChecked(obj)||
       !cQuantile2.SetOpenCLChecked(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- move the transient scratch only when it is materialized.
    if(m_input_gradient_scratch.Total()>0)
@@ -1613,12 +1949,16 @@ bool CNeuronACSRM::SetOpenCLChecked(COpenCLMy*obj)
       if(m_input_gradient_scratch.GetIndex()>=0&&
          m_input_gradient_scratch.GetOpenCL()!=obj&&
          !m_input_gradient_scratch.BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if((m_input_gradient_scratch.GetOpenCL()!=obj||
           m_input_gradient_scratch.GetIndex()<0)&&
          !m_input_gradient_scratch.BufferCreate(obj))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- move the transient rearrangement buffers when materialized.
@@ -1638,12 +1978,16 @@ bool CNeuronACSRM::SetOpenCLChecked(COpenCLMy*obj)
       if(transient[k].GetIndex()>=0&&
          transient[k].GetOpenCL()!=obj&&
          !transient[k].BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if((transient[k].GetOpenCL()!=obj||
           transient[k].GetIndex()<0)&&
          !transient[k].BufferCreate(obj))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    m_rearrangement_ready=false;
 
@@ -1664,21 +2008,29 @@ bool CNeuronSoftActorCritic::Init(uint numOutputs,
                                  )
   {
    if(!CNeuronFQF::Init(numOutputs,myIndex,open_cl,actions,quantiles,numInputs,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cAlphas.Init(0,0,OpenCL,actions,numInputs,cQuantile2.Neurons(),optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cAlphas.SetActivationFunction(SIGMOID);
 
 //---
    if(!cLogProbs.BufferInit(actions,0)||!cLogProbs.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cRandomize.BufferInit(actions,0)||!cRandomize.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -1689,10 +2041,14 @@ bool CNeuronSoftActorCritic::Init(uint numOutputs,
 bool CNeuronSoftActorCritic::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CNeuronFQF::feedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAlphas.FeedForward(GetPointer(cQuantile0),cQuantile2.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int actions=cRandomize.Total();
@@ -1704,7 +2060,9 @@ bool CNeuronSoftActorCritic::feedForward(CNeuronBaseOCL*NeuronOCL)
      }
 
    if(!cRandomize.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -1720,7 +2078,9 @@ bool CNeuronSoftActorCritic::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_SAC_AlphaLogProbs,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!cRandomize.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -1732,7 +2092,9 @@ bool CNeuronSoftActorCritic::calcAlphaGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||!NeuronOCL||!NeuronOCL.getGradient()||
       NeuronOCL.getGradientIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -1745,7 +2107,9 @@ bool CNeuronSoftActorCritic::calcAlphaGradients(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_SAC_AlphaGradients,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!cLogProbs.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(cQuantile0.CalcHiddenGradients((CObject*)GetPointer(cAlphas),cQuantile2.getOutput(),cQuantile2.getGradient()));
@@ -1756,7 +2120,9 @@ bool CNeuronSoftActorCritic::calcAlphaGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronSoftActorCritic::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CNeuronFQF::updateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(cAlphas.UpdateInputWeights(cQuantile0.AsObject(),cQuantile2.getOutput()));
@@ -1767,7 +2133,9 @@ bool CNeuronSoftActorCritic::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronSoftActorCritic::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronFQF::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronSoftActorCritic *Source=source;
 
@@ -1796,7 +2164,9 @@ void CNeuronSoftActorCritic::SetOpenCL(COpenCLMy*obj)
 bool CNeuronSoftActorCritic::Save(const int file_handle)
   {
    if(!CNeuronFQF::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(cAlphas.Save(file_handle));
   }
@@ -1806,11 +2176,15 @@ bool CNeuronSoftActorCritic::Save(const int file_handle)
 bool CNeuronSoftActorCritic::Load(const int file_handle)
   {
    if(!CNeuronFQF::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileReadInteger(file_handle)!=cAlphas.Type()||
       !cAlphas.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(cLogProbs.Total()!=Neurons())
@@ -1819,7 +2193,9 @@ bool CNeuronSoftActorCritic::Load(const int file_handle)
 
       if(!cLogProbs.BufferInit(Neurons(),0)||
          (!!OpenCL&&!cLogProbs.BufferCreate(OpenCL)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -1829,7 +2205,9 @@ bool CNeuronSoftActorCritic::Load(const int file_handle)
 
       if(!cRandomize.BufferInit(Neurons(),0)||
          (!!OpenCL&&!cRandomize.BufferCreate(OpenCL)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -1841,10 +2219,14 @@ bool CNeuronSoftActorCritic::Load(const int file_handle)
 bool CNeuronSoftActorCritic::CalcLogProbs(CBufferFloat*buffer)
   {
    if(!buffer||buffer.Total()<Neurons())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(buffer.GetIndex()<0&&!buffer.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -1859,7 +2241,9 @@ bool CNeuronSoftActorCritic::CalcLogProbs(CBufferFloat*buffer)
    kernelExecute(def_k_SAC_CalcLogProbs,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!cQuantile2.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -1870,7 +2254,9 @@ bool CNeuronSoftActorCritic::CalcLogProbs(CBufferFloat*buffer)
 bool CNeuronSoftActorCritic::ReCalcLogProbs(void)
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -1885,7 +2271,9 @@ bool CNeuronSoftActorCritic::ReCalcLogProbs(void)
    kernelExecute(def_k_SAC_CalcLogProbs,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!cQuantile2.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -1896,7 +2284,9 @@ bool CNeuronSoftActorCritic::ReCalcLogProbs(void)
 bool CNeuronSoftActorCritic::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!Gradient||!Output)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
@@ -1913,16 +2303,22 @@ bool CNeuronSoftActorCritic::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
       kernelExecute(def_k_SAC_OutputGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!cSoftMax.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
 //---
    if(!cQuantile1.CalcHiddenGradients((CObject*)GetPointer(cQuantile2)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile0.CalcHiddenGradients((CObject*)GetPointer(cQuantile1)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
@@ -1936,13 +2332,17 @@ bool CNeuronSoftActorCritic::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
       kernelExecute(def_k_FQF_QuantileGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!cCosineEmbeding.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
 //---
    if(!cCosine.CalcHiddenGradients((CObject*)GetPointer(cCosineEmbeding)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
@@ -1954,12 +2354,16 @@ bool CNeuronSoftActorCritic::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
       kernelExecute(def_k_FQF_CosineGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!cSoftMax.getGradient().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
    if(!cSoftMax.CalcHiddenGradients((CObject*)GetPointer(cFraction)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -1986,31 +2390,47 @@ void CNeuronSoftActorCritic::getCheckData(vector<float>&output,
 bool CNeuronFQF::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronFQF *temp=source;
 
    if(!cFraction.WeightsUpdate(GetPointer(temp.cFraction),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cSoftMax.WeightsUpdate(GetPointer(temp.cSoftMax),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCosine.WeightsUpdate(GetPointer(temp.cCosine),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCosineEmbeding.WeightsUpdate(GetPointer(temp.cCosineEmbeding),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile0.WeightsUpdate(GetPointer(temp.cQuantile0),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile1.WeightsUpdate(GetPointer(temp.cQuantile1),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQuantile2.WeightsUpdate(GetPointer(temp.cQuantile2),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2029,7 +2449,9 @@ bool CNeuronPLROCL::Init(uint numOutputs,
                         )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,window_in*units_count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iVariables=(int)window_in;
@@ -2040,7 +2462,9 @@ bool CNeuronPLROCL::Init(uint numOutputs,
    icIsTTP=OpenCL.AddBuffer(sizeof(int)*Neurons(),CL_MEM_READ_WRITE);
 
    if(icIsTTP<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2051,7 +2475,9 @@ bool CNeuronPLROCL::Init(uint numOutputs,
 bool CNeuronPLROCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||!NeuronOCL||!NeuronOCL.getOutput())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[2]={0};
@@ -2068,7 +2494,9 @@ bool CNeuronPLROCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecuteLoc(def_k_PLR,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -2079,7 +2507,9 @@ bool CNeuronPLROCL::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPLROCL::calcInputGradients(CNeuronBaseOCL*prevLayer)
   {
    if(!OpenCL||!prevLayer||!prevLayer.getGradient())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[2]={0};
@@ -2094,7 +2524,9 @@ bool CNeuronPLROCL::calcInputGradients(CNeuronBaseOCL*prevLayer)
    kernelExecute(def_k_PLRGrad,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!prevLayer.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -2105,16 +2537,24 @@ bool CNeuronPLROCL::calcInputGradients(CNeuronBaseOCL*prevLayer)
 bool CNeuronPLROCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iCount)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iVariables)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,int(bTranspose))<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2125,21 +2565,29 @@ bool CNeuronPLROCL::Save(const int file_handle)
 bool CNeuronPLROCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iCount=FileReadInteger(file_handle);
 
    if(FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iVariables=FileReadInteger(file_handle);
 
    if(FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    bTranspose=(bool)FileReadInteger(file_handle);
 
@@ -2148,7 +2596,9 @@ bool CNeuronPLROCL::Load(const int file_handle)
    icIsTTP=OpenCL.AddBuffer(sizeof(int)*Neurons(),CL_MEM_READ_WRITE);
 
    if(icIsTTP<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2175,7 +2625,9 @@ bool CNeuronMarketObserver::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
   {
 //--- init parent object
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,window*forecast,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- clear layers' array
    cLayers.Clear();
@@ -2189,8 +2641,8 @@ bool CNeuronMarketObserver::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !transp.Init(0,lay_count,OpenCL,units_count,window,optimization,iBatch)||
       !cLayers.Add(transp))
      {
-      DeleteObj(transp);
-      ReturnFalse;
+      DeleteObj(transp)
+      ReturnFalse
      }
 
 //--- piecewise linear representation
@@ -2201,8 +2653,8 @@ bool CNeuronMarketObserver::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !plr.Init(0,lay_count,OpenCL,units_count,window,false,optimization,iBatch)||
       !cLayers.Add(plr))
      {
-      DeleteObj(plr);
-      ReturnFalse;
+      DeleteObj(plr)
+      ReturnFalse
      }
 
 //--- self-Attention for Variables
@@ -2213,8 +2665,8 @@ bool CNeuronMarketObserver::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !att.Init(0,lay_count,OpenCL,units_count,window_key,window,heads,layers,optimization,iBatch)||
       !cLayers.Add(att))
      {
-      DeleteObj(att);
-      ReturnFalse;
+      DeleteObj(att)
+      ReturnFalse
      }
 
 //--- forecast mapping
@@ -2225,8 +2677,8 @@ bool CNeuronMarketObserver::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !conv.Init(0,lay_count,OpenCL,units_count,forecast,window,optimization,iBatch)||
       !cLayers.Add(conv))
      {
-      DeleteObj(conv);
-      ReturnFalse;
+      DeleteObj(conv)
+      ReturnFalse
      }
 
 //--- back transpose forecast
@@ -2237,14 +2689,16 @@ bool CNeuronMarketObserver::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !transp.Init(0,lay_count,OpenCL,window,forecast,optimization,iBatch)||
       !cLayers.Add(transp))
      {
-      DeleteObj(transp);
-      ReturnFalse;
+      DeleteObj(transp)
+      ReturnFalse
      }
 
 //---
    if(!SetOutput(transp.getOutput(),true)||
       !SetGradient(transp.getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2259,7 +2713,9 @@ bool CNeuronRLAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
   {
 //--- init parent object
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,n_actions,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- clear layers' array
    cLayers.Clear();
@@ -2276,8 +2732,8 @@ bool CNeuronRLAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
          !psf.Init(0,lay_count,OpenCL,window,units_count,segments,rho,optimization,iBatch)||
          !cLayers.Add(psf))
         {
-         DeleteObj(psf);
-         ReturnFalse;
+         DeleteObj(psf)
+         ReturnFalse
         }
       lay_count++;
      }
@@ -2289,8 +2745,8 @@ bool CNeuronRLAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !conv.Init(n_actions,lay_count,OpenCL,window,window,1,units_count,1,optimization,iBatch)||
       !cLayers.Add(conv))
      {
-      DeleteObj(conv);
-      ReturnFalse;
+      DeleteObj(conv)
+      ReturnFalse
      }
    conv.SetActivationFunction(GELU);
    lay_count++;
@@ -2300,15 +2756,17 @@ bool CNeuronRLAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !flat.Init(0,lay_count,OpenCL,n_actions,optimization,iBatch)||
       !cLayers.Add(flat))
      {
-      DeleteObj(flat);
-      ReturnFalse;
+      DeleteObj(flat)
+      ReturnFalse
      }
    SetActivationFunction(SIGMOID);
 
 //---
    if(!SetOutput(flat.getOutput(),true)||
       !SetGradient(flat.getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2323,7 +2781,9 @@ bool CNeuronControlAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
   {
 //--- init parent object
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,window*units_count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- clear layers' array
    cLayers.Clear();
@@ -2337,8 +2797,8 @@ bool CNeuronControlAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !flat.Init(0,lay_count,OpenCL,window_kv*units_kv,optimization,iBatch)||
       !cLayers.Add(flat))
      {
-      DeleteObj(flat);
-      ReturnFalse;
+      DeleteObj(flat)
+      ReturnFalse
      }
    lay_count++;
    CNeuronTransposeOCL *transp=new CNeuronTransposeOCL();
@@ -2347,8 +2807,8 @@ bool CNeuronControlAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !transp.Init(0,lay_count,OpenCL,units_kv,window_kv,optimization,iBatch)||
       !cLayers.Add(transp))
      {
-      DeleteObj(transp);
-      ReturnFalse;
+      DeleteObj(transp)
+      ReturnFalse
      }
    lay_count++;
 
@@ -2363,8 +2823,8 @@ bool CNeuronControlAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
             !self.Init(0,lay_count,OpenCL,window,window_key,units_count,heads,optimization,iBatch)||
             !cLayers.Add(self))
            {
-            DeleteObj(self);
-            ReturnFalse;
+            DeleteObj(self)
+            ReturnFalse
            }
          lay_count++;
         }
@@ -2374,8 +2834,8 @@ bool CNeuronControlAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
          !cross.Init(0,lay_count,OpenCL,window,window_key,units_count,heads,units_kv,window_kv,optimization,iBatch)||
          !cLayers.Add(cross))
         {
-         DeleteObj(cross);
-         ReturnFalse;
+         DeleteObj(cross)
+         ReturnFalse
         }
       lay_count++;
       CResidualConv *ffn=new CResidualConv();
@@ -2384,8 +2844,8 @@ bool CNeuronControlAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
          !ffn.Init(0,lay_count,OpenCL,window,window,units_count,optimization,iBatch)||
          !cLayers.Add(ffn))
         {
-         DeleteObj(ffn);
-         ReturnFalse;
+         DeleteObj(ffn)
+         ReturnFalse
         }
       lay_count++;
      }
@@ -2395,15 +2855,17 @@ bool CNeuronControlAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       !conv.Init(0,lay_count,OpenCL,window,window,window,units_count,1,optimization,iBatch)||
       !cLayers.Add(conv))
      {
-      DeleteObj(conv);
-      ReturnFalse;
+      DeleteObj(conv)
+      ReturnFalse
      }
    SetActivationFunction(SIGMOID);
 
 //---
    if(!SetOutput(conv.getOutput(),true)||
       !SetGradient(conv.getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2414,22 +2876,30 @@ bool CNeuronControlAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronControlAgent::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferFloat*SecondInput)
   {
    if(!SecondInput)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *second=cLayers[0];
 
    if(!second)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!second.SetOutput(SecondInput,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    second=cLayers[1];
 
    if(!second||!second.FeedForward(cLayers[0]))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *first=NeuronOCL;
@@ -2441,7 +2911,9 @@ bool CNeuronControlAgent::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferFloat*Seco
 
       if(!main||
          !main.FeedForward(first,second.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       first=main;
      }
@@ -2459,16 +2931,22 @@ bool CNeuronControlAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                             )
   {
    if(!NeuronOCL||!SecondGradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *main=cLayers[0];
 
    if(!main)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!main.SetGradient(SecondGradient,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    main.SetActivationFunction(SecondActivation);
 
@@ -2476,7 +2954,9 @@ bool CNeuronControlAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
    CNeuronBaseOCL *second=cLayers[1];
 
    if(!second)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    second.SetActivationFunction(SecondActivation);
    CBufferFloat *second_out=second.getOutput();
@@ -2484,7 +2964,9 @@ bool CNeuronControlAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
    CBufferFloat *temp=second.getPrevOutput();
 
    if(!second_gr.Fill(0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(int i=cLayers.Total()-2;i>=2;i--)
@@ -2492,34 +2974,46 @@ bool CNeuronControlAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
       main=cLayers[i];
 
       if(!main)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(cLayers[i+1].Type()==defNeuronRelativeCrossAttention)
         {
          if(!main.CalcHiddenGradients(cLayers[i+1],second_out,temp,SecondActivation)||
             !SumAndNormalize(temp,second_gr,second_gr,1,false,0,0,0,1))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       else
         {
          if(!main.CalcHiddenGradients(cLayers[i+1]))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
 
 //---
    if(!NeuronOCL.CalcHiddenGradients(main.AsObject(),second_out,temp,SecondActivation))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(main.Type()==defNeuronRelativeCrossAttention)
      {
       if(!SumAndNormalize(temp,second_gr,second_gr,1,false,0,0,0,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    main=cLayers[0];
 
    if(!main.CalcHiddenGradients(second.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2538,13 +3032,17 @@ bool CNeuronControlAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL,CBufferFlo
 
       if(!main||
          !main.UpdateInputWeights(cLayers[i-1],second.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    main=cLayers[2];
 
    if(!main||
       !main.UpdateInputWeights(NeuronOCL,second.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2560,27 +3058,39 @@ bool CNeuronMASA::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                        ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronBaseSAMOCL::Init(numOutputs,myIndex,open_cl,n_actions,rho,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- market Observation
    if(!cMarketObserver.Init(0,0,OpenCL,window,window_key,units_count,heads_mo,layers_mo,forecast,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRevIN.Init(0,1,OpenCL,cMarketObserver.Neurons(),NormLayer,normLayer))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- rL Agent
    if(!cRLAgent.Init(0,2,OpenCL,window,units_count,segments_rl,fRho,layers_rl,n_actions,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cControlAgent.Init(0,3,OpenCL,3,window_key,n_actions/3,heads_contr,window,forecast,layers_contr,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!SetOutput(cControlAgent.getOutput(),true)||
       !SetGradient(cControlAgent.getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetActivationFunction(SIGMOID);
 
@@ -2602,13 +3112,19 @@ void CNeuronMASA::SetActivationFunction(ENUM_ACTIVATION value)
 bool CNeuronMASA::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cMarketObserver.FeedForward(NeuronOCL.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRLAgent.FeedForward(NeuronOCL.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cControlAgent.FeedForward(cRLAgent.AsObject(),cMarketObserver.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2623,25 +3139,35 @@ bool CNeuronMASA::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                     )
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cRevIN.FeedForward(cMarketObserver.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float error=1.0f;
 
    if(!cRevIN.calcOutputGradients(SecondGradient,error))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketObserver.CalcHiddenGradients(cRevIN.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRLAgent.CalcHiddenGradients(cControlAgent.AsObject(),cMarketObserver.getOutput(),
                                     cMarketObserver.getPrevOutput(),
                                     (ENUM_ACTIVATION)cMarketObserver.Activation())||
       !SumAndNormalize(cMarketObserver.getGradient(),cMarketObserver.getPrevOutput(),cMarketObserver.getGradient(),1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CBufferFloat *temp=cRLAgent.getGradient();
@@ -2650,11 +3176,15 @@ bool CNeuronMASA::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
       !cRLAgent.calcOutputGradients(cControlAgent.getOutput(),error)||
       !SumAndNormalize(temp,cRLAgent.getPrevOutput(),temp,1,false,0,0,0,1)||
       !cRLAgent.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!NeuronOCL.CalcHiddenGradients(cMarketObserver.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    temp=NeuronOCL.getGradient();
 
@@ -2662,7 +3192,9 @@ bool CNeuronMASA::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
       !NeuronOCL.calcOutputGradients(cRLAgent.getOutput(),error)||
       !SumAndNormalize(temp,NeuronOCL.getPrevOutput(),temp,1,false,0,0,0,1)||
       !NeuronOCL.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2673,13 +3205,19 @@ bool CNeuronMASA::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
 bool CNeuronMASA::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cControlAgent.UpdateInputWeights(cRLAgent.AsObject(),cMarketObserver.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRLAgent.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketObserver.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2701,19 +3239,29 @@ void CNeuronMASA::SetOpenCL(COpenCLMy*obj)
 bool CNeuronMASA::Save(const int file_handle)
   {
    if(!CNeuronBaseSAMOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketObserver.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRevIN.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRLAgent.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cControlAgent.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2724,24 +3272,36 @@ bool CNeuronMASA::Save(const int file_handle)
 bool CNeuronMASA::Load(const int file_handle)
   {
    if(!CNeuronBaseSAMOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cMarketObserver.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cRevIN.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cRLAgent.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cControlAgent.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!SetOutput(cControlAgent.getOutput(),true)||
       !SetGradient(cControlAgent.getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2764,11 +3324,15 @@ bool CNeuronPLRMultiAgentsOCL::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
    iAgents=(int)min_distance.Size();
 
    if(iAgents<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,window_in*units_count*iAgents,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iVariables=(int)window_in;
@@ -2779,12 +3343,16 @@ bool CNeuronPLRMultiAgentsOCL::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
    icIsTTP=OpenCL.AddBuffer(sizeof(int)*Neurons(),CL_MEM_READ_WRITE);
 
    if(icIsTTP<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cMinDistance.AssignArray(min_distance)||
       !cMinDistance.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2795,7 +3363,9 @@ bool CNeuronPLRMultiAgentsOCL::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
 bool CNeuronPLRMultiAgentsOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||!NeuronOCL||!NeuronOCL.getOutput())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[3]={0};
@@ -2813,7 +3383,9 @@ bool CNeuronPLRMultiAgentsOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -2824,7 +3396,9 @@ bool CNeuronPLRMultiAgentsOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPLRMultiAgentsOCL::calcInputGradients(CNeuronBaseOCL*prevLayer)
   {
    if(!OpenCL||!prevLayer||!prevLayer.getGradient())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[2]={0};
@@ -2841,7 +3415,9 @@ bool CNeuronPLRMultiAgentsOCL::calcInputGradients(CNeuronBaseOCL*prevLayer)
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!prevLayer.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -2852,13 +3428,19 @@ bool CNeuronPLRMultiAgentsOCL::calcInputGradients(CNeuronBaseOCL*prevLayer)
 bool CNeuronPLRMultiAgentsOCL::Save(const int file_handle)
   {
    if(!CNeuronPLROCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iAgents)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMinDistance.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2869,16 +3451,22 @@ bool CNeuronPLRMultiAgentsOCL::Save(const int file_handle)
 bool CNeuronPLRMultiAgentsOCL::Load(const int file_handle)
   {
    if(!CNeuronPLROCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iAgents=FileReadInteger(file_handle);
 
    if(!cMinDistance.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2902,16 +3490,22 @@ bool CNeuronCrossSectionalAnalysis::Init(uint numOutputs,uint myIndex,COpenCLMy*
   {
    if(!CNeuronMVMHAttentionMLKV::Init(numOutputs,myIndex,open_cl,window_key,window_key,heads,heads_kv,
                                       variables,layers,layers_to_one_kv,units_count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cEmbeding.Init(0,0,OpenCL,window,window,window_key,units_count,variables,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cEmbeding.SetActivationFunction(GELU);
 
    if(!cTransposeRCD.Init(0,1,OpenCL,variables,units_count,window_key,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetActivationFunction(None);
 
@@ -2924,10 +3518,14 @@ bool CNeuronCrossSectionalAnalysis::Init(uint numOutputs,uint myIndex,COpenCLMy*
 bool CNeuronCrossSectionalAnalysis::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cEmbeding.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeRCD.FeedForward(cEmbeding.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronMVMHAttentionMLKV::feedForward(cTransposeRCD.AsObject()));
@@ -2938,22 +3536,32 @@ bool CNeuronCrossSectionalAnalysis::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronCrossSectionalAnalysis::calcInputGradients(CNeuronBaseOCL*prevLayer)
   {
    if(!prevLayer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronMVMHAttentionMLKV::calcInputGradients(cTransposeRCD.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cEmbeding.CalcHiddenGradients(cTransposeRCD.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(cEmbeding.Activation()!=None)
      {
       if(!DeActivation(cEmbeding.getOutput(),cEmbeding.getGradient(),cEmbeding.getGradient(),cEmbeding.Activation()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!prevLayer.CalcHiddenGradients(cEmbeding.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2964,10 +3572,14 @@ bool CNeuronCrossSectionalAnalysis::calcInputGradients(CNeuronBaseOCL*prevLayer)
 bool CNeuronCrossSectionalAnalysis::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CNeuronMVMHAttentionMLKV::updateInputWeights(cTransposeRCD.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cEmbeding.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -2987,13 +3599,19 @@ void CNeuronCrossSectionalAnalysis::SetOpenCL(COpenCLMy*obj)
 bool CNeuronCrossSectionalAnalysis::Save(const int file_handle)
   {
    if(!CNeuronMVMHAttentionMLKV::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cEmbeding.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeRCD.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3004,13 +3622,19 @@ bool CNeuronCrossSectionalAnalysis::Save(const int file_handle)
 bool CNeuronCrossSectionalAnalysis::Load(const int file_handle)
   {
    if(!CNeuronMVMHAttentionMLKV::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cEmbeding.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTransposeRCD.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3025,10 +3649,14 @@ bool CNeuronTemporalAnalysis::Init(uint numOutputs,uint myIndex,COpenCLMy*open_c
   {
    if(!CNeuronCrossSectionalAnalysis::Init(numOutputs,myIndex,open_cl,3*units_count,window_key,heads,heads_kv,
                                            window/3,layers,layers_to_one_kv,variables,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.Init(0,0,OpenCL,variables,units_count,window,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3039,7 +3667,9 @@ bool CNeuronTemporalAnalysis::Init(uint numOutputs,uint myIndex,COpenCLMy*open_c
 bool CNeuronTemporalAnalysis::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cTranspose.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronCrossSectionalAnalysis::feedForward(cTranspose.AsObject()));
@@ -3050,10 +3680,14 @@ bool CNeuronTemporalAnalysis::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronTemporalAnalysis::calcInputGradients(CNeuronBaseOCL*prevLayer)
   {
    if(!prevLayer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronCrossSectionalAnalysis::calcInputGradients(cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(prevLayer.CalcHiddenGradients(cTranspose.AsObject()));
@@ -3079,10 +3713,14 @@ void CNeuronTemporalAnalysis::SetOpenCL(COpenCLMy*obj)
 bool CNeuronTemporalAnalysis::Save(const int file_handle)
   {
    if(!CNeuronCrossSectionalAnalysis::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3093,10 +3731,14 @@ bool CNeuronTemporalAnalysis::Save(const int file_handle)
 bool CNeuronTemporalAnalysis::Load(const int file_handle)
   {
    if(!CNeuronCrossSectionalAnalysis::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3110,10 +3752,14 @@ bool CNeuronPortfolioGenerator::Init(uint numOutputs,uint myIndex,COpenCLMy*open
                                      ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(assets<=0||time_points<=0||dimension<=0||agents<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,projection,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iAssets=assets;
@@ -3123,20 +3769,28 @@ bool CNeuronPortfolioGenerator::Init(uint numOutputs,uint myIndex,COpenCLMy*open
 
 //---
    if(!cTransposeVRC.Init(0,0,OpenCL,iAgents,iTimePoints,iDimension,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAssetTime[0].Init(0,1,OpenCL,iAssets*iTimePoints*iAgents,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cAssetTime[0].SetActivationFunction(None);
 
    if(!cSoftMax.Init(0,2,OpenCL,cAssetTime[0].Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cSoftMax.SetHeads(iAssets*iAgents);
 
    if(!cAssetTime[1].Init(Neurons(),3,OpenCL,iAssets*iDimension*iAgents,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cAssetTime[1].SetActivationFunction(None);
 
@@ -3149,21 +3803,31 @@ bool CNeuronPortfolioGenerator::Init(uint numOutputs,uint myIndex,COpenCLMy*open
 bool CNeuronPortfolioGenerator::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferFloat*SecondInput)
   {
    if(!SecondInput)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cTransposeVRC.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!MatMul(SecondInput,cTransposeVRC.getOutput(),cAssetTime[0].getOutput(),iAssets,iDimension,iTimePoints,iAgents))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cSoftMax.FeedForward(cAssetTime[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!MatMul(cSoftMax.getOutput(),NeuronOCL.getOutput(),cAssetTime[1].getOutput(),iAssets,iTimePoints,iDimension,iAgents))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronBaseOCL::feedForward(cAssetTime[1].AsObject()));
@@ -3178,37 +3842,53 @@ bool CNeuronPortfolioGenerator::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                                   )
   {
    if(!NeuronOCL||!SecondGradient||!SecondInput)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronBaseOCL::calcInputGradients(cAssetTime[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!MatMulGrad(cSoftMax.getOutput(),cSoftMax.getGradient(),
                   NeuronOCL.getOutput(),cTransposeVRC.getPrevOutput(),
                   cAssetTime[1].getGradient(),
                   iAssets,iTimePoints,iDimension,iAgents))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAssetTime[0].CalcHiddenGradients(cSoftMax.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!MatMulGrad(SecondInput,SecondGradient,
                   cTransposeVRC.getOutput(),cTransposeVRC.getGradient(),
                   cAssetTime[0].getGradient(),
                   iAssets,iDimension,iTimePoints,iAgents))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(SecondActivation!=None)
       if(!DeActivation(SecondInput,SecondGradient,SecondGradient,SecondActivation))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!NeuronOCL.CalcHiddenGradients(cTransposeVRC.AsObject())||
       !SumAndNormalize(NeuronOCL.getGradient(),cTransposeVRC.getPrevOutput(),NeuronOCL.getGradient(),iDimension,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(NeuronOCL.Activation()!=None)
       if(!DeActivation(NeuronOCL.getOutput(),cTransposeVRC.getPrevOutput(),cTransposeVRC.getPrevOutput(),NeuronOCL.Activation()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -3238,30 +3918,34 @@ void CNeuronPortfolioGenerator::SetOpenCL(COpenCLMy*obj)
 bool CNeuronPortfolioGenerator::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cAssetTime.Size();i++)
       if(!cAssetTime[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cTransposeVRC.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cSoftMax.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
-   if(FileWriteInteger(file_handle,(int)iAssets)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iAssets)
 
-   if(FileWriteInteger(file_handle,(int)iTimePoints)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iTimePoints)
 
-   if(FileWriteInteger(file_handle,(int)iAgents)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iAgents)
 
-   if(FileWriteInteger(file_handle,(int)iDimension)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iDimension)
 
 //---
    return(true);
@@ -3272,17 +3956,25 @@ bool CNeuronPortfolioGenerator::Save(const int file_handle)
 bool CNeuronPortfolioGenerator::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cAssetTime.Size();i++)
       if(!LoadInsideLayer(file_handle,cAssetTime[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!LoadInsideLayer(file_handle,cTransposeVRC.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cSoftMax.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    dFileReadUInt(file_handle,iAssets)
@@ -3306,22 +3998,34 @@ bool CNeuronMASAAT::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
   {
    if(!CNeuronPortfolioGenerator::Init(numOutputs,myIndex,open_cl,window,units_cout/3,
                                        window_key,(uint)min_distance.Size()+1,projection,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.Init(0,0,OpenCL,units_cout,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPLR.Init(0,1,OpenCL,window,units_cout,false,min_distance,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConcat.Init(0,2,OpenCL,cTranspose.Neurons()+cPLR.Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossSectionalAnalysis.Init(0,3,OpenCL,units_cout,window_key,heads,heads/2,window,layers,1,iAgents,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTemporalAnalysis.Init(0,4,OpenCL,units_cout,window_key,heads,heads/2,window,layers,1,iAgents,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3332,19 +4036,29 @@ bool CNeuronMASAAT::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronMASAAT::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cTranspose.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPLR.FeedForward(cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!Concat(cTranspose.getOutput(),cPLR.getOutput(),cConcat.getOutput(),cTranspose.Neurons(),cPLR.Neurons(),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossSectionalAnalysis.FeedForward(cConcat.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTemporalAnalysis.FeedForward(cConcat.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronPortfolioGenerator::feedForward(cTemporalAnalysis.AsObject(),cCrossSectionalAnalysis.getOutput()));
@@ -3355,16 +4069,22 @@ bool CNeuronMASAAT::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMASAAT::calcInputGradients(CNeuronBaseOCL*prevLayer)
   {
    if(!prevLayer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronPortfolioGenerator::calcInputGradients(cTemporalAnalysis.AsObject(),
                                                      cCrossSectionalAnalysis.getOutput(),
                                                      cCrossSectionalAnalysis.getGradient(),
                                                      (ENUM_ACTIVATION)cCrossSectionalAnalysis.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConcat.CalcHiddenGradients(cCrossSectionalAnalysis.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *grad=cConcat.getGradient();
 
@@ -3372,27 +4092,39 @@ bool CNeuronMASAAT::calcInputGradients(CNeuronBaseOCL*prevLayer)
       !cConcat.CalcHiddenGradients(cTemporalAnalysis.AsObject())||
       !SumAndNormalize(grad,cConcat.getGradient(),grad,1,0,0,0,0,1)||
       !cConcat.SetGradient(grad,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!DeConcat(cTranspose.getPrevOutput(),cPLR.getGradient(),cConcat.getGradient(),cTranspose.Neurons(),cPLR.Neurons(),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(cPLR.Activation()!=None)
       if(!DeActivation(cPLR.getOutput(),cPLR.getGradient(),cPLR.getGradient(),cPLR.Activation()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    if(!cTranspose.CalcHiddenGradients(cPLR.AsObject())||
       !SumAndNormalize(cTranspose.getGradient(),cTranspose.getPrevOutput(),cTranspose.getGradient(),iDimension,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(cTranspose.Activation()!=None)
       if(!DeActivation(cTranspose.getOutput(),cTranspose.getGradient(),cTranspose.getGradient(),cTranspose.Activation()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!prevLayer.CalcHiddenGradients(cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3403,10 +4135,14 @@ bool CNeuronMASAAT::calcInputGradients(CNeuronBaseOCL*prevLayer)
 bool CNeuronMASAAT::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cCrossSectionalAnalysis.UpdateInputWeights(cConcat.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTemporalAnalysis.UpdateInputWeights(cConcat.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronPortfolioGenerator::updateInputWeights(cTemporalAnalysis.AsObject()));
@@ -3429,19 +4165,29 @@ void CNeuronMASAAT::SetOpenCL(COpenCLMy*obj)
 bool CNeuronMASAAT::Save(const int file_handle)
   {
    if(!CNeuronPortfolioGenerator::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPLR.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossSectionalAnalysis.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTemporalAnalysis.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -3451,23 +4197,35 @@ bool CNeuronMASAAT::Save(const int file_handle)
 bool CNeuronMASAAT::Load(const int file_handle)
   {
    if(!CNeuronPortfolioGenerator::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cPLR.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cCrossSectionalAnalysis.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTemporalAnalysis.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cConcat.Init(0,2,OpenCL,cTranspose.Neurons()+cPLR.Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3481,13 +4239,19 @@ bool CNeuronMemory::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
   {
    if(!CNeuronRelativeCrossAttention::Init(numOutputs,myIndex,open_cl,window,window_key,
                                            units_count,heads,window,units_count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLSTM.Init(0,0,OpenCL,iWindow,iUnits,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMamba.Init(0,1,OpenCL,iWindow,2*iWindow,iUnits,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3498,10 +4262,14 @@ bool CNeuronMemory::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronMemory::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cLSTM.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMamba.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronRelativeCrossAttention::feedForward(cMamba.AsObject(),cLSTM.getOutput()));
@@ -3512,26 +4280,38 @@ bool CNeuronMemory::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMemory::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronRelativeCrossAttention::calcInputGradients(cMamba.AsObject(),cLSTM.getOutput(),
                                                          cLSTM.getGradient(),(ENUM_ACTIVATION)cLSTM.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cMamba.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=NeuronOCL.getGradient();
 
    if(!NeuronOCL.SetGradient(cMamba.getPrevOutput(),false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cLSTM.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.SetGradient(temp,false)||
       !SumAndNormalize(temp,cMamba.getPrevOutput(),temp,iWindow,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3542,13 +4322,19 @@ bool CNeuronMemory::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMemory::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CNeuronRelativeCrossAttention::updateInputWeights(cMamba.AsObject(),cLSTM.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLSTM.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMamba.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3568,13 +4354,19 @@ void CNeuronMemory::SetOpenCL(COpenCLMy*obj)
 bool CNeuronMemory::Save(const int file_handle)
   {
    if(!CNeuronRelativeCrossAttention::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLSTM.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMamba.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3585,13 +4377,19 @@ bool CNeuronMemory::Save(const int file_handle)
 bool CNeuronMemory::Load(const int file_handle)
   {
    if(!CNeuronRelativeCrossAttention::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cLSTM.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cMamba.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3602,13 +4400,19 @@ bool CNeuronMemory::Load(const int file_handle)
 bool CNeuronMemory::Clear(void)
   {
    if(!CNeuronRelativeCrossAttention::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLSTM.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMamba.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3624,42 +4428,58 @@ bool CNeuronFinMem::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
    if(!CNeuronRelativeCrossAttention::Init(numOutputs,myIndex,open_cl,
                                            nactions/2,window_key,2,heads,window,
                                            units_count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!cTransposeState.Init(0,index,OpenCL,units_count,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMemory[0].Init(0,index,OpenCL,window,window_key,units_count,heads,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMemory[1].Init(0,index,OpenCL,units_count,window_key,window,heads,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cCrossMemory.Init(0,index,OpenCL,window,window_key,units_count,heads,units_count,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMemoryToAccount.Init(0,index,OpenCL,window,window_key,units_count,heads,account_descr,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cActionToAccount.Init(0,index,OpenCL,nactions/2,window_key,2,heads,account_descr,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3670,26 +4490,40 @@ bool CNeuronFinMem::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronFinMem::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferFloat*SecondInput)
   {
    if(!cTransposeState.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemory[0].FeedForward(NeuronOCL)||
       !cMemory[1].FeedForward(cTransposeState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossMemory.FeedForward(cMemory[0].AsObject(),cMemory[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemoryToAccount.FeedForward(cCrossMemory.AsObject(),SecondInput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToAccount.FeedForward(this.AsObject(),SecondInput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronRelativeCrossAttention::feedForward(cActionToAccount.AsObject(),cMemoryToAccount.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3703,45 +4537,67 @@ bool CNeuronFinMem::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                        ENUM_ACTIVATION SecondActivation=None)
   {
    if(!NeuronOCL||!SecondInput||!SecondGradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronRelativeCrossAttention::calcInputGradients(cActionToAccount.AsObject(),
                                                          cMemoryToAccount.getOutput(),
                                                          cMemoryToAccount.getGradient(),
                                                          (ENUM_ACTIVATION)cMemoryToAccount.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=Gradient;
 
    if(!SetGradient(cMemoryToAccount.getPrevOutput(),false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!calcHiddenGradients(cActionToAccount.AsObject(),SecondInput,SecondGradient,SecondActivation))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    Gradient=temp;
 
    if(!cCrossMemory.CalcHiddenGradients(cMemoryToAccount.AsObject(),SecondInput,cMemoryToAccount.getPrevOutput(),SecondActivation))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(SecondGradient,cMemoryToAccount.getPrevOutput(),SecondGradient,1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemory[0].CalcHiddenGradients(cCrossMemory.AsObject(),cMemory[1].getOutput(),cMemory[1].getGradient(),(ENUM_ACTIVATION)cMemory[1].Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.CalcHiddenGradients(cMemory[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cMemory[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    temp=NeuronOCL.getGradient();
 
@@ -3749,7 +4605,9 @@ bool CNeuronFinMem::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
       !NeuronOCL.CalcHiddenGradients(cTransposeState.AsObject())||
       !NeuronOCL.SetGradient(temp,false)||
       !SumAndNormalize(temp,cTransposeState.getPrevOutput(),temp,iWindow,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3760,33 +4618,51 @@ bool CNeuronFinMem::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
 bool CNeuronFinMem::updateInputWeights(CNeuronBaseOCL*NeuronOCL,CBufferFloat*SecondInput)
   {
    if(!NeuronOCL||!SecondInput)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronRelativeCrossAttention::updateInputWeights(cActionToAccount.AsObject(),
                                                          cMemoryToAccount.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToAccount.UpdateInputWeights(this.AsObject(),SecondInput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemoryToAccount.UpdateInputWeights(cCrossMemory.AsObject(),SecondInput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossMemory.UpdateInputWeights(cMemory[0].AsObject(),cMemory[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemory[1].UpdateInputWeights(cTransposeState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemory[0].UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3798,11 +4674,15 @@ bool CNeuronFinMem::Clear(void)
   {
    if(!Output||
       !Output.Fill(0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cMemory.Size();i++)
       if(!cMemory[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -3827,23 +4707,35 @@ void CNeuronFinMem::SetOpenCL(COpenCLMy*obj)
 bool CNeuronFinMem::Save(const int file_handle)
   {
    if(!CNeuronRelativeCrossAttention::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cMemory.Size();i++)
       if(!cMemory[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cCrossMemory.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemoryToAccount.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToAccount.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3854,23 +4746,35 @@ bool CNeuronFinMem::Save(const int file_handle)
 bool CNeuronFinMem::Load(const int file_handle)
   {
    if(!CNeuronRelativeCrossAttention::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTransposeState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cMemory.Size();i++)
       if(!LoadInsideLayer(file_handle,cMemory[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!LoadInsideLayer(file_handle,cCrossMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cMemoryToAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cActionToAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3884,25 +4788,33 @@ bool CNeuronLowLevelReflection::Init(uint numOutputs,uint myIndex,COpenCLMy*open
   {
    if(!CNeuronMemory::Init(numOutputs,myIndex,open_cl,window,window_key,units_count,heads,
                            optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!cChangeLSTM.Init(0,index,OpenCL,window,units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cChangeMamba.Init(0,index,OpenCL,window,2*window,units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<2;i++)
      {
       index++;
 
       if(!cCrossAttention[i].Init(0,index,OpenCL,window,window_key,units_count,heads,window,units_count,optimization,iBatch))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -3914,16 +4826,24 @@ bool CNeuronLowLevelReflection::Init(uint numOutputs,uint myIndex,COpenCLMy*open
 bool CNeuronLowLevelReflection::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cChangeLSTM.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cChangeMamba.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention[0].FeedForward(NeuronOCL,cChangeLSTM.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention[1].FeedForward(cCrossAttention[0].AsObject(),cChangeMamba.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronMemory::feedForward(cCrossAttention[1].AsObject()));
@@ -3934,33 +4854,47 @@ bool CNeuronLowLevelReflection::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronLowLevelReflection::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronMemory::calcInputGradients(cCrossAttention[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention[0].CalcHiddenGradients(cCrossAttention[1].AsObject(),cChangeMamba.getOutput(),
                                               cChangeMamba.getGradient(),(ENUM_ACTIVATION)cChangeMamba.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cCrossAttention[0].AsObject(),cChangeLSTM.getOutput(),
                                      cChangeLSTM.getGradient(),(ENUM_ACTIVATION)cChangeLSTM.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=NeuronOCL.getGradient();
 
    if(!NeuronOCL.SetGradient(cChangeMamba.getPrevOutput(),false)||
       !NeuronOCL.CalcHiddenGradients(cChangeMamba.AsObject())||
       !SumAndNormalize(NeuronOCL.getGradient(),temp,temp,iWindow,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cChangeLSTM.AsObject())||
       !SumAndNormalize(NeuronOCL.getGradient(),temp,temp,iWindow,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3971,19 +4905,29 @@ bool CNeuronLowLevelReflection::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronLowLevelReflection::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CNeuronMemory::updateInputWeights(cCrossAttention[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention[1].UpdateInputWeights(cCrossAttention[0].AsObject(),cChangeMamba.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention[0].UpdateInputWeights(NeuronOCL,cChangeLSTM.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cChangeMamba.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cChangeLSTM.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -3994,17 +4938,25 @@ bool CNeuronLowLevelReflection::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronLowLevelReflection::Save(const int file_handle)
   {
    if(!CNeuronMemory::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cChangeLSTM.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cChangeMamba.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cCrossAttention.Size();i++)
       if(!cCrossAttention[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -4015,17 +4967,25 @@ bool CNeuronLowLevelReflection::Save(const int file_handle)
 bool CNeuronLowLevelReflection::Load(const int file_handle)
   {
    if(!CNeuronMemory::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cChangeLSTM.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cChangeMamba.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cCrossAttention.Size();i++)
       if(!LoadInsideLayer(file_handle,cCrossAttention[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -4048,13 +5008,19 @@ void CNeuronLowLevelReflection::SetOpenCL(COpenCLMy*obj)
 bool CNeuronLowLevelReflection::Clear(void)
   {
    if(!CNeuronMemory::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cChangeLSTM.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cChangeMamba.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4069,35 +5035,47 @@ bool CNeuronHighLevelReflection::Init(uint numOutputs,uint myIndex,COpenCLMy*ope
   {
    if(!CNeuronMemory::Init(numOutputs,myIndex,open_cl,3,window_key,actions_state/3,
                            heads,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!cAccount.Init(0,index,OpenCL,desc_account,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cHistoryAccount.Init(0,index,OpenCL,desc_account,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cActionReason.Init(0,index,OpenCL,iWindow,iWindowKey,iUnits,iHeads,
                           window,units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cHistoryActions.Init(0,index,OpenCL,iWindow,iUnits,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cActionResult.Init(0,index,OpenCL,iWindow,iWindowKey,iUnits,iHeads,
                           desc_account,1,optimization,iBatch))
-      ReturnFalse;;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4108,34 +5086,50 @@ bool CNeuronHighLevelReflection::Init(uint numOutputs,uint myIndex,COpenCLMy*ope
 bool CNeuronHighLevelReflection::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferFloat*SecondInput)
   {
    if(!NeuronOCL||!SecondInput)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(cAccount.getOutput()!=SecondInput)
      {
       if(cAccount.Neurons()!=SecondInput.Total())
          if(!cAccount.Init(0,0,OpenCL,SecondInput.Total(),optimization,iBatch))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
       if(!cAccount.SetOutput(SecondInput,true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
    if(!cHistoryAccount.FeedForward(cAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionReason.FeedForward(this.AsObject(),NeuronOCL.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHistoryActions.FeedForward(cActionReason.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionResult.FeedForward(cHistoryActions.AsObject(),cHistoryAccount.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronMemory::feedForward(cActionResult.AsObject()));
@@ -4149,47 +5143,65 @@ bool CNeuronHighLevelReflection::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                                     ENUM_ACTIVATION SecondActivation=None)
   {
    if(!NeuronOCL||!SecondGradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(cAccount.getGradient()!=SecondGradient)
       if(!cAccount.SetGradient(SecondGradient,true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    cAccount.SetActivationFunction(SecondActivation);
 
 //---
    if(!CNeuronMemory::calcInputGradients(cActionResult.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHistoryActions.CalcHiddenGradients(cActionResult.AsObject(),
                                            cHistoryAccount.getOutput(),
                                            cHistoryAccount.getGradient(),
                                            (ENUM_ACTIVATION)cHistoryAccount.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionReason.CalcHiddenGradients(cHistoryActions.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=Gradient;
    Gradient=cActionReason.getPrevOutput();
 
    if(!calcHiddenGradients(cActionReason.AsObject(),NeuronOCL.getOutput(),
                            NeuronOCL.getGradient(),(ENUM_ACTIVATION)NeuronOCL.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    Gradient=temp;
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cAccount.CalcHiddenGradients(cHistoryAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4200,25 +5212,39 @@ bool CNeuronHighLevelReflection::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
 bool CNeuronHighLevelReflection::updateInputWeights(CNeuronBaseOCL*NeuronOCL,CBufferFloat*SecondInput)
   {
    if(!CNeuronMemory::updateInputWeights(cActionResult.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionResult.UpdateInputWeights(cHistoryActions.AsObject(),cHistoryAccount.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHistoryActions.UpdateInputWeights(cActionReason.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionReason.UpdateInputWeights(this.AsObject(),NeuronOCL.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHistoryAccount.UpdateInputWeights(cAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4229,22 +5255,34 @@ bool CNeuronHighLevelReflection::updateInputWeights(CNeuronBaseOCL*NeuronOCL,CBu
 bool CNeuronHighLevelReflection::Save(const int file_handle)
   {
    if(!CNeuronMemory::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAccount.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHistoryAccount.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionReason.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHistoryActions.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionResult.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4255,22 +5293,34 @@ bool CNeuronHighLevelReflection::Save(const int file_handle)
 bool CNeuronHighLevelReflection::Load(const int file_handle)
   {
    if(!CNeuronMemory::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cHistoryAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cActionReason.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cHistoryActions.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cActionResult.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4293,22 +5343,34 @@ void CNeuronHighLevelReflection::SetOpenCL(COpenCLMy*obj)
 bool CNeuronHighLevelReflection::Clear(void)
   {
    if(!CNeuronMemory::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAccount.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHistoryAccount.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionReason.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHistoryActions.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionResult.Clear())
-      ReturnFalse;;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4319,7 +5381,9 @@ bool CNeuronHighLevelReflection::Clear(void)
 bool CNeuronMoreLessEqual::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[1]={0};
    uint global_work_size[1]={Neurons()};
@@ -4332,7 +5396,9 @@ bool CNeuronMoreLessEqual::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!NeuronOCL.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -4343,7 +5409,9 @@ bool CNeuronMoreLessEqual::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMoreLessEqual::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!NeuronOCL.getGradient())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(NeuronOCL.getGradient().Fill(0));
   }
@@ -4359,58 +5427,80 @@ bool CNeuronFinAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                                            window_key,nactions/3,heads,
                                            window,units_count,
                                            optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int index=0;
 
    if(!cMarketIntelligence.Init(0,index,OpenCL,window,units_count,segments,0.2f,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMarketMemory.Init(0,index,OpenCL,window,window_key,units_count,heads,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cTransposeState.Init(0,index,OpenCL,units_count,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cLowLevelReflection[0].Init(0,index,OpenCL,window,window_key,units_count,heads,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cLowLevelReflection[1].Init(0,index,OpenCL,units_count,window_key,window,heads,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cHighLevelReflection.Init(0,index,OpenCL,window,window_key,units_count,heads,account_descr,nactions,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cTools.Init(0,index,OpenCL,window*units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cTools.SetActivationFunction(None);
    index++;
 
    if(!cCrossLowLevel.Init(0,index,OpenCL,window,window_key,units_count,heads,units_count,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMarketToLowLevel.Init(0,index,OpenCL,window,window_key,units_count,heads,window,units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMarketToTools.Init(0,index,OpenCL,window,window_key,units_count,heads,window,units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4421,34 +5511,54 @@ bool CNeuronFinAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronFinAgent::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferFloat*SecondInput)
   {
    if(!cMarketIntelligence.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketMemory.FeedForward(cMarketIntelligence.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.FeedForward(cMarketIntelligence.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLowLevelReflection[0].FeedForward(cMarketIntelligence.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLowLevelReflection[1].FeedForward(cTransposeState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHighLevelReflection.FeedForward(cMarketIntelligence.AsObject(),SecondInput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTools.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossLowLevel.FeedForward(cLowLevelReflection[0].AsObject(),cLowLevelReflection[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketToLowLevel.FeedForward(cMarketMemory.AsObject(),cCrossLowLevel.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketToTools.FeedForward(cMarketToLowLevel.AsObject(),cTools.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronRelativeCrossAttention::feedForward(cHighLevelReflection.AsObject(),cMarketToTools.getOutput()));
@@ -4462,42 +5572,56 @@ bool CNeuronFinAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                          ENUM_ACTIVATION SecondActivation=None)
   {
    if(!NeuronOCL||!SecondGradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronRelativeCrossAttention::calcInputGradients(cHighLevelReflection.AsObject(),
                                                          cMarketToTools.getOutput(),
                                                          cMarketToTools.getGradient(),
                                                          (ENUM_ACTIVATION)cMarketToTools.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cMarketToLowLevel.CalcHiddenGradients(cMarketToTools.AsObject(),
                                              cTools.getOutput(),
                                              cTools.getGradient(),
                                              (ENUM_ACTIVATION)cTools.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cMarketMemory.CalcHiddenGradients(cMarketToLowLevel.AsObject(),
                                          cCrossLowLevel.getOutput(),
                                          cCrossLowLevel.getGradient(),
                                          (ENUM_ACTIVATION)cCrossLowLevel.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cLowLevelReflection[0].CalcHiddenGradients(cCrossLowLevel.AsObject(),
                                                   cLowLevelReflection[1].getOutput(),
                                                   cLowLevelReflection[1].getGradient(),
                                                   (ENUM_ACTIVATION)cLowLevelReflection[1].Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.CalcHiddenGradients(cLowLevelReflection[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!((CNeuronBaseOCL*)cMarketIntelligence.AsObject()).CalcHiddenGradients(cMarketMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=cMarketIntelligence.getGradient();
 
@@ -4505,20 +5629,28 @@ bool CNeuronFinAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
       !((CNeuronBaseOCL*)cMarketIntelligence.AsObject()).CalcHiddenGradients(cHighLevelReflection.AsObject(),
                                                                              SecondInput,SecondGradient,SecondActivation)||
       !SumAndNormalize(temp,cMarketIntelligence.getGradient(),temp,1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!((CNeuronBaseOCL*)cMarketIntelligence.AsObject()).CalcHiddenGradients(cLowLevelReflection[0].AsObject())||
       !SumAndNormalize(temp,cMarketIntelligence.getGradient(),temp,1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!((CNeuronBaseOCL*)cMarketIntelligence.AsObject()).CalcHiddenGradients(cTransposeState.AsObject())||
       !SumAndNormalize(temp,cMarketIntelligence.getGradient(),temp,1,false,0,0,0,1)||
       !cMarketIntelligence.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!NeuronOCL.CalcHiddenGradients(cMarketIntelligence.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4531,40 +5663,58 @@ bool CNeuronFinAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL,CBufferFloat*S
 //---
    if(!CNeuronRelativeCrossAttention::updateInputWeights(cHighLevelReflection.AsObject(),
                                                          cMarketToTools.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cMarketToTools.UpdateInputWeights(cMarketToLowLevel.AsObject(),
                                          cTools.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cMarketToLowLevel.UpdateInputWeights(cMarketMemory.AsObject(),
                                             cCrossLowLevel.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketMemory.UpdateInputWeights(cMarketIntelligence.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cCrossLowLevel.UpdateInputWeights(cLowLevelReflection[0].AsObject(),
                                          cLowLevelReflection[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cLowLevelReflection[0].UpdateInputWeights(cMarketIntelligence.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLowLevelReflection[1].UpdateInputWeights(cTransposeState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cHighLevelReflection.UpdateInputWeights(cMarketIntelligence.AsObject(),SecondInput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cMarketIntelligence.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4575,35 +5725,55 @@ bool CNeuronFinAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL,CBufferFloat*S
 bool CNeuronFinAgent::Save(const int file_handle)
   {
    if(!CNeuronRelativeCrossAttention::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketIntelligence.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketMemory.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cLowLevelReflection.Size();i++)
       if(!cLowLevelReflection[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cHighLevelReflection.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTools.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossLowLevel.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketToLowLevel.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketToTools.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4614,35 +5784,55 @@ bool CNeuronFinAgent::Save(const int file_handle)
 bool CNeuronFinAgent::Load(const int file_handle)
   {
    if(!CNeuronRelativeCrossAttention::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cMarketIntelligence.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cMarketMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTransposeState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cLowLevelReflection.Size();i++)
       if(!LoadInsideLayer(file_handle,cLowLevelReflection[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!LoadInsideLayer(file_handle,cHighLevelReflection.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTools.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cCrossLowLevel.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cMarketToLowLevel.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cMarketToTools.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4671,35 +5861,55 @@ void CNeuronFinAgent::SetOpenCL(COpenCLMy*obj)
 bool CNeuronFinAgent::Clear(void)
   {
    if(!CNeuronRelativeCrossAttention::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketIntelligence.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketMemory.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cLowLevelReflection.Size();i++)
       if(!cLowLevelReflection[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cHighLevelReflection.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTools.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossLowLevel.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketToLowLevel.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMarketToTools.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4714,48 +5924,64 @@ bool CNeuronMemoryDistil::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
   {
    if(!CNeuronRelativeCrossAttention::Init(numOutputs,myIndex,open_cl,window,window_key,
                                            units_count,heads,window,2*stack_size,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint index=0;
 
    if(!cLSTM.Init(0,index,OpenCL,iWindow,iUnits,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMamba.Init(0,index,OpenCL,iWindow,2*iWindow,iUnits,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    index++;
 
    if(!cConcatenated.Init(0,index,OpenCL,2*iWindow*iUnits,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cConcatenated.SetActivationFunction(None);
    index++;
 
    if(!cTransposeConc.Init(0,index,OpenCL,iUnits,2*iWindow,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cConvolution.Init(0,index,OpenCL,iUnits,iUnits,iWindowKey,iWindow,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cConvolution.SetActivationFunction(GELU);
    index++;
    uint windows[]={iWindowKey*iWindow,iWindowKey*iWindow};
 
    if(!cDistilMemory.Init(0,index,OpenCL,iUnitsKV/2,iWindow,windows))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    index++;
 
    if(!cCrossAttention.Init(0,index,OpenCL,iWindow,iWindowKey,iUnits,iHeads,iWindow,2*iUnits,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4766,27 +5992,41 @@ bool CNeuronMemoryDistil::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronMemoryDistil::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cLSTM.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMamba.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!Concat(cLSTM.getOutput(),cMamba.getOutput(),cConcatenated.getOutput(),iWindow,iWindow,iUnits))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeConc.FeedForward(cConcatenated.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConvolution.FeedForward(cTransposeConc.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cDistilMemory.FeedForward(cConvolution.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cCrossAttention.FeedForward(NeuronOCL,cConcatenated.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronRelativeCrossAttention::feedForward(cCrossAttention.AsObject(),cDistilMemory.getOutput()));
@@ -4797,45 +6037,63 @@ bool CNeuronMemoryDistil::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMemoryDistil::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronRelativeCrossAttention::calcInputGradients(cCrossAttention.AsObject(),
                                                          cDistilMemory.getOutput(),
                                                          cDistilMemory.getGradient(),
                                                          (ENUM_ACTIVATION)cDistilMemory.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cConvolution.CalcHiddenGradients(cDistilMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeConc.CalcHiddenGradients(cConvolution.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConcatenated.CalcHiddenGradients(cTransposeConc.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cCrossAttention.AsObject(),
                                      cConcatenated.getOutput(),
                                      cConcatenated.getPrevOutput(),
                                      (ENUM_ACTIVATION)cConcatenated.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(cConcatenated.getGradient(),cConcatenated.getPrevOutput(),
                        cConcatenated.getGradient(),iWindow,false,0,0,0,1)||
       !DeConcat(cLSTM.getGradient(),cMamba.getGradient(),cConcatenated.getGradient(),
                 iWindow,iWindow,iUnits))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(cLSTM.Activation()!=None)
       if(!DeActivation(cLSTM.getOutput(),cLSTM.getGradient(),cLSTM.getGradient(),cLSTM.Activation()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(cMamba.Activation()!=None)
       if(!DeActivation(cMamba.getOutput(),cMamba.getGradient(),cMamba.getGradient(),cMamba.Activation()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    CBufferFloat *temp=NeuronOCL.getGradient();
@@ -4843,12 +6101,16 @@ bool CNeuronMemoryDistil::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    if(!NeuronOCL.SetGradient(cConcatenated.getPrevOutput(),false)||
       !NeuronOCL.CalcHiddenGradients(cLSTM.AsObject())||
       !SumAndNormalize(temp,NeuronOCL.getGradient(),temp,iWindow,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cMamba.AsObject())||
       !SumAndNormalize(temp,NeuronOCL.getGradient(),temp,iWindow,false,0,0,0,1)||
       !NeuronOCL.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4859,24 +6121,36 @@ bool CNeuronMemoryDistil::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMemoryDistil::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CNeuronRelativeCrossAttention::updateInputWeights(cCrossAttention.AsObject(),cDistilMemory.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention.UpdateInputWeights(NeuronOCL,cConcatenated.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cDistilMemory.UpdateInputWeights(cConvolution.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConvolution.UpdateInputWeights(cTransposeConc.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cLSTM.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMamba.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4899,22 +6173,34 @@ void CNeuronMemoryDistil::SetOpenCL(COpenCLMy*obj)
 bool CNeuronMemoryDistil::Clear(void)
   {
    if(!CNeuronMemory::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConcatenated.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeConc.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConvolution.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cDistilMemory.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4925,22 +6211,34 @@ bool CNeuronMemoryDistil::Clear(void)
 bool CNeuronMemoryDistil::Save(const int file_handle)
   {
    if(!CNeuronMemory::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConcatenated.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeConc.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConvolution.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cDistilMemory.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4951,22 +6249,34 @@ bool CNeuronMemoryDistil::Save(const int file_handle)
 bool CNeuronMemoryDistil::Load(const int file_handle)
   {
    if(!CNeuronMemory::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cConcatenated.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTransposeConc.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cConvolution.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cDistilMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cCrossAttention.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -4983,42 +6293,56 @@ bool CNeuronFinConAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                                            3,window_key,action_space/3,
                                            heads,window,units_count,
                                            optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!cStatesMemory.Init(0,index,OpenCL,window,iWindowKey,iUnitsKV,
                           iHeads,stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cActionsMemory.Init(0,index,OpenCL,iWindow,iWindowKey,iUnits,
                            iHeads,stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!caRole[0].Init(10*iWindow,index,OpenCL,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *out=caRole[0].getOutput();
 
    if(!out||
       !out.Fill(1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!caRole[1].Init(0,index,OpenCL,10*iWindow,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cStateToRole.Init(0,index,OpenCL,window,iWindowKey,iUnitsKV,
                          iHeads,iWindow,10,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5029,21 +6353,31 @@ bool CNeuronFinConAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronFinConAgent::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(bTrain&&!caRole[1].FeedForward(caRole[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cStateToRole.FeedForward(NeuronOCL,caRole[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStatesMemory.FeedForward(cStateToRole.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cActionsMemory.FeedForward(this.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronRelativeCrossAttention::feedForward(cActionsMemory.AsObject(),cStatesMemory.getOutput()));
@@ -5054,39 +6388,53 @@ bool CNeuronFinConAgent::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFinConAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronRelativeCrossAttention::calcInputGradients(cActionsMemory.AsObject(),
                                                          cStatesMemory.getOutput(),
                                                          cStatesMemory.getGradient(),
                                                          (ENUM_ACTIVATION)cStatesMemory.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CBufferFloat *temp=Gradient;
 
    if(!SwapBuffers(Output,PrevOutput)||
       !SetGradient(cActionsMemory.getPrevOutput(),false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!calcHiddenGradients(cActionsMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    Gradient=temp;
 
 //---
    if(!cStateToRole.CalcHiddenGradients(cStatesMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cStateToRole.AsObject(),
                                      caRole[1].getOutput(),
                                      caRole[1].getGradient(),
                                      (ENUM_ACTIVATION)caRole[1].Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5098,28 +6446,42 @@ bool CNeuronFinConAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CNeuronRelativeCrossAttention::updateInputWeights(cActionsMemory.AsObject(),
                                                          cStatesMemory.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionsMemory.UpdateInputWeights(this.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cStatesMemory.UpdateInputWeights(cStateToRole.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStateToRole.UpdateInputWeights(NeuronOCL,caRole[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!caRole[1].UpdateInputWeights(caRole[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5142,22 +6504,34 @@ void CNeuronFinConAgent::SetOpenCL(COpenCLMy*obj)
 bool CNeuronFinConAgent::Clear(void)
   {
    if(!CNeuronRelativeCrossAttention::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStatesMemory.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionsMemory.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!caRole[0].Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!caRole[1].Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStateToRole.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5168,22 +6542,34 @@ bool CNeuronFinConAgent::Clear(void)
 bool CNeuronFinConAgent::Save(const int file_handle)
   {
    if(!CNeuronRelativeCrossAttention::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStatesMemory.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionsMemory.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!caRole[0].Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!caRole[1].Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStateToRole.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5194,22 +6580,34 @@ bool CNeuronFinConAgent::Save(const int file_handle)
 bool CNeuronFinConAgent::Load(const int file_handle)
   {
    if(!CNeuronRelativeCrossAttention::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cStatesMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cActionsMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,caRole[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,caRole[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cStateToRole.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5225,13 +6623,17 @@ bool CNeuronFinConManager::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
    if(!CNeuronFinConAgent::Init(numOutputs,myIndex,open_cl,action_space,window_key,
                                 caAgents.Size()+caTrAgents.Size()+1,
                                 heads,stack_size,action_space,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!cTransposeState.Init(0,index,OpenCL,units_count,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(uint i=0;i<caAgents.Size();i++)
@@ -5239,7 +6641,9 @@ bool CNeuronFinConManager::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       index++;
 
       if(!caAgents[i].Init(0,index,OpenCL,window,iWindowKey,units_count,iHeads,stack_size,action_space,optimization,iBatch))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    for(uint i=0;i<caTrAgents.Size();i++)
@@ -5247,25 +6651,33 @@ bool CNeuronFinConManager::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       index++;
 
       if(!caTrAgents[i].Init(0,index,OpenCL,units_count,iWindowKey,window,iHeads,stack_size,action_space,optimization,iBatch))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    index++;
 
    if(!cRiskAgent.Init(0,index,OpenCL,account_descr,iWindowKey,1,iHeads,stack_size,action_space,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cConcatenatedAgents.Init(0,index,OpenCL,caAgents.Size()*caAgents[0].Neurons()+
                                 caTrAgents.Size()*caTrAgents[0].Neurons()+
                                 cRiskAgent.Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    index++;
 
    if(!cAccount.Init(0,index,OpenCL,account_descr,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5278,30 +6690,42 @@ bool CNeuronFinConManager::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferFloat*Sec
    if(cAccount.getOutput()!=SecondInput)
      {
       if(!cAccount.SetOutput(SecondInput,true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!cTransposeState.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- agents
    for(uint i=0;i<caAgents.Size();i++)
       if(!caAgents[i].FeedForward(NeuronOCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    for(uint i=0;i<caTrAgents.Size();i++)
       if(!caTrAgents[i].FeedForward(cTransposeState.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cRiskAgent.FeedForward(cAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- concatenate
    if(!Concat(caAgents[0].getOutput(),caAgents[1].getOutput(),caAgents[2].getOutput(),cRiskAgent.getOutput(),
               cConcatenatedAgents.getPrevOutput(),Neurons(),Neurons(),Neurons(),Neurons(),1)||
       !Concat(caTrAgents[0].getOutput(),caTrAgents[1].getOutput(),caTrAgents[2].getOutput(),cConcatenatedAgents.getPrevOutput(),
               cConcatenatedAgents.getOutput(),Neurons(),Neurons(),Neurons(),4*Neurons(),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- manager
    return(CNeuronFinConAgent::feedForward(cConcatenatedAgents.AsObject()));
@@ -5315,70 +6739,100 @@ bool CNeuronFinConManager::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                               ENUM_ACTIVATION SecondActivation=None)
   {
    if(!NeuronOCL||!SecondGradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(cAccount.getGradient()!=SecondGradient)
      {
       if(!cAccount.SetGradient(SecondGradient,true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       cAccount.SetActivationFunction(SecondActivation);
      }
 
 //---
    if(!CNeuronFinConAgent::calcInputGradients(cConcatenatedAgents.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!DeConcat(caTrAgents[0].getGradient(),caTrAgents[1].getGradient(),caTrAgents[2].getGradient(),cConcatenatedAgents.getPrevOutput(),
                 cConcatenatedAgents.getGradient(),Neurons(),Neurons(),Neurons(),4*Neurons(),1)||
       !DeConcat(caAgents[0].getGradient(),caAgents[1].getGradient(),caAgents[2].getGradient(),cRiskAgent.getGradient(),
                 cConcatenatedAgents.getPrevOutput(),Neurons(),Neurons(),Neurons(),Neurons(),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cAccount.CalcHiddenGradients(cRiskAgent.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.CalcHiddenGradients(caTrAgents[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=cTransposeState.getGradient();
 
    if(!cTransposeState.SetGradient(cTransposeState.getPrevOutput(),false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=1;i<caTrAgents.Size();i++)
      {
       if(!cTransposeState.CalcHiddenGradients(caTrAgents[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!SumAndNormalize(cTransposeState.getGradient(),temp,temp,1,false,0,0,0,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!cTransposeState.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cTransposeState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    temp=NeuronOCL.getGradient();
 
    if(!NeuronOCL.SetGradient(cTransposeState.getPrevOutput(),false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAgents.Size();i++)
      {
       if(!NeuronOCL.CalcHiddenGradients(caAgents[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!SumAndNormalize(NeuronOCL.getGradient(),temp,temp,1,false,0,0,0,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!NeuronOCL.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5391,19 +6845,27 @@ bool CNeuronFinConManager::updateInputWeights(CNeuronBaseOCL*NeuronOCL,
   {
 //--- manager
    if(!CNeuronFinConAgent::updateInputWeights(cConcatenatedAgents.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- agents
    for(uint i=0;i<caAgents.Size();i++)
       if(!caAgents[i].UpdateInputWeights(NeuronOCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    for(uint i=0;i<caTrAgents.Size();i++)
       if(!caTrAgents[i].UpdateInputWeights(cTransposeState.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cRiskAgent.UpdateInputWeights(cAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5448,27 +6910,41 @@ void CNeuronFinConManager::TrainMode(bool flag)
 bool CNeuronFinConManager::Save(const int file_handle)
   {
    if(!CNeuronFinConAgent::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAgents.Size();i++)
       if(!caAgents[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    for(uint i=0;i<caTrAgents.Size();i++)
       if(!caTrAgents[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cRiskAgent.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConcatenatedAgents.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAccount.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5479,27 +6955,41 @@ bool CNeuronFinConManager::Save(const int file_handle)
 bool CNeuronFinConManager::Load(const int file_handle)
   {
    if(!CNeuronFinConAgent::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTransposeState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAgents.Size();i++)
       if(!LoadInsideLayer(file_handle,caAgents[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    for(uint i=0;i<caTrAgents.Size();i++)
       if(!LoadInsideLayer(file_handle,caTrAgents[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!LoadInsideLayer(file_handle,cRiskAgent.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cConcatenatedAgents.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5510,27 +7000,41 @@ bool CNeuronFinConManager::Load(const int file_handle)
 bool CNeuronFinConManager::Clear(void)
   {
    if(!CNeuronFinConAgent::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAgents.Size();i++)
       if(!caAgents[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    for(uint i=0;i<caTrAgents.Size();i++)
       if(!caTrAgents[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cRiskAgent.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConcatenatedAgents.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAccount.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5544,7 +7048,9 @@ bool CNeuronMacroHFTHyperAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open
                                      ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronSoftMaxOCL::Init(numOutputs,myIndex,open_cl,agents,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetHeads(1);
 
@@ -5552,35 +7058,47 @@ bool CNeuronMacroHFTHyperAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open
    int index=0;
 
    if(!cMemory.Init(0,0,OpenCL,window,window_key,units_count,heads,stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cStatePrepare.Init(0,index,OpenCL,window,window_key,units_count,heads,layers,
                           optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cTranspose.Init(0,index,OpenCL,units_count,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cScale.Init(4*agents,index,OpenCL,3,1,1,units_count-2,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cScale.SetActivationFunction(TANH);
    index++;
 
    if(!cMLP[0].Init(agents,index,OpenCL,4*agents,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cMLP[0].SetActivationFunction(LReLU);
    index++;
 
    if(!cMLP[1].Init(0,index,OpenCL,agents,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cMLP[0].SetActivationFunction(None);
 
@@ -5593,22 +7111,34 @@ bool CNeuronMacroHFTHyperAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open
 bool CNeuronMacroHFTHyperAgent::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cMemory.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStatePrepare.FeedForward(cMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.FeedForward(cStatePrepare.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScale.FeedForward(cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMLP[0].FeedForward(cScale.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMLP[1].FeedForward(cMLP[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronSoftMaxOCL::feedForward(cMLP[1].AsObject()));
@@ -5619,28 +7149,44 @@ bool CNeuronMacroHFTHyperAgent::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMacroHFTHyperAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronSoftMaxOCL::calcInputGradients(cMLP[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMLP[0].CalcHiddenGradients(cMLP[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScale.CalcHiddenGradients(cMLP[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.CalcHiddenGradients(cScale.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStatePrepare.CalcHiddenGradients(cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemory.CalcHiddenGradients(cStatePrepare.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5651,19 +7197,29 @@ bool CNeuronMacroHFTHyperAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMacroHFTHyperAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cMLP[1].UpdateInputWeights(cMLP[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMLP[0].UpdateInputWeights(cScale.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScale.UpdateInputWeights(cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStatePrepare.UpdateInputWeights(cMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemory.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5674,23 +7230,35 @@ bool CNeuronMacroHFTHyperAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMacroHFTHyperAgent::Save(const int file_handle)
   {
    if(!CNeuronSoftMaxOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStatePrepare.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScale.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cMLP.Size();i++)
       if(!cMLP[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cMemory.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5701,23 +7269,35 @@ bool CNeuronMacroHFTHyperAgent::Save(const int file_handle)
 bool CNeuronMacroHFTHyperAgent::Load(const int file_handle)
   {
    if(!CNeuronSoftMaxOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cStatePrepare.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cScale.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cMLP.Size();i++)
       if(!LoadInsideLayer(file_handle,cMLP[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!LoadInsideLayer(file_handle,cMemory.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5742,23 +7322,35 @@ void CNeuronMacroHFTHyperAgent::SetOpenCL(COpenCLMy*obj)
 bool CNeuronMacroHFTHyperAgent::Clear(void)
   {
    if(!CNeuronSoftMaxOCL::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStatePrepare.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScale.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cMLP.Size();i++)
       if(!cMLP[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cMemory.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5772,13 +7364,17 @@ bool CNeuronMacroHFT::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                            ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,nactions,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!cTranspose.Init(0,index,OpenCL,units_count,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint half=(caAgents.Size()+1)/2;
 
@@ -5788,7 +7384,9 @@ bool CNeuronMacroHFT::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 
       if(!caAgents[i].Init(0,index,OpenCL,window,window_key,units_count,heads,
                            stack_size,nactions,optimization,iBatch))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    for(uint i=half;i<caAgents.Size();i++)
@@ -5797,18 +7395,24 @@ bool CNeuronMacroHFT::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 
       if(!caAgents[i].Init(0,index,OpenCL,units_count,window_key,window,heads,
                            stack_size,nactions,optimization,iBatch))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    index++;
 
    if(!cHyperAgent.Init(0,index,OpenCL,window,window_key,units_count,heads,layers,
                         caAgents.Size(),stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cConcatenated.Init(0,index,OpenCL,caAgents.Size()*nactions,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5819,7 +7423,9 @@ bool CNeuronMacroHFT::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronMacroHFT::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cTranspose.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint total=caAgents.Size();
@@ -5827,14 +7433,20 @@ bool CNeuronMacroHFT::feedForward(CNeuronBaseOCL*NeuronOCL)
 
    for(uint i=0;i<half;i++)
       if(!caAgents[i].FeedForward(NeuronOCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    for(uint i=half;i<total;i++)
       if(!caAgents[i].FeedForward(cTranspose.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cHyperAgent.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!Concat(caAgents[0].getOutput(),caAgents[1].getOutput(),caAgents[2].getOutput(),
@@ -5842,10 +7454,14 @@ bool CNeuronMacroHFT::feedForward(CNeuronBaseOCL*NeuronOCL)
               Neurons(),Neurons(),1)||
       !Concat(cConcatenated.getPrevOutput(),caAgents[4].getOutput(),caAgents[5].getOutput(),
               cConcatenated.getOutput(),4*Neurons(),Neurons(),Neurons(),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!MatMul(cHyperAgent.getOutput(),cConcatenated.getOutput(),Output,1,total,Neurons(),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5856,17 +7472,23 @@ bool CNeuronMacroHFT::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMacroHFT::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint total=caAgents.Size();
 
    if(!MatMulGrad(cHyperAgent.getOutput(),cHyperAgent.getGradient(),cConcatenated.getOutput(),cConcatenated.getGradient(),Gradient,1,total,Neurons(),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!NeuronOCL.CalcHiddenGradients(cHyperAgent.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!DeConcat(cConcatenated.getPrevOutput(),caAgents[4].getGradient(),caAgents[5].getGradient(),
@@ -5874,38 +7496,52 @@ bool CNeuronMacroHFT::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
       !DeConcat(caAgents[0].getGradient(),caAgents[1].getGradient(),caAgents[2].getGradient(),
                 caAgents[3].getGradient(),cConcatenated.getPrevOutput(),Neurons(),Neurons(),
                 Neurons(),Neurons(),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CBufferFloat *temp=NeuronOCL.getGradient();
 
    if(!temp||
       !NeuronOCL.SetGradient(cTranspose.getPrevOutput(),false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint half=(total+1)/2;
 
    for(uint i=0;i<half;i++)
      {
       if(!NeuronOCL.CalcHiddenGradients(caAgents[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!SumAndNormalize(temp,NeuronOCL.getGradient(),temp,1,false,0,0,0,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    for(uint i=half;i<total;i++)
      {
       if(!cTranspose.CalcHiddenGradients(caAgents[i].AsObject())||
          !NeuronOCL.CalcHiddenGradients(cTranspose.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!SumAndNormalize(temp,NeuronOCL.getGradient(),temp,1,false,0,0,0,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!NeuronOCL.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5916,7 +7552,9 @@ bool CNeuronMacroHFT::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMacroHFT::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cHyperAgent.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint total=caAgents.Size();
@@ -5924,11 +7562,15 @@ bool CNeuronMacroHFT::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 
    for(uint i=0;i<half;i++)
       if(!caAgents[i].UpdateInputWeights(NeuronOCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    for(uint i=half;i<total;i++)
       if(!caAgents[i].UpdateInputWeights(cTranspose.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -5939,18 +7581,26 @@ bool CNeuronMacroHFT::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronMacroHFT::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cTranspose.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAgents.Size();i++)
       if(!caAgents[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cHyperAgent.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -5961,22 +7611,32 @@ bool CNeuronMacroHFT::Save(const int file_handle)
 bool CNeuronMacroHFT::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!LoadInsideLayer(file_handle,cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAgents.Size();i++)
       if(!LoadInsideLayer(file_handle,caAgents[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!LoadInsideLayer(file_handle,cHyperAgent.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cConcatenated.Init(0,8,OpenCL,caAgents.Size()*Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6002,18 +7662,26 @@ void CNeuronMacroHFT::SetOpenCL(COpenCLMy*obj)
 bool CNeuronMacroHFT::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cTranspose.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAgents.Size();i++)
       if(!caAgents[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cHyperAgent.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6027,36 +7695,48 @@ bool CNeuronMacroHFTvsRiskManager::Init(uint numOutputs,uint myIndex,COpenCLMy*o
                                         ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CResidualConv::Init(numOutputs,myIndex,open_cl,3,3,(nactions+2)/3,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!caAccountProjection[0].Init(0,index,OpenCL,account_decr,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!caAccountProjection[1].Init(0,index,OpenCL,window*units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMemoryAccount.Init(caAccountProjection[1].Neurons(),index,OpenCL,account_decr,
                            window_key,1,heads,stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cMemoryAction.Init(0,index,OpenCL,3,window_key,(nactions+2)/3,
                           heads,stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cCrossAttention.Init(0,index,OpenCL,3,window_key,(nactions+2)/3,
                             heads,window,units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6069,21 +7749,31 @@ bool CNeuronMacroHFTvsRiskManager::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferF
    if(caAccountProjection[0].getOutput()!=SecondInput)
      {
       if(!caAccountProjection[0].SetOutput(SecondInput,true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
    if(!cMemoryAccount.FeedForward(caAccountProjection[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!caAccountProjection[1].FeedForward(cMemoryAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemoryAction.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention.FeedForward(cMemoryAction.AsObject(),caAccountProjection[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CResidualConv::feedForward(cCrossAttention.AsObject()));
@@ -6097,36 +7787,50 @@ bool CNeuronMacroHFTvsRiskManager::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                                       ENUM_ACTIVATION SecondActivation=None)
   {
    if(!NeuronOCL||!SecondGradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(caAccountProjection[0].getGradient()!=SecondGradient)
      {
       if(!caAccountProjection[0].SetGradient(SecondGradient,true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       caAccountProjection[0].SetActivationFunction(SecondActivation);
      }
 
 //---
    if(!CResidualConv::calcInputGradients(cCrossAttention.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemoryAction.CalcHiddenGradients(cCrossAttention.AsObject(),
                                          caAccountProjection[1].getOutput(),
                                          caAccountProjection[1].getGradient(),
                                          (ENUM_ACTIVATION)caAccountProjection[1].Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!NeuronOCL.CalcHiddenGradients(cMemoryAction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cMemoryAccount.CalcHiddenGradients(caAccountProjection[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!caAccountProjection[0].CalcHiddenGradients(cMemoryAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6138,21 +7842,31 @@ bool CNeuronMacroHFTvsRiskManager::updateInputWeights(CNeuronBaseOCL*NeuronOCL,
                                                       CBufferFloat *SecondInput)
   {
    if(!CResidualConv::updateInputWeights(cCrossAttention.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention.UpdateInputWeights(cMemoryAction.AsObject(),caAccountProjection[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cMemoryAction.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!caAccountProjection[1].UpdateInputWeights(cMemoryAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemoryAccount.UpdateInputWeights(caAccountProjection[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6163,20 +7877,30 @@ bool CNeuronMacroHFTvsRiskManager::updateInputWeights(CNeuronBaseOCL*NeuronOCL,
 bool CNeuronMacroHFTvsRiskManager::Save(const int file_handle)
   {
    if(!CResidualConv::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAccountProjection.Size();i++)
       if(!caAccountProjection[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cMemoryAccount.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemoryAction.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6187,20 +7911,30 @@ bool CNeuronMacroHFTvsRiskManager::Save(const int file_handle)
 bool CNeuronMacroHFTvsRiskManager::Load(const int file_handle)
   {
    if(!CResidualConv::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAccountProjection.Size();i++)
       if(!LoadInsideLayer(file_handle,caAccountProjection[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!LoadInsideLayer(file_handle,cMemoryAccount.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cMemoryAction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cCrossAttention.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6224,20 +7958,30 @@ void CNeuronMacroHFTvsRiskManager::SetOpenCL(COpenCLMy*obj)
 bool CNeuronMacroHFTvsRiskManager::Clear(void)
   {
    if(!CResidualConv::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caAccountProjection.Size();i++)
       if(!caAccountProjection[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cMemoryAccount.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cMemoryAction.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCrossAttention.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6251,52 +7995,70 @@ bool CNeuronHidformerTSAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_c
                                    ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CResidualConv::Init(numOutputs,myIndex,open_cl,3,3,(action_space+2)/3,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- role
    int index=0;
 
    if(!caRole[0].Init(10*window_key,index,OpenCL,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    caRole[0].getOutput().Fill(1);
    index++;
 
    if(!caRole[1].Init(0,index,OpenCL,10*window_key,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- state to Role
    index++;
 
    if(!cStateToRole.Init(0,index,OpenCL,window,window_key,units_count,heads,window_key,10,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- state
    index++;
 
    if(!cShuffle.Init(0,index,OpenCL,window,window*units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cRecursiveState.Init(0,index,OpenCL,window,window_key,units_count,heads,stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cResidualState.Init(0,index,OpenCL,window,window,units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    index++;
 
    if(!cRecursiveAction.Init(0,index,OpenCL,3,window_key,(action_space+2)/3,heads,stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cActionToState.Init(0,index,OpenCL,3,window_key,(action_space+2)/3,heads,window,units_count,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6307,31 +8069,47 @@ bool CNeuronHidformerTSAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open_c
 bool CNeuronHidformerTSAgent::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(bTrain&&!caRole[1].FeedForward(caRole[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- state to Role
    if(!cStateToRole.FeedForward(NeuronOCL,caRole[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- state
    if(!cShuffle.FeedForward(cStateToRole.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRecursiveState.FeedForward(cShuffle.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidualState.FeedForward(cRecursiveState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    if(!cRecursiveAction.FeedForward(AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToState.FeedForward(cRecursiveAction.AsObject(),cResidualState.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CResidualConv::feedForward(cActionToState.AsObject()));
@@ -6342,48 +8120,68 @@ bool CNeuronHidformerTSAgent::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronHidformerTSAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CResidualConv::calcInputGradients(cActionToState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRecursiveAction.CalcHiddenGradients(cActionToState.AsObject(),
                                             cResidualState.getOutput(),
                                             cResidualState.getGradient(),
                                             (ENUM_ACTIVATION)cResidualState.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    CBufferFloat *temp=Gradient;
 
    if(!SwapBuffers(Output,PrevOutput)||
       !SetGradient(cRecursiveAction.getPrevOutput(),false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!calcHiddenGradients(cRecursiveAction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    Gradient=temp;
 
 //--- state
    if(!cRecursiveState.CalcHiddenGradients(cResidualState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cShuffle.CalcHiddenGradients(cRecursiveState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStateToRole.CalcHiddenGradients(cShuffle.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cStateToRole.AsObject(),
                                      caRole[1].getOutput(),
                                      caRole[1].getGradient(),
                                      (ENUM_ACTIVATION)caRole[1].Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6394,33 +8192,49 @@ bool CNeuronHidformerTSAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronHidformerTSAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CResidualConv::updateInputWeights(cActionToState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    if(!cActionToState.UpdateInputWeights(cRecursiveAction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput)||
       !cRecursiveAction.UpdateInputWeights(AsObject())||
       !SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- state
    if(!cResidualState.UpdateInputWeights(cRecursiveState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidualState.UpdateInputWeights(cShuffle.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cShuffle.UpdateInputWeights(cStateToRole.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cStateToRole.UpdateInputWeights(NeuronOCL,caRole[1].getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- role
    if(!caRole[1].UpdateInputWeights(caRole[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6431,30 +8245,46 @@ bool CNeuronHidformerTSAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronHidformerTSAgent::Save(const int file_handle)
   {
    if(!CResidualConv::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(uint i=0;i<caRole.Size();i++)
       if(!caRole[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cStateToRole.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cShuffle.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRecursiveState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidualState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRecursiveAction.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6465,30 +8295,46 @@ bool CNeuronHidformerTSAgent::Save(const int file_handle)
 bool CNeuronHidformerTSAgent::Load(const int file_handle)
   {
    if(!CResidualConv::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(uint i=0;i<caRole.Size();i++)
       if(!LoadInsideLayer(file_handle,caRole[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!LoadInsideLayer(file_handle,cStateToRole.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cShuffle.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cRecursiveState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cResidualState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cRecursiveAction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cActionToState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6516,30 +8362,46 @@ void CNeuronHidformerTSAgent::SetOpenCL(COpenCLMy*obj)
 bool CNeuronHidformerTSAgent::Clear(void)
   {
    if(!CResidualConv::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(uint i=0;i<caRole.Size();i++)
       if(!caRole[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cStateToRole.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cShuffle.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRecursiveState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidualState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRecursiveAction.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6553,51 +8415,69 @@ bool CNeuronHidformerFreqAgent::Init(uint numOutputs,uint myIndex,COpenCLMy*open
                                      ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CResidualConv::Init(numOutputs,myIndex,open_cl,3,3,(action_space+2)/3,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!cTranspose.Init(0,index,OpenCL,units_count,window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
    uint wind=(units_count>=20?(units_count+3)/4:units_count);
    uint units=(units_count+wind-1)/wind;
 
    if(!cLegendre.Init(0,index,OpenCL,wind,wind,units,filters,window,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cHLState.Init(0,index,OpenCL,units*window,2,filters,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cAttentionState.Init(0,index,OpenCL,filters,filters,units*window,2,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cResidualState.Init(0,index,OpenCL,filters,filters,2*units*window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cShuffle.Init(0,index,OpenCL,filters,cResidualState.Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    index++;
 
    if(!cRecursiveAction.Init(0,index,OpenCL,3,filters,(action_space+2)/3,heads,stack_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cActionToState.Init(0,index,OpenCL,3,filters,(action_space+2)/3,heads,filters,2*units*window,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6609,32 +8489,50 @@ bool CNeuronHidformerFreqAgent::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
 //--- state
    if(!cTranspose.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLegendre.FeedForward(cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHLState.FeedForward(cLegendre.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAttentionState.FeedForward(cHLState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidualState.FeedForward(cAttentionState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cShuffle.FeedForward(cResidualState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    if(!cRecursiveAction.FeedForward(AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToState.FeedForward(cRecursiveAction.AsObject(),cShuffle.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(CResidualConv::feedForward(cActionToState.AsObject()));
   }
@@ -6644,17 +8542,23 @@ bool CNeuronHidformerFreqAgent::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronHidformerFreqAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    if(!CResidualConv::calcInputGradients(cActionToState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cRecursiveAction.CalcHiddenGradients(cActionToState.AsObject(),
                                             cShuffle.getOutput(),
                                             cShuffle.getGradient(),
                                             (ENUM_ACTIVATION)cShuffle.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=Gradient;
 
@@ -6662,28 +8566,42 @@ bool CNeuronHidformerFreqAgent::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
       !SetGradient(cActionToState.getPrevOutput(),false)||
       !calcHiddenGradients(cRecursiveAction.AsObject())||
       !SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    Gradient=temp;
 
 //--- state
    if(!cResidualState.CalcHiddenGradients(cShuffle.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAttentionState.CalcHiddenGradients(cResidualState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHLState.CalcHiddenGradients(cAttentionState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLegendre.CalcHiddenGradients(cHLState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.CalcHiddenGradients(cLegendre.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6695,26 +8613,38 @@ bool CNeuronHidformerFreqAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
 //--- action
    if(!CResidualConv::updateInputWeights(cActionToState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToState.UpdateInputWeights(cRecursiveAction.AsObject(),
                                          cShuffle.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SwapBuffers(Output,PrevOutput)||
       !cRecursiveAction.UpdateInputWeights(AsObject())||
       !SwapBuffers(Output,PrevOutput))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- state
    if(!cShuffle.UpdateInputWeights(cResidualState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidualState.UpdateInputWeights(cAttentionState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAttentionState.UpdateInputWeights(cHLState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6725,33 +8655,51 @@ bool CNeuronHidformerFreqAgent::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronHidformerFreqAgent::Save(const int file_handle)
   {
    if(!CResidualConv::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cTranspose.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLegendre.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHLState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAttentionState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidualState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cShuffle.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    if(!cRecursiveAction.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToState.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6762,33 +8710,51 @@ bool CNeuronHidformerFreqAgent::Save(const int file_handle)
 bool CNeuronHidformerFreqAgent::Load(const int file_handle)
   {
    if(!CResidualConv::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- state
    if(!LoadInsideLayer(file_handle,cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cLegendre.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cHLState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cAttentionState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cResidualState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cShuffle.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    if(!LoadInsideLayer(file_handle,cRecursiveAction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cActionToState.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6799,33 +8765,51 @@ bool CNeuronHidformerFreqAgent::Load(const int file_handle)
 bool CNeuronHidformerFreqAgent::Clear(void)
   {
    if(!CResidualConv::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cTranspose.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cLegendre.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHLState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAttentionState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidualState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cShuffle.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- action
    if(!cRecursiveAction.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cActionToState.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -6860,7 +8844,9 @@ bool CNeuronHiSSDLowLevelControler::Init(uint numOutputs,uint myIndex,COpenCLMy*
   {
    if(!CNeuronConvOCL::Init(numOutputs,myIndex,open_cl,window_key,window_key,
                             n_actions,1,variables,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetActivationFunction(SIGMOID);
 
@@ -6869,7 +8855,9 @@ bool CNeuronHiSSDLowLevelControler::Init(uint numOutputs,uint myIndex,COpenCLMy*
 
    if(!cTaskSpecificSkillsEncoder.Init(0,index,OpenCL,time_step,variables,task_skills,
                                        window,step,window_key,heads,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cTaskSpecificSkillsEncoder.SetActivationFunction(None);
 
@@ -6881,7 +8869,9 @@ bool CNeuronHiSSDLowLevelControler::Init(uint numOutputs,uint myIndex,COpenCLMy*
    index++;
 
    if(!cTranspose.Init(0,index,OpenCL,time_step,variables,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint window_size=(time_step+iTaskSkills+iCommonSkills);
@@ -6889,14 +8879,18 @@ bool CNeuronHiSSDLowLevelControler::Init(uint numOutputs,uint myIndex,COpenCLMy*
 
    if(!cObservAndSkillsConcat.Init(0,index,OpenCL,window_size*iVariables,
                                    optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cObservAndSkillsConcat.SetActivationFunction(None);
    index++;
 
    if(!cNormalizarion.Init(0,index,OpenCL,cObservAndSkillsConcat.Neurons(),
                            iBatch,optimization))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cNormalizarion.SetActivationFunction(None);
 
@@ -6906,7 +8900,9 @@ bool CNeuronHiSSDLowLevelControler::Init(uint numOutputs,uint myIndex,COpenCLMy*
 
       if(!cActionDecoder[i].Init(0,index,OpenCL,window_size,window_size,window_key,
                                  1,iVariables,optimization,iBatch))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       cActionDecoder[i].SetActivationFunction(SoftPlus);
       window_size=window_key;
@@ -6921,28 +8917,40 @@ bool CNeuronHiSSDLowLevelControler::Init(uint numOutputs,uint myIndex,COpenCLMy*
 bool CNeuronHiSSDLowLevelControler::feedForward(CNeuronBaseOCL*NeuronOCL,CBufferFloat*SecondInput)
   {
    if(!SecondInput)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTaskSpecificSkillsEncoder.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!Concat(cTranspose.getOutput(),cTaskSpecificSkillsEncoder.getOutput(),SecondInput,
               cObservAndSkillsConcat.getOutput(),cTranspose.GetCount(),
               iTaskSkills,iCommonSkills,iVariables))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizarion.FeedForward(cObservAndSkillsConcat.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *neuron=cNormalizarion.AsObject();
 
    for(uint i=0;i<cActionDecoder.Size();i++)
      {
       if(!cActionDecoder[i].FeedForward(neuron))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       neuron=cActionDecoder[i].AsObject();
      }
@@ -6959,63 +8967,85 @@ bool CNeuronHiSSDLowLevelControler::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
                                                        ENUM_ACTIVATION SecondActivation=None)
   {
    if(!NeuronOCL||!SecondGradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint total=cActionDecoder.Size();
 
    if(total<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CObject *neuron=cActionDecoder[total-1].AsObject();
 
 //---
    if(!CNeuronConvOCL::calcInputGradients(neuron))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=int(total-2);i>=0;i--)
      {
       if(!cActionDecoder[i].CalcHiddenGradients(neuron))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       neuron=cActionDecoder[i].AsObject();
      }
 
    if(!cNormalizarion.CalcHiddenGradients(neuron))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cObservAndSkillsConcat.CalcHiddenGradients(cNormalizarion.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!DeConcat(cTranspose.getGradient(),cTaskSpecificSkillsEncoder.getGradient(),SecondGradient,
                 cObservAndSkillsConcat.getGradient(),cTranspose.GetCount(),
                 iTaskSkills,iCommonSkills,iVariables))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(SecondActivation!=None)
      {
       if(!DeActivation(SecondInput,SecondGradient,SecondGradient,SecondActivation))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(NeuronOCL.Activation()!=None)
      {
       if(!DeActivation(cTranspose.getOutput(),cTranspose.getGradient(),
                        cTranspose.getGradient(),NeuronOCL.Activation()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(cTaskSpecificSkillsEncoder.Activation()!=None)
      {
       if(!DeActivation(cTaskSpecificSkillsEncoder.getOutput(),cTaskSpecificSkillsEncoder.getGradient(),
                        cTaskSpecificSkillsEncoder.getGradient(),cTaskSpecificSkillsEncoder.Activation()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
    if(!NeuronOCL.CalcHiddenGradients(cTaskSpecificSkillsEncoder.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=NeuronOCL.getGradient();
 
@@ -7023,7 +9053,9 @@ bool CNeuronHiSSDLowLevelControler::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
       !NeuronOCL.CalcHiddenGradients(cTranspose.AsObject())||
       !SumAndNormalize(temp,NeuronOCL.getGradient(),temp,iVariables,false,0,0,0,1)||
       !NeuronOCL.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -7034,17 +9066,23 @@ bool CNeuronHiSSDLowLevelControler::calcInputGradients(CNeuronBaseOCL*NeuronOCL,
 bool CNeuronHiSSDLowLevelControler::updateInputWeights(CNeuronBaseOCL*NeuronOCL,CBufferFloat*second)
   {
    if(!cTaskSpecificSkillsEncoder.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizarion.UpdateInputWeights(cObservAndSkillsConcat.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *neuron=cNormalizarion.AsObject();
 
    for(uint i=0;i<cActionDecoder.Size();i++)
      {
       if(!cActionDecoder[i].UpdateInputWeights(neuron))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       neuron=cActionDecoder[i].AsObject();
      }
@@ -7058,19 +9096,27 @@ bool CNeuronHiSSDLowLevelControler::updateInputWeights(CNeuronBaseOCL*NeuronOCL,
 bool CNeuronHiSSDLowLevelControler::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!source||source.Type()!=Type())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronHiSSDLowLevelControler *Source=source;
 
    if(!cTaskSpecificSkillsEncoder.WeightsUpdate(GetPointer(Source.cTaskSpecificSkillsEncoder),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizarion.WeightsUpdate(GetPointer(Source.cNormalizarion),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cActionDecoder.Size();i++)
       if(!cActionDecoder[i].WeightsUpdate(GetPointer(Source.cActionDecoder[i]),tau))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(CNeuronConvOCL::WeightsUpdate(source,tau));
@@ -7081,28 +9127,42 @@ bool CNeuronHiSSDLowLevelControler::WeightsUpdate(CNeuronBaseOCL*source,float ta
 bool CNeuronHiSSDLowLevelControler::Save(const int file_handle)
   {
    if(!CNeuronConvOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteInteger(file_handle,int(iTaskSkills))<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,int(iCommonSkills))<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cTaskSpecificSkillsEncoder.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTranspose.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizarion.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cActionDecoder.Size();i++)
       if(!cActionDecoder[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -7113,7 +9173,9 @@ bool CNeuronHiSSDLowLevelControler::Save(const int file_handle)
 bool CNeuronHiSSDLowLevelControler::Load(const int file_handle)
   {
    if(!CNeuronConvOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    dFileReadUInt(file_handle,iTaskSkills)
@@ -7122,22 +9184,32 @@ bool CNeuronHiSSDLowLevelControler::Load(const int file_handle)
 
 //---
    if(!LoadInsideLayer(file_handle,cTaskSpecificSkillsEncoder.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cNormalizarion.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<cActionDecoder.Size();i++)
       if(!LoadInsideLayer(file_handle,cActionDecoder[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    if(!cObservAndSkillsConcat.Init(0,2,OpenCL,cNormalizarion.Neurons(),
                                    optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cObservAndSkillsConcat.SetActivationFunction(None);
 
@@ -7460,23 +9532,23 @@ CNeuronScenarioRolloutOCL::CNeuronScenarioRolloutOCL(void)
 //+------------------------------------------------------------------+
 CNeuronScenarioRolloutOCL::~CNeuronScenarioRolloutOCL(void)
   {
-   DeleteObj(m_states);
-   DeleteObj(m_validity);
-   DeleteObj(m_violations);
-   DeleteObj(m_diagnostics);
-   DeleteObj(m_return_scratch);
-   DeleteObj(m_state_scratch);
-   DeleteObj(m_violation_scratch);
-   DeleteObj(m_validity_scratch);
-   DeleteObj(m_diagnostic_scratch);
-   DeleteObj(m_system);
-   DeleteObj(m_aggregate);
-   DeleteObj(m_slice_active);
-   DeleteObj(m_batch_validity);
-   DeleteObj(m_batch_diagnostics);
-   DeleteObj(m_open_context);
-   DeleteObj(m_open_state);
-   DeleteObj(m_open_risk);
+   DeleteObj(m_states)
+   DeleteObj(m_validity)
+   DeleteObj(m_violations)
+   DeleteObj(m_diagnostics)
+   DeleteObj(m_return_scratch)
+   DeleteObj(m_state_scratch)
+   DeleteObj(m_violation_scratch)
+   DeleteObj(m_validity_scratch)
+   DeleteObj(m_diagnostic_scratch)
+   DeleteObj(m_system)
+   DeleteObj(m_aggregate)
+   DeleteObj(m_slice_active)
+   DeleteObj(m_batch_validity)
+   DeleteObj(m_batch_diagnostics)
+   DeleteObj(m_open_context)
+   DeleteObj(m_open_state)
+   DeleteObj(m_open_risk)
   }
 //+------------------------------------------------------------------+
 //| Fail - Records a refused operation without publishing stale state|
@@ -9154,7 +11226,9 @@ CNeuronPlanProjectionOCL::~CNeuronPlanProjectionOCL(void)
    m_rollout=NULL;
 
    for(uint i=0;i<DPCC_PW_COUNT;i++)
-      DeleteObj(m_work[i]);
+     {
+      DeleteObj(m_work[i])
+     }
   }
 //+------------------------------------------------------------------+
 //| Fail - Invalidates failed public results and records...          |
@@ -10544,7 +12618,9 @@ CNeuronPlanProjectionTraceOCL::CNeuronPlanProjectionTraceOCL(void)
 CNeuronPlanProjectionTraceOCL::~CNeuronPlanProjectionTraceOCL(void)
   {
    for(uint i=0;i<DPCC_TW_COUNT;i++)
-      DeleteObj(m_trace[i]);
+     {
+      DeleteObj(m_trace[i])
+     }
   }
 //+------------------------------------------------------------------+
 //| TraceFail - Invalidates every frame after a trace or device...   |
@@ -11219,7 +13295,7 @@ bool CNeuronPlanProjectionTraceOCL::OwnsBufferOrDeviceSlot(CBufferFloat*candidat
    return(CNeuronPlanProjectionOCL::OwnsBufferOrDeviceSlot(candidate));
   }
 //+------------------------------------------------------------------+
-//| DPCCBuildStepPositionalEncoding -...                             |
+//| DPCCBuildStepPositionalEncoding - Build step positional encoding |
 //+------------------------------------------------------------------+
 bool DPCCBuildStepPositionalEncoding(const uint j,const uint J,float&encoding[],string&reason)
   {
@@ -14034,52 +16110,52 @@ void CNeuronDPCCOCL::ReleaseOwned(void)
 
    if(m_actor_projector)
       m_actor_projector.UnbindRollout();
-   DeleteObj(m_actor_projector);
+   DeleteObj(m_actor_projector)
    m_actor_projector=NULL;
 
    if(m_projector)
       m_projector.UnbindRollout();
-   DeleteObj(m_projector);
-   DeleteObj(m_rollout);
-   DeleteObj(m_denoiser);
-   DeleteObj(m_decoder);
+   DeleteObj(m_projector)
+   DeleteObj(m_rollout)
+   DeleteObj(m_denoiser)
+   DeleteObj(m_decoder)
    m_projector=NULL;
    m_rollout=NULL;
    m_denoiser=NULL;
    m_decoder=NULL;
-   DeleteObj(m_denorm);
-   DeleteObj(m_normalizer);
+   DeleteObj(m_denorm)
+   DeleteObj(m_normalizer)
    m_denorm=NULL;
    m_normalizer=NULL;
-   DeleteObj(m_decoder_source);
-   DeleteObj(m_plan_source);
+   DeleteObj(m_decoder_source)
+   DeleteObj(m_plan_source)
    m_decoder_source=NULL;
    m_plan_source=NULL;
 
    for(uint i=0;i<DPCC_CW_COUNT;i++)
      {
-      DeleteObj(m_work[i]);
+      DeleteObj(m_work[i])
       m_work[i]=NULL;
       m_sizes[i]=0;
      }
-   DeleteObj(m_action_context);
-   DeleteObj(m_action_condition);
-   DeleteObj(m_action_noise);
-   DeleteObj(m_action_current);
-   DeleteObj(m_action_next);
-   DeleteObj(m_action_physical);
-   DeleteObj(m_action_epsilon);
-   DeleteObj(m_action_probability_frames);
-   DeleteObj(m_action_projected_frames);
-   DeleteObj(m_action_flags);
-   DeleteObj(m_action_scalar);
-   DeleteObj(m_action_status);
-   DeleteObj(m_action_candidate_status);
-   DeleteObj(m_action_returns);
-   DeleteObj(m_action_account13);
-   DeleteObj(m_action_q2_scores);
-   DeleteObj(m_action_rank_scores);
-   DeleteObj(m_action_numeric_flags);
+   DeleteObj(m_action_context)
+   DeleteObj(m_action_condition)
+   DeleteObj(m_action_noise)
+   DeleteObj(m_action_current)
+   DeleteObj(m_action_next)
+   DeleteObj(m_action_physical)
+   DeleteObj(m_action_epsilon)
+   DeleteObj(m_action_probability_frames)
+   DeleteObj(m_action_projected_frames)
+   DeleteObj(m_action_flags)
+   DeleteObj(m_action_scalar)
+   DeleteObj(m_action_status)
+   DeleteObj(m_action_candidate_status)
+   DeleteObj(m_action_returns)
+   DeleteObj(m_action_account13)
+   DeleteObj(m_action_q2_scores)
+   DeleteObj(m_action_rank_scores)
+   DeleteObj(m_action_numeric_flags)
    m_action_context=NULL;
    m_action_condition=NULL;
    m_action_noise=NULL;
@@ -14387,7 +16463,13 @@ bool CNeuronDPCCOCL::Init(uint outputs,uint index,COpenCLMy*context,CLayerDescri
       return(Fail(DPCC_CONTRACT_MISMATCH,true));
 
    if(!m_loading)
-     {m_decision_serial=0;m_bar_identity_valid=false;m_bar_symbol="";m_bar_timeframe=0;m_bar_time=0;}
+     {
+      m_decision_serial=0;
+      m_bar_identity_valid=false;
+      m_bar_symbol="";
+      m_bar_timeframe=0;
+      m_bar_time=0;
+     }
 
    return(true);
   }
@@ -14999,7 +17081,10 @@ CLayerDescription*CNeuronDPCCOCL::GetLayerInfo(void)
    CLayerDescription *description=new CLayerDescription();
 
    if(!description||(m_actor_abi==3?!DescribeAction6(description):!Describe(description,Type(),6,0)))
-     {DeleteObj(description);return(NULL);}
+     {
+      DeleteObj(description)
+      return(NULL);
+     }
 
    return(description);
   }
@@ -15873,11 +17958,17 @@ ulong CNeuronDPCCOCL::SnapshotFingerprint(void)
    DPCCRolloutHashWord((ulong)m_snapshot.previous_mark_time,hash);
 
    for(uint h=0;h<m_shape.H;h++)
-     {DPCCRolloutHashWord((ulong)m_snapshot.bar_open_times[h],hash);DPCCRolloutHashWord((ulong)m_snapshot.bar_close_times[h],hash);}
+     {
+      DPCCRolloutHashWord((ulong)m_snapshot.bar_open_times[h],hash);
+      DPCCRolloutHashWord((ulong)m_snapshot.bar_close_times[h],hash);
+     }
    const string texts[]={m_snapshot.symbol,m_snapshot.account_currency};
 
    for(uint text_index=0;text_index<2;text_index++)
-     {DPCCRolloutHashWord(StringLen(texts[text_index]),hash);for(int i=0;i<StringLen(texts[text_index]);i++)DPCCRolloutHashWord(StringGetCharacter(texts[text_index],i),hash);}
+     {
+      DPCCRolloutHashWord(StringLen(texts[text_index]),hash);
+      for(int i=0;i<StringLen(texts[text_index]);i++)DPCCRolloutHashWord(StringGetCharacter(texts[text_index],i),hash);
+     }
 
    return(hash);
   }
@@ -16938,7 +19029,10 @@ bool CNeuronACSRM::RestoreEvaluationState(SLayerReadState&state)
                              };
 
    for(int i=0;i<7;i++)
-     {CBufferFloat*original=buffers[i];if(!state.GetBuffer(buffers[i])||buffers[i]!=original)return(false);}
+     {
+      CBufferFloat*original=buffers[i];
+      if(!state.GetBuffer(buffers[i])||buffers[i]!=original)return(false);
+     }
 
    return(true);
   }

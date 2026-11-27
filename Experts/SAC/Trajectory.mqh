@@ -16,7 +16,7 @@
 #define                    Buffer_Size  2112
 #define                    FileName     "SAC"
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -29,6 +29,9 @@ struct SState
    bool              Load(int file_handle);
 
 //--- overloading
+//+------------------------------------------------------------------+
+//| operator= - Copy the trajectory state                            |
+//+------------------------------------------------------------------+
    void              operator=(const SState &obj)   { ArrayCopy(state,obj.state); ArrayCopy(account,obj.account); }
   };
 //+------------------------------------------------------------------+
@@ -49,23 +52,25 @@ SState::SState(void)
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalse
+     }
 //---
    int total=ArraySize(state);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,state[i])
+     }
 //---
    total=ArraySize(account);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,account[i])
+     }
 //---
    return(true);
   }
@@ -77,7 +82,9 @@ bool SState::Save(int file_handle)
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
    if(FileIsEnding(file_handle))
       return(false);
 //---
@@ -87,9 +94,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      state[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,state[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -98,15 +103,13 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      account[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,account[i])
      }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| STrajectory - Store a simulated trading trajectory               |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
@@ -126,7 +129,7 @@ struct STrajectory
    bool              Load(int file_handle);
   };
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| STrajectory - Initialize an empty trajectory                     |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
    DiscountFactor(0.9f),
@@ -144,7 +147,9 @@ STrajectory::STrajectory(void)  :   Total(0),
 bool STrajectory::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    if(!CumCounted)
       CumRevards();
@@ -173,7 +178,9 @@ bool STrajectory::Save(int file_handle)
 bool STrajectory::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    Total=FileReadInteger(file_handle);
    if(Total>=ArraySize(Actions))
@@ -194,7 +201,7 @@ bool STrajectory::Load(int file_handle)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CumRevards.           |
+//| CumRevards - Accumulate discounted trajectory rewards            |
 //+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {

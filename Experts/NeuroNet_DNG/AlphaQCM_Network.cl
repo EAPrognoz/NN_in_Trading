@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                              AlphaQCM_Network.cl |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 // AlphaQCM batch network. Tape rows contain h, c, then f, i, o and g.
 // Each group reduction uses a power-of-two local size chosen for its kernel.
@@ -50,10 +51,17 @@ __kernel void AQCEmbed(__global const int *token,__global const int *length,
                        __global const float *weight,__global float *x,int L,int E,int A,float position_scale)
   {
    int j=get_global_id(0),p=get_global_id(1),t=p%L,b=p/L;
-   if(t>=length[b]) { x[p*E+j]=0; return; }
+   if(t>=length[b])
+     {
+      x[p*E+j]=0;
+      return;
+     }
    int id=token[p];
    if(length[b]>L || id<0 || id>=A || (t==0 && id!=0) || (t!=0 && id<=1))
-     { x[p*E+j]=NAN; return; }
+     {
+      x[p*E+j]=NAN;
+      return;
+     }
    float phase=t/pow(position_scale,(float)(2*(j/2))/E);
    x[p*E+j]=weight[id*E+j]+((j&1)?cos(phase):sin(phase));
   }
@@ -81,7 +89,11 @@ __kernel void AQCRecur(__global const float *x,__global const int *len,__global 
       AGSearchRecur(x+p*stride,I,w,H,s,row+2*H,partial);
       for(int j=lane;j<H;j+=lanes)
         {
-         if(mode==0) { row[j]=s[j]; row[H+j]=s[H+j]; }
+         if(mode==0)
+           {
+            row[j]=s[j];
+            row[H+j]=s[H+j];
+           }
          if(mode==1) tape[p*H+j]=s[j];
          mean[b*H+j]+=s[j];
         }
@@ -282,7 +294,10 @@ __kernel void AQCTargetSelect(__global const int *done,__global const int *legal
    __local int ids[128],bad[128];
    int b=get_group_id(0),lane=get_local_id(0),lanes=get_local_size(0);
    if(done[base+b])
-     { if(!lane) next[b]=(done[base+b]==1?-1.0f:NAN); return; }
+     {
+      if(!lane) next[b]=(done[base+b]==1?-1.0f:NAN);
+      return;
+     }
    float best=-INFINITY;
    int id=A,failed=0;
    for(int a=lane;a<A;a+=lanes)
@@ -292,7 +307,11 @@ __kernel void AQCTargetSelect(__global const int *done,__global const int *legal
       if(!allowed) continue;
       float q=qt[b*A+a];
       if(!isfinite(q)) failed=1;
-      if(q>best) { best=q; id=a; }
+      if(q>best)
+        {
+         best=q;
+         id=a;
+        }
      }
    scores[lane]=best; ids[lane]=id; bad[lane]=failed;
    barrier(CLK_LOCAL_MEM_FENCE);
@@ -302,7 +321,10 @@ __kernel void AQCTargetSelect(__global const int *done,__global const int *legal
         {
          int j=lane+n;
          if(scores[j]>scores[lane]||(scores[j]==scores[lane]&&ids[j]<ids[lane]))
-           { scores[lane]=scores[j]; ids[lane]=ids[j]; }
+           {
+            scores[lane]=scores[j];
+            ids[lane]=ids[j];
+           }
          bad[lane]|=bad[j];
         }
       barrier(CLK_LOCAL_MEM_FENCE);
@@ -317,7 +339,11 @@ __kernel void AQCQResidual(__global const float *q,__global const float *qt,
   {
    int a=get_global_id(0),b=get_global_id(1);
    if(actions[base+b]<2||actions[base+b]>=A)
-     { gradient[b*A+a]=0; if(!a) loss[b]=NAN; return; }
+     {
+      gradient[b*A+a]=0;
+      if(!a) loss[b]=NAN;
+      return;
+     }
    if(a!=actions[base+b])
      {
       gradient[b*A+a]=0;
@@ -379,7 +405,11 @@ __kernel void AQCPriorityLoss(__global const float *row_loss,__global const floa
    float v=0;
    for(int i=get_local_id(0);i<N;i+=get_local_size(0)) v+=row_loss[b*N+i];
    v=AQCNetSum(v,part);
-   if(!get_local_id(0)) { loss[base+b]=v; weighted[b]=is_weight[base+b]*v/B; }
+   if(!get_local_id(0))
+     {
+      loss[base+b]=v;
+      weighted[b]=is_weight[base+b]*v/B;
+     }
   }
 
 __kernel void AQCZeroGradient(__global float *gradient)

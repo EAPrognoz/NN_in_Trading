@@ -110,8 +110,8 @@ int OnInit()
 void OnDeinit(const int reason)
   {
 //---
-   DeleteObj(Result);
-   DeleteObj(bAction);
+   DeleteObj(Result)
+   DeleteObj(bAction)
   }
 //+------------------------------------------------------------------+
 //| OnTick - expert tick function                                    |
@@ -295,33 +295,45 @@ bool FillStack(void)
 //---
    if(!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(RSI.BarsCalculated()<bars||
       CCI.BarsCalculated()<bars||
       ATR.BarsCalculated()<bars||
       MACD.BarsCalculated()<bars)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
 //---
    if(!ArraySetAsSeries(Rates,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bars -= end+HistoryBars;
    if(bars<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    vector<float>result,target,neg_target;
 //---
    uint ticks=GetTickCount();
    if(!cActor.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int posit=start-HistoryBars-1; posit>=end; posit--)
      {
       if(!CreateBuffers(posit,GetPointer(bState),GetPointer(bTime),NULL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       vector<float>account=vector<float>::Zeros(AccountDescr);
       account[0]=float(AccountInfoDouble(ACCOUNT_BALANCE) / EtalonBalance);
       account[2]=1;
@@ -336,11 +348,15 @@ bool FillStack(void)
       account[12]=(float)MathSin(x!=0 ? 2.0 * M_PI * x : 0);
       //---
       if(!bState.AddArray(account))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    //--- feed Forward
       if(!cActor.feedForward((CBufferFloat*)GetPointer(bState),1,false,(CBufferFloat*)GetPointer(bTime)))
-            ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(GetTickCount()-ticks>500)
         {
          double percent=(1.0-double(posit-end) / (start-end-HistoryBars-NForecast))  * 100.0;

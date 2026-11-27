@@ -93,7 +93,8 @@ int OnInit()
 //---
    Net=new CNet(NULL);
    ResetLastError();
-   float temp1,temp2;
+   float temp1;
+   float temp2;
    if(!Net||!Net.Load(FileName+".nnw",dError,temp1,temp2,dtStudied,false))
      {
       printf("%s - %d -> Error of read %s prev Net %d",__FUNCTION__,__LINE__,FileName+".nnw",GetLastError());
@@ -318,7 +319,7 @@ void OnChartEvent(const int id,
      }
   }
 //+------------------------------------------------------------------+
-//| Train                                                            |
+//| Train - Train the neural networks                                |
 //+------------------------------------------------------------------+
 void Train(datetime StartTrainBar=0)
   {

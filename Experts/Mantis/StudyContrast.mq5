@@ -375,7 +375,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time)
 
    if(time.GetIndex()>=0)
       if(!time.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 //---
    return(true);
   }

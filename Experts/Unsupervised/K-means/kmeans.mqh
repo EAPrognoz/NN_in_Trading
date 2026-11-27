@@ -120,7 +120,7 @@ COpenCLMy *OpenCLCreate(string programm)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| CKmeans                                                          |
+//| CKmeans - Group observations with k-means                        |
 //+------------------------------------------------------------------+
 class CKmeans  : public CObject
   {
@@ -157,7 +157,7 @@ public:
    virtual bool      Load(const int file_handle);
    //---
 //+------------------------------------------------------------------+
-//| Type                                                             |
+//| Type - Return the object type identifier                         |
 //+------------------------------------------------------------------+
    virtual int       Type(void)
      {
@@ -165,7 +165,7 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//| CKmeans                                                          |
+//| CKmeans - Group observations with k-means                        |
 //+------------------------------------------------------------------+
 void CKmeans::CKmeans(void)   :  m_iClusters(2),
    m_iVectorSize(1),
@@ -179,7 +179,7 @@ void CKmeans::CKmeans(void)   :  m_iClusters(2),
    c_OpenCL=NULL;
   }
 //+------------------------------------------------------------------+
-//| ~CKmeans                                                         |
+//| ~CKmeans - Release owned resources                               |
 //+------------------------------------------------------------------+
 void CKmeans::~CKmeans(void)
   {
@@ -230,7 +230,9 @@ bool CKmeans::Init(COpenCLMy *context,int clusters,int vector_size)
      }
    c_aMeans.BufferFree();
    if(!c_aMeans.BufferInit(m_iClusters * m_iVectorSize,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_bTrained=false;
    m_dLoss=-1;
 //---
@@ -287,7 +289,9 @@ bool CKmeans::Study(CBufferFloat *data,bool init_means=true)
      }
    c_aDistance.BufferFree();
    if(!c_aDistance.BufferInit(rows * m_iClusters,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(CheckPointer(c_aClasters)==POINTER_INVALID)
      {
@@ -297,7 +301,9 @@ bool CKmeans::Study(CBufferFloat *data,bool init_means=true)
      }
    c_aClasters.BufferFree();
    if(!c_aClasters.BufferInit(rows,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(CheckPointer(c_aFlags)==POINTER_INVALID)
      {
@@ -307,7 +313,9 @@ bool CKmeans::Study(CBufferFloat *data,bool init_means=true)
      }
    c_aFlags.BufferFree();
    if(!c_aFlags.BufferInit(rows,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(!data.BufferCreate(c_OpenCL)||
       !c_aMeans.BufferCreate(c_OpenCL)||
@@ -347,13 +355,17 @@ bool CKmeans::Study(CBufferFloat *data,bool init_means=true)
       kernelExecute(def_k_kmeans_clustering,global_work_offset1,global_work_size1)
 
       if(!c_aFlags.BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       m_bTrained=(c_aFlags.Maximum()==0);
       if(m_bTrained)
         {
          if(!c_aClasters.BufferRead())
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          break;
         }
       //---
@@ -374,7 +386,9 @@ bool CKmeans::Study(CBufferFloat *data,bool init_means=true)
    while(!m_bTrained&&!IsStopped());
 //---
    if(!c_aMeans.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    data.BufferFree();
    c_aDistance.BufferFree();
@@ -413,7 +427,9 @@ bool CKmeans::Clustering(CBufferFloat *data)
      }
    c_aDistance.BufferFree();
    if(!c_aDistance.BufferInit(rows * m_iClusters,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(CheckPointer(c_aClasters)==POINTER_INVALID)
      {
@@ -423,7 +439,9 @@ bool CKmeans::Clustering(CBufferFloat *data)
      }
    c_aClasters.BufferFree();
    if(!c_aClasters.BufferInit(rows,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(CheckPointer(c_aFlags)==POINTER_INVALID)
      {
@@ -433,7 +451,9 @@ bool CKmeans::Clustering(CBufferFloat *data)
      }
    c_aFlags.BufferFree();
    if(!c_aFlags.BufferInit(rows,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(!data.BufferCreate(c_OpenCL)||
       !c_aMeans.BufferCreate(c_OpenCL)||
@@ -456,7 +476,9 @@ bool CKmeans::Clustering(CBufferFloat *data)
    global_work_size[1]=m_iClusters;
    kernelExecute(def_k_kmeans_distance,global_work_offset,global_work_size)
    if(!c_aDistance.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    setBuffer(def_k_kmeans_clustering,def_k_kmc_flags,c_aFlags.GetIndex())
 
@@ -471,7 +493,9 @@ bool CKmeans::Clustering(CBufferFloat *data)
    global_work_size1[0]=rows;
    kernelExecute(def_k_kmeans_clustering,global_work_offset1,global_work_size1)
    if(!c_aClasters.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    data.BufferFree();
    c_aDistance.BufferFree();
@@ -558,7 +582,9 @@ bool CKmeans::Statistic(CBufferFloat *data,CBufferFloat *targets)
          return(false);
      }
    if(!c_aProbability.BufferInit(3 * m_iClusters,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    int total=c_aClasters.Total();
    if(!targets.BufferCreate(c_OpenCL)||
@@ -578,7 +604,9 @@ bool CKmeans::Statistic(CBufferFloat *data,CBufferFloat *targets)
    global_work_size[0]=m_iClusters;
    kernelExecute(def_k_kmeans_statistic,global_work_offset,global_work_size)
    if(!c_aProbability.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    data.BufferFree();
    targets.BufferFree();
@@ -629,7 +657,9 @@ CBufferFloat *CKmeans::GetProbability(CBufferFloat *data)
 bool CKmeans::Save(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 
    if(FileWriteInteger(file_handle,Type())<INT_VALUE)
       return(false);
@@ -640,8 +670,7 @@ bool CKmeans::Save(const int file_handle)
    if(FileWriteInteger(file_handle,m_iVectorSize)<INT_VALUE)
       return(false);
 
-   if(FileWriteInteger(file_handle,(int)m_bTrained)<INT_VALUE)
-      return(false);
+   dFileWriteUInt(file_handle,m_bTrained)
 
    if(!c_aMeans.Save(file_handle))
       return(false);
@@ -666,7 +695,9 @@ bool CKmeans::Save(const int file_handle)
 bool CKmeans::Load(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    if(FileIsEnding(file_handle))
       return(false);

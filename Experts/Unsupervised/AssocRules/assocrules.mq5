@@ -169,7 +169,7 @@ void OnChartEvent(const int id,
      }
   }
 //+------------------------------------------------------------------+
-//| Train                                                            |
+//| Train - Train the neural networks                                |
 //+------------------------------------------------------------------+
 void Train(datetime StartTrainBar=0)
   {
@@ -242,7 +242,8 @@ void Train(datetime StartTrainBar=0)
    fractals.Hsplit(array,ar_fractals);
 //---
    Rules.CreateRules(ar_data[1],ar_fractals[1].Col(0),ar_fractals[1].Col(1),3,0.05f,0.05f);
-   float buy_prob,sell_prob;
+   float buy_prob;
+   float sell_prob;
    for(ulong i=0; i<ar_data[0].Rows(); i++)
      {
       if(!Rules.Probability(ar_data[0].Row(i),buy_prob,sell_prob))
@@ -258,7 +259,7 @@ void Train(datetime StartTrainBar=0)
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| DoubleToSignal                                                   |
+//| DoubleToSignal - Convert model output to a signal                |
 //+------------------------------------------------------------------+
 ENUM_SIGNAL DoubleToSignal(double value)
   {
@@ -274,7 +275,7 @@ ENUM_SIGNAL DoubleToSignal(double value)
    return(Undefine);
   }
 //+------------------------------------------------------------------+
-//| DrawObject                                                       |
+//| DrawObject - Draw the chart object                               |
 //+------------------------------------------------------------------+
 void DrawObject(datetime time,double signal,double high,double low)
   {
@@ -318,7 +319,7 @@ void DrawObject(datetime time,double signal,double high,double low)
    ObjectSetString(0,name,OBJPROP_TOOLTIP,EnumToString(DoubleToSignal(signal))+" "+DoubleToString(signal,5));
   }
 //+------------------------------------------------------------------+
-//| DeleteObject                                                     |
+//| DeleteObject - Remove the chart object                           |
 //+------------------------------------------------------------------+
 void DeleteObject(datetime time)
   {

@@ -16,7 +16,7 @@
 #define LogProbMultiplier      1.0e-5f
 
 //+------------------------------------------------------------------+
-//| CNet_SAC_DICE                                                    |
+//| CNet_SAC_DICE - Apply DICE weights in SAC                        |
 //+------------------------------------------------------------------+
 class CNet_SAC_DICE  : protected CNet
   {
@@ -37,18 +37,19 @@ protected:
    float fLoss1;
    float fLoss2;
    float fZeta;
-   //---
-   vector<float>GetLogProbability(CBufferFloat *Actions);
 public:
    //---
                      CNet_SAC_DICE(void);
+//+------------------------------------------------------------------+
+//| ~CNet_SAC_DICE - Use automatic member cleanup                    |
+//+------------------------------------------------------------------+
                     ~CNet_SAC_DICE(void) {}
    //---
    bool              Create(CArrayObj *actor,CArrayObj *critic,CArrayObj *zeta,CArrayObj *nu,int latent_layer=-1);
    //---
    virtual bool      Study(CArrayFloat *State,CArrayFloat *SecondInput,CBufferFloat *Actions,vector<float>&ActionsLogProbab,CBufferFloat *NextState,CBufferFloat *NextSecondInput,float reward,float discount,float tau);
 //+------------------------------------------------------------------+
-//| GetLoss                                                          |
+//| GetLoss - Read the loss                                          |
 //+------------------------------------------------------------------+
    virtual void      GetLoss(float &loss1,float &loss2)
      {
@@ -58,9 +59,12 @@ public:
    //---
    virtual bool      Save(string file_name,bool common=true);
    bool              Load(string file_name,bool common=true);
+protected:
+   //---
+   vector<float>GetLogProbability(CBufferFloat *Actions);
   };
 //+------------------------------------------------------------------+
-//| CNet_SAC_DICE                                                    |
+//| CNet_SAC_DICE - Apply DICE weights in SAC                        |
 //+------------------------------------------------------------------+
 CNet_SAC_DICE::CNet_SAC_DICE(void)  :  fLambda(1.0e-5f),
                                        fLambda_m(0),
@@ -143,7 +147,7 @@ bool CNet_SAC_DICE::Create(CArrayObj *actor,CArrayObj *critic,CArrayObj *zeta,CA
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Study                                                            |
+//| Study - Check study                                              |
 //+------------------------------------------------------------------+
 bool CNet_SAC_DICE::Study(CArrayFloat *State,
                           CArrayFloat *SecondInput,
@@ -393,7 +397,9 @@ bool CNet_SAC_DICE::Save(string file_name,bool common=true)
 //---
    int handle=FileOpen(file_name+".set",(common ? FILE_COMMON : 0) | FILE_BIN | FILE_WRITE);
    if(handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 
    if(FileWriteFloat(handle,fLambda)<sizeof(fLambda)||
       FileWriteFloat(handle,fLambda_m)<sizeof(fLambda_m)||
@@ -435,20 +441,13 @@ bool CNet_SAC_DICE::Load(string file_name,bool common=true)
 //---
    int handle=FileOpen(file_name+".set",(common ? FILE_COMMON : 0) | FILE_BIN | FILE_READ);
    if(handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 
-   if(FileIsEnding(handle))
-      return(false);
-
-   fLambda=FileReadFloat(handle);
-   if(FileIsEnding(handle))
-      return(false);
-
-   fLambda_m=FileReadFloat(handle);
-   if(FileIsEnding(handle))
-      return(false);
-
-   fLambda_v=FileReadFloat(handle);
+   dFileReadUFloat(handle,fLambda)
+   dFileReadUFloat(handle,fLambda_m)
+   dFileReadUFloat(handle,fLambda_v)
    if(FileIsEnding(handle))
       return(false);
    iLatentLayer=FileReadInteger(handle);;

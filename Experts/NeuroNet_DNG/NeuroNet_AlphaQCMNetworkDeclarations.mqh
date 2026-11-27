@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                         NeuroNet_AlphaQCMNetworkDeclarations.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_NETWORK_DECLARATIONS_MQH
 #define NEURONET_ALPHAQCM_NETWORK_DECLARATIONS_MQH
@@ -16,7 +17,7 @@ enum ENUM_AQC_MATRIX_LAYOUT
   };
 
 //+------------------------------------------------------------------+
-//| SAQCInferenceMatrix - Borrowed row-major FP32 parameter matrix.   |
+//| SAQCInferenceMatrix - Borrowed row-major FP32 parameter matrix.  |
 //+------------------------------------------------------------------+
 struct SAQCInferenceMatrix
   {
@@ -27,7 +28,7 @@ struct SAQCInferenceMatrix
   };
 
 //+------------------------------------------------------------------+
-//| SAQCInferenceView - Short-lived parameter view from one encoder.  |
+//| SAQCInferenceView - Short-lived parameter view from one encoder. |
 //+------------------------------------------------------------------+
 struct SAQCInferenceView
   {
@@ -44,7 +45,13 @@ struct SAQCInferenceView
 class CAlphaQCMRecurrentOwner : public CNeuronAlphaGenPolicyLSTMOCL
   {
 public:
+//+------------------------------------------------------------------+
+//| FirstIndex - Return the first index                              |
+//+------------------------------------------------------------------+
    int FirstIndex(void) const { return(m_cFirstMomentumLSTM.GetIndex()); }
+//+------------------------------------------------------------------+
+//| SecondIndex - Return the second index                            |
+//+------------------------------------------------------------------+
    int SecondIndex(void) const { return(m_cSecondMomentumLSTM.GetIndex()); }
   };
 
@@ -98,6 +105,9 @@ protected:
 public:
    CNeuronAlphaQCMEncoderOCL(void);
    ~CNeuronAlphaQCMEncoderOCL(void);
+//+------------------------------------------------------------------+
+//| Type - Return the layer type identifier                          |
+//+------------------------------------------------------------------+
    virtual int Type(void) const override { return(defNeuronAlphaQCMEncoderOCL); }
    bool Configure(COpenCLMy *context,const bool iqn,const int length,const int actions,
                   const int embedding,const int hidden,const int frequencies);
@@ -108,7 +118,13 @@ public:
    void ReleaseWorkspace(void);
    bool BindBatch(const int tokens,const int lengths,const int tau,const int rows,const int quantiles,
                   const int first,const float position_scale);
+//+------------------------------------------------------------------+
+//| Result - Return the result                                       |
+//+------------------------------------------------------------------+
    int Result(void) const { return(m_work[AQX_RESULT].GetIndex()); }
+//+------------------------------------------------------------------+
+//| getOutputIndex - Return the output buffer index                  |
+//+------------------------------------------------------------------+
    virtual int getOutputIndex(void) const override { return(Result()); }
    bool BeginUpdate(void);
    bool PrepareGradient(const int gradient);
@@ -120,6 +136,9 @@ public:
    virtual bool Load(const int handle) override;
 
 protected:
+//+------------------------------------------------------------------+
+//| MatrixCount - Return the matrix count                            |
+//+------------------------------------------------------------------+
    int  MatrixCount(void) const { return(m_iqn?6:5); }
    bool MatrixView(const int id,SAQCMatrix &v);
    bool Geometry(void);

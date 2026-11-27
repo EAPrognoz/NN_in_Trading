@@ -78,9 +78,9 @@ void DPCCTestStop(const string phase,const string reason)
       TesterStop();
   }
 //+------------------------------------------------------------------+
-//| Shared D01 restore boundary for Market and Trading inference     |
-//| roles                                                            |
+//| DPCCTestRestoreFrozenTrading - Restore frozen inference roles    |
 //+------------------------------------------------------------------+
+//--- Shared D01 restore boundary for Market and Trading inference roles
 bool DPCCTestRestoreFrozenTrading(string &reason)
   {
    CNet                       *target_actor=NULL;
@@ -118,8 +118,9 @@ bool DPCCTestRestoreFrozenTrading(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Shared physical-account and causal financial-context boundary    |
+//| DPCCTestDecisionContext - Test decision context                  |
 //+------------------------------------------------------------------+
+//--- Shared physical-account and causal financial-context boundary
 bool DPCCTestDecisionContext(const long decision_open,CBufferFloat *native_ohlc,
                              CBufferFloat *&context,float &account13[],string &reason)
   {
@@ -127,8 +128,9 @@ bool DPCCTestDecisionContext(const long decision_open,CBufferFloat *native_ohlc,
                                    decision_open,context,account13,reason));
   }
 //+------------------------------------------------------------------+
-//| Verify frozen Market, Actor and the two inference-only critics   |
+//| DPCCTestFrozenPolicy - Test frozen policy                        |
 //+------------------------------------------------------------------+
+//--- Verify frozen Market, Actor and the two inference-only critics
 bool DPCCTestFrozenPolicy(string &reason)
   {
    CNet      *market=EXTMarket.ReadyMarketNetwork();
@@ -182,8 +184,9 @@ bool DPCCTestFrozenPolicy(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Allocate the live Market Z snapshot from its actual frozen axes  |
+//| DPCCTestPrepareMarketSnapshot - Test prepare market snapshot     |
 //+------------------------------------------------------------------+
+//--- Allocate the live Market Z snapshot from its actual frozen axes
 bool DPCCTestPrepareMarketSnapshot(string &reason)
   {
    CNet                            *market=EXTMarket.ReadyMarketNetwork();
@@ -214,8 +217,9 @@ bool DPCCTestPrepareMarketSnapshot(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Close the Actor frame before releasing its Market generation     |
+//| DPCCTestReleaseGeneration - Test release generation              |
 //+------------------------------------------------------------------+
+//--- Close the Actor frame before releasing its Market generation
 bool DPCCTestReleaseGeneration(const ulong generation,string &reason)
   {
    if(generation==0)
@@ -337,8 +341,9 @@ int OnInit(void)
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Evaluate the first quote of each H1 bar in the Tester interval   |
+//| OnTick - Process the latest market tick                          |
 //+------------------------------------------------------------------+
+//--- Evaluate the first quote of each H1 bar in the Tester interval
 void OnTick(void)
   {
    if(!EXTReady||EXTStopped||IsStopped())
@@ -480,8 +485,9 @@ void OnTick(void)
      }
   }
 //+------------------------------------------------------------------+
-//| Mark normal completion of the Strategy Tester interval           |
+//| OnTester - Return the tester result                              |
 //+------------------------------------------------------------------+
+//--- Mark normal completion of the Strategy Tester interval
 double OnTester(void)
   {
    if(EXTReady&&!EXTStopped)
@@ -490,8 +496,9 @@ double OnTester(void)
    return(0.0);
   }
 //+------------------------------------------------------------------+
-//| Report observed results and release policy borrowers first       |
+//| OnDeinit - Release program resources                             |
 //+------------------------------------------------------------------+
+//--- Report observed results and release policy borrowers first
 void OnDeinit(const int reason)
   {
    if(EXTReady)

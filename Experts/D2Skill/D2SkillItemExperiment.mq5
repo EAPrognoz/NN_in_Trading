@@ -31,14 +31,16 @@ bool CreateOpenCLHost(void)
   {
    CArrayObj *description=new CArrayObj();
    if(!description)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    description.FreeMode(true);
    for(int i=0; i<2; i++)
      {
       CLayerDescription *layer=new CLayerDescription();
       if(!layer)
         {
-         DeleteObjAndFalse(description);
+         DeleteObjAndFalse(description)
         }
       layer.type=defNeuronBaseOCL;
       layer.count=D2_ITEM_DIM;
@@ -46,8 +48,8 @@ bool CreateOpenCLHost(void)
       layer.optimization=ADAM;
       if(!description.Add(layer))
         {
-         DeleteObj(layer);
-         DeleteObjAndFalse(description);
+         DeleteObj(layer)
+         DeleteObjAndFalse(description)
         }
      }
    const bool result=g_net.Create(description);
@@ -80,7 +82,9 @@ bool RunRepresentation(const ED2SkillRepresentation representation,const float b
    COpenCLMy    *opencl=g_net.GetOpenCL();
    CD2SkillItem item;
    if(!opencl||!item.Init(0,300,opencl,D2_ITEM_DIM,ADAM,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    item.SetRepresentation(representation);
    item.SetEMA(beta,beta,beta);
    float latent[D2_ITEM_DIM]={0.0f,0.0f,0.0f,0.0f};
@@ -88,7 +92,9 @@ bool RunRepresentation(const ED2SkillRepresentation representation,const float b
       !g_source.getOutput().BufferWrite()||
       !g_target.BufferInit(D2_ITEM_DIM,0.0f)||
       !g_target.BufferCreate(opencl))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- forward, loss-gradient and bank update stay on the GPU.  No output,
 //--- gradient or slot buffer is read during this sample loop.
@@ -118,11 +124,15 @@ bool RunRepresentation(const ED2SkillRepresentation representation,const float b
                         sample_index,target[0],target[1],target[2],target[3],
                         MathSqrt(pseudo_norm),(sample==9||sample==22 ? "true" : "false"));
          if(!g_target.AssignArray(target)||!g_target.BufferWrite())
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          float error=1.0f;
          if(!g_source.calcOutputGradients(&g_target,error)||
             !item.UpdateFromGradient(g_source.getGradient()))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       //----- Host readback is restricted to completed epoch boundaries.
@@ -130,7 +140,9 @@ bool RunRepresentation(const ED2SkillRepresentation representation,const float b
          !item.Correction().BufferRead()||!item.Direction().BufferRead()||
          !item.Scale().BufferRead()||!item.Observations().BufferRead()||
          !item.Mass().BufferRead()||!item.getOutput().BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       float correction_norm=0.0f;
       float correction_error=0.0f;
       float base_loss=0.0f;
@@ -174,20 +186,23 @@ bool RunRepresentation(const ED2SkillRepresentation representation,const float b
           outlier_response>=0.0f);
   }
 //+------------------------------------------------------------------+
-//| Create an isolated OpenCL host for one arbitrary-dimension test. |
+//| CreateCoverageHost - Create coverage host                        |
 //+------------------------------------------------------------------+
+//--- Create an isolated OpenCL host for one arbitrary-dimension test.
 bool CreateCoverageHost(CNet &net,const uint dimension)
   {
    CArrayObj *description=new CArrayObj();
    if(!description)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    description.FreeMode(true);
    for(int i=0; i<2; i++)
      {
       CLayerDescription *layer=new CLayerDescription();
       if(!layer)
         {
-         DeleteObjAndFalse(description);
+         DeleteObjAndFalse(description)
         }
       layer.type=defNeuronBaseOCL;
       layer.count=dimension;
@@ -195,8 +210,8 @@ bool CreateCoverageHost(CNet &net,const uint dimension)
       layer.optimization=ADAM;
       if(!description.Add(layer))
         {
-         DeleteObj(layer);
-         DeleteObjAndFalse(description);
+         DeleteObj(layer)
+         DeleteObjAndFalse(description)
         }
      }
    const bool result=net.Create(description);
@@ -205,9 +220,9 @@ bool CreateCoverageHost(CNet &net,const uint dimension)
    return(result&&net.GetOpenCL()!=NULL);
   }
 //+------------------------------------------------------------------+
-//| Compare one deterministic GPU update with the complete CPU       |
-//| state.                                                           |
+//| RunArbitraryDimensionCoverage - Compare one GPU update with CPU  |
 //+------------------------------------------------------------------+
+//--- Compare one deterministic GPU update with the complete CPU state.
 bool RunArbitraryDimensionCoverage(void)
   {
    const int    dimensions[]={1,2,4,63,64,65,257,1025};
@@ -232,7 +247,9 @@ bool RunArbitraryDimensionCoverage(void)
             !gradient.BufferCreate(net.GetOpenCL())||
             !item.Init(0,400+(uint)(2 * test+mode),net.GetOpenCL(),
                        (uint)dimension,ADAM,1))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          item.SetRepresentation(representation);
          item.SetEMA(beta_correction,beta_direction,beta_magnitude);
          vector<float>gradient_values=vector<float>::Zeros(dimension);
@@ -277,7 +294,9 @@ bool RunArbitraryDimensionCoverage(void)
             !item.Correction().BufferRead()||!item.Direction().BufferRead()||
             !item.Scale().BufferRead()||!item.Observations().BufferRead()||
             !item.Mass().BufferRead())
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          for(int component=0; component<dimension; component++)
            {
             if(MathAbs(item.Correction()[component]-expected_correction[component])>tolerance)
@@ -285,14 +304,14 @@ bool RunArbitraryDimensionCoverage(void)
                PrintFormat("D2SkillItemExperiment: coverage correction failed dimension=%d mode=%s component=%d actual=%.8f expected=%.8f",
                            dimension,mode_name,component,item.Correction()[component],
                            expected_correction[component]);
-               ReturnFalse;
+               ReturnFalse
               }
             if(MathAbs(item.Direction()[component]-expected_direction[component])>tolerance)
               {
                PrintFormat("D2SkillItemExperiment: coverage direction failed dimension=%d mode=%s component=%d actual=%.8f expected=%.8f",
                            dimension,mode_name,component,item.Direction()[component],
                            expected_direction[component]);
-               ReturnFalse;
+               ReturnFalse
               }
            }
          const float expected_observations=1.0f;
@@ -304,7 +323,7 @@ bool RunArbitraryDimensionCoverage(void)
             PrintFormat("D2SkillItemExperiment: coverage scalar failed dimension=%d mode=%s scale=%.8f/%.8f observations=%.8f/%.8f mass=%.8f/%.8f",
                         dimension,mode_name,item.Scale()[0],expected_scale,
                         item.Observations()[0],expected_observations,item.Mass()[0],expected_mass);
-            ReturnFalse;
+            ReturnFalse
            }
          PrintFormat("D2SkillItemExperiment: coverage dimension=%d mode=%s components=%d tail=%.8f scale=%.8f observations=%.0f mass=%.8f",
                      dimension,mode_name,dimension,item.Correction()[dimension-1],

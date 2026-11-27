@@ -73,7 +73,7 @@ string StudyMetrics()
   }
 
 //+------------------------------------------------------------------+
-//| StudyProgress                                                    |
+//| StudyProgress - Process study progress                           |
 //+------------------------------------------------------------------+
 void StudyProgress(bool force=false)
   {
@@ -158,7 +158,7 @@ int OnInit()
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| StudyFinish                                                      |
+//| StudyFinish - Finish study                                       |
 //+------------------------------------------------------------------+
 void StudyFinish(bool interrupted)
   {
@@ -189,7 +189,7 @@ void StudyFinish(bool interrupted)
   }
 
 //+------------------------------------------------------------------+
-//| OnChartEvent                                                     |
+//| OnChartEvent - Handle the chart event                            |
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
   {

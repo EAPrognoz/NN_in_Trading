@@ -11,7 +11,7 @@
 #include "MyTreeNode.mqh"
 //---
 //+------------------------------------------------------------------+
-//| CAssocRules                                                      |
+//| CAssocRules - Find association rules                             |
 //+------------------------------------------------------------------+
 class CAssocRules : public CObject
   {
@@ -25,16 +25,6 @@ protected:
    matrixf     m_mPositions;
    matrixf     m_BuyPositions;
    matrixf     m_SellPositions;
-   //---
-   bool              NewPath(CMyTreeNode *root,matrixf &path);
-   CMyTreeNode       *CheckPath(CMyTreeNode *root,vectorf &path);
-   //---
-   bool              PrepaerData(matrixf &data,matrixf &bin_data,vectorf &buy,vectorf &sell,const int sections=10,const float min_sup=0.03f);
-   matrixf            CreatePath(vectorf &bin_data,matrixf &positions);
-   matrixf            CreatePositions(vectorf &support,const float min_sup=0.03f);
-   bool              GrowsTree(CMyTreeNode *root,matrixf &bin_data,matrixf &positions);
-   float             Probability(CMyTreeNode *root,vectorf &data,matrixf &positions);
-
 public:
                      CAssocRules();
                     ~CAssocRules();
@@ -47,6 +37,16 @@ public:
    virtual bool      Load(const int file_handle);
    virtual bool      Save(const string file_name);
    virtual bool      Load(const string file_name);
+protected:
+   //---
+   bool              NewPath(CMyTreeNode *root,matrixf &path);
+   CMyTreeNode       *CheckPath(CMyTreeNode *root,vectorf &path);
+   //---
+   bool              PrepaerData(matrixf &data,matrixf &bin_data,vectorf &buy,vectorf &sell,const int sections=10,const float min_sup=0.03f);
+   matrixf            CreatePath(vectorf &bin_data,matrixf &positions);
+   matrixf            CreatePositions(vectorf &support,const float min_sup=0.03f);
+   bool              GrowsTree(CMyTreeNode *root,matrixf &bin_data,matrixf &positions);
+   float             Probability(CMyTreeNode *root,vectorf &data,matrixf &positions);
   };
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -57,7 +57,7 @@ CAssocRules::CAssocRules()   :  m_iSections(10)
   {
   }
 //+------------------------------------------------------------------+
-//| ~CAssocRules                                                     |
+//| ~CAssocRules - Release owned resources                           |
 //+------------------------------------------------------------------+
 CAssocRules::~CAssocRules()
   {

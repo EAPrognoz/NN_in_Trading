@@ -84,7 +84,7 @@ CiCCI  CCI;
 CiATR  ATR;
 CiMACD MACD;
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -99,14 +99,18 @@ struct SState
    bool              Load(int file_handle);
 
 //--- overloading
-   void              operator=(const SState &obj)
-     {
-      ArrayCopy(state,obj.state);
-      ArrayCopy(account,obj.account);
-      ArrayCopy(action,obj.action);
-      ArrayCopy(rewards,obj.rewards);
-     }
+   void              operator=(const SState &obj);
   };
+//+------------------------------------------------------------------+
+//| operator= - Copies state data.                                   |
+//+------------------------------------------------------------------+
+void SState::operator=(const SState &obj)
+  {
+   ArrayCopy(state,obj.state);
+   ArrayCopy(account,obj.account);
+   ArrayCopy(action,obj.action);
+   ArrayCopy(rewards,obj.rewards);
+  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -127,39 +131,41 @@ SState::SState(void)
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalse
+     }
 //---
    int total=ArraySize(state);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,state[i])
+     }
 //---
    total=ArraySize(account);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,account[i])
+     }
 //---
    total=ArraySize(action);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,action[i])
+     }
 
    total=ArraySize(rewards);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,rewards[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,rewards[i])
+     }
 //---
    return(true);
   }
@@ -171,7 +177,9 @@ bool SState::Save(int file_handle)
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
    if(FileIsEnding(file_handle))
       return(false);
 //---
@@ -181,9 +189,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      state[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,state[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -192,9 +198,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      account[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,account[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -214,15 +218,13 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      rewards[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,rewards[i])
      }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CreateDescriptions                                               |
+//| CreateDescriptions - Define the neural network architectures     |
 //+------------------------------------------------------------------+
 bool CreateDescriptions(CArrayObj *&actor,
                         CArrayObj *&critic
@@ -249,23 +251,31 @@ bool CreateDescriptions(CArrayObj *&actor,
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    uint prev_count=descr.count=(HistoryBars * BarDescr)+AccountDescr;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iLatentLayer=0;
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronMomAD;
    descr.count=LatentCount;
      {
       if(ArrayResize(descr.windows,4)<4)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       descr.windows[0]=HistoryBars;     // Sequence dimension
       descr.windows[1]=4;               // Account
       descr.windows[2]=5;               // Position
@@ -274,7 +284,9 @@ bool CreateDescriptions(CArrayObj *&actor,
      {
       uint temp[]={BarDescr,StackSize,Quantiles};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.step=NHeads;
    descr.window_out=EmbeddingSize;
@@ -284,7 +296,9 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=None;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iLatentLayer++;
    uint count=prev_count=LatentCount / EmbeddingSize;
    uint prev_out=descr.window_out;
@@ -292,7 +306,9 @@ bool CreateDescriptions(CArrayObj *&actor,
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=prev_count;
    descr.window=prev_out;
@@ -302,40 +318,56 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 3
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=LatentCount;
    descr.activation=SIGMOID;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=2 * NActions;
    descr.activation=SIGMOID;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 5
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronVAEOCL;
    descr.count=NActions;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 6
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NActions / 3;
    descr.window=3;
@@ -344,24 +376,32 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=SIGMOID;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- critic
    critic.Clear();
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NActions;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronMHCrossFAT;
      {
       uint temp[]={3,                      // Inputs window
@@ -386,11 +426,15 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=None;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=NActions / 3;
    descr.window=3;
@@ -400,11 +444,15 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=NActions / 3;
    descr.window=EmbeddingSize;
@@ -414,29 +462,39 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 5
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=LatentCount;
    descr.activation=SIGMOID;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 6
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=NRewards;
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    return(true);
   }
@@ -459,7 +517,7 @@ bool IsNewBar(void)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CloseByDirection.     |
+//| CloseByDirection - Close positions of the specified type         |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -534,7 +592,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for ClosePartial.         |
+//| ClosePartial - Close part of the position volume                 |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {
@@ -567,7 +625,7 @@ bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   }
 #endif
 //+------------------------------------------------------------------+
-//| CDeal                                                            |
+//| CDeal - Represent a recorded trading deal                        |
 //+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
@@ -582,6 +640,9 @@ public:
    double             point;
    //---
                      CDeal(void);
+//+------------------------------------------------------------------+
+//| ~CDeal - Use automatic member cleanup                            |
+//+------------------------------------------------------------------+
                     ~CDeal(void) {};
    //---
    vector<float>Action(datetime current,double ask,double bid,int period_seconds);
@@ -640,14 +701,20 @@ vector<float>CDeal::Action(datetime current,double ask,double bid,int period_sec
    return(result);
   }
 //+------------------------------------------------------------------+
-//| CDeals                                                           |
+//| CDeals - Manage recorded trading deals                           |
 //+------------------------------------------------------------------+
 class CDeals
   {
 protected:
    CArrayObj Deals;
 public:
+//+------------------------------------------------------------------+
+//| CDeals - Start with an empty deal collection                     |
+//+------------------------------------------------------------------+
                      CDeals(void) { Deals.Clear(); }
+//+------------------------------------------------------------------+
+//| ~CDeals - Clear the stored deal collection                       |
+//+------------------------------------------------------------------+
                     ~CDeals(void) { Deals.Clear(); }
    //---
    bool              LoadDeals(string file_name,string symbol,double point);
@@ -787,7 +854,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
    int total_bars=(start_bar+HistoryBars+(!!forecast ? NForecast : 0));
    if(!state||!time||start_bar<0||
       total_bars>int(Rates.Size()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    matrix<float>mState=matrix<float>::Zeros(BarDescr,HistoryBars);
    vector<float>vForecast=vector<float>::Zeros(NForecast * BarDescr);
@@ -803,7 +872,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       float macd=(float)MACD.Main(b+bar);
       float sign=(float)MACD.Signal(b+bar);
       if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       //---
       mState[0,b]=(float)(Rates[b+bar].close-open);
       mState[1,b]=(float)(Rates[b+bar].high-open);
@@ -815,13 +886,19 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       mState[7,b]=macd;
       mState[8,b]=sign;
       if(!time.Add(float(Rates[b+bar].time)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!state.AssignArray(mState))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(time.GetIndex()>=0)
       if(!time.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    if(!forecast)
       return(true);
 //---
@@ -834,7 +911,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       float macd=(float)MACD.Main(bar-b);
       float sign=(float)MACD.Signal(bar-b);
       if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       //---
       int shift=(NForecast-b) * BarDescr;
       vForecast[shift]=(float)(Rates[bar-b].close-open);
@@ -849,7 +928,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
      }
 //---
    if(!forecast.AssignArray(vForecast))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    return(true);
   }
@@ -938,7 +1019,7 @@ const vector<float>SampleAccount(CBufferFloat *state,datetime time,double max_ba
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CheckAction.          |
+//| CheckAction - Simulate the account response to an action         |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action,double balance,uint start_position)
   {

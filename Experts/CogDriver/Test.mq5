@@ -136,8 +136,8 @@ int OnInit()
 void OnDeinit(const int reason)
   {
 //---
-   DeleteObj(Result);
-   DeleteObj(bAction);
+   DeleteObj(Result)
+   DeleteObj(bAction)
   }
 //+------------------------------------------------------------------+
 //| OnTick - expert tick function                                    |
@@ -322,37 +322,51 @@ bool FillStack(void)
 //---
    if(!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(RSI.BarsCalculated()<bars||
       CCI.BarsCalculated()<bars||
       ATR.BarsCalculated()<bars||
       MACD.BarsCalculated()<bars)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
 //---
    if(!ArraySetAsSeries(Rates,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bars -= end+HistoryBars;
    if(bars<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    vector<float>result,target,neg_target;
 //---
    uint ticks=GetTickCount();
    uint tester_print=0;
    if(!cActor.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!cStateEncoder.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    cStateEncoder.TrainMode(false);
    for(int posit=start-HistoryBars-1; posit>=end; posit--)
      {
       if(!CreateBuffers(posit,GetPointer(bState),GetPointer(bTime),NULL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       vector<float>account=vector<float>::Zeros(AccountDescr);
       account[0]=float(AccountInfoDouble(ACCOUNT_BALANCE) / EtalonBalance);
       account[2]=1;
@@ -367,13 +381,19 @@ bool FillStack(void)
       account[12]=(float)MathSin(x!=0 ? 2.0 * M_PI * x : 0);
       //---
       if(!bContext.AssignArray(account))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!cStateEncoder.feedForward((CBufferFloat*)GetPointer(bState),1,false,(CBufferFloat*)NULL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    //--- feed Forward
       if(!cActor.feedForward((CBufferFloat*)GetPointer(bContext),1,false,(CNet*)GetPointer(cStateEncoder),StateTokenLayer))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       //---
       if(GetTickCount()-ticks>500)
         {

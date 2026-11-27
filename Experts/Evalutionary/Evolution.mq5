@@ -130,7 +130,7 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train                                                            |
+//| Train - Train the neural networks                                |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -236,7 +236,8 @@ void Train(void)
       if(!IsStopped())
          Models.Save(MODEL+".nnw",false);
       //---
-      float average,maximum;
+      float average;
+      float maximum;
       if(!Models.NextGeneration(Mutation,average,maximum))
         {
          PrintFormat("Error of create next generation: %d",GetLastError());

@@ -75,7 +75,8 @@ bool HabiContext(CBufferFloat &ctx,COpenCLMy *cl,int mode,uint frame,const float
 //+------------------------------------------------------------------+
 bool HabiForward(CNet *net,const float &values_in[],int mode,uint frame,const float &payload[],bool training)
   {
-   CBufferFloat ctx,values;
+   CBufferFloat ctx;
+   CBufferFloat values;
 
    return(net&&HabiFinite(values_in,net.Layer(0).Neurons())&&net.TrainMode(training)&&HabiContext(ctx,net.GetOpenCL(),mode,frame,payload)&&values.AssignArray(values_in)&&net.feedForward(GetPointer(values),1,false,GetPointer(ctx)));
   }
@@ -450,347 +451,14 @@ public:
    float         last_distribution[];            // last Gaussian distribution
    float         last_actions[];                 // last action sample
    float         last_observation[];             // last observation
-
-   //+------------------------------------------------------------------+
-   //| CHabiModels - initialises the network pointers                   |
-   //+------------------------------------------------------------------+
-                     CHabiModels()
-     {
-      prior=NULL;
-      posterior=NULL;
-      decoder=NULL;
-      critic=NULL;
-      target_prior=NULL;
-      target_decoder=NULL;
-      target_critic=NULL;
-      serial=0;
-      policy_frame=0;
-      policy_live=false;
-      target_bn_pending=false;
-     }
-   //+------------------------------------------------------------------+
-   //| ~CHabiModels - releases the networks                             |
-   //+------------------------------------------------------------------+
-                    ~CHabiModels()
-     {
-      if(target_critic)
-         delete target_critic;
-
-      if(target_decoder)
-         delete target_decoder;
-
-      if(target_prior)
-         delete target_prior;
-
-      if(critic)
-         delete critic;
-
-      if(decoder)
-         delete decoder;
-
-      if(posterior)
-         delete posterior;
-
-      if(prior)
-         delete prior;
-     }
-   //+------------------------------------------------------------------+
-   //| Role - loads or creates one model role and binds OpenCL          |
-   //+------------------------------------------------------------------+
-   bool              Role(CNet *net,string path,int role,bool training)
-     {
-      if(net!=prior&&!net.UseOpenCLRuntime(prior.GetOpenCL()))
-         return(false);
-
-      string model=net==target_prior?"TargetPrior":(net==target_decoder?"TargetDecoder":(net==target_critic?"TargetCritic":(net==posterior?"Posterior":(net==decoder?"Decoder":(net==critic?"Critic":"Prior")))));
-      if(path!="")
-        {
-         if(!HabiLoad(net,path,model))
-            return(false);
-        }
-      else
-         if(!training||!HabiCreate(net,role,g,model))
-            return(false);
-
-      if(!HabiShape(net,role,g))
-         return(false);
-
-      if(net!=prior&&(!net.SetOpenCLChecked(prior.GetOpenCL())||!net.IsOpenCLTransferReady()))
-         return(false);
-
-      HabiRelease(net);
-
-      return(true);
-     }
-   //+------------------------------------------------------------------+
-   //| Check public device buffers for cross-model aliases.             |
-   //+------------------------------------------------------------------+
-   bool              RuntimeBuffer(CBufferFloat *buffer,int role,int &ids[],int &owners[])
-     {
-      if(CheckPointer(buffer)==POINTER_INVALID||buffer.Total()==0||buffer.GetIndex()<0)
-         return(true);
-
-      int id=buffer.GetIndex();
-      for(int i=0;i<ArraySize(ids);i++)
-         if(ids[i]==id)
-            return(owners[i]==role);
-
-      int count=ArraySize(ids);
-      if(ArrayResize(ids,count+1)!=count+1||ArrayResize(owners,count+1)!=count+1)
-         return(false);
-
-      ids[count]=id;
-      owners[count]=role;
-
-      return(true);
-     }
-   //+------------------------------------------------------------------+
-   //| Verify one program/context and distinct model-owned buffers.     |
-   //+------------------------------------------------------------------+
-   bool              ValidateRuntime()
-     {
-      CNet *nets[7];
-      nets[0]=prior;
-      nets[1]=decoder;
-      nets[2]=critic;
-      nets[3]=posterior;
-      nets[4]=target_prior;
-      nets[5]=target_decoder;
-      nets[6]=target_critic;
-      COpenCLMy *runtime=prior.GetOpenCL();
-      int       ids[],owners[];
-      int       roles=0;
-      for(int n=0;n<7;n++)
-        {
-         if(nets[n]==NULL)
-            continue;
-         if(nets[n].GetOpenCL()!=runtime||!nets[n].IsOpenCLTransferReady())
-            return(false);
-
-         roles++;
-         for(int layer=0;layer<7;layer++)
-           {
-            CNeuronBaseOCL *p=nets[n].Layer(layer);
-            if(p==NULL)
-               break;
-            if(!RuntimeBuffer(p.getOutput(),n,ids,owners)||
-               !RuntimeBuffer(p.getGradient(),n,ids,owners)||
-               !RuntimeBuffer(p.getWeights(),n,ids,owners))
-              {
-               PrintFormat("Habi runtime: buffer alias role=%d layer=%d",n,layer);
-
-               return(false);
-              }
-           }
-        }
-      PrintFormat("Habi runtime: shared roles=%d context=%d program=%d distinct_public_buffers=%d",roles,runtime.GetContext(),runtime.GetProgram(),ArraySize(ids));
-
-      return(true);
-     }
-   //+------------------------------------------------------------------+
-   //| Init - builds or loads the graphs for the requested stage        |
-   //+------------------------------------------------------------------+
-   bool              Init(int stage)
-     {
-      bool training=stage!=2;
-      if(!training&&(!FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0)||
-                       !FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0)||
-                       !FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0)))
-        {
-         Print("Habi: Test requires saved Prior/Decoder/Critic models");
-
-         return(false);
-        }
-
-   //--- training creates missing files; Test requires saved core models.
-      string prior_file=(!training||FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0))?PriorFile:"";
-      string posterior_file=(!training||FileIsExist(PosteriorFile,CommonFiles?FILE_COMMON:0))?PosteriorFile:"";
-      string decoder_file=(!training||FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0))?DecoderFile:"";
-      string critic_file=(!training||FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0))?CriticFile:"";
-      string target_prior_file=(!training||FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0))?PriorFile:"";
-      string target_decoder_file=(!training||FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0))?DecoderFile:"";
-      string target_critic_file=(!training||FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0))?CriticFile:"";
-
-      g.M=HistoryBars*9;
-      g.O=g.M+13;
-      g.A=6;
-      g.L=LatentSize;
-      g.N=Candidates;
-
-      prior=new CNet();
-
-      if(!prior)
-         return(false);
-
-      NNHabiInitModel="SharedRuntime";
-      if(!prior.PrepareOpenCLRuntime())
-         return(false);
-
-      if(prior_file!="")
-        {
-         if(!HabiLoad(prior,prior_file,"Prior")||!prior.Layer(5)||prior.Layer(5).Type()!=defNeuronHabiGaussianOCL)
-            return(false);
-
-         g.L=((CNeuronHabiGaussianOCL*)prior.Layer(5)).Latent();
-        }
-
-   //--- decoder defines N for imported models, before creating any other graph
-      decoder=new CNet();
-
-      if(!decoder||!decoder.UseOpenCLRuntime(prior.GetOpenCL()))
-         return(false);
-
-      if(decoder_file!="")
-        {
-         if(!HabiLoad(decoder,decoder_file,"Decoder")||!decoder.Layer(1)||decoder.Layer(1).Type()!=defNeuronHabiVAEOCL)
-            return(false);
-
-         CNeuronHabiVAEOCL *s=decoder.Layer(1);
-
-         g.N=s.Rows();
-
-         if(prior_file=="")
-            g.L=s.Latent();
-         else
-            if(g.L!=s.Latent())
-               return(false);
-        }
-
-      ulong width=2*(ulong)g.L+g.A;
-      if(g.N<1||g.L<1||width>INT_MAX||g.N>INT_MAX/width||
-         4+(ulong)g.N*g.A+2*(ulong)g.L>INT_MAX||
-         (width+1)*g.L>INT_MAX||((ulong)g.L+1)*2*g.L>INT_MAX||g.M>INT_MAX-19)
-         return(false);
-
-      if(prior_file==""&&(!training||!HabiCreate(prior,0,g)))
-         return(false);
-
-      if(!HabiShape(prior,0,g))
-         return(false);
-
-      if(decoder_file==""&&(!training||!HabiCreate(decoder,2,g)))
-         return(false);
-
-      if(!HabiShape(decoder,2,g)||!decoder.SetOpenCLChecked(prior.GetOpenCL()))
-         return(false);
-
-      critic=new CNet();
-
-      if(!critic||!Role(critic,critic_file,3,training))
-         return(false);
-
-      if(training&&!((CNeuronHabiCriticHeadOCL*)critic.Layer(6)).Discount((float)DiscountGamma))
-         return(false);
-
-      if(stage==0)
-        {
-         posterior=new CNet();
-
-         if(!posterior||!Role(posterior,posterior_file,1,true))
-            return(false);
-
-         CNeuronHabiGaussianOCL *head=(CNeuronHabiGaussianOCL*)posterior.Layer(5);
-         float                  loaded_beta=head.EffectiveBeta();
-         bool                   invalid_beta=!MathIsValidNumber(loaded_beta)||loaded_beta<=0;
-         if(posterior_file==""||ResetLoadedBeta||invalid_beta||head.IsBetaAdaptive()!=AdaptiveBeta)
-           {
-            if(!head.Beta(AdaptiveBeta,BetaValue,BetaLearningRate,KTarget,BetaRho1,BetaRho2,BetaEpsilon))
-               return(false);
-
-            if(posterior_file!="")
-               PrintFormat("Habi Study: configured KL beta %.6g (adaptive=%s) for %s",head.EffectiveBeta(),AdaptiveBeta?"true":"false",posterior_file);
-           }
-         if(!MathIsValidNumber(head.EffectiveBeta())||head.EffectiveBeta()<=0)
-           {
-            Print("Habi Study: BC requires a positive finite KL beta");
-
-            return(false);
-           }
-        }
-
-      if(!HabiImport(prior,PriorImportFile,PriorImportLayers,0,g)||!HabiImport(decoder,DecoderImportFile,DecoderImportLayers,2,g)||!HabiImport(critic,CriticImportFile,CriticImportLayers,3,g)||(posterior&&!HabiImport(posterior,PosteriorImportFile,PosteriorImportLayers,1,g)))
-         return(false);
-
-      if(stage==1&&enable_critic_td)
-        {
-         target_prior=new CNet();
-         target_decoder=new CNet();
-         target_critic=new CNet();
-
-         if(!target_prior||!target_decoder||!target_critic||!Role(target_prior,target_prior_file,0,true)||!Role(target_decoder,target_decoder_file,2,true)||!Role(target_critic,target_critic_file,3,true))
-            return(false);
-
-         if((target_prior_file==""&&!target_prior.WeightsUpdate(prior,1))||(target_decoder_file==""&&!target_decoder.WeightsUpdate(decoder,1))||(target_critic_file==""&&!target_critic.WeightsUpdate(critic,1)))
-            return(false);
-        }
-
-      if(target_prior)
-        {
-         bool ready=((CNeuronHabiObservationOCL*)target_prior.Layer(1)).BNReady();
-
-         if(target_prior_file!=""&&!ready)
-            return(false);
-
-         target_bn_pending=!ready;
-        }
-
-      if(!training&&!((CNeuronHabiObservationOCL*)prior.Layer(1)).BNReady())
-         return(false);
-
-      HabiRelease(prior);
-      HabiRelease(decoder);
-
-      return(ValidateRuntime());
-     }
-   //+------------------------------------------------------------------+
-   //| Generate - samples latent and actions from the given networks    |
-   //+------------------------------------------------------------------+
-   bool              Generate(CNet *p,CNet *d,const float &o[],uint id,bool policy,float &distribution[],float &actions[])
-     {
-      float empty[];
-
-      if(!HabiForward(p,o,policy?3:2,id,empty,policy)||!HabiOutput(p,5,2*g.L,distribution)||!HabiForward(d,distribution,21,id,empty,policy)||!HabiOutput(d,5,g.N*g.A,actions))
-         return(false);
-
-      return(true);
-     }
-   //+------------------------------------------------------------------+
-   //| Predict - builds one online generation from the observation      |
-   //+------------------------------------------------------------------+
-   bool              Predict(const float &o[],bool training_policy)
-     {
-      HabiRelease(prior);
-      HabiRelease(decoder);
-
-      policy_live=false;
-      policy_frame=++serial;
-
-   //--- a new StudyOnline BN may start on its first real observation
-      if(training_policy||!((CNeuronHabiObservationOCL*)prior.Layer(1)).BNReady())
-        {
-         float empty[];
-
-         if(!HabiForward(prior,o,3,policy_frame,empty,true)||!HabiOutput(prior,5,2*g.L,last_distribution)||!HabiForward(decoder,last_distribution,21,policy_frame,empty,training_policy)||!HabiOutput(decoder,5,g.N*g.A,last_actions))
-            return(false);
-        }
-      else
-         if(!Generate(prior,decoder,o,policy_frame,false,last_distribution,last_actions))
-            return(false);
-
-      if(target_bn_pending)
-        {
-         if(!((CNeuronHabiObservationOCL*)target_prior.Layer(1)).CopyBN((CNeuronHabiObservationOCL*)prior.Layer(1)))
-            return(false);
-
-         target_bn_pending=false;
-        }
-
-      ArrayCopy(last_observation,o);
-
-      policy_live=training_policy;
-
-      return(true);
-     }
+   CHabiModels();
+   ~CHabiModels();
+   bool              Role(CNet *net,string path,int role,bool training);
+   bool              RuntimeBuffer(CBufferFloat *buffer,int role,int &ids[],int &owners[]);
+   bool              ValidateRuntime();
+   bool              Init(int stage);
+   bool              Generate(CNet *p,CNet *d,const float &o[],uint id,bool policy,float &distribution[],float &actions[]);
+   bool              Predict(const float &o[],bool training_policy);
    //+------------------------------------------------------------------+
    //| Scores - evaluates one candidate batch with the critic           |
    //+------------------------------------------------------------------+
@@ -801,190 +469,11 @@ public:
       return(ArraySize(distribution)==2*g.L&&ArraySize(a)==g.N*g.A&&
              HabiForward(net,a,mode,id,distribution,train)&&HabiOutput(net,6,g.N,q));
      }
-   //+------------------------------------------------------------------+
-   //| BC - runs one behavioural cloning update                         |
-   //+------------------------------------------------------------------+
-   bool              BC(const float &o[],const float &teacher[],double &mse,double &kl,double &beta_used)
-     {
-      float beta=((CNeuronHabiGaussianOCL*)posterior.Layer(5)).EffectiveBeta();
-      if(!MathIsValidNumber(beta)||beta<=0)
-         return(false);
-
-      uint  id=++serial;
-      float empty[],qinput[],pv[],qv[],reconstruction[],payload[],prediction[];
-
-      ArrayCopy(qinput,o);
-      ArrayCopy(qinput,teacher,ArraySize(o));
-
-      HabiRelease(prior);
-      HabiRelease(posterior);
-      HabiRelease(decoder);
-
-      if(!HabiForward(prior,o,1,id,empty,true)||!HabiForward(posterior,qinput,1,id,empty,true)||!HabiOutput(prior,5,2*g.L,pv)||!HabiOutput(posterior,5,2*g.L,qv))
-         return(false);
-
-      if(!HabiForward(decoder,qv,21,id,empty,true)||!HabiOutput(decoder,5,g.N*g.A,prediction)||!HabiBackward(decoder,23,id,teacher)||!HabiGradient(decoder,reconstruction))
-         return(false);
-
-      ArrayCopy(payload,pv);
-      ArrayCopy(payload,reconstruction,2*g.L);
-      ArrayResize(payload,4*g.L+1);
-      payload[4*g.L]=beta;
-
-      if(!HabiBackward(posterior,12,id,payload))
-         return(false);
-
-      ArrayResize(payload,0);
-      ArrayCopy(payload,qv);
-      ArrayResize(payload,2*g.L+1);
-      payload[2*g.L]=beta;
-
-      if(!HabiBackward(prior,11,id,payload))
-         return(false);
-
-      mse=0;
-      for(uint i=0;i<g.N*g.A;i++)
-        {
-         double residual=(double)prediction[i]-teacher[i%g.A];
-         mse+=residual*residual;
-        }
-      mse/=g.N*g.A;
-      kl=((CNeuronHabiGaussianOCL*)posterior.Layer(5)).LastKL();
-      beta_used=beta;
-
-      return(true);
-     }
-   //+------------------------------------------------------------------+
-   //| MC - draws one posterior sample and decodes it                   |
-   //+------------------------------------------------------------------+
-   bool              MC(const float &o[],const float &teacher[],float &distribution[],float &a[],uint &id)
-     {
-      id=++serial;
-
-      float in[],empty[],qv[];
-
-      ArrayCopy(in,o);
-      ArrayCopy(in,teacher,ArraySize(o));
-
-      HabiRelease(posterior);
-      HabiRelease(decoder);
-
-      return(HabiForward(posterior,in,2,id,empty,false)&&HabiOutput(posterior,5,2*g.L,distribution)&&HabiForward(decoder,distribution,21,id,empty,false)&&HabiOutput(decoder,5,g.N*g.A,a));
-     }
-   //+------------------------------------------------------------------+
-   //| LearnMC - updates the critic towards the given targets           |
-   //+------------------------------------------------------------------+
-   bool              LearnMC(const float &distribution[],const float &a[],const float &targets[],uint id,double &mse)
-     {
-      float q[];
-
-      if(!Scores(critic,distribution,a,id,31,true,q)||!HabiBackward(critic,32,id,targets))
-         return(false);
-
-      mse=0;
-      for(uint i=0;i<g.N;i++)
-        {
-         double residual=(double)q[i]-targets[i];
-         mse+=residual*residual;
-        }
-      mse/=g.N;
-
-      return(true);
-     }
-   //+------------------------------------------------------------------+
-   //| TD - runs one critic TD update using the target networks         |
-   //+------------------------------------------------------------------+
-   bool              TD(const float &distribution[],const float &a[],const float &reward[],const float &done[],const float &next[])
-     {
-      uint id=++serial;
-
-      float boot[],payload[],q[];
-
-      ArrayResize(boot,g.N);
-      ArrayInitialize(boot,0);
-
-      bool terminal=true;
-
-      for(uint n=0;n<g.N;n++)
-         if(done[n]!=1)
-            terminal=false;
-
-      if(!terminal)
-        {
-         float target_distribution[],ta[],tq[];
-
-         HabiRelease(target_prior);
-         HabiRelease(target_decoder);
-
-         if(!Generate(target_prior,target_decoder,next,id,false,target_distribution,ta)||!Scores(target_critic,target_distribution,ta,id,35,false,tq))
-            return(false);
-
-         float mx=tq[0];
-
-         for(uint n=1;n<g.N;n++)
-            mx=MathMax(mx,tq[n]);
-
-         ArrayInitialize(boot,mx);
-        }
-
-      ArrayCopy(payload,reward);
-      ArrayCopy(payload,done,g.N);
-      ArrayCopy(payload,boot,2*g.N);
-
-      return(Scores(critic,distribution,a,id,31,true,q)&&HabiBackward(critic,33,id,payload));
-     }
-   //+------------------------------------------------------------------+
-   //| Policy - runs one policy update through the frozen critic        |
-   //+------------------------------------------------------------------+
-   bool              Policy()
-     {
-      if(!policy_live||(!train_prior&&!train_decoder))
-        {
-         HabiRelease(prior);
-         HabiRelease(decoder);
-
-         policy_live=false;
-
-         return(true);
-        }
-
-      float empty[],q[],ga[],gc[],payload[],gp[];
-
-      bool frozen=critic.WeightsUpdateEnabled();
-
-      if(!critic.SetWeightsUpdate(false))
-         return(false);
-
-      bool ok=Scores(critic,last_distribution,last_actions,policy_frame,36,true,q)&&HabiBackward(critic,34,policy_frame,empty)&&HabiGradient(critic,ga)&&((CNeuronHabiCriticInputOCL*)critic.Layer(1)).DirectGradient(gc);
-
-      critic.SetWeightsUpdate(frozen);
-
-      if(!ok)
-         return(false);
-
-      ArrayCopy(payload,ga);
-      ArrayCopy(payload,gc,g.N*g.A);
-
-      bool old=decoder.WeightsUpdateEnabled();
-
-      decoder.SetWeightsUpdate(train_decoder);
-
-      ok=HabiBackward(decoder,24,policy_frame,payload);
-
-      decoder.SetWeightsUpdate(old);
-
-      if(!ok)
-         return(false);
-
-      if(train_prior&&(!HabiGradient(decoder,gp)||!HabiBackward(prior,13,policy_frame,gp)))
-         return(false);
-
-      HabiRelease(prior);
-
-      policy_live=false;
-
-      return(true);
-     }
+   bool              BC(const float &o[],const float &teacher[],double &mse,double &kl,double &beta_used);
+   bool              MC(const float &o[],const float &teacher[],float &distribution[],float &a[],uint &id);
+   bool              LearnMC(const float &distribution[],const float &a[],const float &targets[],uint id,double &mse);
+   bool              TD(const float &distribution[],const float &a[],const float &reward[],const float &done[],const float &next[]);
+   bool              Policy();
    //+------------------------------------------------------------------+
    //| Sync - copies the trainable weights into the target networks     |
    //+------------------------------------------------------------------+
@@ -1007,6 +496,532 @@ public:
       return(SaveRole(prior,"_Prior")&&SaveRole(posterior,"_Posterior")&&SaveRole(decoder,"_Decoder")&&SaveRole(critic,"_Critic")&&SaveRole(target_prior,"_TargetPrior")&&SaveRole(target_decoder,"_TargetDecoder")&&SaveRole(target_critic,"_TargetCritic"));
      }
   };
+//+------------------------------------------------------------------+
+//| CHabiModels - initialises the network pointers                   |
+//+------------------------------------------------------------------+
+CHabiModels::CHabiModels()
+  {
+   prior=NULL;
+   posterior=NULL;
+   decoder=NULL;
+   critic=NULL;
+   target_prior=NULL;
+   target_decoder=NULL;
+   target_critic=NULL;
+   serial=0;
+   policy_frame=0;
+   policy_live=false;
+   target_bn_pending=false;
+  }
+//+------------------------------------------------------------------+
+//| ~CHabiModels - releases the networks                             |
+//+------------------------------------------------------------------+
+CHabiModels::~CHabiModels()
+  {
+   if(target_critic)
+      delete target_critic;
+
+   if(target_decoder)
+      delete target_decoder;
+
+   if(target_prior)
+      delete target_prior;
+
+   if(critic)
+      delete critic;
+
+   if(decoder)
+      delete decoder;
+
+   if(posterior)
+      delete posterior;
+
+   if(prior)
+      delete prior;
+  }
+//+------------------------------------------------------------------+
+//| Role - loads or creates one model role and binds OpenCL          |
+//+------------------------------------------------------------------+
+bool CHabiModels::Role(CNet *net,string path,int role,bool training)
+  {
+   if(net!=prior&&!net.UseOpenCLRuntime(prior.GetOpenCL()))
+      return(false);
+
+   string model=net==target_prior?"TargetPrior":(net==target_decoder?"TargetDecoder":(net==target_critic?"TargetCritic":(net==posterior?"Posterior":(net==decoder?"Decoder":(net==critic?"Critic":"Prior")))));
+   if(path!="")
+     {
+      if(!HabiLoad(net,path,model))
+         return(false);
+     }
+   else
+      if(!training||!HabiCreate(net,role,g,model))
+         return(false);
+
+   if(!HabiShape(net,role,g))
+      return(false);
+
+   if(net!=prior&&(!net.SetOpenCLChecked(prior.GetOpenCL())||!net.IsOpenCLTransferReady()))
+      return(false);
+
+   HabiRelease(net);
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| RuntimeBuffer - Check runtime buffer                             |
+//+------------------------------------------------------------------+
+//--- Check public device buffers for cross-model aliases.
+bool CHabiModels::RuntimeBuffer(CBufferFloat *buffer,int role,int &ids[],int &owners[])
+  {
+   if(CheckPointer(buffer)==POINTER_INVALID||buffer.Total()==0||buffer.GetIndex()<0)
+      return(true);
+
+   int id=buffer.GetIndex();
+   for(int i=0;i<ArraySize(ids);i++)
+      if(ids[i]==id)
+         return(owners[i]==role);
+
+   int count=ArraySize(ids);
+   if(ArrayResize(ids,count+1)!=count+1||ArrayResize(owners,count+1)!=count+1)
+      return(false);
+
+   ids[count]=id;
+   owners[count]=role;
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| ValidateRuntime - Validate runtime                               |
+//+------------------------------------------------------------------+
+//--- Verify one program/context and distinct model-owned buffers.
+bool CHabiModels::ValidateRuntime()
+  {
+   CNet *nets[7];
+   nets[0]=prior;
+   nets[1]=decoder;
+   nets[2]=critic;
+   nets[3]=posterior;
+   nets[4]=target_prior;
+   nets[5]=target_decoder;
+   nets[6]=target_critic;
+   COpenCLMy *runtime=prior.GetOpenCL();
+   int       ids[],owners[];
+   int       roles=0;
+   for(int n=0;n<7;n++)
+     {
+      if(nets[n]==NULL)
+         continue;
+      if(nets[n].GetOpenCL()!=runtime||!nets[n].IsOpenCLTransferReady())
+         return(false);
+
+      roles++;
+      for(int layer=0;layer<7;layer++)
+        {
+         CNeuronBaseOCL *p=nets[n].Layer(layer);
+         if(p==NULL)
+            break;
+         if(!RuntimeBuffer(p.getOutput(),n,ids,owners)||
+            !RuntimeBuffer(p.getGradient(),n,ids,owners)||
+            !RuntimeBuffer(p.getWeights(),n,ids,owners))
+           {
+            PrintFormat("Habi runtime: buffer alias role=%d layer=%d",n,layer);
+
+            return(false);
+           }
+        }
+     }
+   PrintFormat("Habi runtime: shared roles=%d context=%d program=%d distinct_public_buffers=%d",roles,runtime.GetContext(),runtime.GetProgram(),ArraySize(ids));
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Init - builds or loads the graphs for the requested stage        |
+//+------------------------------------------------------------------+
+bool CHabiModels::Init(int stage)
+  {
+   bool training=stage!=2;
+   if(!training&&(!FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0)||
+                    !FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0)||
+                    !FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0)))
+     {
+      Print("Habi: Test requires saved Prior/Decoder/Critic models");
+
+      return(false);
+     }
+
+//--- training creates missing files; Test requires saved core models.
+   string prior_file=(!training||FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0))?PriorFile:"";
+   string posterior_file=(!training||FileIsExist(PosteriorFile,CommonFiles?FILE_COMMON:0))?PosteriorFile:"";
+   string decoder_file=(!training||FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0))?DecoderFile:"";
+   string critic_file=(!training||FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0))?CriticFile:"";
+   string target_prior_file=(!training||FileIsExist(PriorFile,CommonFiles?FILE_COMMON:0))?PriorFile:"";
+   string target_decoder_file=(!training||FileIsExist(DecoderFile,CommonFiles?FILE_COMMON:0))?DecoderFile:"";
+   string target_critic_file=(!training||FileIsExist(CriticFile,CommonFiles?FILE_COMMON:0))?CriticFile:"";
+
+   g.M=HistoryBars*9;
+   g.O=g.M+13;
+   g.A=6;
+   g.L=LatentSize;
+   g.N=Candidates;
+
+   prior=new CNet();
+
+   if(!prior)
+      return(false);
+
+   NNHabiInitModel="SharedRuntime";
+   if(!prior.PrepareOpenCLRuntime())
+      return(false);
+
+   if(prior_file!="")
+     {
+      if(!HabiLoad(prior,prior_file,"Prior")||!prior.Layer(5)||prior.Layer(5).Type()!=defNeuronHabiGaussianOCL)
+         return(false);
+
+      g.L=((CNeuronHabiGaussianOCL*)prior.Layer(5)).Latent();
+     }
+
+//--- decoder defines N for imported models, before creating any other graph
+   decoder=new CNet();
+
+   if(!decoder||!decoder.UseOpenCLRuntime(prior.GetOpenCL()))
+      return(false);
+
+   if(decoder_file!="")
+     {
+      if(!HabiLoad(decoder,decoder_file,"Decoder")||!decoder.Layer(1)||decoder.Layer(1).Type()!=defNeuronHabiVAEOCL)
+         return(false);
+
+      CNeuronHabiVAEOCL *s=decoder.Layer(1);
+
+      g.N=s.Rows();
+
+      if(prior_file=="")
+         g.L=s.Latent();
+      else
+         if(g.L!=s.Latent())
+            return(false);
+     }
+
+   ulong width=2*(ulong)g.L+g.A;
+   if(g.N<1||g.L<1||width>INT_MAX||g.N>INT_MAX/width||
+      4+(ulong)g.N*g.A+2*(ulong)g.L>INT_MAX||
+      (width+1)*g.L>INT_MAX||((ulong)g.L+1)*2*g.L>INT_MAX||g.M>INT_MAX-19)
+      return(false);
+
+   if(prior_file==""&&(!training||!HabiCreate(prior,0,g)))
+      return(false);
+
+   if(!HabiShape(prior,0,g))
+      return(false);
+
+   if(decoder_file==""&&(!training||!HabiCreate(decoder,2,g)))
+      return(false);
+
+   if(!HabiShape(decoder,2,g)||!decoder.SetOpenCLChecked(prior.GetOpenCL()))
+      return(false);
+
+   critic=new CNet();
+
+   if(!critic||!Role(critic,critic_file,3,training))
+      return(false);
+
+   if(training&&!((CNeuronHabiCriticHeadOCL*)critic.Layer(6)).Discount((float)DiscountGamma))
+      return(false);
+
+   if(stage==0)
+     {
+      posterior=new CNet();
+
+      if(!posterior||!Role(posterior,posterior_file,1,true))
+         return(false);
+
+      CNeuronHabiGaussianOCL *head=(CNeuronHabiGaussianOCL*)posterior.Layer(5);
+      float                  loaded_beta=head.EffectiveBeta();
+      bool                   invalid_beta=!MathIsValidNumber(loaded_beta)||loaded_beta<=0;
+      if(posterior_file==""||ResetLoadedBeta||invalid_beta||head.IsBetaAdaptive()!=AdaptiveBeta)
+        {
+         if(!head.Beta(AdaptiveBeta,BetaValue,BetaLearningRate,KTarget,BetaRho1,BetaRho2,BetaEpsilon))
+            return(false);
+
+         if(posterior_file!="")
+            PrintFormat("Habi Study: configured KL beta %.6g (adaptive=%s) for %s",head.EffectiveBeta(),AdaptiveBeta?"true":"false",posterior_file);
+        }
+      if(!MathIsValidNumber(head.EffectiveBeta())||head.EffectiveBeta()<=0)
+        {
+         Print("Habi Study: BC requires a positive finite KL beta");
+
+         return(false);
+        }
+     }
+
+   if(!HabiImport(prior,PriorImportFile,PriorImportLayers,0,g)||!HabiImport(decoder,DecoderImportFile,DecoderImportLayers,2,g)||!HabiImport(critic,CriticImportFile,CriticImportLayers,3,g)||(posterior&&!HabiImport(posterior,PosteriorImportFile,PosteriorImportLayers,1,g)))
+      return(false);
+
+   if(stage==1&&enable_critic_td)
+     {
+      target_prior=new CNet();
+      target_decoder=new CNet();
+      target_critic=new CNet();
+
+      if(!target_prior||!target_decoder||!target_critic||!Role(target_prior,target_prior_file,0,true)||!Role(target_decoder,target_decoder_file,2,true)||!Role(target_critic,target_critic_file,3,true))
+         return(false);
+
+      if((target_prior_file==""&&!target_prior.WeightsUpdate(prior,1))||(target_decoder_file==""&&!target_decoder.WeightsUpdate(decoder,1))||(target_critic_file==""&&!target_critic.WeightsUpdate(critic,1)))
+         return(false);
+     }
+
+   if(target_prior)
+     {
+      bool ready=((CNeuronHabiObservationOCL*)target_prior.Layer(1)).BNReady();
+
+      if(target_prior_file!=""&&!ready)
+         return(false);
+
+      target_bn_pending=!ready;
+     }
+
+   if(!training&&!((CNeuronHabiObservationOCL*)prior.Layer(1)).BNReady())
+      return(false);
+
+   HabiRelease(prior);
+   HabiRelease(decoder);
+
+   return(ValidateRuntime());
+  }
+//+------------------------------------------------------------------+
+//| Generate - samples latent and actions from the given networks    |
+//+------------------------------------------------------------------+
+bool CHabiModels::Generate(CNet *p,CNet *d,const float &o[],uint id,bool policy,float &distribution[],float &actions[])
+  {
+   float empty[];
+
+   if(!HabiForward(p,o,policy?3:2,id,empty,policy)||!HabiOutput(p,5,2*g.L,distribution)||!HabiForward(d,distribution,21,id,empty,policy)||!HabiOutput(d,5,g.N*g.A,actions))
+      return(false);
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| Predict - builds one online generation from the observation      |
+//+------------------------------------------------------------------+
+bool CHabiModels::Predict(const float &o[],bool training_policy)
+  {
+   HabiRelease(prior);
+   HabiRelease(decoder);
+
+   policy_live=false;
+   policy_frame=++serial;
+
+//--- a new StudyOnline BN may start on its first real observation
+   if(training_policy||!((CNeuronHabiObservationOCL*)prior.Layer(1)).BNReady())
+     {
+      float empty[];
+
+      if(!HabiForward(prior,o,3,policy_frame,empty,true)||!HabiOutput(prior,5,2*g.L,last_distribution)||!HabiForward(decoder,last_distribution,21,policy_frame,empty,training_policy)||!HabiOutput(decoder,5,g.N*g.A,last_actions))
+         return(false);
+     }
+   else
+      if(!Generate(prior,decoder,o,policy_frame,false,last_distribution,last_actions))
+         return(false);
+
+   if(target_bn_pending)
+     {
+      if(!((CNeuronHabiObservationOCL*)target_prior.Layer(1)).CopyBN((CNeuronHabiObservationOCL*)prior.Layer(1)))
+         return(false);
+
+      target_bn_pending=false;
+     }
+
+   ArrayCopy(last_observation,o);
+
+   policy_live=training_policy;
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| BC - runs one behavioural cloning update                         |
+//+------------------------------------------------------------------+
+bool CHabiModels::BC(const float &o[],const float &teacher[],double &mse,double &kl,double &beta_used)
+  {
+   float beta=((CNeuronHabiGaussianOCL*)posterior.Layer(5)).EffectiveBeta();
+   if(!MathIsValidNumber(beta)||beta<=0)
+      return(false);
+
+   uint  id=++serial;
+   float empty[],qinput[],pv[],qv[],reconstruction[],payload[],prediction[];
+
+   ArrayCopy(qinput,o);
+   ArrayCopy(qinput,teacher,ArraySize(o));
+
+   HabiRelease(prior);
+   HabiRelease(posterior);
+   HabiRelease(decoder);
+
+   if(!HabiForward(prior,o,1,id,empty,true)||!HabiForward(posterior,qinput,1,id,empty,true)||!HabiOutput(prior,5,2*g.L,pv)||!HabiOutput(posterior,5,2*g.L,qv))
+      return(false);
+
+   if(!HabiForward(decoder,qv,21,id,empty,true)||!HabiOutput(decoder,5,g.N*g.A,prediction)||!HabiBackward(decoder,23,id,teacher)||!HabiGradient(decoder,reconstruction))
+      return(false);
+
+   ArrayCopy(payload,pv);
+   ArrayCopy(payload,reconstruction,2*g.L);
+   ArrayResize(payload,4*g.L+1);
+   payload[4*g.L]=beta;
+
+   if(!HabiBackward(posterior,12,id,payload))
+      return(false);
+
+   ArrayResize(payload,0);
+   ArrayCopy(payload,qv);
+   ArrayResize(payload,2*g.L+1);
+   payload[2*g.L]=beta;
+
+   if(!HabiBackward(prior,11,id,payload))
+      return(false);
+
+   mse=0;
+   for(uint i=0;i<g.N*g.A;i++)
+     {
+      double residual=(double)prediction[i]-teacher[i%g.A];
+      mse+=residual*residual;
+     }
+   mse/=g.N*g.A;
+   kl=((CNeuronHabiGaussianOCL*)posterior.Layer(5)).LastKL();
+   beta_used=beta;
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| MC - draws one posterior sample and decodes it                   |
+//+------------------------------------------------------------------+
+bool CHabiModels::MC(const float &o[],const float &teacher[],float &distribution[],float &a[],uint &id)
+  {
+   id=++serial;
+
+   float in[],empty[],qv[];
+
+   ArrayCopy(in,o);
+   ArrayCopy(in,teacher,ArraySize(o));
+
+   HabiRelease(posterior);
+   HabiRelease(decoder);
+
+   return(HabiForward(posterior,in,2,id,empty,false)&&HabiOutput(posterior,5,2*g.L,distribution)&&HabiForward(decoder,distribution,21,id,empty,false)&&HabiOutput(decoder,5,g.N*g.A,a));
+  }
+//+------------------------------------------------------------------+
+//| LearnMC - updates the critic towards the given targets           |
+//+------------------------------------------------------------------+
+bool CHabiModels::LearnMC(const float &distribution[],const float &a[],const float &targets[],uint id,double &mse)
+  {
+   float q[];
+
+   if(!Scores(critic,distribution,a,id,31,true,q)||!HabiBackward(critic,32,id,targets))
+      return(false);
+
+   mse=0;
+   for(uint i=0;i<g.N;i++)
+     {
+      double residual=(double)q[i]-targets[i];
+      mse+=residual*residual;
+     }
+   mse/=g.N;
+
+   return(true);
+  }
+//+------------------------------------------------------------------+
+//| TD - runs one critic TD update using the target networks         |
+//+------------------------------------------------------------------+
+bool CHabiModels::TD(const float &distribution[],const float &a[],const float &reward[],const float &done[],const float &next[])
+  {
+   uint id=++serial;
+
+   float boot[],payload[],q[];
+
+   ArrayResize(boot,g.N);
+   ArrayInitialize(boot,0);
+
+   bool terminal=true;
+
+   for(uint n=0;n<g.N;n++)
+      if(done[n]!=1)
+         terminal=false;
+
+   if(!terminal)
+     {
+      float target_distribution[],ta[],tq[];
+
+      HabiRelease(target_prior);
+      HabiRelease(target_decoder);
+
+      if(!Generate(target_prior,target_decoder,next,id,false,target_distribution,ta)||!Scores(target_critic,target_distribution,ta,id,35,false,tq))
+         return(false);
+
+      float mx=tq[0];
+
+      for(uint n=1;n<g.N;n++)
+         mx=MathMax(mx,tq[n]);
+
+      ArrayInitialize(boot,mx);
+     }
+
+   ArrayCopy(payload,reward);
+   ArrayCopy(payload,done,g.N);
+   ArrayCopy(payload,boot,2*g.N);
+
+   return(Scores(critic,distribution,a,id,31,true,q)&&HabiBackward(critic,33,id,payload));
+  }
+//+------------------------------------------------------------------+
+//| Policy - runs one policy update through the frozen critic        |
+//+------------------------------------------------------------------+
+bool CHabiModels::Policy()
+  {
+   if(!policy_live||(!train_prior&&!train_decoder))
+     {
+      HabiRelease(prior);
+      HabiRelease(decoder);
+
+      policy_live=false;
+
+      return(true);
+     }
+
+   float empty[],q[],ga[],gc[],payload[],gp[];
+
+   bool frozen=critic.WeightsUpdateEnabled();
+
+   if(!critic.SetWeightsUpdate(false))
+      return(false);
+
+   bool ok=Scores(critic,last_distribution,last_actions,policy_frame,36,true,q)&&HabiBackward(critic,34,policy_frame,empty)&&HabiGradient(critic,ga)&&((CNeuronHabiCriticInputOCL*)critic.Layer(1)).DirectGradient(gc);
+
+   critic.SetWeightsUpdate(frozen);
+
+   if(!ok)
+      return(false);
+
+   ArrayCopy(payload,ga);
+   ArrayCopy(payload,gc,g.N*g.A);
+
+   bool old=decoder.WeightsUpdateEnabled();
+
+   decoder.SetWeightsUpdate(train_decoder);
+
+   ok=HabiBackward(decoder,24,policy_frame,payload);
+
+   decoder.SetWeightsUpdate(old);
+
+   if(!ok)
+      return(false);
+
+   if(train_prior&&(!HabiGradient(decoder,gp)||!HabiBackward(prior,13,policy_frame,gp)))
+      return(false);
+
+   HabiRelease(prior);
+
+   policy_live=false;
+
+   return(true);
+  }
 #endif
 
 //+------------------------------------------------------------------+

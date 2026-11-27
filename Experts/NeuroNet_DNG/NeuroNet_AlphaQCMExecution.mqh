@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
-//|                                  NeuroNet_AlphaQCMExecution.mqh  |
+//|                                   NeuroNet_AlphaQCMExecution.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_EXECUTION_MQH
 #define NEURONET_ALPHAQCM_EXECUTION_MQH
@@ -11,7 +12,7 @@
 // Market and financial execution adapted from AlphaGen/Trajectory.mqh.
 
 //+------------------------------------------------------------------+
-//| Encode exact integer metadata in FP32 service words.             |
+//| AlphaQCMInteger - Encode integer metadata in FP32 words          |
 //+------------------------------------------------------------------+
 void AlphaQCMInteger(float &data[],int offset,ulong value)
   {
@@ -21,23 +22,26 @@ void AlphaQCMInteger(float &data[],int offset,ulong value)
      }
   }
 //+------------------------------------------------------------------+
-//| Financial part: each added volume retains its own entry and age. |
+//| SAlphaQCMPart - Store entry and age for each added volume        |
 //+------------------------------------------------------------------+
 struct SAlphaQCMPart
   {
-   double            volume,entry;
+   double            volume;
+   double            entry;
    datetime          time;
   };
 //+------------------------------------------------------------------+
-//| SAlphaQCMTarget                                                  |
+//| SAlphaQCMTarget - Store protected target exposure                |
 //+------------------------------------------------------------------+
 struct SAlphaQCMTarget
   {
-   double            volume,sl,tp;
+   double            volume;
+   double            sl;
+   double            tp;
    bool              invalid;
   };
 //+------------------------------------------------------------------+
-//| CAlphaQCMEnvironment                                             |
+//| CAlphaQCMEnvironment - Reconcile and execute target exposure     |
 //+------------------------------------------------------------------+
 class CAlphaQCMEnvironment
   {
@@ -89,8 +93,9 @@ public:
 
 public:
    //+------------------------------------------------------------------+
-   //| Initialize owned runtime state and diagnostic counters.          |
+   //| CAlphaQCMEnvironment - Initialize the object state               |
    //+------------------------------------------------------------------+
+   //--- Initialize owned runtime state and diagnostic counters.
    CAlphaQCMEnvironment():virtual_mode(false),
                      gross_profit(0),
                      gross_loss(0),
@@ -110,8 +115,9 @@ public:
    bool              Snapshot(double bid,double ask,datetime time);
    bool              Account(datetime time,float &a[]);
    //+------------------------------------------------------------------+
-   //| Record the confirmed starting snapshot before execution.         |
+   //| Commit - Record the confirmed state                              |
    //+------------------------------------------------------------------+
+   //--- Record the confirmed starting snapshot before execution.
    void              Commit()
      {
       previous_balance=balance;
@@ -148,17 +154,17 @@ bool CAlphaQCMEnvironment::Init(bool simulated,double capital)
    if(point<=0||tick<=0||lot_min<=0||lot_step<=0||lot_max<lot_min||capital<=0||
       AG_VOLUME_CAP<lot_min||!MathIsValidNumber(point+tick+lot_min+lot_step+lot_max+capital))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    k_buy=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE_PROFIT)/tick;
    k_sell=SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE_LOSS)/tick;
    if(k_buy<=0||k_sell<=0||!MathIsValidNumber(k_buy+k_sell))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(!simulated&&(PositionsTotal()!=0||OrdersTotal()!=0))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    trade.SetAsyncMode(false);
    trade.SetTypeFillingBySymbol(_Symbol);
@@ -204,7 +210,7 @@ bool CAlphaQCMEnvironment::Snapshot(double bid,double ask,datetime time)
          double m=0;
          if(!OrderCalcMargin(q>0?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,MathAbs(q),q>0?ask:bid,m))
            {
-            ReturnFalse;
+            ReturnFalse
            }
          margin+=m;
         }
@@ -221,7 +227,7 @@ bool CAlphaQCMEnvironment::Snapshot(double bid,double ask,datetime time)
         {
          if(PositionGetTicket(i)==0||PositionGetString(POSITION_SYMBOL)!=_Symbol)
            {
-            ReturnFalse;
+            ReturnFalse
            }
          double q=PositionGetDouble(POSITION_VOLUME);
          bool   buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
@@ -258,7 +264,7 @@ bool CAlphaQCMEnvironment::Snapshot(double bid,double ask,datetime time)
      }
    if(!MathIsValidNumber(balance+equity+volume+margin+age_weight))
      {
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -271,7 +277,7 @@ bool CAlphaQCMEnvironment::Account(datetime time,float &a[])
   {
    if(previous_balance<=0||previous_equity<=0)
      {
-      ReturnFalse;
+      ReturnFalse
      }
    ArrayResize(a,AG_ACCOUNT_SIZE);
    a[0]=(float)(balance/AG_ETALON_BALANCE);
@@ -291,7 +297,7 @@ bool CAlphaQCMEnvironment::Account(datetime time,float &a[])
      {
       if(!MathIsValidNumber(a[i]))
         {
-         ReturnFalse;
+         ReturnFalse
         }
      }
 
@@ -471,7 +477,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
         {
          if(!CloseVirtual(MathAbs(volume),bid,ask,time))
            {
-            ReturnFalse;
+            ReturnFalse
            }
         }
       double delta=MathAbs(a.volume)-MathAbs(volume);
@@ -479,7 +485,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
         {
          if(!CloseVirtual(-delta,bid,ask,time))
            {
-            ReturnFalse;
+            ReturnFalse
            }
         }
       if(delta>=lot_min-AG_LOT_EPSILON)
@@ -487,7 +493,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
          double m=0;
          if(!OrderCalcMargin(a.volume>0?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,delta,a.volume>0?ask:bid,m))
            {
-            ReturnFalse;
+            ReturnFalse
            }
          if(m>equity-margin)
            {
@@ -509,7 +515,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
      }
    if(!TerminalInfoInteger(TERMINAL_CONNECTED)&&!MQLInfoInteger(MQL_TESTER))
      {
-      ReturnFalseEx("Terminal is disconnected");
+      ReturnFalseEx("Terminal is disconnected")
      }
    // Close opposite exposure before checking incremental margin.
    double reduction_left=MathMax(MathAbs(volume)-MathAbs(a.volume),0);
@@ -518,7 +524,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
       ulong ticket=PositionGetTicket(i);
       if(ticket==0)
         {
-         ReturnFalse;
+         ReturnFalse
         }
       bool   buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
       double q=PositionGetDouble(POSITION_VOLUME);
@@ -564,7 +570,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
      }
    if(!Snapshot(bid,ask,time))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(volume*a.volume<0||(a.volume==0&&volume!=0))
      {
@@ -600,7 +606,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
               }
             if(!Snapshot(bid,ask,time))
               {
-               ReturnFalse;
+               ReturnFalse
               }
            }
 
@@ -617,7 +623,7 @@ bool CAlphaQCMEnvironment::Execute(SAlphaQCMTarget &a,double bid,double ask,date
       double m=0;
       if(!OrderCalcMargin(a.volume>0?ORDER_TYPE_BUY:ORDER_TYPE_SELL,_Symbol,delta,a.volume>0?ask:bid,m))
         {
-         ReturnFalse;
+         ReturnFalse
         }
       if(m>AccountInfoDouble(ACCOUNT_MARGIN_FREE))
         {
@@ -669,7 +675,7 @@ bool CAlphaQCMEnvironment::PathPoint(double bid,double spread,datetime time)
   {
    if(!Snapshot(bid,bid+spread,time))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    bool hit=volume>0?(bid<=sl||bid>=tp):(volume<0&&(bid+spread>=sl||bid+spread<=tp));
    if(hit||equity<=AG_EQUITY_FLOOR*reference)
@@ -711,13 +717,13 @@ bool CAlphaQCMEnvironment::Segment(double from,double to,double spread,datetime 
      }
    if(!PathPoint(end,spread,time))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    if(nearest<=1&&volume!=0)
      {
       if(!CloseVirtual(MathAbs(volume),end,end+spread,time))
         {
-         ReturnFalse;
+         ReturnFalse
         }
      }
 
@@ -732,12 +738,12 @@ bool CAlphaQCMEnvironment::Bar(MqlRates &bar)
    double spread=bar.spread*point;
    if(!PathPoint(bar.open,spread,bar.time))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    double first=volume>=0?bar.low:bar.high,second=volume>=0?bar.high:bar.low;
    if(!Segment(bar.open,first,spread,bar.time)||!Segment(first,second,spread,bar.time)||!Segment(second,bar.close,spread,bar.time))
      {
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(Snapshot(bar.close,bar.close+spread,bar.time+PeriodSeconds(TimeFrame)));
@@ -804,7 +810,7 @@ bool CAlphaQCMEnvironment::TradeSessionOpen(const datetime time)
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Shared native model, chronological driver and finalizer.         |
+//| SAlphaQCMDeal - Track booked cash and decision ownership         |
 //+------------------------------------------------------------------+
 struct SAlphaQCMDeal
   {
@@ -815,27 +821,34 @@ struct SAlphaQCMDeal
    ulong             owner;
   };
 //+------------------------------------------------------------------+
-//| SAlphaQCMInterval                                                |
+//| SAlphaQCMInterval - Store decision cash and state                |
 //+------------------------------------------------------------------+
 struct SAlphaQCMInterval
   {
    ulong             decision;
-   datetime          start_boundary,end_boundary;
-   long              start_msc,end_msc;
-   double            reference,gamma,start_equity,end_equity;
+   datetime          start_boundary;
+   datetime          end_boundary;
+   long              start_msc;
+   long              end_msc;
+   double            reference;
+   double            gamma;
+   double            start_equity;
+   double            end_equity;
    int               duration;
    bool              trained;
   };
 //+------------------------------------------------------------------+
-//| SAlphaQCMRequestOwner                                            |
+//| SAlphaQCMRequestOwner - Associate a request with a decision      |
 //+------------------------------------------------------------------+
 struct SAlphaQCMRequestOwner
   {
-   ulong             deal,order,decision;
+   ulong             deal;
+   ulong             order;
+   ulong             decision;
   };
 
 //+------------------------------------------------------------------+
-//| CAlphaQCMApplicationBase                                         |
+//| CAlphaQCMApplicationBase - Drive the model and finalize results  |
 //+------------------------------------------------------------------+
 class CAlphaQCMApplicationBase
   {
@@ -933,8 +946,9 @@ public:
 
 public:
    //+------------------------------------------------------------------+
-   //| Initialize owned runtime state and diagnostic counters.          |
+   //| CAlphaQCMApplicationBase - Initialize the object state           |
    //+------------------------------------------------------------------+
+   //--- Initialize owned runtime state and diagnostic counters.
    CAlphaQCMApplicationBase():confirmed_requests(0),
                      trained_money_msc(0),
                      confirmed_boundary(0),
@@ -1033,7 +1047,7 @@ bool CAlphaQCMApplicationBase::RememberRequests()
       int n=ArraySize(request_owners);
       if(ArrayResize(request_owners,n+1)!=n+1)
         {
-         ReturnFalse;
+         ReturnFalse
         }
       request_owners[n].deal=money.request_deals[i];
       request_owners[n].order=money.request_orders[i];
@@ -1057,7 +1071,7 @@ bool CAlphaQCMApplicationBase::ExecuteTarget(SAlphaQCMTarget &target,double bid,
    bool result=money.Execute(target,bid,ask,time);
    if(!RememberRequests())
      {
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(result);
@@ -1126,7 +1140,7 @@ bool CAlphaQCMApplicationBase::SealInterval(datetime boundary)
    int n=ArraySize(sealed);
    if(ArrayResize(sealed,n+1)!=n+1)
      {
-      ReturnFalse;
+      ReturnFalse
      }
    sealed[n].decision=decision_id;
    sealed[n].start_boundary=decision_time;
@@ -1167,7 +1181,7 @@ bool CAlphaQCMApplicationBase::CorrectSealedCash(ulong owner,long at,double diff
         {
          PrintFormat("AlphaQCM cash correction rejected: ambiguous owner; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
 
-         ReturnFalse;
+         ReturnFalse
         }
       match=i;
      }
@@ -1182,7 +1196,7 @@ bool CAlphaQCMApplicationBase::CorrectSealedCash(ulong owner,long at,double diff
         {
          PrintFormat("AlphaQCM cash correction rejected: cash precedes open decision; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
 
-         ReturnFalse;
+         ReturnFalse
         }
       if(ArraySize(sealed)==0||at>sealed[ArraySize(sealed)-1].end_msc)
         {
@@ -1190,13 +1204,13 @@ bool CAlphaQCMApplicationBase::CorrectSealedCash(ulong owner,long at,double diff
         }
       PrintFormat("AlphaQCM cash correction rejected: no matching interval; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
 
-      ReturnFalse;
+      ReturnFalse
      }
    if(sealed[match].trained||sealed[match].reference<=0)
      {
       PrintFormat("AlphaQCM cash correction rejected: interval trained or invalid reference; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
 
-      ReturnFalse;
+      ReturnFalse
      }
    int start_shift=iBarShift(_Symbol,TimeFrame,sealed[match].start_boundary,true);
    int cash_shift=iBarShift(_Symbol,TimeFrame,(datetime)((at-1)/1000),false);
@@ -1204,21 +1218,21 @@ bool CAlphaQCMApplicationBase::CorrectSealedCash(ulong owner,long at,double diff
      {
       PrintFormat("AlphaQCM cash correction rejected: history shift unavailable; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
 
-      ReturnFalse;
+      ReturnFalse
      }
    int cash_step=MathMax(start_shift-cash_shift+1,1);
    if(cash_step>sealed[match].duration)
      {
       PrintFormat("AlphaQCM cash correction rejected: cash outside interval duration; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
 
-      ReturnFalse;
+      ReturnFalse
      }
    double adjustment=MathPow(sealed[match].gamma,cash_step-1)*difference/sealed[match].reference;
    if(!MathIsValidNumber(adjustment)||!agent.AdjustReward(sealed[match].decision,(float)adjustment))
      {
       PrintFormat("AlphaQCM cash correction rejected: reward adjustment rejected; owner=%I64u at=%I64d cash=%.8f match=%d",owner,at,difference,match);
 
-      ReturnFalse;
+      ReturnFalse
      }
    // The current confirmed equity already includes this cash correction.
    // Remove it from the new interval rather than rewarding it twice.
@@ -1331,7 +1345,7 @@ bool CAlphaQCMApplicationBase::Pack(MqlRates &bars[],int end,datetime boundary,b
    ulong begin=GetMicrosecondCount();
    if(end<window||end>ArraySize(bars))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    for(int i=0;i<window;i++)
      {
@@ -1340,7 +1354,7 @@ bool CAlphaQCMApplicationBase::Pack(MqlRates &bars[],int end,datetime boundary,b
          bar.close<=0||bar.spread<0||bar.tick_volume<0||
          (i>0&&bar.time<=bars[end-window+i-1].time))
         {
-         ReturnFalse;
+         ReturnFalse
         }
       input_values[i]=(float)bar.open;
       input_values[window+i]=(float)bar.high;
@@ -1354,7 +1368,7 @@ bool CAlphaQCMApplicationBase::Pack(MqlRates &bars[],int end,datetime boundary,b
    datetime account_time=simulated?boundary:(snapshot_msc>0?(datetime)(snapshot_msc/1000):TimeCurrent());
    if(account&&!money.Account(account_time,a))
      {
-      ReturnFalse;
+      ReturnFalse
      }
    for(int i=0;i<AG_ACCOUNT_SIZE;i++)
      {
@@ -1452,7 +1466,9 @@ bool CAlphaQCMApplicationBase::ReconcileDeals(datetime now)
          volume=HistoryDealGetDouble(ticket,DEAL_VOLUME)*(type==DEAL_TYPE_BUY?1:-1);
         }
       if(!MathIsValidNumber(cash)||!MathIsValidNumber(volume))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       long at=HistoryDealGetInteger(ticket,DEAL_TIME_MSC);
       if(recorded)
         {
@@ -1463,7 +1479,7 @@ bool CAlphaQCMApplicationBase::ReconcileDeals(datetime now)
            }
          if(!CorrectSealedCash(ledger[found].owner,at,cash-ledger[found].cash))
            {
-            ReturnFalse;
+            ReturnFalse
            }
          if(ledger[found].cash>=0)
            {
@@ -1501,20 +1517,22 @@ bool CAlphaQCMApplicationBase::ReconcileDeals(datetime now)
            }
          int n=ArraySize(ledger);
          if(ArrayResize(ledger,n+1,256)!=n+1)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!ledger_index.Add(ticket,n))
            {
             ArrayResize(ledger,n);
 
-            ReturnFalse;
+            ReturnFalse
            }
          if(!CorrectSealedCash(owner,at,cash))
            {
             ledger_index.Remove(ticket);
             ArrayResize(ledger,n);
 
-            ReturnFalse;
+            ReturnFalse
            }
          ledger[n].ticket=ticket;
          ledger[n].cash=cash;

@@ -92,7 +92,8 @@ int OnInit()
       !ATR.BufferResize(HistoryBars+1)||!MACD.BufferResize(HistoryBars+1))
       return(INIT_FAILED);
 //---
-   float temp1,temp2;
+   float temp1;
+   float temp2;
    if(!StudyNet.Load(FileName+".nnw",dError,temp1,temp2,dtStudied,true))
       return(INIT_FAILED);
 //---
@@ -159,7 +160,7 @@ void OnTick()
    if(State1.Total()<(int)(HistoryBars * 12))
       return;
 
-   if(!StudyNet.feedForward(GetPointer(State1),12,true))
+   if(!StudyNet.feedForward(GetPointer(State1),12,true,(CBufferFloat*)NULL))
       return;
 
    StudyNet.getResults(TempData);
@@ -235,7 +236,7 @@ int GetAction(CBufferFloat* probability)
    prob=prob.CumSum();
    prob=prob / prob.Max();
    int   err_code;
-   float random=(float)Math::MathRandomNormal(0.5,0.5,err_code);
+   float random=(float)MathRandomNormal(0.5,0.5,err_code);
    if(random>=1)
       return((int)prob.Size()-1);
 

@@ -39,15 +39,30 @@ input double MinBalance=50.0;                      //Minimum account balance
 datetime Start=0;
 datetime End=0;
 int      Epochs=0;
-CNet Actor,TargetActor,Q1,Q2,TargetQ1,TargetQ2;
-CBufferFloat State,TimeState,Account,Action,CriticInput,TargetCriticInput,ScalarTarget;
+CNet Actor;
+CNet TargetActor;
+CNet Q1;
+CNet Q2;
+CNet TargetQ1;
+CNet TargetQ2;
+CBufferFloat State;
+CBufferFloat TimeState;
+CBufferFloat Account;
+CBufferFloat Action;
+CBufferFloat CriticInput;
+CBufferFloat TargetCriticInput;
+CBufferFloat ScalarTarget;
 CBufferFloat PreviousAccount;
-CBufferFloat BaselineVirtualAccount,SkillVirtualAccount;
-CBufferFloat BaselineVirtualNext,SkillVirtualNext;
-CBufferFloat BaselineVirtualAction,SkillVirtualAction;
+CBufferFloat BaselineVirtualAccount;
+CBufferFloat SkillVirtualAccount;
+CBufferFloat BaselineVirtualNext;
+CBufferFloat SkillVirtualNext;
+CBufferFloat BaselineVirtualAction;
+CBufferFloat SkillVirtualAction;
 SD2SkillActorForwardState ActorForwardState;
 SD2SkillActorForwardState BaselineActorForwardState;
-SD2SkillEpisodeOutcome BaselineEpisodeOutcome,SkillEpisodeOutcome;
+SD2SkillEpisodeOutcome BaselineEpisodeOutcome;
+SD2SkillEpisodeOutcome SkillEpisodeOutcome;
 double PreviousBalance=0,PreviousEquity=0;
 double PreviousMarginPenalty=0;
 ulong  Transition=0;
@@ -61,28 +76,36 @@ bool   OnlineBaselineTerminal=false;
 bool   OnlineSkillTerminal=false;
 ulong  OnlineEpisodeTransitions=0;
 //+------------------------------------------------------------------+
-//| Resets only D2Skill episode influence, preserving bank params.   |
+//| ResetD2SkillEpisodeInfluence - Reset d 2 skill episode influence |
 //+------------------------------------------------------------------+
+//--- Resets only D2Skill episode influence, preserving bank params.
 bool ResetD2SkillEpisodeInfluence(CNet &actor)
   {
    CNeuronBaseOCL *layer=actor.Layer(1);
    if(!layer||layer.Type()!=defNeuronD2Skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2Skill *skill=(CD2Skill*)layer;
    if(!skill.Ready()||!skill.ResetEpisodeInfluence())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Accumulates one causal online virtual account outcome.           |
+//| AccumulateOnlineOutcome - Accumulate online outcome              |
 //+------------------------------------------------------------------+
+//--- Accumulates one causal online virtual account outcome.
 bool AccumulateOnlineOutcome(SD2SkillEpisodeOutcome &outcome,
                              CBufferFloat *account,const double reward)
   {
    if(!account||account.Total()!=AccountDescr||!MathIsValidNumber(reward)||
       (account.GetIndex()>=0&&!account.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double balance=MathMax(0.0,double(account[0]) * EtalonBalance);
    const double equity=MathMax(0.0,double(account[2]) * MathMax(balance,1.0));
    const double drawdown=MathMin(0.0,double(account[1]));
@@ -92,14 +115,17 @@ bool AccumulateOnlineOutcome(SD2SkillEpisodeOutcome &outcome,
    return(outcome.Accumulate(reward,balance,equity,drawdown,cost,1,risk));
   }
 //+------------------------------------------------------------------+
-//| Initializes the independent Base and Skill online trajectories.  |
+//| StartOnlinePair - Start online pair                              |
 //+------------------------------------------------------------------+
+//--- Initializes the independent Base and Skill online trajectories.
 bool StartOnlinePair(CBufferFloat *account)
   {
    CNeuronBaseOCL *layer=Actor.Layer(1);
    CD2Skill       *skill=(layer&&layer.Type()==defNeuronD2Skill ? (CD2Skill*)layer : NULL);
    if(!account)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!skill||!D2SkillUsePairedHindsight(skill,ActorForwardState))
      {
       OnlinePairActive=false;
@@ -112,7 +138,9 @@ bool StartOnlinePair(CBufferFloat *account)
       !SkillVirtualAccount.AssignArray(account)||!BaselineEpisodeOutcome.Reset()||
       !SkillEpisodeOutcome.Reset()||!D2SkillCaptureActorForwardState(ActorForwardState)||
       !D2SkillCaptureActorForwardState(BaselineActorForwardState))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    OnlinePairActive=true;
    OnlineVirtualTransitionPending=false;
    OnlineBaselineTerminal=false;
@@ -122,8 +150,9 @@ bool StartOnlinePair(CBufferFloat *account)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Advances both virtual trajectories using their previous actions. |
+//| AdvanceOnlinePair - Advance online pair                          |
 //+------------------------------------------------------------------+
+//--- Advances both virtual trajectories using their previous actions.
 bool AdvanceOnlinePair(void)
   {
    if(!OnlinePairActive||!OnlineVirtualTransitionPending)
@@ -137,29 +166,40 @@ bool AdvanceOnlinePair(void)
                                          MinBalance,GetPointer(BaselineVirtualNext),
                                          baseline_reward,
                                          OnlineBaselineTerminal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!AccumulateOnlineOutcome(BaselineEpisodeOutcome,
                                GetPointer(BaselineVirtualNext),
                                baseline_reward))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!AdvanceAccount(GetPointer(SkillVirtualAccount),GetPointer(SkillVirtualAction),1,
                      MinBalance,GetPointer(SkillVirtualNext),
                      skill_reward,OnlineSkillTerminal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!AccumulateOnlineOutcome(SkillEpisodeOutcome,
                                GetPointer(SkillVirtualNext),
                                skill_reward))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!BaselineVirtualAccount.AssignArray(GetPointer(BaselineVirtualNext))||
       !SkillVirtualAccount.AssignArray(GetPointer(SkillVirtualNext)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    OnlineEpisodeTransitions++;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Applies terminal paired DeltaJ and clears episode influence.     |
+//| FinishOnlinePair - Finish online pair                            |
 //+------------------------------------------------------------------+
+//--- Applies terminal paired DeltaJ and clears episode influence.
 bool FinishOnlinePair(void)
   {
    if(!OnlinePairActive)
@@ -172,13 +212,17 @@ bool FinishOnlinePair(void)
        D2SkillComputePairedEpisodeDelta(BaselineEpisodeOutcome,SkillEpisodeOutcome,delta_j)&&
        D2SkillUpdateD2UtilityDelta(Actor,delta_j,utility_mutated));
    if(!ResetD2SkillEpisodeInfluence(Actor))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    OnlinePairActive=false;
    OnlineVirtualTransitionPending=false;
    OnlineBaselineTerminal=false;
    OnlineSkillTerminal=false;
    if(!utility_operation_ok)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    PrintFormat("D2Skill online paired terminal JBase=%.8f JSkill=%.8f DeltaJ=%.8f "
                "utility_mutated=%s "
                "base_balance=%.2f skill_balance=%.2f base_drawdown=%.2f skill_drawdown=%.2f "
@@ -196,15 +240,18 @@ bool FinishOnlinePair(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Drops an incomplete pair without emitting terminal utility.      |
+//| AbortOnlinePair - Abort online pair                              |
 //+------------------------------------------------------------------+
+//--- Drops an incomplete pair without emitting terminal utility.
 bool AbortOnlinePair(void)
   {
    if(!OnlinePairActive)
       return(true);
 
    if(!ResetD2SkillEpisodeInfluence(Actor))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    OnlinePairActive=false;
    OnlineVirtualTransitionPending=false;
    OnlineBaselineTerminal=false;
@@ -213,9 +260,9 @@ bool AbortOnlinePair(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Produces a Base action without disturbing the Skill recurrent    |
-//| state.                                                           |
+//| BuildOnlineBaselineAction - Build action without state changes   |
 //+------------------------------------------------------------------+
+//--- Produces a Base action without disturbing the Skill recurrent state.
 bool BuildOnlineBaselineAction(void)
   {
    if(!OnlinePairActive)
@@ -224,7 +271,9 @@ bool BuildOnlineBaselineAction(void)
    CNeuronBaseOCL *layer=Actor.Layer(1);
    CD2Skill       *skill=(layer&&layer.Type()==defNeuronD2Skill ? (CD2Skill*)layer : NULL);
    if(!skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bool task_enabled=false;
    bool step_enabled=false;
    D2SkillD2BankFlags(task_enabled,step_enabled);
@@ -238,24 +287,30 @@ bool BuildOnlineBaselineAction(void)
       !D2SkillRestorePairedActorState(ActorForwardState,skill,
                                       task_enabled,step_enabled,
                                       "online_baseline_to_skill"))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for ClearPreviousTransit... |
+//| ClearPreviousTransition - Clear previous transition              |
 //+------------------------------------------------------------------+
 bool ClearPreviousTransition(void)
   {
    if(!AbortOnlinePair())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    HavePrevious=false;
    PreviousAccount.Clear();
    PreviousBalance=AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity=AccountInfoDouble(ACCOUNT_EQUITY);
    PreviousMarginPenalty=0;
    if(!Actor.Clear()||!ResetD2SkillEpisodeInfluence(Actor)||!D2SkillMarket.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -268,19 +323,24 @@ bool StorePrevious(void)
            (PreviousAccount.GetIndex()<0||PreviousAccount.BufferWrite()));
   }
 //+------------------------------------------------------------------+
-//| Target objects are runtime-only. They start as exact copies o... |
+//| LoadOnlineTargets - Load online targets                          |
 //+------------------------------------------------------------------+
+//--- Target objects are runtime-only. They start as exact copies o...
 bool LoadOnlineTargets(void)
   {
    if(!D2SkillLoadPolicyNet(TargetActor,D2Skill_ACTOR_FILE)||
       !D2SkillLoadPolicyNet(TargetQ1,D2Skill_Q1_FILE)||!D2SkillLoadPolicyNet(TargetQ2,D2Skill_Q2_FILE))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    TargetActor.SetOpenCL(D2SkillMarket.GetOpenCL());
    TargetQ1.SetOpenCL(D2SkillMarket.GetOpenCL());
    TargetQ2.SetOpenCL(D2SkillMarket.GetOpenCL());
    if(!D2SkillValidatePolicyShape(TargetActor,false)||!D2SkillValidatePolicyShape(TargetQ1,true)||
       !D2SkillValidatePolicyShape(TargetQ2,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    TargetActor.TrainMode(false);
    TargetQ1.TrainMode(false);
    TargetQ2.TrainMode(false);
@@ -300,17 +360,23 @@ bool TrainPreviousTransition(const bool terminal)
    if(!terminal)
      {
       if(!TargetActor.feedForward(GetPointer(Account),1,false,GetPointer(D2SkillMarket),-1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       CNeuronBaseOCL *target_context=TargetActor.Layer(0);
       CNeuronBaseOCL *target_actor_layer=TargetActor.Layer(3);
       if(!target_context||!target_actor_layer||
          !BuildCriticInput(target_context.getOutput(),target_actor_layer.getOutput(),GetPointer(TargetCriticInput))||
          !TargetQ1.feedForward(GetPointer(TargetCriticInput),1,false,GetPointer(D2SkillMarket),-1)||
          !TargetQ2.feedForward(GetPointer(TargetCriticInput),1,false,GetPointer(D2SkillMarket),-1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       CNeuronBaseOCL *target_q1_layer=TargetQ1.Layer(3),*target_q2_layer=TargetQ2.Layer(3);
       if(!target_q1_layer||!target_q2_layer)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    //--- TD target is consumed by CPU scalar arithmetic.  getResults is the
    //--- library CPU boundary and also supports a host-only final critic layer.
@@ -321,13 +387,13 @@ bool TrainPreviousTransition(const bool terminal)
    //--- function if.
       if(!qt1||!qt2||qt1.Total()!=1||qt2.Total()!=1)
         {
-         DeleteObj(qt1);
-         DeleteObjAndFalse(qt2);
+         DeleteObj(qt1)
+         DeleteObjAndFalse(qt2)
         }
       q1_target=double(qt1[0]);
       q2_target=double(qt2[0]);
-      DeleteObj(qt1);
-      DeleteObj(qt2);
+      DeleteObj(qt1)
+      DeleteObj(qt2)
      }
    double observed=(AccountInfoDouble(ACCOUNT_EQUITY)-PreviousEquity+
                       AccountInfoDouble(ACCOUNT_BALANCE)-PreviousBalance) * PreviousBalance / EtalonBalance+
@@ -339,7 +405,9 @@ bool TrainPreviousTransition(const bool terminal)
       const double point_cost=Symb.TickValue() / Symb.TickSize();
       if(State.Total()!=HistoryBars * BarDescr||Symb.LotsMin()<=0||
          !MathIsValidNumber(point_cost))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       const double loss=MathAbs(State[0]) * point_cost * Symb.LotsMin();
       observed -= loss * PreviousBalance / EtalonBalance;
      }
@@ -348,39 +416,53 @@ bool TrainPreviousTransition(const bool terminal)
 //--- not update D2 utility.  Utility is restricted to paired terminal delta J.
    const double target=observed+(terminal ? 0.0 : DiscFactor * MathMin(q1_target,q2_target));
    if(!MathIsValidNumber(target)||!ScalarTarget.BufferInit(1,0)||!ScalarTarget.Update(0,float(target)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- restore only the ordinary previous state. Forecast scenarios are rerun,
 //--- never cached or serialized.
    if(!CreateBuffers(1,GetPointer(State),GetPointer(TimeState),(CBufferFloat*)NULL)||
       !D2SkillMarket.Clear()||
       !D2SkillForwardForecastState(GetPointer(State)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *actor_context=Actor.Layer(0);
    CNeuronBaseOCL *actor_layer=Actor.Layer(3);
    if(!actor_context||!actor_layer||!BuildCriticInput(actor_context.getOutput(),actor_layer.getOutput(),GetPointer(CriticInput))||
       !Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(D2SkillMarket),-1)||
       !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(D2SkillMarket),-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool bank_gradient_backward=D2SkillRequiresBankGradientBackward();
    const bool actor_backward=(Actor.WeightsUpdateEnabled()||bank_gradient_backward);
    if(actor_backward&&UpdatePolicy>0&&Transition>0&&
       Transition % (ulong)UpdatePolicy==0&&
       !PolicyBackward(Actor,Q1,GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!Q1.backProp(GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1)||
       !Q2.backProp(GetPointer(ScalarTarget),GetPointer(D2SkillMarket),-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    PreviousMarginPenalty=0;
 
 //--- per-transition guard reads only the three small trainable weight buffers.
    if(!D2SkillVerifyFrozenWeightsExact())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(UpdateTargets>0&&Transition>0&&Transition % (ulong)UpdateTargets==0)
       if((Actor.WeightsUpdateEnabled()&&!TargetActor.WeightsUpdate(GetPointer(Actor),Tau))||
          (Q1.WeightsUpdateEnabled()&&!TargetQ1.WeightsUpdate(GetPointer(Q1),Tau))||
          (Q2.WeightsUpdateEnabled()&&!TargetQ2.WeightsUpdate(GetPointer(Q2),Tau)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -398,29 +480,59 @@ int OnInit(void)
                                InpD2SkillRepresentation,
                                InpD2SkillResetBanksOnRepresentationMismatch,
                                InpD2SkillRecreateIncompatibleCheckpoint))
-     { Print("D2Skill online init: runtime configuration=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: runtime configuration=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillInitIndicators())
-     { Print("D2Skill online init: indicators=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: indicators=FAIL");
+      return(INIT_FAILED);
+     }
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
-     { Print("D2Skill online init: trade filling=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: trade filling=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillLoadForecastInference())
-     { Print("D2Skill online init: forecast=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: forecast=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillLoadOrCreatePolicySet(Actor,Q1,Q2,false))
-     { Print("D2Skill online init: policy checkpoint=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: policy checkpoint=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillConfigureActorCriticUpdates(Actor,Q1,Q2))
-     { Print("D2Skill online init: update permissions=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: update permissions=FAIL");
+      return(INIT_FAILED);
+     }
    if(!LoadOnlineTargets())
-     { Print("D2Skill online init: runtime targets=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: runtime targets=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillVerifyFrozenForecastExact())
-     { Print("D2Skill online init: frozen forecast=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: frozen forecast=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillConfigureD2UtilityMode(D2Skill_D2_UTILITY_PAIRED_HINDSIGHT))
-      { Print("D2Skill online init: utility source=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: utility source=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillInitActorForwardState(ActorForwardState,Actor)||
       !D2SkillInitActorForwardState(BaselineActorForwardState,Actor)||
       !Actor.Clear()||!D2SkillMarket.Clear()||!ResetD2SkillEpisodeInfluence(Actor)||
       !D2SkillCaptureActorForwardState(ActorForwardState)||
       !D2SkillCaptureActorForwardState(BaselineActorForwardState))
-      { Print("D2Skill online init: forecast clear=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill online init: forecast clear=FAIL");
+      return(INIT_FAILED);
+     }
    PreviousBalance=AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity=AccountInfoDouble(ACCOUNT_EQUITY);
    D2SkillOnlineInitialized=true;

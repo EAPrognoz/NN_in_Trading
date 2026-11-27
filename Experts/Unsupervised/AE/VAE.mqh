@@ -20,7 +20,7 @@ enum ENUM_VAE_SAMPLE_MODE
   };
 //---
 //+------------------------------------------------------------------+
-//| CVAE                                                             |
+//| CVAE - Encode and reconstruct inputs variationally               |
 //+------------------------------------------------------------------+
 class CVAE : public CNeuronBaseOCL
   {
@@ -28,46 +28,27 @@ protected:
    float                m_fKLD_Mult;
    CBufferFloat         *     m_cRandom;
    ENUM_VAE_SAMPLE_MODE m_eSampleMode;
-   ///\ingroup neuron_base_ff
-   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::VAE().@param NeuronOCL Pointer to previos layer.
-   bool              ValidateCheckedScratch(CNeuronBaseOCL *NeuronOCL,
-         CBufferFloat *numeric_flags,
-         CBufferFloat *numeric_ones,
-         CBufferFloat *numeric_scalar);
-   virtual bool      VAEFeedForward(CNeuronBaseOCL *NeuronOCL,
-                                    CBufferFloat *numeric_flags);
-
-   ///\ingroup neuron_base_opt
-//+------------------------------------------------------------------+
-//| updateInputWeights                                               |
-//+------------------------------------------------------------------+
-   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)
-     {
-      return(true);
-     }  ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
-
-
 public:
                      CVAE();
                     ~CVAE();
    virtual bool      Init(uint numOutputs,uint myIndex,COpenCLMy *open_cl,uint numNeurons,ENUM_OPTIMIZATION optimization_type,uint batch);
    //---
 //+------------------------------------------------------------------+
-//| SetKLDMult                                                       |
+//| SetKLDMult - Set KLD mult                                        |
 //+------------------------------------------------------------------+
    virtual void      SetKLDMult(float value)
      {
       m_fKLD_Mult=value;
      }
 //+------------------------------------------------------------------+
-//| SetSampleMode                                                    |
+//| SetSampleMode - Set sample mode                                  |
 //+------------------------------------------------------------------+
    virtual void      SetSampleMode(ENUM_VAE_SAMPLE_MODE mode)
      {
       m_eSampleMode=mode;
      }
 //+------------------------------------------------------------------+
-//| SampleMode                                                       |
+//| SampleMode - Return the sample mode                              |
 //+------------------------------------------------------------------+
    virtual ENUM_VAE_SAMPLE_MODE SampleMode(void) const
      {
@@ -88,7 +69,7 @@ public:
    virtual bool      Load(int const file_handle);///< Load method @param[in] file_handle handle of file @return logical result of operation
    //---
 //+------------------------------------------------------------------+
-//| Type                                                             |
+//| Type - Return the object type identifier                         |
 //+------------------------------------------------------------------+
    virtual int       Type(void)        const
      {
@@ -97,10 +78,29 @@ public:
    virtual void      SetOpenCL(COpenCLMy *obj);
    virtual bool      SupportsOpenCLChecked(void) const override;
    virtual bool      SetOpenCLChecked(COpenCLMy *obj) override;
+protected:
+   ///\ingroup neuron_base_ff
+   virtual bool      feedForward(CNeuronBaseOCL *NeuronOCL);               ///< \brief Feed Forward method of calling kernel ::VAE().@param NeuronOCL Pointer to previos layer.
+   bool              ValidateCheckedScratch(CNeuronBaseOCL *NeuronOCL,
+                                            CBufferFloat *numeric_flags,
+                                            CBufferFloat *numeric_ones,
+                                            CBufferFloat *numeric_scalar);
+   virtual bool      VAEFeedForward(CNeuronBaseOCL *NeuronOCL,
+                                    CBufferFloat *numeric_flags);
+
+   ///\ingroup neuron_base_opt
+//+------------------------------------------------------------------+
+//| updateInputWeights - Complete without updating weights           |
+//+------------------------------------------------------------------+
+   virtual bool      updateInputWeights(CNeuronBaseOCL *NeuronOCL)
+     {
+      return(true);
+     }  ///< Method for updating weights.\details Calling one of kernels ::UpdateWeightsMomentum() or ::UpdateWeightsAdam() in depends of optimization type (#ENUM_OPTIMIZATION).@param NeuronOCL Pointer to previos layer.
   };
 //+------------------------------------------------------------------+
-//| Construct the VAE sampler with random sampling as the default.   |
+//| CVAE - Encode and reconstruct inputs variationally               |
 //+------------------------------------------------------------------+
+//--- Construct the VAE sampler with random sampling as the default.
 CVAE::CVAE()
    : m_fKLD_Mult(0.01f),
      m_eSampleMode(VAE_SAMPLE_RANDOM)
@@ -131,16 +131,21 @@ bool CVAE::Init(uint numOutputs,uint myIndex,COpenCLMy *open_cl,uint numNeurons,
          return(false);
      }
    if(!m_cRandom.BufferInit(numNeurons,0.0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!m_cRandom.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- initialization completed successfully.
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Execute one deterministic or random VAE forward sample.          |
+//| feedForward - Compute the layer output                           |
 //+------------------------------------------------------------------+
+//--- Execute one deterministic or random VAE forward sample.
 bool CVAE::feedForward(CNeuronBaseOCL *NeuronOCL)
   {
 //--- validate the posterior input layout.
@@ -167,15 +172,18 @@ bool CVAE::feedForward(CNeuronBaseOCL *NeuronOCL)
          return(false);
 
       if(!m_cRandom.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- execute the selected sample through the VAE kernel.
    return(VAEFeedForward(NeuronOCL,NULL));
   }
 //+------------------------------------------------------------------+
-//| Validates caller scratch against every VAE kernel operand.       |
+//| ValidateCheckedScratch - Validate checked scratch                |
 //+------------------------------------------------------------------+
+//--- Validates caller scratch against every VAE kernel operand.
 bool CVAE::ValidateCheckedScratch(CNeuronBaseOCL *NeuronOCL,
                                   CBufferFloat *numeric_flags,
                                   CBufferFloat *numeric_ones,
@@ -210,8 +218,9 @@ bool CVAE::ValidateCheckedScratch(CNeuronBaseOCL *NeuronOCL,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Dispatch the selected VAE sample with an optional numeric flag.  |
+//| VAEFeedForward - Check VAE feed forward                          |
 //+------------------------------------------------------------------+
+//--- Dispatch the selected VAE sample with an optional numeric flag.
 bool CVAE::VAEFeedForward(CNeuronBaseOCL *NeuronOCL,
                           CBufferFloat *numeric_flags)
   {
@@ -239,9 +248,8 @@ bool CVAE::VAEFeedForward(CNeuronBaseOCL *NeuronOCL,
 
    setBuffer(def_k_VAEFeedForward,def_k_vaeff_outputd,Output.GetIndex())
 
-   if(!OpenCL.SetArgumentBuffer(def_k_VAEFeedForward,def_k_vaeff_numeric_flags,
-                                (numeric_flags ? numeric_flags.GetIndex() : Output.GetIndex())))
-      return(false);
+   setBuffer(def_k_VAEFeedForward,def_k_vaeff_numeric_flags,
+             (numeric_flags ? numeric_flags.GetIndex() : Output.GetIndex()))
 
    setArgument(def_k_VAEFeedForward,def_k_vaeff_flags_enabled,(numeric_flags ? 1 : 0))
 
@@ -253,8 +261,9 @@ bool CVAE::VAEFeedForward(CNeuronBaseOCL *NeuronOCL,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Runs one checked VAE sample and reduces its output status.       |
+//| FeedForwardChecked - Check feed forward checked                  |
 //+------------------------------------------------------------------+
+//--- Runs one checked VAE sample and reduces its output status.
 bool CVAE::FeedForwardChecked(CNeuronBaseOCL *NeuronOCL,
                               CBufferFloat *numeric_flags,
                               CBufferFloat *numeric_ones,
@@ -291,7 +300,7 @@ bool CVAE::FeedForwardChecked(CNeuronBaseOCL *NeuronOCL,
                              (uint)Neurons(),rejected));
   }
 //+------------------------------------------------------------------+
-//| calcInputGradients                                               |
+//| calcInputGradients - Compute input gradients                     |
 //+------------------------------------------------------------------+
 bool CVAE::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
   {
@@ -315,7 +324,7 @@ bool CVAE::calcInputGradients(CNeuronBaseOCL *NeuronOCL)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CVAE::Save(const int file_handle)
   {
@@ -328,7 +337,7 @@ bool CVAE::Save(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CVAE::Load(const int file_handle)
   {
@@ -344,14 +353,18 @@ bool CVAE::Load(const int file_handle)
      }
    m_cRandom.BufferFree();
    if(!m_cRandom.BufferInit(Neurons(),0.0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!m_cRandom.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| SetOpenCL                                                        |
+//| SetOpenCL - Set open CL                                          |
 //+------------------------------------------------------------------+
 void CVAE::SetOpenCL(COpenCLMy *obj)
   {
@@ -360,15 +373,17 @@ void CVAE::SetOpenCL(COpenCLMy *obj)
       m_cRandom.BufferCreate(obj);
   }
 //+------------------------------------------------------------------+
-//| Checks checked-transfer support of VAE base and random holder.   |
+//| SupportsOpenCLChecked - Check open CL checked                    |
 //+------------------------------------------------------------------+
+//--- Checks checked-transfer support of VAE base and random holder.
 bool CVAE::SupportsOpenCLChecked(void) const
   {
    return(Type()==defNeuronVAEOCL&&CheckPointer(m_cRandom)!=POINTER_INVALID);
   }
 //+------------------------------------------------------------------+
-//| Transfers VAE random data before inherited context publication.  |
+//| SetOpenCLChecked - Set open CL checked                           |
 //+------------------------------------------------------------------+
+//--- Transfers VAE random data before inherited context publication.
 bool CVAE::SetOpenCLChecked(COpenCLMy *obj)
   {
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())

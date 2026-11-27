@@ -269,7 +269,7 @@ void OnChartEvent(const int id,
      }
   }
 //+------------------------------------------------------------------+
-//| Train                                                            |
+//| Train - Train the neural networks                                |
 //+------------------------------------------------------------------+
 void Train(datetime StartTrainBar=0)
   {
@@ -499,7 +499,7 @@ void Train(datetime StartTrainBar=0)
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| DoubleToSignal                                                   |
+//| DoubleToSignal - Convert model output to a signal                |
 //+------------------------------------------------------------------+
 ENUM_SIGNAL DoubleToSignal(double value)
   {
@@ -515,7 +515,7 @@ ENUM_SIGNAL DoubleToSignal(double value)
    return(Undefine);
   }
 //+------------------------------------------------------------------+
-//| DrawObject                                                       |
+//| DrawObject - Draw the chart object                               |
 //+------------------------------------------------------------------+
 void DrawObject(datetime time,double signal,double high,double low)
   {
@@ -559,7 +559,7 @@ void DrawObject(datetime time,double signal,double high,double low)
    ObjectSetString(0,name,OBJPROP_TOOLTIP,EnumToString(DoubleToSignal(signal))+" "+DoubleToString(signal,5));
   }
 //+------------------------------------------------------------------+
-//| DeleteObject                                                     |
+//| DeleteObject - Remove the chart object                           |
 //+------------------------------------------------------------------+
 void DeleteObject(datetime time)
   {

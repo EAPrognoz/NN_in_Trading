@@ -34,8 +34,9 @@ int OnInit()
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Process current quotes through the shared execution driver.      |
+//| OnTick - Process the latest market tick                          |
 //+------------------------------------------------------------------+
+//--- Process current quotes through the shared execution driver.
 void OnTick()
   {
    App.Tick();
@@ -48,15 +49,17 @@ void OnTimer()
    App.Tick();
   }
 //+------------------------------------------------------------------+
-//| Forward trade notifications without issuing a new action.        |
+//| OnTradeTransaction - Process a trade transaction                 |
 //+------------------------------------------------------------------+
+//--- Forward trade notifications without issuing a new action.
 void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &request,const MqlTradeResult &result)
   {
    App.Transaction(trans,request,result);
   }
 //+------------------------------------------------------------------+
-//| Finalize confirmed test results before terminal deinitialization.|
+//| OnTester - Return the tester result                              |
 //+------------------------------------------------------------------+
+//--- Finalize confirmed test results before terminal deinitialization.
 double OnTester()
   {
    if(!App.Finalized&&!App.failed&&!App.Finish(App.money.stopout,true,true))

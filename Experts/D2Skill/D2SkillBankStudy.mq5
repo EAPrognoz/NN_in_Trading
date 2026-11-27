@@ -30,14 +30,16 @@ bool CreateHost(void)
   {
    CArrayObj *description=new CArrayObj();
    if(!description)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    description.FreeMode(true);
    for(int i=0; i<2; i++)
      {
       CLayerDescription *layer=new CLayerDescription();
       if(!layer)
         {
-         DeleteObjAndFalse(description);
+         DeleteObjAndFalse(description)
         }
       layer.type=defNeuronBaseOCL;
       layer.count=D2_STUDY_DIM;
@@ -45,8 +47,8 @@ bool CreateHost(void)
       layer.optimization=ADAM;
       if(!description.Add(layer))
         {
-         DeleteObj(layer);
-         DeleteObjAndFalse(description);
+         DeleteObj(layer)
+         DeleteObjAndFalse(description)
         }
      }
    const bool created=g_net.Create(description);
@@ -79,7 +81,9 @@ bool Train(CD2SkillBank &bank,const float gradient_x,const float gradient_y)
    if(!Put(g_source.getOutput(),1.0f,0.0f)||!bank.FeedForward(g_source.AsObject())||
       !Put(g_source.getGradient(),gradient_x,gradient_y)||
       !bank.UpdateFromGradient(g_source.getOutput(),g_source.getGradient()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -92,8 +96,9 @@ bool ReadLifecycle(CD2SkillBank &bank)
           bank.Used().BufferRead()&&bank.State().BufferRead());
   }
 //+------------------------------------------------------------------+
-//| Two close keys intentionally own corrections with opposite sign. |
+//| SeedCloseOpposingCorrections - Close seed opposing corrections   |
 //+------------------------------------------------------------------+
+//--- Two close keys intentionally own corrections with opposite sign.
 bool SeedCloseOpposingCorrections(CD2SkillBank &bank)
   {
    float keys[4]={1.00f,0.00f,0.98f,0.20f};
@@ -124,9 +129,9 @@ bool SeedCloseOpposingCorrections(CD2SkillBank &bank)
           bank.Influence().AssignArray(influence)&&bank.Influence().BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Nearby account states must select their matching signed          |
-//| residual.                                                        |
+//| RunCorrectionSelection - Check signed residual selection         |
 //+------------------------------------------------------------------+
+//--- Nearby account states must select their matching signed residual.
 bool RunCorrectionSelection(void)
   {
    CD2SkillBank bank;
@@ -134,15 +139,21 @@ bool RunCorrectionSelection(void)
       !bank.SetThresholds(0.50f,0.50f)||!bank.SetAlpha(1.00f)||
       !bank.SetUtilityPolicy(false,-1.00f)||!bank.SetEnabled(true)||
       !SeedCloseOpposingCorrections(bank))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!Put(g_source.getOutput(),1.00f,0.00f)||!bank.FeedForward(g_source.AsObject())||
       !ReadSelection(bank))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float aligned_slot=bank.SelectedSlot()[0];
    const float aligned_correction=bank.SelectedCorrection()[0];
    if(!Put(g_source.getOutput(),0.98f,0.20f)||!bank.FeedForward(g_source.AsObject())||
       !ReadSelection(bank))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float opposing_slot=bank.SelectedSlot()[0];
    const float opposing_correction=bank.SelectedCorrection()[0];
    PrintFormat("D2SkillBankStudy: corrections aligned_slot=%.0f aligned=%.4f "
@@ -152,8 +163,9 @@ bool RunCorrectionSelection(void)
           opposing_slot==1.0f&&opposing_correction<0.0f);
   }
 //+------------------------------------------------------------------+
-//| Candidate becomes an ordinary slot, then evicts only inactive.   |
+//| RunCandidateAndEviction - Run candidate and eviction             |
 //+------------------------------------------------------------------+
+//--- Candidate becomes an ordinary slot, then evicts only inactive.
 bool RunCandidateAndEviction(void)
   {
    CD2SkillBank bank;
@@ -164,13 +176,19 @@ bool RunCandidateAndEviction(void)
       !Train(bank,-1.00f,0.00f)||!Train(bank,-1.00f,0.00f)||
       !Train(bank,0.00f,1.00f)||!Train(bank,0.00f,1.00f)||
       !ReadLifecycle(bank))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float candidate_before=bank.Diagnostics()[10];
    const float evicted_before=bank.Diagnostics()[7];
    if(candidate_before!=1.0f||evicted_before!=0.0f)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!Train(bank,0.00f,1.00f)||!ReadLifecycle(bank))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float evicted_after=bank.Diagnostics()[7];
    const float inactive_after=bank.Diagnostics()[13];
    PrintFormat("D2SkillBankStudy: candidate candidate=%.0f evicted_before=%.0f "
@@ -180,8 +198,9 @@ bool RunCandidateAndEviction(void)
    return(evicted_after>=1.0f&&inactive_after<=1.0f);
   }
 //+------------------------------------------------------------------+
-//| A promoted DirectionMagnitude candidate keeps scale as its norm. |
+//| RunDirectionMagnitudePromotion - Run magnitude promotion         |
 //+------------------------------------------------------------------+
+//--- A promoted DirectionMagnitude candidate keeps scale as its norm.
 bool RunDirectionMagnitudePromotion(void)
   {
    CD2SkillBank bank;
@@ -192,10 +211,14 @@ bool RunDirectionMagnitudePromotion(void)
       !Train(bank,1.00f,1.00f)||!Put(g_source.getOutput(),1.00f,0.00f)||
       !bank.FeedForward(g_source.AsObject())||!ReadSelection(bank)||
       !bank.Directions().BufferRead()||!bank.Scales().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const int slot=(int)bank.SelectedSlot()[0];
    if(slot<0||slot>=(int)D2_STUDY_SLOTS)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const int offset=slot * (int)D2_STUDY_DIM;
    const float direction_norm=(float)MathSqrt(bank.Directions()[offset] *
                                 bank.Directions()[offset]+bank.Directions()[offset+1] *
@@ -211,8 +234,9 @@ bool RunDirectionMagnitudePromotion(void)
           MathAbs(correction_norm-scale)<=D2_STUDY_EPSILON);
   }
 //+------------------------------------------------------------------+
-//| Protected slots reject an unrelated confirmed candidate.         |
+//| RunProtectedRejection - Run protected rejection                  |
 //+------------------------------------------------------------------+
+//--- Protected slots reject an unrelated confirmed candidate.
 bool RunProtectedRejection(void)
   {
    CD2SkillBank bank;
@@ -223,7 +247,9 @@ bool RunProtectedRejection(void)
       !Train(bank,-1.00f,0.00f)||!Train(bank,-1.00f,0.00f)||
       !Train(bank,0.00f,1.00f)||!Train(bank,0.00f,1.00f)||
       !ReadLifecycle(bank))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float rejected=bank.Diagnostics()[5];
    const float evicted=bank.Diagnostics()[7];
    const float protected_slots=bank.Diagnostics()[11];
@@ -233,9 +259,9 @@ bool RunProtectedRejection(void)
    return(rejected>=1.0f&&evicted==0.0f&&protected_slots==D2_STUDY_SLOTS);
   }
 //+------------------------------------------------------------------+
-//| A query outside the acceptance gate must take the zero NoSkill   |
-//| path.                                                            |
+//| RunNoSkill - Check the out-of-gate NoSkill path                  |
 //+------------------------------------------------------------------+
+//--- A query outside the acceptance gate must take the zero NoSkill path.
 bool RunNoSkill(void)
   {
    CD2SkillBank bank;
@@ -244,7 +270,9 @@ bool RunNoSkill(void)
       !bank.SetEnabled(true)||!SeedCloseOpposingCorrections(bank)||
       !Put(g_source.getOutput(),-1.00f,0.00f)||!bank.FeedForward(g_source.AsObject())||
       !ReadSelection(bank))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float correction_norm=bank.SelectedCorrection()[0] * bank.SelectedCorrection()[0]+
                                  bank.SelectedCorrection()[1] * bank.SelectedCorrection()[1];
    PrintFormat("D2SkillBankStudy: noskill slot=%.0f correction_norm=%.8f",
@@ -253,9 +281,9 @@ bool RunNoSkill(void)
    return(bank.SelectedSlot()[0]==-1.0f&&correction_norm<=D2_STUDY_EPSILON);
   }
 //+------------------------------------------------------------------+
-//| Save/Load preserves durable slots and gives the same next        |
-//| winner.                                                          |
+//| RunPersistenceWinner - Check the restored winner is unchanged    |
 //+------------------------------------------------------------------+
+//--- Save/Load preserves durable slots and gives the same next winner.
 bool RunPersistenceWinner(void)
   {
    CD2SkillBank original;
@@ -264,32 +292,40 @@ bool RunPersistenceWinner(void)
       !original.SetUtilityPolicy(false,-1.00f)||!original.SetEnabled(true)||
       !SeedCloseOpposingCorrections(original)||!Put(g_source.getOutput(),0.98f,0.20f)||
       !original.FeedForward(g_source.AsObject())||!ReadSelection(original))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float expected_slot=original.SelectedSlot()[0];
    const float expected_score=original.SelectedScore()[0];
    const float expected_correction=original.SelectedCorrection()[0];
    int         handle=FileOpen(D2_STUDY_FILE,FILE_WRITE | FILE_BIN | FILE_COMMON);
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!original.Save(handle))
      {
       FileClose(handle);
-      ReturnFalse;
+      ReturnFalse
      }
    FileClose(handle);
    CD2SkillBank restored;
    handle=FileOpen(D2_STUDY_FILE,FILE_READ | FILE_BIN | FILE_COMMON | FILE_SHARE_READ);
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!restored.Load(handle,g_net.GetOpenCL()))
      {
       FileClose(handle);
-      ReturnFalse;
+      ReturnFalse
      }
    FileClose(handle);
    if(!Put(g_source.getOutput(),0.98f,0.20f)||!restored.FeedForward(g_source.AsObject())||
       !ReadSelection(restored))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float slot_delta=MathAbs(restored.SelectedSlot()[0]-expected_slot);
    const float score_delta=MathAbs(restored.SelectedScore()[0]-expected_score);
    const float correction_delta=MathAbs(restored.SelectedCorrection()[0]-expected_correction);

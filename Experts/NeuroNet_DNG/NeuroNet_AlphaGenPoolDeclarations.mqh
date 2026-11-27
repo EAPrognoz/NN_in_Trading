@@ -9,7 +9,7 @@
 //| CAlphaGenPool - Define class interface                           |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
-//| CAlphaGenPool                                                    |
+//| CAlphaGenPool - Manage the pool of accepted formulas             |
 //+------------------------------------------------------------------+
 class CAlphaGenPool
   {
@@ -53,37 +53,47 @@ protected:
    int m_iQCMBatch;
    int m_iQCMNext;
    int m_iQCMStatus;
+#endif
 
 public:
+#ifdef NN_ALPHAQCM
    bool QCMRefresh(CBufferFloat *market,const bool pin=false,const ulong window=0);
    bool QCMEvaluateBatch(CBufferFloat *market,CBufferFloat *packed,const int count);
    bool QCMCommitCandidate(CBufferFloat *market,CBufferFloat *packed,const int count,const int index);
    bool QCMPrepareAppend(CBufferFloat *market,const bool first=false);
+//+------------------------------------------------------------------+
+//| QCMObserve - Update the current QCM signal                       |
+//+------------------------------------------------------------------+
    bool QCMObserve(CBufferFloat *market){return(QCMSignalStep(market,0,false,0));}
+//+------------------------------------------------------------------+
+//| QCMWarmup - Warm up the QCM signal state                         |
+//+------------------------------------------------------------------+
    bool QCMWarmup(CBufferFloat *market,const bool first=false){return(QCMSignalStep(market,1,first,0));}
    bool QCMRewarmActive(CBufferFloat *market);
    bool QCMValidateWorkspace(const int candidates);
    bool QCMValidLoadedActive(void) const;
    int QCMStatus(void) const;
+//+------------------------------------------------------------------+
+//| QCMChanged - Check whether the QCM fit changed                   |
+//+------------------------------------------------------------------+
    bool QCMChanged(void){return(m_cQCMFit.Total()==3&&m_cQCMFit.At(2)==1);}
+//+------------------------------------------------------------------+
+//| QCMFitIC - Return the fitted information coefficient             |
+//+------------------------------------------------------------------+
    float QCMFitIC(void){return(m_cQCMFit.Total()==3?m_cQCMFit.At(0):0);}
+//+------------------------------------------------------------------+
+//| QCMAggregateUsable - Check the fitted aggregate is usable        |
+//+------------------------------------------------------------------+
    bool QCMAggregateUsable(void){return(m_cQCMFit.Total()==3&&m_cQCMFit.At(1)==1);}
+//+------------------------------------------------------------------+
+//| QCMUncertain - Read the QCM uncertainty flag                     |
+//+------------------------------------------------------------------+
    bool QCMUncertain(void){return(m_bQCMUncertain);}
                      CAlphaGenPool(void);
 #else
-   //+------------------------------------------------------------------+
-   //| Allocate - Implement Allocate                                    |
-   //+------------------------------------------------------------------+
-   bool Allocate(CBufferFloat&buffer,const int count)
-     {
-      if(count<1||!buffer.BufferInit(count,0)||!buffer.BufferCreate(OpenCL))
-         ReturnFalse;
-
-      return(true);
-     }
-   bool Transaction(CBufferFloat*market,CBufferFloat*tokens,const int length,const int mode);
-   bool SignalStep(CBufferFloat*market,const int mode,const bool first=false,const int count=0);
-public:
+//+------------------------------------------------------------------+
+//| CAlphaGenPool - Initialize the object state                      |
+//+------------------------------------------------------------------+
                      CAlphaGenPool(void){OpenCL=NULL;m_iWindow=0;m_iHistoryCount=0;}
 #endif
    bool Configure(COpenCLMy*context,const float&config[]);
@@ -109,22 +119,7 @@ public:
 //+------------------------------------------------------------------+
 //| PrepareAppend                                                    |
 //+------------------------------------------------------------------+
-#ifdef NN_ALPHAQCM
    bool PrepareAppend(CBufferFloat*market,const bool first=false);
-#else
-   bool PrepareAppend(CBufferFloat*market,const bool first=false)
-     {
-      if(first&&m_iHistoryCount>0)
-        {
-         int count=m_iHistoryCount;
-         m_iHistoryCount=0;
-
-         return(SignalStep(GetPointer(m_cHistory),2,true,count));
-        }
-
-      return(SignalStep(market,2,first));
-     }
-#endif
    //+------------------------------------------------------------------+
    //| Commit - Implement Commit                                        |
    //+------------------------------------------------------------------+
@@ -154,63 +149,63 @@ public:
       return(Transaction(GetPointer(m_cDummy),GetPointer(m_cDummy),0,4));
      }
 //+------------------------------------------------------------------+
-//| Observe                                                          |
+//| Observe - Check observe                                          |
 //+------------------------------------------------------------------+
    bool         Observe(CBufferFloat*market)
      {
       return(SignalStep(market,0));
      }
 //+------------------------------------------------------------------+
-//| Warmup                                                           |
+//| Warmup - Check warmup                                            |
 //+------------------------------------------------------------------+
    bool         Warmup(CBufferFloat*market,const bool first=false)
      {
       return(SignalStep(market,1,first));
      }
 //+------------------------------------------------------------------+
-//| Control                                                          |
+//| Control - Return the control                                     |
 //+------------------------------------------------------------------+
    CBufferFloat *Control(void)
      {
       return(GetPointer(m_cControl));
      }
 //+------------------------------------------------------------------+
-//| Signal                                                           |
+//| Signal - Return the signal                                       |
 //+------------------------------------------------------------------+
    CBufferFloat *Signal(void)
      {
       return(GetPointer(m_cSignal));
      }
 //+------------------------------------------------------------------+
-//| Context                                                          |
+//| Context - Return the context                                     |
 //+------------------------------------------------------------------+
    CBufferFloat *Context(void)
      {
       return(GetPointer(m_cContext));
      }
 //+------------------------------------------------------------------+
-//| StagedContext                                                    |
+//| StagedContext - Return the staged context                        |
 //+------------------------------------------------------------------+
    CBufferFloat *StagedContext(void)
      {
       return(GetPointer(m_cPreparedContext));
      }
 //+------------------------------------------------------------------+
-//| StagedSignal                                                     |
+//| StagedSignal - Return the staged signal                          |
 //+------------------------------------------------------------------+
    CBufferFloat *StagedSignal(void)
      {
       return(GetPointer(m_cPreparedSignal));
      }
 //+------------------------------------------------------------------+
-//| Banks                                                            |
+//| Banks - Return the banks                                         |
 //+------------------------------------------------------------------+
    CBufferFloat *Banks(void)
      {
       return(GetPointer(m_cBanks));
      }
 //+------------------------------------------------------------------+
-//| Rings                                                            |
+//| Rings - Return the rings                                         |
 //+------------------------------------------------------------------+
    CBufferFloat *Rings(void)
      {
@@ -219,11 +214,11 @@ public:
    bool         Save(const int file_handle);
    bool         Load(const int file_handle);
 
-#ifdef NN_ALPHAQCM
 protected:
    bool Allocate(CBufferFloat&buffer,const int count);
    bool Transaction(CBufferFloat*market,CBufferFloat*tokens,const int length,const int mode);
    bool SignalStep(CBufferFloat*market,const int mode,const bool first=false,const int count=0);
+#ifdef NN_ALPHAQCM
    bool QCMEnsure(CBufferFloat &buffer,const long count);
    bool QCMRun(const int kernel,const int groups);
    bool QCMBindAdvance(const int begin,const int end);
@@ -238,7 +233,7 @@ protected:
 
 #ifdef NN_ALPHAQCM
 //+------------------------------------------------------------------+
-//| CAlphaGenPool - Initialize the AlphaQCM pool state                |
+//| CAlphaGenPool - Initialize the AlphaQCM pool state               |
 //+------------------------------------------------------------------+
 CAlphaGenPool::CAlphaGenPool(void)
   {
@@ -255,13 +250,17 @@ CAlphaGenPool::CAlphaGenPool(void)
    m_iQCMPacked=-1;
   }
 
+#endif
+
 //+------------------------------------------------------------------+
 //| Allocate - Allocate a pool buffer                                |
 //+------------------------------------------------------------------+
 bool CAlphaGenPool::Allocate(CBufferFloat&buffer,const int count)
   {
    if(count<1||!buffer.BufferInit(count,0)||!buffer.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -281,6 +280,5 @@ bool CAlphaGenPool::PrepareAppend(CBufferFloat*market,const bool first)
 
    return(SignalStep(market,2,first));
   }
-#endif
 
 #endif

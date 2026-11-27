@@ -11,11 +11,15 @@
 bool CAlphaGenPool::Configure(COpenCLMy*context,const float&config[])
   {
    if(!context||ArraySize(config)!=AG_CFG_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<AG_CFG_SIZE;i++)
       if(!MathIsValidNumber(config[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //--- reconfiguration must not retain indices belonging to an earlier context.
    m_cEvaluationWork.Clear();
@@ -25,13 +29,17 @@ bool CAlphaGenPool::Configure(COpenCLMy*context,const float&config[])
    m_iHistoryCount=0;
 
    if(!m_cEvaluationWork.BufferCreate(context)||!m_cEvaluated.BufferCreate(context))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OpenCL=context;
 
    for(int i=AG_CFG_W;i<=AG_CFG_CONTEXT;i++)
       if(config[i]!=(float)(int)config[i])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    m_iLookback=(int)config[AG_CFG_LOOKBACK];
    m_iWindow=(int)config[AG_CFG_W];m_iTokens=(int)config[AG_CFG_MAX_TOKENS];
@@ -48,7 +56,9 @@ bool CAlphaGenPool::Configure(COpenCLMy*context,const float&config[])
       config[AG_CFG_SIGNAL_CLIP]<=0||config[AG_CFG_EPS_VAR]<=0||
       m_iWindow<config[AG_CFG_LOOKBACK]+MathMax(m_iIC+config[AG_CFG_HORIZON],m_iNorm)||
       bank*4>INT_MAX||ring*2>INT_MAX||work>INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_iBankSize=(int)bank;m_iRingSize=(int)ring;m_iWorkSize=(int)work;
 
@@ -57,11 +67,15 @@ bool CAlphaGenPool::Configure(COpenCLMy*context,const float&config[])
       !Allocate(m_cWork,m_iWorkSize)||!Allocate(m_cControl,AG_POOL_CONTROL_SIZE)||
       !Allocate(m_cSignal,1)||!Allocate(m_cContext,m_iContext)||
       !Allocate(m_cPreparedSignal,1)||!Allocate(m_cPreparedContext,m_iContext)||!Allocate(m_cDummy,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- the first accepted formula receives ID one; zero remains unassigned.
    if(!m_cBanks.Update(1,1)||!m_cBanks.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -78,7 +92,7 @@ bool CAlphaGenPool::Transaction(CBufferFloat*market,CBufferFloat*tokens,const in
                   mode,length,m_iTokens,m_iWindow,(int)CheckPointer(OpenCL),
                   CheckPointer(market)!=POINTER_INVALID?market.Total():-1,
                   CheckPointer(tokens)!=POINTER_INVALID?tokens.Total():-1);
-      ReturnFalse;
+      ReturnFalse
      }
    setBuffer(def_k_AGPoolTransaction,def_ag_AGPoolTransaction_market,market.GetIndex())
    setBuffer(def_k_AGPoolTransaction,def_ag_AGPoolTransaction_tokens,tokens.GetIndex())
@@ -95,7 +109,9 @@ bool CAlphaGenPool::Transaction(CBufferFloat*market,CBufferFloat*tokens,const in
    lane_limit=MathMin(lane_limit,OpenCL.GetKernelInfoInteger(def_k_AGPoolTransaction,CL_KERNEL_WORK_GROUP_SIZE));
 
    if(lane_limit<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint lanes=1;
    while(lanes<64&&2*(long)lanes<=lane_limit)
@@ -121,7 +137,9 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
       CheckPointer(summary)==POINTER_INVALID||CheckPointer(prefixes)==POINTER_INVALID||
       CheckPointer(masks)==POINTER_INVALID||CheckPointer(metadata)==POINTER_INVALID||
       CheckPointer(gae)==POINTER_INVALID||count<1||first_row<0||m_iWindow<1||m_iTokens<2)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    long capacity_check=samples.Total();
 
@@ -133,7 +151,9 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
       (long)metadata.Total()<capacity_check*7||
       (long)gae.Total()<capacity_check*AG_GAE_FIELDS||
       (long)summary.Total()<4+AG_POOL_CONTROL_SIZE+(long)count*m_iTokens)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    long stride=(long)m_iWindow*m_iTokens+MathMax((long)m_iWindow*m_iTokens,3*(long)(m_iTokens+1));
    long work_count=stride*count;
@@ -142,7 +162,9 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
    if(work_count>INT_MAX||cache_count>INT_MAX||
       (m_cEvaluationWork.Total()<work_count&&!Allocate(m_cEvaluationWork,(int)work_count))||
       (m_cEvaluated.Total()<cache_count&&!Allocate(m_cEvaluated,(int)cache_count)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGPoolEvaluateBatch,def_ag_AGPoolEvaluateBatch_market,market.GetIndex())
    setBuffer(def_k_AGPoolEvaluateBatch,def_ag_AGPoolEvaluateBatch_candidates,candidates.GetIndex())
@@ -156,7 +178,9 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
    lane_limit=MathMin(lane_limit,MathMin(kernel_limit,commit_limit));
 
    if(lane_limit<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- tree reductions in commit use a power-of-two group, at most 64 lanes.
    uint lanes=1;
@@ -164,7 +188,9 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
       lanes*=2;
 
    if((long)count*lanes>UINT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint eval_offset[]={0};
    uint eval_global[]={(uint)count*lanes};
@@ -177,7 +203,9 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
 
    if(!OpenCL.Execute(def_k_AGPoolEvaluateBatch,1,eval_offset,eval_global,eval_local)||
       !OpenCL.WaitAlphaGenKernel(def_k_AGPoolEvaluateBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(first_row==0)
       PrintFormat("AlphaGen parallel formula evaluation: groups=%d lanes=%d us=%I64u",count,lanes,GetMicrosecondCount()-eval_started);
@@ -225,15 +253,21 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
                      candidate+1,count,(int)queued,enqueue_error,enqueue_us,(int)complete,GetMicrosecondCount()-started);
 
       if(!complete)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!summary.BufferRead()||summary.At(0)!=AG_OK)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<AG_POOL_CONTROL_SIZE;i++)
       if(!m_cControl.Update(i,summary.At(4+i)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -243,9 +277,13 @@ bool CAlphaGenPool::CommitSearchBatch(CBufferFloat*market,CBufferFloat*candidate
 bool CAlphaGenPool::SetWarmupHistory(const float&history[],const int count)
   {
    if(!OpenCL||count<m_iWindow||(long)count*5!=ArraySize(history))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!m_cHistory.AssignArray(history)||!m_cHistory.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_iHistoryCount=count;
 
    return(true);
@@ -257,12 +295,16 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
   {
    int span=count>0?count:m_iWindow;
    if(!OpenCL||!market||span<m_iWindow||(long)market.Total()<5*(long)span)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int  start=first?(mode==2?m_iLookback:MathMax(m_iLookback,span-m_iContext)):span-1;
    long required=2*(long)m_iCapacity*span;
    long available=0;
    if(required>INT_MAX||!OpenCL.GetLocalMemorySize(available))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int  tile=(int)MathMin(span,(available-512)/(8*(long)m_iTokens));
    long local_bytes=0;
    long kernel_local_bytes=0;
@@ -273,10 +315,14 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
       long slots=(long)m_iTokens*tile;
       local_bytes=4*(slots+MathMax(slots,3*(long)(m_iTokens+1)));
       if(local_bytes>INT_MAX||!OpenCL.SetArgumentLocalMemory(def_k_AGPoolEvaluateHistory,8,(int)local_bytes))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       kernel_local_bytes=OpenCL.GetKernelInfoInteger(def_k_AGPoolEvaluateHistory,CL_KERNEL_LOCAL_MEM_SIZE);
       if(kernel_local_bytes<0)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(kernel_local_bytes<=available)
          break;
       long bytes_per_bar=8*(long)m_iTokens;
@@ -286,10 +332,12 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
      {
       PrintFormat("AlphaGen history local memory insufficient: device=%I64d kernel=%I64d lookback=%d tokens=%d",
                   available,kernel_local_bytes,m_iLookback,m_iTokens);
-      ReturnFalse;
+      ReturnFalse
      }
    if(m_cHistoryValues.Total()!=required&&!Allocate(m_cHistoryValues,(int)required))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    setBuffer(def_k_AGPoolEvaluateHistory,0,market.GetIndex())
    setBuffer(def_k_AGPoolEvaluateHistory,1,m_cConfig.GetIndex())
    setBuffer(def_k_AGPoolEvaluateHistory,2,m_cBanks.GetIndex())
@@ -300,7 +348,9 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
    setArgument(def_k_AGPoolEvaluateHistory,7,tile)
    uint evaluation_lanes=OpenCL.AlphaGenGroupSize(def_k_AGPoolEvaluateHistory,64,1);
    if(evaluation_lanes==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    uint evaluation_offset[]={0};
    uint evaluation_global[]={evaluation_lanes*(uint)m_iCapacity};
    uint evaluation_local[]={evaluation_lanes};
@@ -309,7 +359,7 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
       int error=GetLastError();
       PrintFormat("AlphaGen history launch failed: error=%d span=%d tile=%d lanes=%u local_requested=%I64d local_kernel=%I64d local_device=%I64d",
                   error,span,tile,evaluation_lanes,local_bytes,kernel_local_bytes,available);
-      ReturnFalse;
+      ReturnFalse
      }
 
    setBuffer(def_k_AGPoolSignal,def_ag_AGPoolSignal_market,market.GetIndex())
@@ -330,7 +380,9 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
    lane_limit=MathMin(lane_limit,OpenCL.GetKernelInfoInteger(def_k_AGPoolSignal,CL_KERNEL_WORK_GROUP_SIZE));
 
    if(lane_limit<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint lanes=1;
    while(lanes<64&&2*(long)lanes<=lane_limit)
@@ -344,7 +396,7 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
    if(!OpenCL.WaitAlphaGenKernel(def_k_AGPoolSignal))
      {
       PrintFormat("AlphaGen pool signal failed: mode=%d first=%d start=%d window=%d",mode,(int)first,start,m_iWindow);
-      ReturnFalse;
+      ReturnFalse
      }
 #endif
    return(true);
@@ -355,29 +407,43 @@ bool CAlphaGenPool::SignalStep(CBufferFloat*market,const int mode,const bool fir
 bool CAlphaGenPool::Save(const int file_handle)
   {
    if(!OpenCL||file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileWriteUInt(file_handle,m_iBankSize)
    dFileWriteUInt(file_handle,m_iRingSize)
 
    if(!m_cBanks.BufferRead()||!m_cBanks.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cRings.BufferRead()||!m_cRings.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cControl.BufferRead()||!m_cControl.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cSignal.BufferRead()||!m_cSignal.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cContext.BufferRead()||!m_cContext.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cPreparedSignal.BufferRead()||!m_cPreparedSignal.Save(file_handle)||
       !m_cPreparedContext.BufferRead()||!m_cPreparedContext.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -387,7 +453,9 @@ bool CAlphaGenPool::Save(const int file_handle)
 bool CAlphaGenPool::Load(const int file_handle)
   {
    if(!OpenCL||file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint bank=0;
    uint ring=0;
@@ -395,7 +463,9 @@ bool CAlphaGenPool::Load(const int file_handle)
    dFileReadUInt(file_handle,ring)
 
    if(bank!=(uint)m_iBankSize||ring!=(uint)m_iRingSize)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat banks;
    CBufferFloat rings;
@@ -412,16 +482,50 @@ bool CAlphaGenPool::Load(const int file_handle)
       !context.Load(file_handle)||context.Total()!=m_iContext||
       !prepared_signal.Load(file_handle)||prepared_signal.Total()!=1||
       !prepared_context.Load(file_handle)||prepared_context.Total()!=m_iContext)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- every persisted scalar must be finite before any working state changes.
-   for(int i=0;i<banks.Total();i++)if(!MathIsValidNumber(banks.At(i))){ReturnFalse;}
-   for(int i=0;i<rings.Total();i++)if(!MathIsValidNumber(rings.At(i))){ReturnFalse;}
-   for(int i=0;i<control.Total();i++)if(!MathIsValidNumber(control.At(i))){ReturnFalse;}
-   for(int i=0;i<context.Total();i++)if(!MathIsValidNumber(context.At(i))||MathAbs(context.At(i))>1){ReturnFalse;}
-   for(int i=0;i<prepared_context.Total();i++)if(!MathIsValidNumber(prepared_context.At(i))||MathAbs(prepared_context.At(i))>1){ReturnFalse;}
+   for(int i=0;i<banks.Total();i++)
+     {
+      if(!MathIsValidNumber(banks.At(i)))
+        {
+         ReturnFalse
+        }
+     }
+   for(int i=0;i<rings.Total();i++)
+     {
+      if(!MathIsValidNumber(rings.At(i)))
+        {
+         ReturnFalse
+        }
+     }
+   for(int i=0;i<control.Total();i++)
+     {
+      if(!MathIsValidNumber(control.At(i)))
+        {
+         ReturnFalse
+        }
+     }
+   for(int i=0;i<context.Total();i++)
+     {
+      if(!MathIsValidNumber(context.At(i))||MathAbs(context.At(i))>1)
+        {
+         ReturnFalse
+        }
+     }
+   for(int i=0;i<prepared_context.Total();i++)
+     {
+      if(!MathIsValidNumber(prepared_context.At(i))||MathAbs(prepared_context.At(i))>1)
+        {
+         ReturnFalse
+        }
+     }
    if(!MathIsValidNumber(signal.At(0))||!MathIsValidNumber(prepared_signal.At(0)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int b=0;b<4;b++)
      {
@@ -429,18 +533,24 @@ bool CAlphaGenPool::Load(const int file_handle)
       int count=(int)banks.At(offset);
 
       if(count<0||count>(b==2?m_iCapacity:m_iCapacity-1)||banks.At(offset)!=(float)count)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(int k=1;k<9;k++)
         {
          float limb=banks.At(offset+k);
 
          if(limb<0||limb>65535||limb!=(float)(int)limb)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(banks.At(offset+9)!=0&&banks.At(offset+9)!=1)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(int j=0;j<count;j++)
         {
@@ -448,20 +558,26 @@ bool CAlphaGenPool::Load(const int file_handle)
          int length=(int)banks.At(record);
 
          if(length<2||length>m_iTokens||banks.At(record)!=(float)length)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          for(int k=1;k<5;k++)
            {
             float limb=banks.At(record+k);
 
             if(limb<0||limb>65535||limb!=(float)(int)limb)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
          bool zero_id=true;
 
          for(int k=1;k<5;k++)if(banks.At(record+k)!=0)zero_id=false;
          if(zero_id)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(b!=2)
            {
@@ -472,11 +588,17 @@ bool CAlphaGenPool::Load(const int file_handle)
                float next=banks.At(offset+1+k);
                float id=banks.At(record+1+k);
 
-               if(next!=id){greater=next>id;break;}
+               if(next!=id)
+                 {
+                  greater=next>id;
+                  break;
+                 }
               }
 
             if(!greater)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
 
          for(int previous=0;previous<j;previous++)
@@ -489,23 +611,31 @@ bool CAlphaGenPool::Load(const int file_handle)
             for(int k=0;k<length&&same_formula;k++)
                if(banks.At(record+5+k)!=banks.At(other+5+k))same_formula=false;
             if(same_id||same_formula)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
 
          if(banks.At(record+5+length-1)!=AG_STOP)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(banks.At(offset+9)==1&&(banks.At(record+5+m_iTokens)<=0||
             banks.At(record+7+m_iTokens)<=0||banks.At(record+9+m_iTokens)<=0||
             banks.At(record+10+m_iTokens)!=AG_OK))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          for(int k=0;k<length;k++)
            {
             float token=banks.At(record+5+k);
 
             if(token<0||token>=AG_VOCABULARY||token!=(float)(int)token)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
         }
      }
@@ -520,29 +650,43 @@ bool CAlphaGenPool::Load(const int file_handle)
       if(count<0||count>m_iNorm||count!=(float)(int)count||
          position<0||position>=m_iNorm||position!=(float)(int)position||
          used<0||used>m_iContext||used!=(float)(int)used)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(count==m_iNorm&&rings.At(offset+10)==AG_OK&&
          (rings.At(offset+3)<=0||rings.At(offset+5)<=0||rings.At(offset+7)<=0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!m_cBanks.AssignArray(GetPointer(banks))||!m_cBanks.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cRings.AssignArray(GetPointer(rings))||!m_cRings.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cControl.AssignArray(GetPointer(control))||!m_cControl.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cSignal.AssignArray(GetPointer(signal))||!m_cSignal.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_cContext.AssignArray(GetPointer(context))||!m_cContext.BufferWrite()||
       !m_cPreparedSignal.AssignArray(GetPointer(prepared_signal))||!m_cPreparedSignal.BufferWrite()||
       !m_cPreparedContext.AssignArray(GetPointer(prepared_context))||!m_cPreparedContext.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }

@@ -14,7 +14,9 @@
 bool CAlphaGenBufferView::Bind(COpenCLMy*context,const int index,const int count)
   {
    if(!BufferInit(count,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OpenCL=context;
    m_myIndex=index;
@@ -56,13 +58,17 @@ bool CNeuronAlphaGenDenseOCL::Configure(COpenCLMy*context,const int inputs,const
    m_iRows=outputs;
 
    if(!Init(outputs,0,context,inputs,ADAM,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetActivationFunction(function);
 
    if(outputs>0&&
       (!m_cWeightGradient.BufferInit((inputs+1)*outputs,0)||!m_cWeightGradient.BufferCreate(OpenCL)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(AllocateChecks());
   }
@@ -98,7 +104,9 @@ bool CNeuronAlphaGenDenseOCL::ForwardDense(CNeuronBaseOCL*source)
 
    if(!feedForwardChecked(source,GetPointer(m_cFlags))||
       !ReduceNumericFlags(GetPointer(m_cFlags),GetPointer(m_cOnes),GetPointer(m_cScalar),Neurons(),rejected))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(!rejected);
   }
@@ -115,7 +123,9 @@ bool CNeuronAlphaGenDenseOCL::Copy(CBufferFloat*source)
 bool CNeuronAlphaGenDenseOCL::Outer(CNeuronBaseOCL*next)
   {
    if(!next||m_iRows!=next.Neurons())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGDenseGradient,def_ag_AGDenseGradient_input,getOutputIndex())
    setBuffer(def_k_AGDenseGradient,def_ag_AGDenseGradient_gradient,next.getGradientIndex())
@@ -148,7 +158,9 @@ bool CNeuronAlphaGenDenseOCL::Check(CNeuronAlphaGenEvaluatorOCL*evaluator)
 bool CNeuronAlphaGenDenseOCL::Apply(void)
   {
    if(m_iRows<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_LSTM_UpdateWeightsAdam,def_k_lstmuw_weights,Weights.GetIndex())
    setBuffer(def_k_LSTM_UpdateWeightsAdam,def_k_lstmuw_weights_gradient,m_cWeightGradient.GetIndex())
@@ -173,12 +185,16 @@ bool CNeuronAlphaGenDenseOCL::SaveState(const int handle)
       (CheckPointer(Weights)==POINTER_INVALID||CheckPointer(FirstMomentum)==POINTER_INVALID||
        CheckPointer(SecondMomentum)==POINTER_INVALID||!Weights.BufferRead()||
        !FirstMomentum.BufferRead()||!SecondMomentum.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(Output)==POINTER_INVALID||CheckPointer(PrevOutput)==POINTER_INVALID||
       CheckPointer(Gradient)==POINTER_INVALID||!Output.BufferRead()||!PrevOutput.BufferRead()||
       !Gradient.BufferRead()||!Save(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileWriteUInt(handle,m_iRandom)
 
@@ -194,13 +210,17 @@ bool CNeuronAlphaGenDenseOCL::LoadState(const int handle,COpenCLMy*context)
    dFileReadUInt(handle,type)
 
    if(!Load(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileReadUInt(handle,m_iRandom)
    m_iRows=getConnections();
 
    if(m_iRows>0&&(!m_cWeightGradient.BufferInit(Weights.Total(),0)||!m_cWeightGradient.BufferCreate(OpenCL)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(AllocateChecks());
   }
@@ -244,7 +264,9 @@ bool CNeuronAlphaGenPolicyLSTMOCL::Check(CNeuronAlphaGenEvaluatorOCL*evaluator)
    CAlphaGenBufferView view;
 
    if(!view.Bind(OpenCL,m_iWeightsGradient,m_cWeightsLSTM.Total()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(evaluator.NumericBatch(GetPointer(view),GetPointer(m_cWeightsLSTM),
                                  GetPointer(m_cFirstMomentumLSTM),GetPointer(m_cSecondMomentumLSTM),false));
@@ -255,7 +277,9 @@ bool CNeuronAlphaGenPolicyLSTMOCL::Check(CNeuronAlphaGenEvaluatorOCL*evaluator)
 bool CNeuronAlphaGenPolicyLSTMOCL::SaveState(const int handle)
   {
    if(!Output.BufferRead()||!PrevOutput.BufferRead()||!Gradient.BufferRead()||!Save(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileWriteUInt(handle,m_iRandom)
    dFileWriteUInt(handle,m_iCapacity)
@@ -272,14 +296,18 @@ bool CNeuronAlphaGenPolicyLSTMOCL::LoadState(const int handle,COpenCLMy*context)
    dFileReadUInt(handle,type)
 
    if(!Load(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileReadUInt(handle,m_iRandom)
    uint capacity=0;
    dFileReadUInt(handle,capacity)
 
    if(capacity>INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(RestoreWorkspace(context,(int)capacity));
   }
@@ -339,17 +367,23 @@ bool CNeuronAlphaGenPolicyOCL::Setup(COpenCLMy*context,const float&config[],cons
    m_bReady=false;
 
    if(!context||ArraySize(config)!=AG_CFG_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int j=0;j<AG_CFG_SIZE;j++)
       if(!MathIsValidNumber(config[j]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(config[AG_CFG_EMBEDDING]<1||config[AG_CFG_SEARCH_HIDDEN]<1||config[AG_CFG_TRADE_HIDDEN]<1||
       config[AG_CFG_MLP]<1||config[AG_CFG_MAX_TOKENS]<1||config[AG_CFG_W]<1||
       !m_cConfig.AssignArray(config)||!m_cConfig.BufferCreate(OpenCL)||!Allocate(m_cSample,AG_ACTIONS)||
       !Allocate(m_cAction,AG_ACTIONS)||!Allocate(m_cMetadata,7)||!Allocate(m_cNoise,AG_ACTIONS))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -380,7 +414,9 @@ bool CNeuronAlphaGenPolicyOCL::Distribution(CNeuronBaseOCL*head,CBufferFloat*mas
    m_bReady=false;
 
    if(mode<0||mode>2)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(mode==0)
      {
@@ -396,7 +432,9 @@ bool CNeuronAlphaGenPolicyOCL::Distribution(CNeuronBaseOCL*head,CBufferFloat*mas
            }
 
       if(!m_cNoise.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    setBuffer(def_k_AGDistribution,def_ag_AGDistribution_head,head.getOutputIndex())
    setBuffer(def_k_AGDistribution,def_ag_AGDistribution_mask,mask.GetIndex())
@@ -422,7 +460,9 @@ bool CNeuronAlphaGenPolicyOCL::NumericSpan(CNeuronAlphaGenEvaluatorOCL*evaluator
    CAlphaGenBufferView view;
 
    if(!view.Bind(OpenCL,buffer.GetIndex(),count))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(evaluator.Numeric(GetPointer(view),false));
   }
@@ -449,7 +489,9 @@ bool CNeuronAlphaGenPolicyOCL::SaveCommon(const int handle)
    dFileWriteUInt(handle,m_iRandom)
 
    if(!m_cConfig.BufferRead()||!m_cConfig.Save(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -463,7 +505,9 @@ bool CNeuronAlphaGenPolicyOCL::LoadCommon(const int handle,COpenCLMy*context)
    CBufferFloat config;
 
    if(!config.Load(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float values[];
    config.GetData(values);
@@ -519,7 +563,9 @@ CNeuronAlphaGenSearchPolicyOCL::CNeuronAlphaGenSearchPolicyOCL(void):m_cTokens(N
 bool CNeuronAlphaGenSearchPolicyOCL::Configure(COpenCLMy*context,const float&config[],const uint seed)
   {
    if(!Setup(context,config,seed))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int capacity=(int)config[AG_CFG_MAX_TOKENS];
    m_cFirst.Seed(seed+3);
@@ -549,7 +595,9 @@ bool CNeuronAlphaGenSearchPolicyOCL::GenerateBatch(const int count,CBufferFloat*
    if(count<1||!results||!workspace||
       results.Total()<(long)count*(1+max_tokens*(4+AG_VOCABULARY))||
       workspace.Total()<(long)count*BatchWorkStride())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    Uniform();
    setBuffer(def_k_AGSearchGenerate,def_ag_AGSearchGenerate_cfg,m_cConfig.GetIndex())
@@ -565,14 +613,18 @@ bool CNeuronAlphaGenSearchPolicyOCL::GenerateBatch(const int count,CBufferFloat*
    lane_limit=MathMin(lane_limit,kernel_limit);
 
    if(lane_limit<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint lanes=1;
    while(lanes<64&&2*(long)lanes<=lane_limit)
       lanes*=2;
 
    if((long)count*lanes>UINT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint offset[]={0};
    uint global[]={(uint)count*lanes};
@@ -590,7 +642,9 @@ bool CNeuronAlphaGenSearchPolicyOCL::ForwardPrefix(CBufferFloat*tokens,const int
 
    if(!tokens||!mask||length<1||length>(int)m_cConfig.At(AG_CFG_MAX_TOKENS)||tokens.Total()<length||
       mask.Total()<AG_VOCABULARY)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_cTokens=tokens;
    m_iLength=length;
@@ -609,7 +663,9 @@ bool CNeuronAlphaGenSearchPolicyOCL::ForwardPrefix(CBufferFloat*tokens,const int
       !m_cSecond.Sequence(m_cFirst.SequenceOutput(),length)||
       !SequenceMap(m_cSecond.SequenceOutput(),m_cMean.getOutput(),length,SearchHidden(),0,mask)||
       !m_cHead.ForwardDense(GetPointer(m_cMean)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(Distribution(GetPointer(m_cHead),mask,true,mode));
   }
@@ -626,7 +682,9 @@ bool CNeuronAlphaGenSearchPolicyOCL::Backward(CNeuronAlphaGenEvaluatorOCL*evalua
                    GetPointer(m_cNoise))||
       !m_cSecond.Backward(m_cFirst.SequenceOutput(),m_cFirst.SequenceGradient())||
       !m_cFirst.Backward(GetPointer(m_cEmbedded),GetPointer(m_cEmbeddedGradient)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(def_k_AGEmbeddingBackward,def_ag_AGEmbeddingBackward_tokens,m_cTokens.GetIndex())
    setArgument(def_k_AGEmbeddingBackward,def_ag_AGEmbeddingBackward_length,m_iLength)
@@ -639,18 +697,24 @@ bool CNeuronAlphaGenSearchPolicyOCL::Backward(CNeuronAlphaGenEvaluatorOCL*evalua
    kernelExecute(def_k_AGEmbeddingBackward,global_work_offset,global_work_size)
 
    if(!OpenCL.Profile().Mark(3))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!evaluator.Numeric(GetPointer(m_cMetadata),true)||!evaluator.Numeric(m_cHead.getOutput(),false)||
       !evaluator.Numeric(m_cHead.getGradient(),false)||!evaluator.Numeric(m_cMean.getGradient(),false)||
       !NumericSpan(evaluator,GetPointer(m_cEmbeddedGradient),m_iLength*EmbeddingDim())||
       !NumericSpan(evaluator,m_cFirst.SequenceGradient(),m_iLength*SearchHidden())||!m_cMean.Check(evaluator)||
       !m_cEmbedding.Check(evaluator)||!m_cFirst.Check(evaluator)||!m_cSecond.Check(evaluator))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bReady=evaluator.NumericOK();
    if(!OpenCL.Profile().Mark(4))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(m_bReady);
   }
@@ -660,7 +724,9 @@ bool CNeuronAlphaGenSearchPolicyOCL::Backward(CNeuronAlphaGenEvaluatorOCL*evalua
 bool CNeuronAlphaGenSearchPolicyOCL::Apply(void)
   {
    if(!m_bReady)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bReady=false;
 
@@ -699,7 +765,9 @@ CNeuronAlphaGenTradingPolicyOCL::CNeuronAlphaGenTradingPolicyOCL(void):m_cSignal
 bool CNeuronAlphaGenTradingPolicyOCL::Configure(COpenCLMy*context,const float&config[],const uint seed)
   {
    if(!Setup(context,config,seed))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_cRecurrent.Seed(seed+1);
 
@@ -718,13 +786,17 @@ bool CNeuronAlphaGenTradingPolicyOCL::Encode(CBufferFloat*signal,const int lengt
    m_bReady=false;
 
    if(!signal||length<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_cSignal=signal;
    m_iLength=length;
 
    if(anchor!=NULL&&!m_cRecurrent.SetAnchor(anchor))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(m_cRecurrent.Sequence(signal,length));
   }
@@ -736,13 +808,17 @@ bool CNeuronAlphaGenTradingPolicyOCL::Heads(CBufferFloat*account,const int mode)
    m_bReady=false;
 
    if(!account||account.Total()!=AG_ACCOUNT||m_iLength<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SequenceMap(m_cRecurrent.SequenceOutput(),m_cInput.getOutput(),m_iLength,TradeHidden(),2,account)||
       !m_cHidden1.ForwardDense(GetPointer(m_cInput))||!ReLU(GetPointer(m_cHidden1),0)||
       !m_cHidden2.ForwardDense(GetPointer(m_cHidden1))||!ReLU(GetPointer(m_cHidden2),0)||
       !m_cHead.ForwardDense(GetPointer(m_cHidden2)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(Distribution(GetPointer(m_cHead),GetPointer(m_cNoise),false,mode));
   }
@@ -769,21 +845,29 @@ bool CNeuronAlphaGenTradingPolicyOCL::Backward(CNeuronAlphaGenEvaluatorOCL*evalu
       !SequenceMap(m_cInput.getGradient(),m_cRecurrent.SequenceGradient(),m_iLength,TradeHidden(),3,
                    GetPointer(m_cNoise))||
       !m_cRecurrent.Backward(m_cSignal,GetPointer(m_cSignalGradient),ALPHAGEN_TRADE_BACKWARD_BARS))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!OpenCL.Profile().Mark(3))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!evaluator.Numeric(GetPointer(m_cMetadata),true)||!evaluator.Numeric(m_cHead.getOutput(),false)||
       !evaluator.Numeric(m_cHead.getGradient(),false)||!evaluator.Numeric(m_cInput.getGradient(),false)||
       !evaluator.Numeric(m_cHidden1.getGradient(),false)||!evaluator.Numeric(m_cHidden2.getGradient(),false)||
       !NumericSpan(evaluator,GetPointer(m_cSignalGradient),m_iLength)||!m_cInput.Check(evaluator)||
       !m_cHidden1.Check(evaluator)||!m_cHidden2.Check(evaluator)||!m_cRecurrent.Check(evaluator))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bReady=evaluator.NumericOK();
    if(!OpenCL.Profile().Mark(4))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(m_bReady);
   }
@@ -793,7 +877,9 @@ bool CNeuronAlphaGenTradingPolicyOCL::Backward(CNeuronAlphaGenEvaluatorOCL*evalu
 bool CNeuronAlphaGenTradingPolicyOCL::Apply(void)
   {
    if(!m_bReady)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bReady=false;
 

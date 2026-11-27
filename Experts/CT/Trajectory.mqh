@@ -45,7 +45,7 @@ struct STrajectory;
 //+------------------------------------------------------------------+
 extern STrajectory Buffer[];
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -63,23 +63,31 @@ struct SState
 //+------------------------------------------------------------------+
 //| Clear                                                            |
 //+------------------------------------------------------------------+
-   void              Clear(void)
-     {
-      ArrayInitialize(state,0);
-      ArrayInitialize(account,0);
-      ArrayInitialize(action,0);
-      ArrayInitialize(rewards,0);
-     }
+   void              Clear(void);
 
 //--- overloading
-   void              operator=(const SState &obj)
-     {
-      ArrayCopy(state,obj.state);
-      ArrayCopy(account,obj.account);
-      ArrayCopy(action,obj.action);
-      ArrayCopy(rewards,obj.rewards);
-     }
+   void              operator=(const SState &obj);
   };
+//+------------------------------------------------------------------+
+//| Clear - Clears state data.                                       |
+//+------------------------------------------------------------------+
+void SState::Clear(void)
+  {
+   ArrayInitialize(state,0);
+   ArrayInitialize(account,0);
+   ArrayInitialize(action,0);
+   ArrayInitialize(rewards,0);
+  }
+//+------------------------------------------------------------------+
+//| operator= - Copies state data.                                   |
+//+------------------------------------------------------------------+
+void SState::operator=(const SState &obj)
+  {
+   ArrayCopy(state,obj.state);
+   ArrayCopy(account,obj.account);
+   ArrayCopy(action,obj.action);
+   ArrayCopy(rewards,obj.rewards);
+  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -100,39 +108,41 @@ SState::SState(void)
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalse
+     }
 //---
    int total=ArraySize(state);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,state[i])
+     }
 //---
    total=ArraySize(account);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,account[i])
+     }
 //---
    total=ArraySize(action);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,action[i])
+     }
 //---
    total=ArraySize(rewards);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,rewards[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,rewards[i])
+     }
 //---
    return(true);
   }
@@ -144,7 +154,9 @@ bool SState::Save(int file_handle)
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
    if(FileIsEnding(file_handle))
       return(false);
 //---
@@ -154,9 +166,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      state[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,state[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -165,9 +175,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      account[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,account[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -176,9 +184,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      action[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,action[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -187,15 +193,13 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      rewards[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,rewards[i])
      }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| STrajectory - Store a simulated trading trajectory               |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
@@ -214,15 +218,19 @@ struct STrajectory
    bool              Load(int file_handle);
 
 //--- overloading
-   void              operator=(const STrajectory &obj)
-     {
-      Total=obj.Total;
-      DiscountFactor=obj.DiscountFactor;
-      CumCounted=obj.CumCounted;
-      for(int i=0; i<Buffer_Size; i++)
-         States[i]=obj.States[i];
-     }
+   void              operator=(const STrajectory &obj);
   };
+//+------------------------------------------------------------------+
+//| operator= - Copies trajectory data.                              |
+//+------------------------------------------------------------------+
+void STrajectory::operator=(const STrajectory &obj)
+  {
+   Total=obj.Total;
+   DiscountFactor=obj.DiscountFactor;
+   CumCounted=obj.CumCounted;
+   for(int i=0; i<Buffer_Size; i++)
+      States[i]=obj.States[i];
+  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -243,7 +251,9 @@ STrajectory::STrajectory(void)  :   Total(0),
 bool STrajectory::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    if(!CumCounted)
       CumRevards();
@@ -267,7 +277,9 @@ bool STrajectory::Save(int file_handle)
 bool STrajectory::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    Total=FileReadInteger(file_handle);
    if(FileIsEnding(file_handle)||Total>=ArraySize(States))
@@ -284,7 +296,7 @@ bool STrajectory::Load(int file_handle)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CumRevards.           |
+//| CumRevards - Accumulate discounted trajectory rewards            |
 //+------------------------------------------------------------------+
 void STrajectory::CumRevards(void)
   {
@@ -313,7 +325,7 @@ bool STrajectory::Add(SState &state)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for ClearFirstN.          |
+//| ClearFirstN - Remove the oldest trajectory states                |
 //+------------------------------------------------------------------+
 void STrajectory::ClearFirstN(const int n)
   {
@@ -586,7 +598,7 @@ bool CreateDescriptions(CArrayObj *agent)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates or initializes WorkerDescriptions.                     |
+//| CreateWorkerDescriptions - Create worker descriptions            |
 //+------------------------------------------------------------------+
 bool CreateWorkerDescriptions(CArrayObj *worker,CArrayObj *descriminator)
   {
@@ -784,7 +796,7 @@ bool CreateWorkerDescriptions(CArrayObj *worker,CArrayObj *descriminator)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates or initializes ValueDescriptions.                      |
+//| CreateValueDescriptions - Create value descriptions              |
 //+------------------------------------------------------------------+
 bool CreateValueDescriptions(CArrayObj *value)
   {
@@ -916,7 +928,7 @@ bool IsNewBar(void)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CloseByDirection.     |
+//| CloseByDirection - Close positions of the specified type         |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -988,7 +1000,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for ClosePartial.         |
+//| ClosePartial - Close part of the position volume                 |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {
@@ -1031,7 +1043,8 @@ vector<float>ForecastAccount(float &prev_account[],vector<float>&actions,double 
    double min_lot=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_MIN);
    double step_lot=SymbolInfoDouble(_Symbol,SYMBOL_VOLUME_STEP);
    double stops=MathMax(SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL),1) * Point();
-   double margin_buy,margin_sell;
+   double margin_buy;
+   double margin_sell;
    if(!OrderCalcMargin(ORDER_TYPE_BUY,_Symbol,1.0,SymbolInfoDouble(_Symbol,SYMBOL_ASK),margin_buy)||
       !OrderCalcMargin(ORDER_TYPE_SELL,_Symbol,1.0,SymbolInfoDouble(_Symbol,SYMBOL_BID),margin_sell))
       return vector<float>::Zeros(prev_account.Size());

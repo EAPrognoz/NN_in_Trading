@@ -11,7 +11,7 @@
 #include <Arrays\ArrayObj.mqh>
 //---
 //+------------------------------------------------------------------+
-//| CMyTreeNode                                                      |
+//| CMyTreeNode - Represent a node in the tree                       |
 //+------------------------------------------------------------------+
 class CMyTreeNode : public CArrayObj
   {
@@ -25,49 +25,49 @@ public:
                     ~CMyTreeNode();
 //--- methods of access to protected data
 //+------------------------------------------------------------------+
-//| Parent                                                           |
+//| Parent - Return the parent node                                  |
 //+------------------------------------------------------------------+
    CMyTreeNode*      Parent(void)           const
      {
       return(m_cParent);
      }
 //+------------------------------------------------------------------+
-//| Parent                                                           |
+//| Parent - Assign the parent node                                  |
 //+------------------------------------------------------------------+
    void              Parent(CMyTreeNode *node)
      {
       m_cParent=node;
      }
 //+------------------------------------------------------------------+
-//| IncreaseSupport                                                  |
+//| IncreaseSupport - Add to this node's support                     |
 //+------------------------------------------------------------------+
    void              IncreaseSupport(float support)
      {
       m_dSupport += support;
      }
 //+------------------------------------------------------------------+
-//| GetSupport                                                       |
+//| GetSupport - Read the support                                    |
 //+------------------------------------------------------------------+
    float            GetSupport(void)
      {
       return(m_dSupport);
      }
 //+------------------------------------------------------------------+
-//| SetSupport                                                       |
+//| SetSupport - Set support                                         |
 //+------------------------------------------------------------------+
    void              SetSupport(float support)
      {
       m_dSupport=support;
      }
 //+------------------------------------------------------------------+
-//| ID                                                               |
+//| ID - Return the identifier                                       |
 //+------------------------------------------------------------------+
    ulong             ID(void)
      {
       return(m_iIndex);
      }
 //+------------------------------------------------------------------+
-//| ID                                                               |
+//| ID - Return the identifier                                       |
 //+------------------------------------------------------------------+
    void              ID(ulong ID)
      {
@@ -93,9 +93,9 @@ public:
    virtual bool      CreateElement(const int index);
   };
 //+------------------------------------------------------------------+
-//| m d Su pp or t implementation                                    |
+//| CMyTreeNode - Initialize tree node support                       |
 //+------------------------------------------------------------------+
-                              CMyTreeNode::CMyTreeNode() : m_dSupport(0)
+CMyTreeNode::CMyTreeNode() : m_dSupport(0)
   {
    Clear();
   }
@@ -106,7 +106,7 @@ CMyTreeNode::~CMyTreeNode()
   {
   }
 //+------------------------------------------------------------------+
-//| GetConfidence                                                    |
+//| GetConfidence - Get confidence                                   |
 //+------------------------------------------------------------------+
 float CMyTreeNode::GetConfidence(void)
   {
@@ -119,7 +119,7 @@ float CMyTreeNode::GetConfidence(void)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| GetConfidence                                                    |
+//| GetConfidence - Get confidence                                   |
 //+------------------------------------------------------------------+
 float CMyTreeNode::GetConfidence(const ulong ID)
   {
@@ -152,7 +152,7 @@ CMyTreeNode *CMyTreeNode::GetNext(const ulong ID)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| DeleteNode                                                       |
+//| DeleteNode - Delete node                                         |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::DeleteNode(const ulong ID)
   {
@@ -198,7 +198,7 @@ CMyTreeNode *CMyTreeNode::AddNode(const ulong ID,float support)
    return(node);
   }
 //+------------------------------------------------------------------+
-//| GetDepth                                                         |
+//| GetDepth - Get depth                                             |
 //+------------------------------------------------------------------+
 uint CMyTreeNode::GetDepth(void)
   {
@@ -209,7 +209,7 @@ uint CMyTreeNode::GetDepth(void)
    return(parent.GetDepth()+1);
   }
 //+------------------------------------------------------------------+
-//| Mining                                                           |
+//| Mining - Check mining                                            |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::Mining(vectorf &supports,matrixf &paths,const ulong ID,float min_conf)
   {
@@ -262,7 +262,7 @@ bool CMyTreeNode::Mining(vectorf &supports,matrixf &paths,const ulong ID,float m
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CreateElement                                                    |
+//| CreateElement - Create element                                   |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::CreateElement(const int index)
   {
@@ -278,7 +278,7 @@ bool CMyTreeNode::CreateElement(const int index)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::Save(const int file_handle)
   {
@@ -293,7 +293,7 @@ bool CMyTreeNode::Save(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CMyTreeNode::Load(const int file_handle)
   {

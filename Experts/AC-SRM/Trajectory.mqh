@@ -94,7 +94,7 @@ CiCCI  CCI;
 CiATR  ATR;
 CiMACD MACD;
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -109,17 +109,22 @@ struct SState
    bool              Load(int file_handle);
 
 //--- overloading
-   void              operator=(const SState &obj)
-     {
-      ArrayCopy(state,obj.state);
-      ArrayCopy(account,obj.account);
-      ArrayCopy(action,obj.action);
-      ArrayCopy(rewards,obj.rewards);
-     }
+   void              operator=(const SState &obj);
   };
 //+------------------------------------------------------------------+
-//| Complete outcome of one independently simulated Skill episode.   |
+//| operator= - Copies state data.                                   |
 //+------------------------------------------------------------------+
+void SState::operator=(const SState &obj)
+  {
+   ArrayCopy(state,obj.state);
+   ArrayCopy(account,obj.account);
+   ArrayCopy(action,obj.action);
+   ArrayCopy(rewards,obj.rewards);
+  }
+//+------------------------------------------------------------------+
+//| SSkillEpisodeOutcome - Store skill episode outcome               |
+//+------------------------------------------------------------------+
+//--- Complete outcome of one independently simulated Skill episode.
 struct SSkillEpisodeOutcome
   {
 private:
@@ -139,49 +144,49 @@ public:
                                 const double cost,const uint duration,
                                 const double risk=0.0);
 //+------------------------------------------------------------------+
-//| Outcome                                                          |
+//| Outcome - Return the outcome                                     |
 //+------------------------------------------------------------------+
    double            Outcome(void) const
      {
       return(dOutcome);
      }
 //+------------------------------------------------------------------+
-//| Balance                                                          |
+//| Balance - Return the balance                                     |
 //+------------------------------------------------------------------+
    double            Balance(void) const
      {
       return(dBalance);
      }
 //+------------------------------------------------------------------+
-//| Equity                                                           |
+//| Equity - Return the equity                                       |
 //+------------------------------------------------------------------+
    double            Equity(void) const
      {
       return(dEquity);
      }
 //+------------------------------------------------------------------+
-//| Drawdown                                                         |
+//| Drawdown - Return the drawdown                                   |
 //+------------------------------------------------------------------+
    double            Drawdown(void) const
      {
       return(dDrawdown);
      }
 //+------------------------------------------------------------------+
-//| Cost                                                             |
+//| Cost - Return the cost                                           |
 //+------------------------------------------------------------------+
    double            Cost(void) const
      {
       return(dCost);
      }
 //+------------------------------------------------------------------+
-//| Risk                                                             |
+//| Risk - Return the risk                                           |
 //+------------------------------------------------------------------+
    double            Risk(void) const
      {
       return(dRisk);
      }
 //+------------------------------------------------------------------+
-//| Duration                                                         |
+//| Duration - Return the duration                                   |
 //+------------------------------------------------------------------+
    uint              Duration(void) const
      {
@@ -205,7 +210,7 @@ bool SSkillEpisodeOutcome::Reset(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Accumulates one step into the episode outcome block.             |
+//| Accumulate - Accumulates one step into the episode outcome block |
 //+------------------------------------------------------------------+
 bool SSkillEpisodeOutcome::Accumulate(const double reward,const double balance,
                                       const double equity,const double drawdown,
@@ -215,7 +220,9 @@ bool SSkillEpisodeOutcome::Accumulate(const double reward,const double balance,
    if(!MathIsValidNumber(reward)||!MathIsValidNumber(balance)||
       !MathIsValidNumber(equity)||!MathIsValidNumber(drawdown)||
       !MathIsValidNumber(cost)||!MathIsValidNumber(risk))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    dOutcome += reward;
    dBalance=balance;
    dEquity=equity;
@@ -230,46 +237,54 @@ bool SSkillEpisodeOutcome::Accumulate(const double reward,const double balance,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Calculates terminal paired utility from complete episode state.  |
+//| SkillComputePairedEpisodeDelta - Compute                         |
 //+------------------------------------------------------------------+
+//--- Calculates terminal paired utility from complete episode state.
 bool SkillComputePairedEpisodeDelta(const SSkillEpisodeOutcome &base,
-                                      const SSkillEpisodeOutcome &skill,
-                                      double &delta_j)
+                                    const SSkillEpisodeOutcome &skill,
+                                    double &delta_j)
   {
    const double base_outcome=base.Outcome();
    const double skill_outcome=skill.Outcome();
    if(!MathIsValidNumber(base_outcome)||!MathIsValidNumber(skill_outcome))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    delta_j=skill_outcome-base_outcome;
 
    return(MathIsValidNumber(delta_j));
   }
 //+------------------------------------------------------------------+
-//| Validates a complete, synchronous paired terminal outcome.       |
+//| SkillValidatePairedEpisode - Validate skill paired episode       |
 //+------------------------------------------------------------------+
+//--- Validates a complete, synchronous paired terminal outcome.
 bool SkillValidatePairedEpisode(const SSkillEpisodeOutcome &base,
-                                  const SSkillEpisodeOutcome &skill)
+                                const SSkillEpisodeOutcome &skill)
   {
    if(!MathIsValidNumber(base.Outcome())||!MathIsValidNumber(skill.Outcome())||
       base.Duration()==0||skill.Duration()==0||
       base.Duration()!=skill.Duration())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns whether a checkpoint requests a later boundary save.     |
+//| SkillCheckpointDue - Check whether skill checkpoint is due       |
 //+------------------------------------------------------------------+
+//--- Returns whether a checkpoint requests a later boundary save.
 bool SkillCheckpointDue(const ulong transitions,const int checkpoint_interval)
   {
    return(checkpoint_interval>0&&transitions>0&&
           transitions % (ulong)checkpoint_interval==0);
   }
 //+------------------------------------------------------------------+
-//| DeltaJ may close only at a terminal or configured pair horizon.  |
+//| SkillOnlinePairBoundary - Check skill online pair boundary       |
 //+------------------------------------------------------------------+
+//--- DeltaJ may close only at a terminal or configured pair horizon.
 bool SkillOnlinePairBoundary(const bool real_terminal,const bool virtual_terminal,
-                               const ulong pair_transitions,const int pair_horizon)
+                             const ulong pair_transitions,const int pair_horizon)
   {
    if(real_terminal||virtual_terminal)
       return(true);
@@ -277,8 +292,9 @@ bool SkillOnlinePairBoundary(const bool real_terminal,const bool virtual_termina
    return(pair_horizon>0&&pair_transitions>=(ulong)pair_horizon);
   }
 //+------------------------------------------------------------------+
-//| An independent pair ends as soon as either branch is terminal.   |
+//| SkillPairReachedTerminal - Check skill pair reached terminal     |
 //+------------------------------------------------------------------+
+//--- An independent pair ends as soon as either branch is terminal.
 bool SkillPairReachedTerminal(const bool base_terminal,const bool skill_terminal)
   {
    return(base_terminal||skill_terminal);
@@ -299,34 +315,36 @@ SState::SState(void)
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    int total=ArraySize(state);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,state[i])
+     }
 //---
    total=ArraySize(account);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,account[i])
+     }
 //---
    total=ArraySize(action);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,action[i])
+     }
    total=ArraySize(rewards);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,rewards[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,rewards[i])
+     }
 //---
    return(true);
   }
@@ -336,59 +354,68 @@ bool SState::Save(int file_handle)
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    int total=FileReadInteger(file_handle);
    if(total!=ArraySize(state))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      state[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,state[i])
      }
 //---
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(account))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      account[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,account[i])
      }
 //---
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(action))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       action[i]=MathMin(MathMax(FileReadFloat(file_handle),0),1);
      }
 //---
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(rewards))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      rewards[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,rewards[i])
      }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Builds the market state encoder/decoder description stack.       |
+//| CreateStateDescriptions - Create state descriptions              |
 //+------------------------------------------------------------------+
+//--- Builds the market state encoder/decoder description stack.
 bool CreateStateDescriptions(CArrayObj *&encoder,
                              CArrayObj *&decoder
                             )
@@ -400,13 +427,17 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
      {
       encoder=new CArrayObj();
       if(!encoder)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!decoder)
      {
       decoder=new CArrayObj();
       if(!decoder)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- state Encoder
@@ -414,57 +445,77 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    uint prev_count=descr.count=HistoryBars * BarDescr;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBatchNormOCL;
    descr.count=prev_count;
    descr.batch=1e4;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronDropoutOCL;
    descr.count=prev_count;
    descr.probability=0.1f;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 3
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverData;
    descr.window=BarDescr;
    descr.count=HistoryBars;
      {
       uint temp[]={StackSize,StackSize,Quantiles};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.probability=1.0f;
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverRankTCM;
    descr.window=BarDescr * (2 * Quantiles+1);
    descr.count=EmbeddingSize;
@@ -472,17 +523,23 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
      {
       uint temp[]={StackSize,NHeads};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 5
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverForecastHead;
    descr.window=EmbeddingSize;
    descr.count=NForecast;
@@ -490,18 +547,24 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
      {
       uint temp[]={Blocks,NHeads};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iStateRawForecastLayer=5;
 
 //--- layer 6
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverForecastToken;
    descr.window=EmbeddingSize;
    descr.count=NForecast;
@@ -509,7 +572,9 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iStateTokenLayer=6;
 
 //--- forecast Decoder
@@ -517,17 +582,23 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=NForecast * EmbeddingSize;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -537,11 +608,15 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=2 * EmbeddingSize;
@@ -551,11 +626,15 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 3
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -565,24 +644,31 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBatchNormOCL;
    descr.count=NForecast * BarDescr;
    descr.batch=1e4;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Builds the Actor/Critic description stacks for the AC-SRM graph. |
+//| CreateDescriptions - Define the neural network architectures     |
 //+------------------------------------------------------------------+
+//--- Builds the Actor/Critic description stacks for the AC-SRM graph.
 bool CreateDescriptions(CArrayObj *&actor,
                         CArrayObj *&critic
                        )
@@ -594,13 +680,17 @@ bool CreateDescriptions(CArrayObj *&actor,
      {
       actor=new CArrayObj();
       if(!actor)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!critic)
      {
       critic=new CArrayObj();
       if(!critic)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- actor
@@ -608,36 +698,48 @@ bool CreateDescriptions(CArrayObj *&actor,
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    uint prev_count=descr.count=AccountDescr;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iLatentLayer=0;
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NScenarios * EmbeddingSize;
    descr.activation=GELU;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronMomADMPI;
    descr.window=EmbeddingSize;
    descr.count=StackSize;
      {
       uint temp[]={NScenarios,ForecastTokenDim,NForecast};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.probability=TopK;
    descr.step=NHeads;
@@ -646,12 +748,16 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iLatentLayer=2;
 
 //--- layer 3
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=1;
    descr.window=EmbeddingSize;
@@ -661,20 +767,28 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NActions;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 5
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NActions / 3;
    descr.window=3;
@@ -683,24 +797,32 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=SIGMOID;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- critic
    critic.Clear();
 
 //--- input layer
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NActions;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 1
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronMHCrossFAT;
      {
       uint temp[]={3,                      // Inputs window
@@ -709,14 +831,18 @@ bool CreateDescriptions(CArrayObj *&actor,
                      EmbeddingSize           // Embedding size
                     };
       if(ArrayCopy(descr.windows,temp)<(int)temp.Size())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
      {
       uint temp[]={NActions / 3,           // Query units
                      NForecast               // Cross units
                     };
       if(ArrayCopy(descr.units,temp)<(int)temp.Size())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.step=NHeads;                      // Heads
    descr.batch=1e4;
@@ -725,11 +851,15 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=None;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 2
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=NActions / 3;
    descr.window=3;
@@ -739,11 +869,15 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 4
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=NActions / 3;
    descr.window=EmbeddingSize;
@@ -753,29 +887,39 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 5
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=LatentCount;
    descr.activation=SIGMOID;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
 //--- layer 6
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=NRewards;
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    return(true);
   }
@@ -794,7 +938,7 @@ bool IsNewBar(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for CloseByDirection.       |
+//| CloseByDirection - Close positions of the specified type         |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -865,7 +1009,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for ClosePartial.           |
+//| ClosePartial - Close part of the position volume                 |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {
@@ -898,7 +1042,7 @@ bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   }
 #endif
 //+------------------------------------------------------------------+
-//| CDeal                                                            |
+//| CDeal - Represent a recorded trading deal                        |
 //+------------------------------------------------------------------+
 class CDeal       :  public CObject
   {
@@ -913,6 +1057,9 @@ public:
    double             point;
    //---
                      CDeal(void);
+//+------------------------------------------------------------------+
+//| ~CDeal - Use automatic member cleanup                            |
+//+------------------------------------------------------------------+
                     ~CDeal(void) {};
    //---
    vector<float>Action(datetime current,double ask,double bid,int period_seconds);
@@ -974,14 +1121,20 @@ vector<float>CDeal::Action(datetime current,double ask,double bid,int period_sec
    return(result);
   }
 //+------------------------------------------------------------------+
-//| CDeals                                                           |
+//| CDeals - Manage recorded trading deals                           |
 //+------------------------------------------------------------------+
 class CDeals
   {
 protected:
    CArrayObj Deals;
 public:
+//+------------------------------------------------------------------+
+//| CDeals - Start with an empty deal collection                     |
+//+------------------------------------------------------------------+
                      CDeals(void) { Deals.Clear(); }
+//+------------------------------------------------------------------+
+//| ~CDeals - Clear the stored deal collection                       |
+//+------------------------------------------------------------------+
                     ~CDeals(void) { Deals.Clear(); }
    //---
    bool              LoadDeals(string file_name,string symbol,double point);
@@ -995,7 +1148,7 @@ bool CDeals::LoadDeals(string file_name,string symbol,double point)
    if(file_name==NULL||!FileIsExist(file_name,FILE_COMMON))
      {
       PrintFormat("File %s not exist",file_name);
-      ReturnFalse;
+      ReturnFalse
      }
    if(symbol==NULL)
      {
@@ -1008,7 +1161,7 @@ bool CDeals::LoadDeals(string file_name,string symbol,double point)
    if(handle==INVALID_HANDLE)
      {
       PrintFormat("Error of open file %s: %d",file_name,GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    FileSeek(handle,0,SEEK_SET);
    while(!FileIsEnding(handle))
@@ -1033,7 +1186,7 @@ bool CDeals::LoadDeals(string file_name,string symbol,double point)
       if(!deal)
         {
          PrintFormat("Error of create new deal object: %d",GetLastError());
-         ReturnFalse;
+         ReturnFalse
         }
       deal.OpenTime=open_time;
       deal.CloseTime=close_time;
@@ -1073,7 +1226,7 @@ bool CDeals::LoadDeals(string file_name,string symbol,double point)
       if(!Deals.Add(deal))
         {
          PrintFormat("Error of add new deal: %d",GetLastError());
-         ReturnFalse;
+         ReturnFalse
         }
      }
 //---
@@ -1111,7 +1264,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
    int total_bars=(start_bar+HistoryBars+(!!forecast ? NForecast : 0));
    if(!state||!time||start_bar<0||
       total_bars>int(Rates.Size()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    matrix<float>mState=matrix<float>::Zeros(BarDescr,HistoryBars);
    vector<float>vForecast=vector<float>::Zeros(NForecast * BarDescr);
@@ -1127,7 +1282,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       float macd=(float)MACD.Main(b+bar);
       float sign=(float)MACD.Signal(b+bar);
       if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       //---
       mState[0,b]=(float)(Rates[b+bar].close-open);
       mState[1,b]=(float)(Rates[b+bar].high-open);
@@ -1139,13 +1296,19 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       mState[7,b]=macd;
       mState[8,b]=sign;
       if(!time.Add(float(Rates[b+bar].time)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!state.AssignArray(mState))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(time.GetIndex()>=0)
       if(!time.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    if(!forecast)
       return(true);
 //---
@@ -1158,7 +1321,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       float macd=(float)MACD.Main(bar-b);
       float sign=(float)MACD.Signal(bar-b);
       if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       //---
       int shift=(NForecast-b) * BarDescr;
       vForecast[shift]=(float)(Rates[bar-b].close-open);
@@ -1173,7 +1338,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
      }
 //---
    if(!forecast.AssignArray(vForecast))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    return(true);
   }
@@ -1259,7 +1426,7 @@ const vector<float>SampleAccount(CBufferFloat *state,datetime time,double max_ba
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for CheckAction.            |
+//| CheckAction - Simulate the account response to an action         |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action,double balance,uint start_position,const int horizon_bars,
                    int &outcome_tag)
@@ -1645,8 +1812,9 @@ string SkillActiveMarketFile=Skill_MARKET_FILE;
 string SkillActiveTargetFile=Skill_TARGET_FILE;
 string SkillActiveManifestFile=Skill_MANIFEST_FILE;
 //+------------------------------------------------------------------+
-//| Skill builds transitions directly from historical windows Base   |
+//| CD2SkillBufferView - Expose a borrowed buffer as a layer         |
 //+------------------------------------------------------------------+
+//--- Skill builds transitions directly from historical windows Base
 //--- CNet already provides Layer(int) and  FeedForwardLayer(CNeuronBaseOCL*). A transient, non-owning layer  view lets the library transpose
 class CD2SkillBufferView : public CNeuronBaseOCL
   {
@@ -1654,7 +1822,7 @@ public:
    bool              Bind(CBufferFloat *source);
 //--- implements Unbind.
 //+------------------------------------------------------------------+
-//| Unbind                                                           |
+//| Unbind - Process unbind                                          |
 //+------------------------------------------------------------------+
    void              Unbind(void)
      {
@@ -1667,22 +1835,27 @@ public:
 bool CD2SkillBufferView::Bind(CBufferFloat *source)
   {
    if(!source||source.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(Output!=source)
-      DeleteObj(Output);
+     {
+      DeleteObj(Output)
+     }
    Output=source;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Device-only composition adapter, all operations reuse existing   |
+//| CD2SkillDeviceOps - Compose D2Skill operations on the device     |
 //+------------------------------------------------------------------+
+//--- Device-only composition adapter, all operations reuse existing
 class CD2SkillDeviceOps : public CNeuronBaseOCL
   {
 public:
 //--- implements Bind.
 //+------------------------------------------------------------------+
-//| Bind                                                             |
+//| Bind - Check bind                                                |
 //+------------------------------------------------------------------+
    bool              Bind(COpenCLMy *open_cl)
      {
@@ -1696,7 +1869,7 @@ public:
    bool              Join4(CBufferFloat *first,CBufferFloat *second,CBufferFloat *third,
                            CBufferFloat *fourth,CBufferFloat *destination,const uint block);
 //+------------------------------------------------------------------+
-//| Subtract                                                         |
+//| Subtract - Subtract the second buffer                            |
 //+------------------------------------------------------------------+
    bool              Subtract(CBufferFloat *first,CBufferFloat *second,CBufferFloat *destination,
                               const uint dimension)
@@ -1704,7 +1877,7 @@ public:
       return(Different(first,second,destination,dimension));
      }
 //+------------------------------------------------------------------+
-//| BroadcastSum                                                     |
+//| BroadcastSum - Add the broadcast buffer                          |
 //+------------------------------------------------------------------+
    bool              BroadcastSum(CBufferFloat *vector_in,CBufferFloat *matrix_in,
                                   CBufferFloat *destination,const uint dimension,const uint variables)
@@ -1712,7 +1885,7 @@ public:
       return(SumVecMatrix(vector_in,matrix_in,destination,dimension,variables));
      }
 //+------------------------------------------------------------------+
-//| Add                                                              |
+//| Add - Add the two buffers                                        |
 //+------------------------------------------------------------------+
    bool              Add(CBufferFloat *first,CBufferFloat *second,CBufferFloat *destination,
                          const uint dimension)
@@ -1720,7 +1893,7 @@ public:
       return(SumAndNormalize(first,second,destination,dimension,false,0,0,0,1.0f));
      }
 //+------------------------------------------------------------------+
-//| Split2                                                           |
+//| Split2 - Split the source into two buffers                       |
 //+------------------------------------------------------------------+
    bool              Split2(CBufferFloat *first,CBufferFloat *second,CBufferFloat *source,
                             const uint first_total,const uint second_total)
@@ -1729,7 +1902,7 @@ public:
      }
 //--- public device wrappers over the protected base element ops.
 //+------------------------------------------------------------------+
-//| IdentDifferenceOnDevice                                          |
+//| IdentDifferenceOnDevice - Subtract broadcast value on the device |
 //+------------------------------------------------------------------+
    bool              IdentDifferenceOnDevice(CBufferFloat *tensor,CBufferFloat *out,
                                              const int dimension)
@@ -1737,7 +1910,7 @@ public:
       return(IdentDifferent(tensor,out,dimension));
      }
 //+------------------------------------------------------------------+
-//| ElementMultiplyOnDevice                                          |
+//| ElementMultiplyOnDevice - Multiply elements on the device        |
 //+------------------------------------------------------------------+
    bool              ElementMultiplyOnDevice(CBufferFloat *first,CBufferFloat *second,
                                              CBufferFloat *out)
@@ -1746,7 +1919,7 @@ public:
      }
 //--- elementwise activation-derivative scaling: inputs_gr[i] =  Deactivation(output_gr[i], inputs[i], activation).  For SIGMOID  every component gets its OWN (1 - a_i) factor (elementwise), not  an identity-row subtraction like IdentDifferent.
 //+------------------------------------------------------------------+
-//| DeActivationOnDevice                                             |
+//| DeActivationOnDevice - Apply the activation derivative on device |
 //+------------------------------------------------------------------+
    bool              DeActivationOnDevice(CBufferFloat *inputs,CBufferFloat *inputs_gr,
                                           CBufferFloat *output_gr,const int activat)
@@ -1763,7 +1936,9 @@ bool CD2SkillDeviceOps::Copy(CBufferFloat *source,CBufferFloat *destination,cons
       destination.Total()!=int(total)||source.GetIndex()<0||
       destination.GetIndex()<0||source.GetOpenCL()!=OpenCL||
       destination.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    return(CopyBufferRaw(source,destination,total));
   }
@@ -1777,7 +1952,9 @@ bool CD2SkillDeviceOps::Join2(CBufferFloat *first,const uint first_total,CBuffer
       second.Total()!=int(second_total)||
       dest.Total()!=int(first_total+second_total)||first.GetIndex()<0||
       second.GetIndex()<0||dest.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(Concat(first,second,dest,first_total,second_total,1));
   }
@@ -1792,7 +1969,9 @@ bool CD2SkillDeviceOps::Join4(CBufferFloat *first,CBufferFloat *second,CBufferFl
       third.Total()!=int(block)||fourth.Total()!=int(block)||
       destination.Total()!=int(4 * block)||first.GetIndex()<0||second.GetIndex()<0||
       third.GetIndex()<0||fourth.GetIndex()<0||destination.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(Concat(first,second,third,fourth,destination,block,block,block,block,1));
   }
@@ -1823,8 +2002,9 @@ CNeuronOMPBOCL *GetACSRM(void)
    return(layer&&layer.Type()==defNeuronOMPBOCL ? (CNeuronOMPBOCL *)layer : NULL);
   }
 //+------------------------------------------------------------------+
-//| Sets an ACSRM runtime mode after clearing source-anchor state.   |
+//| SetACSRMMode - Set ACSRM mode                                    |
 //+------------------------------------------------------------------+
+//--- Sets an ACSRM runtime mode after clearing source-anchor state.
 bool SetACSRMMode(const ENUM_OMPB_MODE mode)
   {
 //--- clear source-anchor state before selecting the requested ACSRM runtime mode.
@@ -1834,14 +2014,17 @@ bool SetACSRMMode(const ENUM_OMPB_MODE mode)
    return(layer&&layer.SetSourceAnchor(false)&&layer.SetMode(mode));
   }
 //+------------------------------------------------------------------+
-//| Configures ACSRM mode and BYPASS training safeguards.            |
+//| ConfigureACSRM - Configure ACSRM                                 |
 //+------------------------------------------------------------------+
+//--- Configures ACSRM mode and BYPASS training safeguards.
 bool ConfigureACSRM(const ENUM_OMPB_MODE mode)
   {
 //--- resolve the layer and install the requested ACSRM runtime mode.
    CNeuronOMPBOCL *layer=GetACSRM();
    if(!layer||!SetACSRMMode(mode))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- BYPASS must not retain a trainable ACSRM layer during MarketEncoder training.
    if(mode==OMPB_BYPASS)
@@ -1851,8 +2034,9 @@ bool ConfigureACSRM(const ENUM_OMPB_MODE mode)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Resets only the ACSRM immutable Reference history.               |
+//| ResetACSRMReference - Reset ACSRM reference                      |
 //+------------------------------------------------------------------+
+//--- Resets only the ACSRM immutable Reference history.
 bool ResetACSRMReference(void)
   {
 //--- resolve ACSRM before discarding its immutable Reference history explicitly.
@@ -1862,16 +2046,19 @@ bool ResetACSRMReference(void)
    return(layer&&layer.ResetReference());
   }
 //+------------------------------------------------------------------+
-//| Reads ACSRM runtime diagnostic counters and regularizer values.  |
+//| ReadACSRMDiagnostics - Read ACSRM diagnostics                    |
 //+------------------------------------------------------------------+
+//--- Reads ACSRM runtime diagnostic counters and regularizer values.
 bool ReadACSRMDiagnostics(uint &reference_count,uint &current_count,
-                         float &disagreement,float &kl,float &alpha_prior,
-                         uint &invalid_fallbacks,uint &kl_rejects)
+                          float &disagreement,float &kl,float &alpha_prior,
+                          uint &invalid_fallbacks,uint &kl_rejects)
   {
 //--- resolve ACSRM before exporting its runtime-only diagnostic counters.
    CNeuronOMPBOCL *layer=GetACSRM();
    if(!layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- read the immutable Reference and rolling Current occupancy counters.
    reference_count=layer.ReferenceCount();
@@ -1888,19 +2075,25 @@ bool ReadACSRMDiagnostics(uint &reference_count,uint &current_count,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Checks that BYPASS leaves ACSRM diagnostics unchanged.           |
+//| SkillCheckACSRMBypassInvariant - Check ACSRM bypass invariant    |
 //+------------------------------------------------------------------+
+//--- Checks that BYPASS leaves ACSRM diagnostics unchanged.
 bool SkillCheckACSRMBypassInvariant(const uint reference_count_before,
-                                     const uint current_count_before,
-                                     const float disagreement_before,
-                                     const float kl_before,
-                                     const float alpha_prior_before,
-                                     const uint invalid_fallbacks_before,
-                                     const uint kl_rejects_before,
-                                     const string scope)
+                                    const uint current_count_before,
+                                    const float disagreement_before,
+                                    const float kl_before,
+                                    const float alpha_prior_before,
+                                    const uint invalid_fallbacks_before,
+                                    const uint kl_rejects_before,
+                                    const string scope)
   {
-   uint reference_count_after,current_count_after,invalid_fallbacks_after,kl_rejects_after;
-   float disagreement_after,kl_after,alpha_prior_after;
+   uint reference_count_after;
+   uint current_count_after;
+   uint invalid_fallbacks_after;
+   uint kl_rejects_after;
+   float disagreement_after;
+   float kl_after;
+   float alpha_prior_after;
    if(!ReadACSRMDiagnostics(reference_count_after,current_count_after,disagreement_after,
                            kl_after,alpha_prior_after,invalid_fallbacks_after,kl_rejects_after))
      {
@@ -1981,13 +2174,16 @@ CBufferFloat ActorDerivOneMinus;
 CBufferFloat ActorDeriv;
 CBufferFloat ActorGradScratch;
 //+------------------------------------------------------------------+
-//| Configures optional forecast recovery diagnostics.               |
+//| SkillConfigureForecastRun - Configure skill forecast run         |
 //+------------------------------------------------------------------+
+//--- Configures optional forecast recovery diagnostics.
 bool SkillConfigureForecastRun(const bool recovery_smoke,
-                                 const uint recovery_batches,const uint recovery_age)
+                               const uint recovery_batches,const uint recovery_age)
   {
    if(recovery_smoke&&(recovery_batches==0||recovery_age==0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    SkillRecoverySmoke=recovery_smoke;
    SkillRecoverySmokeBatches=recovery_batches;
    SkillRecoverySmokeAge=recovery_age;
@@ -2010,12 +2206,14 @@ uint ForecastRecoveryAge(void)
    return((uint)MathMax(1.0,MathRound(6240.0 * PeriodSeconds(PERIOD_H1) / seconds)));
   }
 //+------------------------------------------------------------------+
-//| Creates and manages object lifecycle for ConfigureForecastRec... |
+//| ConfigureForecastRecoveryAge - Configure forecast recovery age   |
 //+------------------------------------------------------------------+
 bool ConfigureForecastRecoveryAge(void)
   {
    if(!SkillForecast||!SkillForecast.SetRecoveryAge(ForecastRecoveryAge()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    PrintFormat("%s %s recovery_age=%u bars",ACSRM_LOG_PREFIX,(SkillRecoverySmoke ? "smoke" : "forecast"),
                SkillForecast.RecoveryAge());
 
@@ -2028,7 +2226,9 @@ bool SkillInitTrainingBuffers(void)
   {
    COpenCLMy *open_cl=SkillMarket.GetOpenCL();
    if(!open_cl||!SkillDevice.Bind(open_cl))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillFutureTranspose.Init(0,0,open_cl,NForecast,BarDescr,1,ADAM,BatchSize)||
       !SkillFuture.BufferInit((NForecast * BarDescr),0)||
       !SkillFuture.BufferCreate(open_cl)||
@@ -2040,7 +2240,9 @@ bool SkillInitTrainingBuffers(void)
       !SkillLatentTarget.BufferCreate(open_cl)||
       !SkillLatentDelta.BufferInit((BarDescr * NForecast * EmbeddingSize),0)||
       !SkillLatentDelta.BufferCreate(open_cl))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -2050,10 +2252,14 @@ bool SkillInitTrainingBuffers(void)
 bool SkillAddBase(CArrayObj *description,const uint count)
   {
    if(!description)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CLayerDescription *descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=count;
    descr.activation=None;
@@ -2061,20 +2267,24 @@ bool SkillAddBase(CArrayObj *description,const uint count)
    descr.batch=BatchSize;
    if(description.Add(descr))
       return(true);
-   DeleteObjAndFalse(descr);
+   DeleteObjAndFalse(descr)
   }
 //+------------------------------------------------------------------+
-//| Implements SkillNormalizeDescriptionBatch.                       |
+//| SkillNormalizeDescriptionBatch - Normalize                       |
 //+------------------------------------------------------------------+
 bool SkillNormalizeDescriptionBatch(CArrayObj *description)
   {
    if(!description)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<description.Total(); i++)
      {
       CLayerDescription *layer=(CLayerDescription*)description.At(i);
       if(!layer)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       layer.batch=BatchSize;
      }
 //---
@@ -2090,10 +2300,10 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
 //--- function if.
    if(!CreateStateDescriptions(market,legacy_decoder))
      {
-      DeleteObj(legacy_decoder);
-      ReturnFalse;
+      DeleteObj(legacy_decoder)
+      ReturnFalse
      }
-   DeleteObj(legacy_decoder);
+   DeleteObj(legacy_decoder)
 
 //--- keep exactly CogDriver layers 0..4 (RankTCM is the boundary).
    int layer=market.Total()-1;
@@ -2107,42 +2317,58 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
       if(!descr||descr.type!=defNeuronCogDriverRankTCM)
         {
          if(!market.Delete(layer))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          layer--;
         }
       else
          break;
      }
    if(market.Total()<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillNormalizeDescriptionBatch(market))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- createBuffers already stores state feature-major as
 //--- [BarDescr,HistoryBars], which is CogDriverData's required input layout.
    if(!market.Delete(layer)||!market.Delete(layer-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CLayerDescription *descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronCogDriverData;
    descr.window=HistoryBars;
    descr.count=BarDescr;
      {
       uint units[]={StackSize,StackSize,Quantiles};
       if(ArrayCopy(descr.units,units,0,0,units.Size())<int(units.Size()))
-         DeleteObjAndFalse(descr);
+        {
+         DeleteObjAndFalse(descr)
+        }
      }
    descr.probability=1.0f;
    descr.activation=None;
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!market.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronCogDriverRankTCM;
    descr.window=HistoryBars * (2 * Quantiles+1);
    descr.count=EmbeddingSize;
@@ -2150,17 +2376,23 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
      {
       uint units[]={StackSize,NHeads};
       if(ArrayCopy(descr.units,units,0,0,units.Size())<int(units.Size()))
-         DeleteObjAndFalse(descr);
+        {
+         DeleteObjAndFalse(descr)
+        }
      }
    descr.activation=None;
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!market.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronOMPBOCL;
    descr.window=EmbeddingSize;
    descr.count=BarDescr;
@@ -2168,17 +2400,23 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
      {
       uint units[]={ACSRMReferenceSize,ACSRMCurrentWindow};
       if(ArrayCopy(descr.units,units,0,0,units.Size())<int(units.Size()))
-         DeleteObjAndFalse(descr);
+        {
+         DeleteObjAndFalse(descr)
+        }
      }
    descr.activation=None;
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!market.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronScenarioForecast;
    descr.count=NScenarios;
    descr.variables=TopK;
@@ -2189,24 +2427,32 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!market.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    if(!target)
       target=new CArrayObj();
    else
       target.Clear();
    if(!target)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    target.FreeMode(true);
 
 //--- detached Target Encoder: one normalized future trajectory per BarDescr
 //--- variable.  ConvOCL zero-fills the unavailable edge of each window, so
 //--- window=3 preserves NForecast positions without an auxiliary pad buffer.
    if(!SkillAddBase(target,(BarDescr * NForecast)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronPeriodNorm;
    descr.count=1;
    descr.window=NForecast;
@@ -2215,11 +2461,15 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=3;
@@ -2230,11 +2480,15 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -2245,11 +2499,15 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=2 * EmbeddingSize;
@@ -2260,11 +2518,15 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    descr=new CLayerDescription();
    if(!descr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    descr.type=defNeuronPeriodNorm;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -2273,7 +2535,9 @@ bool SkillCreateDescriptions(CArrayObj *&market,CArrayObj *&target)
    descr.optimization=ADAM;
    descr.batch=BatchSize;
    if(!target.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 //---
    return(true);
   }
@@ -2287,31 +2551,35 @@ bool SkillCreateNetworks(void)
 //--- function if.
    if(!SkillCreateDescriptions(market,target))
      {
-      DeleteObj(market);
-      DeleteObj(target);
-      ReturnFalse;
+      DeleteObj(market)
+      DeleteObj(target)
+      ReturnFalse
      }
    const bool market_created=SkillMarket.Create(market);
    PrintFormat("%s Create market=%s batch=%u",ACSRM_LOG_PREFIX,(market_created ? "OK" : "FAIL"),uint(BatchSize));
    const bool target_created=(market_created&&SkillTarget.Create(target));
    PrintFormat("%s Create target=%s",ACSRM_LOG_PREFIX,(target_created ? "OK" : "FAIL"));
    const bool created=(market_created&&target_created);
-   DeleteObj(market);
-   DeleteObj(target);
+   DeleteObj(market)
+   DeleteObj(target)
    if(!created)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- CNet::Create initializes its OpenCL program.  Build each network first,
 //--- then move its device buffers to the Market context; otherwise a later
 //--- create invalidates buffers belonging to an earlier network.
    if(!SkillTarget.SetOpenCLChecked(SkillMarket.GetOpenCL()))
-      ReturnFalseEx("target OpenCL transfer failed");
+     {
+      ReturnFalseEx("target OpenCL transfer failed")
+     }
 
 //--- function if.
    if(!SkillInitTrainingBuffers())
      {
       PrintFormat("%s init: training buffers=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
    SkillForecast=(CNeuronScenarioForecast*)SkillMarket.Layer(-1);
 
@@ -2319,15 +2587,19 @@ bool SkillCreateNetworks(void)
    if(!SkillForecast||SkillForecast.Type()!=defNeuronScenarioForecast)
      {
       PrintFormat("%s init: forecast layer=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
    if(!ConfigureForecastRecoveryAge())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    SkillTarget.TrainMode(false);
    SkillMarket.TrainMode(true);
    CNeuronOMPBOCL *ompb=GetACSRM();
    if(!ompb||!ConfigureACSRM(OMPB_BYPASS))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    ompb.TrainMode(false);
 
    return(true);
@@ -2345,7 +2617,7 @@ bool SkillValidateShapes(const bool training=true)
      {
       PrintFormat("%s shape: market input expected=%d actual=%d",ACSRM_LOG_PREFIX,HistoryBars * BarDescr,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    layer=SkillMarket.Layer(4);
    buffer=(layer ? layer.getOutput() : NULL);
@@ -2355,7 +2627,7 @@ bool SkillValidateShapes(const bool training=true)
      {
       PrintFormat("%s shape: market RankTCM expected=%d actual=%d",ACSRM_LOG_PREFIX,BarDescr * EmbeddingSize,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    layer=GetACSRM();
    buffer=(layer ? layer.getOutput() : NULL);
@@ -2363,7 +2635,7 @@ bool SkillValidateShapes(const bool training=true)
      {
       PrintFormat("ACSRM shape: bridge expected=%d actual=%d",BarDescr * EmbeddingSize,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
@@ -2377,7 +2649,7 @@ bool SkillValidateShapes(const bool training=true)
         {
          PrintFormat("%s shape: target input expected=%d actual=%d",ACSRM_LOG_PREFIX,BarDescr * NForecast,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=SkillTarget.Layer(1);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2387,7 +2659,7 @@ bool SkillValidateShapes(const bool training=true)
         {
          PrintFormat("%s shape: target PeriodNorm expected=%d actual=%d",ACSRM_LOG_PREFIX,BarDescr * NForecast,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=SkillTarget.Layer(2);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2398,7 +2670,7 @@ bool SkillValidateShapes(const bool training=true)
          PrintFormat("%s shape: target Conv3 expected=%d actual=%d",ACSRM_LOG_PREFIX,
                      BarDescr * NForecast * EmbeddingSize,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=SkillTarget.Layer(3);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2409,7 +2681,7 @@ bool SkillValidateShapes(const bool training=true)
          PrintFormat("%s shape: target Conv2 expected=%d actual=%d",ACSRM_LOG_PREFIX,
                      BarDescr * NForecast * 2 * EmbeddingSize,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=SkillTarget.Layer(4);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2420,7 +2692,7 @@ bool SkillValidateShapes(const bool training=true)
          PrintFormat("%s shape: target final Conv expected=%d actual=%d",ACSRM_LOG_PREFIX,
                      BarDescr * NForecast * EmbeddingSize,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       layer=SkillTarget.Layer(-1);
       buffer=(layer ? layer.getOutput() : NULL);
@@ -2431,7 +2703,7 @@ bool SkillValidateShapes(const bool training=true)
          PrintFormat("%s shape: target output PeriodNorm expected=%d actual=%d",ACSRM_LOG_PREFIX,
                      BarDescr * NForecast * EmbeddingSize,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
       buffer=SkillFutureTranspose.getOutput();
 
@@ -2440,7 +2712,7 @@ bool SkillValidateShapes(const bool training=true)
         {
          PrintFormat("%s shape: future transpose expected=%d actual=%d",ACSRM_LOG_PREFIX,BarDescr * NForecast,
                      (buffer ? buffer.Total() :-1));
-         ReturnFalse;
+         ReturnFalse
         }
      }
    layer=SkillMarket.Layer(-1);
@@ -2452,7 +2724,7 @@ bool SkillValidateShapes(const bool training=true)
       PrintFormat("%s shape: Scenario Z expected=%d actual=%d",ACSRM_LOG_PREFIX,
                   NScenarios * BarDescr * NForecast * EmbeddingSize,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    buffer=SkillForecast.GetU();
 
@@ -2461,7 +2733,7 @@ bool SkillValidateShapes(const bool training=true)
      {
       PrintFormat("%s shape: Scenario U expected=%d actual=%d",ACSRM_LOG_PREFIX,NScenarios * BarDescr * NForecast,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    buffer=SkillForecast.GetPi();
 
@@ -2470,7 +2742,7 @@ bool SkillValidateShapes(const bool training=true)
      {
       PrintFormat("%s shape: Scenario Pi expected=%d actual=%d",ACSRM_LOG_PREFIX,NScenarios,
                   (buffer ? buffer.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
    if(SkillForecast.Variables()!=BarDescr||SkillForecast.Scenarios()!=NScenarios||
       SkillForecast.Horizon()!=NForecast||SkillForecast.Dimension()!=EmbeddingSize||
@@ -2482,7 +2754,7 @@ bool SkillValidateShapes(const bool training=true)
                   SkillForecast.Variables(),BarDescr,SkillForecast.Scenarios(),NScenarios,
                   SkillForecast.Horizon(),NForecast,SkillForecast.Dimension(),EmbeddingSize,
                   SkillForecast.ActiveTrajectories(),TopK);
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -2517,13 +2789,19 @@ ulong SkillHashFile(ulong hash,const string file_name)
 
    const ulong length=FileSize(handle);
    if(length==0||length>ulong(INT_MAX))
-     { FileClose(handle); return(0); }
+     {
+      FileClose(handle);
+      return(0);
+     }
    uchar bytes[];
    if(ArrayResize(bytes,(int)length)!=(int)length||
 
 //--- read file payload as bytes after successful allocation.
       FileReadArray(handle,bytes,0,(int)length)!=(int)length)
-     { FileClose(handle); return(0); }
+     {
+      FileClose(handle);
+      return(0);
+     }
    FileClose(handle);
    for(int i=0; i<(int)length; i++)
       hash=SkillHashUInt(hash,(ulong)bytes[i]);
@@ -2531,8 +2809,9 @@ ulong SkillHashFile(ulong hash,const string file_name)
    return(hash);
   }
 //+------------------------------------------------------------------+
-//| Exact signature of the unified Market/Scenario inference grap... |
+//| SkillForecastSignature - Return the skill forecast signature     |
 //+------------------------------------------------------------------+
+//--- Exact signature of the unified Market/Scenario inference grap...
 ulong SkillForecastSignature(const string market_file="")
   {
    if(!SkillForecast)
@@ -2560,7 +2839,7 @@ ulong SkillForecastSignature(const string market_file="")
    return(hash);
   }
 //+------------------------------------------------------------------+
-//| Implements SkillForecastTrainingSignature.                       |
+//| SkillForecastTrainingSignature - Return                          |
 //+------------------------------------------------------------------+
 ulong SkillForecastTrainingSignature(const ulong forecast_signature,const string target_file="")
   {
@@ -2577,15 +2856,21 @@ ulong SkillForecastTrainingSignature(const ulong forecast_signature,const string
 bool SkillWriteManifest(const uint completed_epochs)
   {
    if(!SkillForecast)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const ulong signature=SkillForecastSignature(Skill_MARKET_FILE);
    const ulong target_hash=SkillHashFile(ulong(1469598103934665603),Skill_TARGET_FILE);
    const ulong training_signature=SkillForecastTrainingSignature(signature,Skill_TARGET_FILE);
    if(signature==0||target_hash==0||training_signature==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int handle=FileOpen(Skill_MANIFEST_FILE,FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    FileWrite(handle,"format=ACSRM_FORECAST");
    FileWrite(handle,StringFormat("version=%u",Skill_FORMAT_VERSION));
    FileWrite(handle,StringFormat("forecast_type=%d",defNeuronScenarioForecast));
@@ -2714,16 +2999,18 @@ bool     ACSRMStage02StopReported=false;
 //--- accepted Stage 02 transaction has completed its reload smoke.
 bool ACSRMStage02CheckpointPublished=false;
 //+------------------------------------------------------------------+
-//| Checks that every finite value survives the Stage 02 state       |
+//| ACSRMStage02Finite - Stage ACSRM 02 finite                       |
 //+------------------------------------------------------------------+
+//--- Checks that every finite value survives the Stage 02 state
 //--- encoding.
 bool ACSRMStage02Finite(const double value)
   {
    return(MathIsValidNumber(value));
   }
 //+------------------------------------------------------------------+
-//| Returns whether Stage 02 must terminate after a manual stop.     |
+//| ACSRMStage02StopHandled - Stage ACSRM 02 stop handled            |
 //+------------------------------------------------------------------+
+//--- Returns whether Stage 02 must terminate after a manual stop.
 bool ACSRMStage02StopHandled(const string phase="")
   {
    if(!IsStopped())
@@ -2741,13 +3028,14 @@ bool ACSRMStage02StopHandled(const string phase="")
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Configures Stage 02 runtime constants and mode selectors.        |
+//| ACSRMStage02Configure - Stage ACSRM 02 configure                 |
 //+------------------------------------------------------------------+
+//--- Configures Stage 02 runtime constants and mode selectors.
 bool ACSRMStage02Configure(const datetime reference_start,const datetime reference_end,
-                          const datetime calibration_start,const datetime calibration_end,
-                          const uint anchor_period,const float tau_value,const float lambda_dis,
-                          const float lambda_kl,const float lambda_alpha,const float alpha_prior,
-                          const float max_kl,const bool smoke,const uint smoke_limit)
+                           const datetime calibration_start,const datetime calibration_end,
+                           const uint anchor_period,const float tau_value,const float lambda_dis,
+                           const float lambda_kl,const float lambda_alpha,const float alpha_prior,
+                           const float max_kl,const bool smoke,const uint smoke_limit)
   {
    if(reference_start>=reference_end||reference_end>calibration_start||
       calibration_start>=calibration_end||tau_value<0.0f||tau_value>1.0f||
@@ -2758,7 +3046,7 @@ bool ACSRMStage02Configure(const datetime reference_start,const datetime referen
       !ACSRMStage02Finite(alpha_prior)||!ACSRMStage02Finite(max_kl))
      {
       Print("ACSRM_STAGE02_PREFLIGHT_FAIL reason=input_contract");
-      ReturnFalse;
+      ReturnFalse
      }
    const long     reference_span=long(reference_end)-long(reference_start);
    const long     calibration_span=long(calibration_end)-long(calibration_start);
@@ -2769,7 +3057,7 @@ bool ACSRMStage02Configure(const datetime reference_start,const datetime referen
       calibration_split>=calibration_end)
      {
       Print("ACSRM_STAGE02_PREFLIGHT_FAIL reason=empty_80_20_partition");
-      ReturnFalse;
+      ReturnFalse
      }
    CNeuronOMPBOCL *ompb=GetACSRM();
    if(!ompb||!ompb.SetTau(tau_value)||!ompb.SetDisagreementMult(lambda_dis)||
@@ -2778,7 +3066,7 @@ bool ACSRMStage02Configure(const datetime reference_start,const datetime referen
       !ConfigureACSRM(OMPB_BYPASS))
      {
       Print("ACSRM_STAGE02_PREFLIGHT_FAIL reason=ompb_configuration");
-      ReturnFalse;
+      ReturnFalse
      }
    ompb.TrainMode(false);
    ACSRMStage02ReferenceStart=reference_start;
@@ -2803,8 +3091,9 @@ bool ACSRMStage02Configure(const datetime reference_start,const datetime referen
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Prepares Stage 02 input data and state descriptors.              |
+//| ACSRMStage02PrepareData - Stage ACSRM 02 prepare data            |
 //+------------------------------------------------------------------+
+//--- Prepares Stage 02 input data and state descriptors.
 bool ACSRMStage02PrepareData(void)
   {
    const int reference_start=iBarShift(Symb.Name(),TimeFrame,ACSRMStage02ReferenceStart);
@@ -2822,14 +3111,14 @@ bool ACSRMStage02PrepareData(void)
       PrintFormat("ACSRM_STAGE02_PREFLIGHT_FAIL reason=bar_order shifts=(%d,%d,%d,%d,%d,%d)",
                   reference_start,reference_split,reference_end,calibration_start,
                   calibration_split,calibration_end);
-      ReturnFalse;
+      ReturnFalse
      }
    const int bars=CopyRates(Symb.Name(),TimeFrame,0,reference_start,Rates);
    if(bars<=0||!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
      {
       PrintFormat("ACSRM_STAGE02_PREFLIGHT_FAIL reason=rates bars=%d error=%d",bars,GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    int  wait=-1;
    bool calculated=false;
@@ -2844,7 +3133,7 @@ bool ACSRMStage02PrepareData(void)
    if(!calculated)
      {
       PrintFormat("ACSRM_STAGE02_PREFLIGHT_FAIL reason=indicators bars=%d error=%d",bars,GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    RSI.Refresh();
    CCI.Refresh();
@@ -2853,7 +3142,7 @@ bool ACSRMStage02PrepareData(void)
    if(!ArraySetAsSeries(Rates,true))
      {
       PrintFormat("ACSRM_STAGE02_PREFLIGHT_FAIL reason=rates_series error=%d",GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    ACSRMStage02ReferenceFirst=reference_start-HistoryBars-NForecast-1;
    ACSRMStage02ReferenceLast=reference_split;
@@ -2878,7 +3167,7 @@ bool ACSRMStage02PrepareData(void)
                   reference_rows,source_eval_rows,target_calibration_rows,target_eval_rows);
       PrintFormat("ACSRM_STAGE02_PREFLIGHT_REQUIRED reference=%u target_calibration=%u",
                   ACSRMReferenceSize,ACSRMCurrentWindow);
-      ReturnFalse;
+      ReturnFalse
      }
    PrintFormat("ACSRM_STAGE02_PREFLIGHT_PASS bars=%d reference=%d source_eval=%d target_calibration=%d target_eval=%d",
                bars,reference_rows,source_eval_rows,target_calibration_rows,target_eval_rows);
@@ -2886,10 +3175,11 @@ bool ACSRMStage02PrepareData(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the valid-row quota for one Stage 02 progress phase.     |
+//| ACSRMStage02ProgressQuota - Stage ACSRM 02 progress quota        |
 //+------------------------------------------------------------------+
+//--- Returns the valid-row quota for one Stage 02 progress phase.
 uint ACSRMStage02ProgressQuota(const uint rows,const uint cap,const bool smoke,
-                              const uint smoke_limit)
+                               const uint smoke_limit)
   {
    uint quota=(cap==0 ? rows : (uint)MathMin(rows,cap));
    if(smoke)
@@ -2898,8 +3188,9 @@ uint ACSRMStage02ProgressQuota(const uint rows,const uint cap,const bool smoke,
    return(quota);
   }
 //+------------------------------------------------------------------+
-//| Converts valid progress into a bounded Stage 02 percentage.      |
+//| ACSRMStage02ProgressPercent - Stage ACSRM 02 progress percent    |
 //+------------------------------------------------------------------+
+//--- Converts valid progress into a bounded Stage 02 percentage.
 double ACSRMStage02ProgressPercent(const uint done,const uint quota)
   {
    if(quota==0)
@@ -2908,14 +3199,15 @@ double ACSRMStage02ProgressPercent(const uint done,const uint quota)
    return(100.0 * double(MathMin(done,quota)) / double(quota));
   }
 //+------------------------------------------------------------------+
-//| Shows a throttled Stage 02 chart status without training work.   |
+//| ACSRMStage02ShowProgress - Stage ACSRM 02 show progress          |
 //+------------------------------------------------------------------+
+//--- Shows a throttled Stage 02 chart status without training work.
 void ACSRMStage02ShowProgress(const string phase,const uint done,const uint total,
-                             const uint attempts,const uint invalid,const bool end,
-                             const bool successful,const bool show_epoch,
-                             const bool show_ompb,const uint source_done,
-                             const uint source_attempts,const uint source_invalid,
-                             const string detail)
+                              const uint attempts,const uint invalid,const bool end,
+                              const bool successful,const bool show_epoch,
+                              const bool show_ompb,const uint source_done,
+                              const uint source_attempts,const uint source_invalid,
+                              const string detail)
   {
    static ulong  last_tick=0;
    static string last_phase="";
@@ -2935,8 +3227,18 @@ void ACSRMStage02ShowProgress(const string phase,const uint done,const uint tota
 //--- A phase transition deliberately hides the preceding phase's epoch metrics.
    if(read_metrics&&show_epoch)
      {
-      double lmix,router,trajectory,confidence,latent,observation;
-      double valid,diagnostic_invalid,entropy,distance,inactive,recovered;
+      double lmix;
+      double router;
+      double trajectory;
+      double confidence;
+      double latent;
+      double observation;
+      double valid;
+      double diagnostic_invalid;
+      double entropy;
+      double distance;
+      double inactive;
+      double recovered;
       if(SkillForecast&&SkillForecast.ReadEpochDiagnostics(
             lmix,router,trajectory,confidence,latent,observation,
             valid,diagnostic_invalid,entropy,distance,inactive,recovered)&&
@@ -2949,8 +3251,13 @@ void ACSRMStage02ShowProgress(const string phase,const uint done,const uint tota
         }
       if(show_ompb)
         {
-         uint reference_count,current_count,invalid_fallbacks,kl_rejects;
-         float disagreement,kl,alpha_prior;
+         uint reference_count;
+         uint current_count;
+         uint invalid_fallbacks;
+         uint kl_rejects;
+         float disagreement;
+         float kl;
+         float alpha_prior;
          if(ReadACSRMDiagnostics(reference_count,current_count,disagreement,kl,alpha_prior,
                                 invalid_fallbacks,kl_rejects)&&ACSRMStage02Finite(disagreement)&&
             ACSRMStage02Finite(kl))
@@ -2984,15 +3291,16 @@ void ACSRMStage02ShowProgress(const string phase,const uint done,const uint tota
    last_tick=now;
   }
 //+------------------------------------------------------------------+
-//| Collects the immutable Stage 02 Reference history.               |
+//| ACSRMStage02CollectReference - Stage ACSRM 02 collect reference  |
 //+------------------------------------------------------------------+
+//--- Collects the immutable Stage 02 Reference history.
 bool ACSRMStage02CollectReference(void)
   {
    CNeuronOMPBOCL *ompb=GetACSRM();
    if(!ompb||!ResetACSRMReference()||!ConfigureACSRM(OMPB_REFERENCE))
      {
       Print("ACSRM_STAGE02_REFERENCE_FAIL reason=setup");
-      ReturnFalse;
+      ReturnFalse
      }
    ompb.TrainMode(false);
    uint       collected=0;
@@ -3010,7 +3318,7 @@ bool ACSRMStage02CollectReference(void)
          !SkillMarket.feedForward(GetPointer(SkillState),1,false,(CBufferFloat *)NULL))
         {
          PrintFormat("ACSRM_STAGE02_REFERENCE_FAIL reason=forward position=%d line=%d",position,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
       collected++;
       ACSRMStage02ShowProgress("reference",collected,quota,collected,0,false,false,false,
@@ -3037,7 +3345,7 @@ bool ACSRMStage02CollectReference(void)
       ACSRMStage02ShowProgress("reference",collected,quota,collected,0,true,false,false,
                               false,
                               0,0,0,"result=failed");
-      ReturnFalse;
+      ReturnFalse
      }
    ACSRMStage02ShowProgress("reference",collected,quota,collected,0,true,true,false,
                            false,
@@ -3048,10 +3356,11 @@ bool ACSRMStage02CollectReference(void)
    return(ConfigureACSRM(OMPB_BYPASS));
   }
 //+------------------------------------------------------------------+
-//| Computes the frozen BYPASS baseline for one evaluation scope.    |
+//| ACSRMStage02Baseline - Stage ACSRM 02 baseline                   |
 //+------------------------------------------------------------------+
+//--- Computes the frozen BYPASS baseline for one evaluation scope.
 bool ACSRMStage02Baseline(const int first,const int last,const string scope,
-                         double &forecast_loss,uint &valid_batches,uint &invalid_batches)
+                          double &forecast_loss,uint &valid_batches,uint &invalid_batches)
   {
    forecast_loss=0.0;
    valid_batches=0;
@@ -3067,7 +3376,7 @@ bool ACSRMStage02Baseline(const int first,const int last,const string scope,
       !SkillForecast.ResetEpochDiagnostics())
      {
       PrintFormat("ACSRM_STAGE02_BASELINE_FAIL scope=%s reason=setup",scope);
-      ReturnFalse;
+      ReturnFalse
      }
    ACSRMStage02ShowProgress(progress_phase,(ACSRMStage02Smoke ? valid_batches : attempts),
                            quota,attempts,invalid_batches,false,false,true,false,
@@ -3102,8 +3411,18 @@ bool ACSRMStage02Baseline(const int first,const int last,const string scope,
 
       return(false);
      }
-   double lmix,router,trajectory,confidence,latent,observation;
-   double valid,invalid,entropy,distance,inactive,recovered;
+   double lmix;
+   double router;
+   double trajectory;
+   double confidence;
+   double latent;
+   double observation;
+   double valid;
+   double invalid;
+   double entropy;
+   double distance;
+   double inactive;
+   double recovered;
    if(valid_batches==0||!SkillForecast.BuildEpochCodebookDiagnostics()||
       !SkillForecast.ReadEpochDiagnostics(
          lmix,router,trajectory,confidence,latent,observation,
@@ -3116,7 +3435,7 @@ bool ACSRMStage02Baseline(const int first,const int last,const string scope,
       ACSRMStage02ShowProgress(progress_phase,(ACSRMStage02Smoke ? valid_batches : attempts),
                               quota,attempts,invalid_batches,true,false,true,false,
                               0,0,0,"result=failed");
-      ReturnFalse;
+      ReturnFalse
      }
    forecast_loss=lmix / valid;
    if(!ACSRMStage02Finite(forecast_loss))
@@ -3125,7 +3444,7 @@ bool ACSRMStage02Baseline(const int first,const int last,const string scope,
       ACSRMStage02ShowProgress(progress_phase,(ACSRMStage02Smoke ? valid_batches : attempts),
                               quota,attempts,invalid_batches,true,false,true,false,
                               0,0,0,"result=failed");
-      ReturnFalse;
+      ReturnFalse
      }
    ACSRMStage02ShowProgress(progress_phase,(ACSRMStage02Smoke ? valid_batches : attempts),
                            quota,attempts,invalid_batches,true,true,true,false,
@@ -3136,28 +3455,36 @@ bool ACSRMStage02Baseline(const int first,const int last,const string scope,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Fingerprints the selected market layers for Stage 02.            |
+//| ACSRMStage02MarketFingerprint - Stage                            |
 //+------------------------------------------------------------------+
+//--- Fingerprints the selected market layers for Stage 02.
 bool ACSRMStage02MarketFingerprint(const int first,const int last,ulong &fingerprint)
   {
    if(first<0||first>last)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    fingerprint=ulong(1469598103934665603);
    for(int index=first; index<=last; index++)
      {
       CNeuronBaseOCL *layer=SkillMarket.Layer(index);
       if(!layer)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       fingerprint=(fingerprint ^ ulong(index+1)) * ulong(1099511628211);
       if(!layer.AppendParameterFingerprint(fingerprint))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(fingerprint!=0);
   }
 //+------------------------------------------------------------------+
-//| Captures the states that must remain frozen during ACSRM.        |
+//| ACSRMStage02CaptureSignatures - Stage                            |
 //+------------------------------------------------------------------+
+//--- Captures the states that must remain frozen during ACSRM.
 bool ACSRMStage02CaptureSignatures(void)
   {
    ACSRMStage02SignaturesCaptured=false;
@@ -3165,11 +3492,15 @@ bool ACSRMStage02CaptureSignatures(void)
    if(!ompb||!ACSRMStage02MarketFingerprint(0,4,ACSRMStage02BaseFingerprint)||
       !ACSRMStage02MarketFingerprint(6,6,ACSRMStage02ForecastFingerprint)||
       !SkillTarget.ParameterFingerprint(ACSRMStage02TargetFingerprint))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    ACSRMStage02PosteriorFingerprint=ulong(1469598103934665603);
    if(!ompb.AppendParameterFingerprint(ACSRMStage02PosteriorFingerprint)||
       ACSRMStage02PosteriorFingerprint==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    PrintFormat("ACSRM_STAGE02_SIGNATURES_BEFORE base=%I64u forecast=%I64u target=%I64u posterior=%I64u",
                ACSRMStage02BaseFingerprint,ACSRMStage02ForecastFingerprint,
                ACSRMStage02TargetFingerprint,ACSRMStage02PosteriorFingerprint);
@@ -3178,8 +3509,9 @@ bool ACSRMStage02CaptureSignatures(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Ensures Stage 02 changed only the posterior/alpha parameter set. |
+//| ACSRMStage02VerifySignatures - Stage ACSRM 02 verify signatures  |
 //+------------------------------------------------------------------+
+//--- Ensures Stage 02 changed only the posterior/alpha parameter set.
 bool ACSRMStage02VerifySignatures(void)
   {
    if(!ACSRMStage02SignaturesCaptured)
@@ -3195,7 +3527,9 @@ bool ACSRMStage02VerifySignatures(void)
       !ACSRMStage02MarketFingerprint(6,6,forecast)||
       !SkillTarget.ParameterFingerprint(target)||
       !ompb.AppendParameterFingerprint(posterior))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool outer_unchanged=(base==ACSRMStage02BaseFingerprint&&
                                  forecast==ACSRMStage02ForecastFingerprint&&
                                  target==ACSRMStage02TargetFingerprint);
@@ -3207,14 +3541,15 @@ bool ACSRMStage02VerifySignatures(void)
       PrintFormat("ACSRM_STAGE02_SIGNATURES_FAIL outer_unchanged=%s posterior_changed=%s",
                   (outer_unchanged ? "true" : "false"),
                   (posterior_changed ? "true" : "false"));
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Verifies that pre-calibration inference preserved frozen state.  |
+//| ACSRMStage02VerifyPreCalibrationSignatures - Stage               |
 //+------------------------------------------------------------------+
+//--- Verifies that pre-calibration inference preserved frozen state.
 bool ACSRMStage02VerifyPreCalibrationSignatures(void)
   {
    if(!ACSRMStage02SignaturesCaptured)
@@ -3256,11 +3591,12 @@ bool ACSRMStage02VerifyPreCalibrationSignatures(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Computes an evaluation loss through posterior-mean inference.    |
+//| ACSRMStage02InferenceEvaluation - Stage                          |
 //+------------------------------------------------------------------+
+//--- Computes an evaluation loss through posterior-mean inference.
 bool ACSRMStage02InferenceEvaluation(const int first,const int last,const string scope,
-                                    double &forecast_loss,uint &valid_batches,
-                                    uint &invalid_batches)
+                                     double &forecast_loss,uint &valid_batches,
+                                     uint &invalid_batches)
   {
    forecast_loss=0.0;
    valid_batches=0;
@@ -3277,7 +3613,7 @@ bool ACSRMStage02InferenceEvaluation(const int first,const int last,const string
       !SkillForecast.ResetEpochDiagnostics())
      {
       PrintFormat("ACSRM_STAGE02_EVALUATION_FAIL scope=%s reason=setup",scope);
-      ReturnFalse;
+      ReturnFalse
      }
    SkillMarket.TrainMode(true);
    SkillTarget.TrainMode(false);
@@ -3321,8 +3657,18 @@ bool ACSRMStage02InferenceEvaluation(const int first,const int last,const string
 
       return(false);
      }
-   double lmix,router,trajectory,confidence,latent,observation;
-   double valid,invalid,entropy,distance,inactive,recovered;
+   double lmix;
+   double router;
+   double trajectory;
+   double confidence;
+   double latent;
+   double observation;
+   double valid;
+   double invalid;
+   double entropy;
+   double distance;
+   double inactive;
+   double recovered;
    if(valid_batches==0||!SkillForecast.BuildEpochCodebookDiagnostics()||
       !SkillForecast.ReadEpochDiagnostics(lmix,router,trajectory,confidence,latent,
             observation,valid,invalid,entropy,distance,
@@ -3335,7 +3681,7 @@ bool ACSRMStage02InferenceEvaluation(const int first,const int last,const string
       ACSRMStage02ShowProgress(progress_phase,(ACSRMStage02Smoke ? valid_batches : attempts),
                               quota,attempts,invalid_batches,true,false,true,false,
                               0,0,0,"result=failed");
-      ReturnFalse;
+      ReturnFalse
      }
    forecast_loss=lmix / valid;
    if(!ACSRMStage02Finite(forecast_loss)||!SkillVerifyFrozenForecastExact())
@@ -3344,7 +3690,7 @@ bool ACSRMStage02InferenceEvaluation(const int first,const int last,const string
       ACSRMStage02ShowProgress(progress_phase,(ACSRMStage02Smoke ? valid_batches : attempts),
                               quota,attempts,invalid_batches,true,false,true,false,
                               0,0,0,"result=failed");
-      ReturnFalse;
+      ReturnFalse
      }
    ACSRMStage02ShowProgress(progress_phase,(ACSRMStage02Smoke ? valid_batches : attempts),
                            quota,attempts,invalid_batches,true,true,true,false,
@@ -3355,11 +3701,12 @@ bool ACSRMStage02InferenceEvaluation(const int first,const int last,const string
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Checks the frozen acceptance gate without replacing any file.    |
+//| ACSRMStage02Accept - Stage ACSRM 02 accept                       |
 //+------------------------------------------------------------------+
+//--- Checks the frozen acceptance gate without replacing any file.
 bool ACSRMStage02Accept(const double source_before,const double target_before,
-                       const double source_after,const double target_after,
-                       const uint source_valid,const uint target_valid)
+                        const double source_after,const double target_after,
+                        const uint source_valid,const uint target_valid)
   {
    const double denominator_source=MathMax(MathAbs(source_before),1.0e-12);
    const double denominator_target=MathMax(MathAbs(target_before),1.0e-12);
@@ -3377,10 +3724,11 @@ bool ACSRMStage02Accept(const double source_before,const double target_before,
    return(accepted);
   }
 //+------------------------------------------------------------------+
-//| The temporary graph must never validate a production file.       |
+//| ACSRMStage02ForecastSignature - Stage                            |
 //+------------------------------------------------------------------+
+//--- The temporary graph must never validate a production file.
 ulong ACSRMStage02ForecastSignature(const string market_file,
-                                   CNeuronScenarioForecast *forecast)
+                                    CNeuronScenarioForecast *forecast)
   {
    if(!forecast)
       return(0);
@@ -3405,19 +3753,24 @@ ulong ACSRMStage02ForecastSignature(const string market_file,
    return(SkillHashText(hash,"OHLC_deltas_from_open;tick_volume_div_1000;RSI_CCI_ATR_MACD_raw"));
   }
 //+------------------------------------------------------------------+
-//| Writes the candidate manifest for Stage 02 checkpoints.          |
+//| ACSRMStage02WriteCandidateManifest - Stage                       |
 //+------------------------------------------------------------------+
+//--- Writes the candidate manifest for Stage 02 checkpoints.
 bool ACSRMStage02WriteCandidateManifest(const string market_file,const string target_file,
-                                       const string manifest_file,const uint completed_epochs)
+                                        const string manifest_file,const uint completed_epochs)
   {
    const ulong forecast_signature=ACSRMStage02ForecastSignature(market_file,SkillForecast);
    const ulong target_hash=SkillHashFile(ulong(1469598103934665603),target_file);
    const ulong training_signature=SkillHashFile(forecast_signature,target_file);
    if(!SkillForecast||forecast_signature==0||target_hash==0||training_signature==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int handle=FileOpen(manifest_file,FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool written=(FileWrite(handle,"format=ACSRM_FORECAST")>0&&
                          FileWrite(handle,StringFormat("version=%u",Skill_FORMAT_VERSION))>0&&
                          FileWrite(handle,StringFormat("forecast_type=%d",defNeuronScenarioForecast))>0&&
@@ -3448,17 +3801,20 @@ bool ACSRMStage02WriteCandidateManifest(const string market_file,const string ta
    return(written);
   }
 //+------------------------------------------------------------------+
-//| Validates the candidate manifest structure and fields.           |
+//| ACSRMStage02ValidateCandidateManifest - Stage                    |
 //+------------------------------------------------------------------+
+//--- Validates the candidate manifest structure and fields.
 bool ACSRMStage02ValidateCandidateManifest(const string market_file,const string target_file,
-      const string manifest_file,
-      CNeuronScenarioForecast *forecast)
+                                           const string manifest_file,
+                                           CNeuronScenarioForecast *forecast)
   {
    const ulong signature=ACSRMStage02ForecastSignature(market_file,forecast);
    const ulong target_hash=SkillHashFile(ulong(1469598103934665603),target_file);
    const ulong training_signature=SkillHashFile(signature,target_file);
    if(!forecast||signature==0||target_hash==0||training_signature==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #define ACSRM_STAGE02_MANIFEST_EQ(KEY,VALUE) if(SkillManifestValue(manifest_file, KEY) != (VALUE)) ReturnFalse
    ACSRM_STAGE02_MANIFEST_EQ("format","ACSRM_FORECAST");
    ACSRM_STAGE02_MANIFEST_EQ("version",IntegerToString(Skill_FORMAT_VERSION));
@@ -3484,11 +3840,12 @@ bool ACSRMStage02ValidateCandidateManifest(const string market_file,const string
           SkillManifestValue(manifest_file,"invalid_batches")!="");
   }
 //+------------------------------------------------------------------+
-//| Reload-probes one immutable candidate before selector            |
+//| ACSRMStage02ValidateCandidate - Stage                            |
 //+------------------------------------------------------------------+
+//--- Reload-probes one immutable candidate before selector
 //--- activation.
 bool ACSRMStage02ValidateCandidate(const string market_file,const string target_file,
-                                  const string manifest_file)
+                                   const string manifest_file)
   {
    CNet     market;
    CNet     target;
@@ -3496,9 +3853,13 @@ bool ACSRMStage02ValidateCandidate(const string market_file,const string target_
    datetime studied=0;
    if(!market.Load(market_file,error,undefine,forecast,studied,true)||
       !target.Load(target_file,error,undefine,forecast,studied,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!target.SetOpenCLChecked(market.GetOpenCL()))
-      ReturnFalseEx("target OpenCL transfer failed");
+     {
+      ReturnFalseEx("target OpenCL transfer failed")
+     }
    CNeuronBaseOCL *rank_tcm=market.Layer(4);
    CNeuronBaseOCL *ompb_layer=market.Layer(5);
    CNeuronBaseOCL *forecast_layer=market.Layer(6);
@@ -3518,7 +3879,9 @@ bool ACSRMStage02ValidateCandidate(const string market_file,const string target_
       !live_ompb.AppendParameterFingerprint(live_posterior)||
       !ACSRMStage02ValidateCandidateManifest(market_file,target_file,manifest_file,
             staged_forecast))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(staged_market==live_market&&staged_target==live_target&&
           staged_posterior==live_posterior);
   }
@@ -3534,23 +3897,30 @@ ulong  ACSRMStage02PreviousMarketFingerprint=0;
 ulong  ACSRMStage02PreviousTargetFingerprint=0;
 ulong  ACSRMStage02PreviousPosteriorFingerprint=0;
 //+------------------------------------------------------------------+
-//| Validates a complete checkpoint set without touching live state. |
+//| ACSRMStage02ValidateCheckpointSet - Stage                        |
 //+------------------------------------------------------------------+
+//--- Validates a complete checkpoint set without touching live state.
 bool ACSRMStage02ValidateCheckpointSet(const string market_file,const string target_file,
-                                      const string manifest_file)
+                                       const string manifest_file)
   {
    if(!FileIsExist(market_file,FILE_COMMON)||!FileIsExist(target_file,FILE_COMMON)||
       !FileIsExist(manifest_file,FILE_COMMON))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNet     market;
    CNet     target;
    float    error=0.0f,undefine=0.0f,forecast=0.0f;
    datetime studied=0;
    if(!market.Load(market_file,error,undefine,forecast,studied,true)||
       !target.Load(target_file,error,undefine,forecast,studied,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!target.SetOpenCLChecked(market.GetOpenCL()))
-      ReturnFalseEx("target OpenCL transfer failed");
+     {
+      ReturnFalseEx("target OpenCL transfer failed")
+     }
    CNeuronBaseOCL *rank_tcm=market.Layer(4);
    CNeuronBaseOCL *ompb_layer=market.Layer(5);
    CNeuronBaseOCL *forecast_layer=market.Layer(6);
@@ -3564,23 +3934,25 @@ bool ACSRMStage02ValidateCheckpointSet(const string market_file,const string tar
                 checkpoint_forecast));
   }
 //+------------------------------------------------------------------+
-//| Identifies the clean initial state before the first Stage 01     |
+//| ACSRMStage02CanonicalTupleMissing - Stage                        |
 //+------------------------------------------------------------------+
+//--- Identifies the clean initial state before the first Stage 01
 //--- save.
 bool ACSRMStage02CanonicalTupleMissing(const string market_file,const string target_file,
-                                      const string manifest_file)
+                                       const string manifest_file)
   {
 //--- A Stage 01 restore miss is safe only when no tuple member exists.
    return(!FileIsExist(market_file,FILE_COMMON)&&!FileIsExist(target_file,FILE_COMMON)&&
           !FileIsExist(manifest_file,FILE_COMMON));
   }
 //+------------------------------------------------------------------+
-//| Captures the immutable checkpoint fingerprints for rollback      |
+//| ACSRMStage02CheckpointFingerprints - Stage                       |
 //+------------------------------------------------------------------+
+//--- Captures the immutable checkpoint fingerprints for rollback
 //--- proof.
 bool ACSRMStage02CheckpointFingerprints(const string market_file,const string target_file,
-                                       ulong &market_fingerprint,ulong &target_fingerprint,
-                                       ulong &posterior_fingerprint)
+                                        ulong &market_fingerprint,ulong &target_fingerprint,
+                                        ulong &posterior_fingerprint)
   {
    market_fingerprint=0;
    target_fingerprint=0;
@@ -3591,9 +3963,13 @@ bool ACSRMStage02CheckpointFingerprints(const string market_file,const string ta
    datetime studied=0;
    if(!checkpoint_market.Load(market_file,error,undefine,forecast,studied,true)||
       !checkpoint_target.Load(target_file,error,undefine,forecast,studied,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!checkpoint_target.SetOpenCLChecked(checkpoint_market.GetOpenCL()))
-      ReturnFalseEx("target OpenCL transfer failed");
+     {
+      ReturnFalseEx("target OpenCL transfer failed")
+     }
    CNeuronBaseOCL *ompb_layer=checkpoint_market.Layer(5);
    CNeuronOMPBOCL *checkpoint_ompb=
       (ompb_layer&&ompb_layer.Type()==defNeuronOMPBOCL ? (CNeuronOMPBOCL *)ompb_layer : NULL);
@@ -3602,8 +3978,9 @@ bool ACSRMStage02CheckpointFingerprints(const string market_file,const string ta
           checkpoint_ompb.AppendParameterFingerprint(posterior_fingerprint));
   }
 //+------------------------------------------------------------------+
-//| Restores the Stage 01 fixed-name checkpoint as the default view. |
+//| ACSRMStage02ResetActiveCheckpointFiles - Stage                   |
 //+------------------------------------------------------------------+
+//--- Restores the Stage 01 fixed-name checkpoint as the default view.
 void ACSRMStage02ResetActiveCheckpointFiles(void)
   {
    SkillActiveMarketFile=Skill_MARKET_FILE;
@@ -3611,8 +3988,9 @@ void ACSRMStage02ResetActiveCheckpointFiles(void)
    SkillActiveManifestFile=Skill_MANIFEST_FILE;
   }
 //+------------------------------------------------------------------+
-//| Accepts only generated identifiers, never arbitrary filenames.   |
+//| ACSRMStage02GenerationIdValid - Stage                            |
 //+------------------------------------------------------------------+
+//--- Accepts only generated identifiers, never arbitrary filenames.
 bool ACSRMStage02GenerationIdValid(const string generation)
   {
    const int length=StringLen(generation);
@@ -3638,10 +4016,11 @@ bool ACSRMStage02GenerationIdValid(const string generation)
    return(separator>0&&separator<length-1);
   }
 //+------------------------------------------------------------------+
-//| Maps a selector generation to its immutable checkpoint trio.     |
+//| ACSRMStage02GenerationFiles - Stage ACSRM 02 generation files    |
 //+------------------------------------------------------------------+
+//--- Maps a selector generation to its immutable checkpoint trio.
 bool ACSRMStage02GenerationFiles(const string generation,string &market_file,
-                                string &target_file,string &manifest_file)
+                                 string &target_file,string &manifest_file)
   {
    if(generation=="stage01")
      {
@@ -3661,10 +4040,11 @@ bool ACSRMStage02GenerationFiles(const string generation,string &market_file,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Accepts only the fixed Stage 01 trio or one exact generation.    |
+//| ACSRMStage02ExplicitCheckpointFilesValid - Stage                 |
 //+------------------------------------------------------------------+
+//--- Accepts only the fixed Stage 01 trio or one exact generation.
 bool ACSRMStage02ExplicitCheckpointFilesValid(const string market_file,const string target_file,
-      const string manifest_file)
+                                              const string manifest_file)
   {
    string expected_market="",expected_target="",expected_manifest="";
    if(!ACSRMStage02GenerationFiles("stage01",expected_market,expected_target,expected_manifest))
@@ -3693,8 +4073,9 @@ bool ACSRMStage02ExplicitCheckpointFilesValid(const string market_file,const str
           manifest_file==expected_manifest);
   }
 //+------------------------------------------------------------------+
-//| Rejects interrupted publish sidecars instead of guessing         |
+//| ACSRMStage02RecoverySidecarPresent - Stage                       |
 //+------------------------------------------------------------------+
+//--- Rejects interrupted publish sidecars instead of guessing
 //--- recovery.
 bool ACSRMStage02RecoverySidecarPresent(string &sidecar_file)
   {
@@ -3738,8 +4119,9 @@ bool ACSRMStage02RecoverySidecarPresent(string &sidecar_file)
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Reads exactly one strict selector without allowing path          |
+//| ACSRMStage02ReadSelector - Stage ACSRM 02 read selector          |
 //+------------------------------------------------------------------+
+//--- Reads exactly one strict selector without allowing path
 //--- injection.
 bool ACSRMStage02ReadSelector(const string selector_file,string &generation)
   {
@@ -3797,13 +4179,14 @@ bool ACSRMStage02ReadSelector(const string selector_file,string &generation)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Binds one selector to the exact expected checkpoint generation.  |
+//| ACSRMStage02SelectorMatchesExpected - Stage                      |
 //+------------------------------------------------------------------+
+//--- Binds one selector to the exact expected checkpoint generation.
 bool ACSRMStage02SelectorMatchesExpected(const string selector_file,
-                                        const string expected_generation,
-                                        const ulong expected_market,
-                                        const ulong expected_target,
-                                        const ulong expected_posterior)
+                                         const string expected_generation,
+                                         const ulong expected_market,
+                                         const ulong expected_target,
+                                         const ulong expected_posterior)
   {
    string generation="",market_file="",target_file="",manifest_file="";
    ulong  market=0,target=0;
@@ -3819,8 +4202,9 @@ bool ACSRMStage02SelectorMatchesExpected(const string selector_file,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Writes and rereads one non-active selector file before a switch. |
+//| ACSRMStage02WriteSelectorFile - Stage                            |
 //+------------------------------------------------------------------+
+//--- Writes and rereads one non-active selector file before a switch.
 bool ACSRMStage02WriteSelectorFile(const string selector_file,const string generation)
   {
    if(generation!="stage01"&&!ACSRMStage02GenerationIdValid(generation))
@@ -3842,23 +4226,25 @@ bool ACSRMStage02WriteSelectorFile(const string selector_file,const string gener
    return(written&&ACSRMStage02ReadSelector(selector_file,reread)&&reread==generation);
   }
 //+------------------------------------------------------------------+
-//| Ensures three tuple names describe three distinct physical       |
+//| ACSRMStage02TupleNamesValid - Stage ACSRM 02 tuple names valid   |
 //+------------------------------------------------------------------+
+//--- Ensures three tuple names describe three distinct physical
 //--- files.
 bool ACSRMStage02TupleNamesValid(const string market_file,const string target_file,
-                                const string manifest_file)
+                                 const string manifest_file)
   {
    return(market_file!=""&&target_file!=""&&manifest_file!=""&&
           market_file!=target_file&&market_file!=manifest_file&&
           target_file!=manifest_file);
   }
 //+------------------------------------------------------------------+
-//| Copies a complete checkpoint tuple with manifest last.           |
+//| ACSRMStage02CopyTuple - Stage ACSRM 02 copy tuple                |
 //+------------------------------------------------------------------+
+//--- Copies a complete checkpoint tuple with manifest last.
 bool ACSRMStage02CopyTuple(const string source_market,const string source_target,
-                          const string source_manifest,const string destination_market,
-                          const string destination_target,const string destination_manifest,
-                          const bool rewrite)
+                           const string source_manifest,const string destination_market,
+                           const string destination_target,const string destination_manifest,
+                           const bool rewrite)
   {
    if(!ACSRMStage02TupleNamesValid(source_market,source_target,source_manifest)||
       !ACSRMStage02TupleNamesValid(destination_market,destination_target,
@@ -3871,15 +4257,16 @@ bool ACSRMStage02CopyTuple(const string source_market,const string source_target
           FileCopy(source_manifest,FILE_COMMON,destination_manifest,flags));
   }
 //+------------------------------------------------------------------+
-//| Publishes a staged tuple through three canonical active          |
+//| ACSRMStage02PublishCanonicalTuple - Stage                        |
 //+------------------------------------------------------------------+
+//--- Publishes a staged tuple through three canonical active
 //--- filenames. The staged and previous tuples remain until reload  proof completes.
 bool ACSRMStage02PublishCanonicalTuple(const string market_file,const string target_file,
-                                      const string manifest_file,const string next_market,
-                                      const string next_target,const string next_manifest,
-                                      const string previous_market,
-                                      const string previous_target,
-                                      const string previous_manifest)
+                                       const string manifest_file,const string next_market,
+                                       const string next_target,const string next_manifest,
+                                       const string previous_market,
+                                       const string previous_target,
+                                       const string previous_manifest)
   {
    if(!ACSRMStage02TupleNamesValid(market_file,target_file,manifest_file)||
       !ACSRMStage02TupleNamesValid(next_market,next_target,next_manifest)||
@@ -3900,13 +4287,14 @@ bool ACSRMStage02PublishCanonicalTuple(const string market_file,const string tar
           ACSRMStage02ValidateCheckpointSet(market_file,target_file,manifest_file));
   }
 //+------------------------------------------------------------------+
-//| Restores the retained tuple using the manifest as the final      |
+//| ACSRMStage02RestoreCanonicalTuple - Stage                        |
 //+------------------------------------------------------------------+
+//--- Restores the retained tuple using the manifest as the final
 //--- write.
 bool ACSRMStage02RestoreCanonicalTuple(const string market_file,const string target_file,
-                                      const string manifest_file,const string previous_market,
-                                      const string previous_target,
-                                      const string previous_manifest)
+                                       const string manifest_file,const string previous_market,
+                                       const string previous_target,
+                                       const string previous_manifest)
   {
    if(!ACSRMStage02TupleNamesValid(market_file,target_file,manifest_file)||
       !ACSRMStage02TupleNamesValid(previous_market,previous_target,previous_manifest)||
@@ -3918,13 +4306,14 @@ bool ACSRMStage02RestoreCanonicalTuple(const string market_file,const string tar
           ACSRMStage02ValidateCheckpointSet(market_file,target_file,manifest_file));
   }
 //+------------------------------------------------------------------+
-//| Classifies the retained tuple required by one Stage 01 phase.    |
+//| SkillStage01TupleStateValid - Stage skill 01 tuple state valid   |
 //+------------------------------------------------------------------+
+//--- Classifies the retained tuple required by one Stage 01 phase.
 bool SkillStage01TupleStateValid(const bool market_exists,
-                                   const bool target_exists,
-                                   const bool manifest_exists,
-                                   const bool had_previous,
-                                   const string phase)
+                                 const bool target_exists,
+                                 const bool manifest_exists,
+                                 const bool had_previous,
+                                 const string phase)
   {
 //--- the first save has no prior tuple; every later phase retains all members.
    const bool complete=(market_exists&&target_exists&&manifest_exists);
@@ -3937,15 +4326,17 @@ bool SkillStage01TupleStateValid(const bool market_exists,
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Removes only files owned by a completed Stage 01 transaction.    |
+//| SkillStage01DeleteFile - Stage skill 01 delete file              |
 //+------------------------------------------------------------------+
+//--- Removes only files owned by a completed Stage 01 transaction.
 bool SkillStage01DeleteFile(const string file_name)
   {
    return(!FileIsExist(file_name,FILE_COMMON)||FileDelete(file_name,FILE_COMMON));
   }
 //+------------------------------------------------------------------+
-//| Releases Stage 01 resources and resets stage state.              |
+//| SkillStage01Cleanup - Stage skill 01 cleanup                     |
 //+------------------------------------------------------------------+
+//--- Releases Stage 01 resources and resets stage state.
 bool SkillStage01Cleanup(void)
   {
 //--- remove the commit marker last; its presence must survive every partial cleanup.
@@ -3958,11 +4349,12 @@ bool SkillStage01Cleanup(void)
           SkillStage01DeleteFile(ACSRM_STAGE01_TRANSACTION_FILE));
   }
 //+------------------------------------------------------------------+
-//| Writes one durable marker before canonical Stage 01 publication. |
+//| SkillStage01WriteTransaction - Stage skill 01 write transaction  |
 //+------------------------------------------------------------------+
+//--- Writes one durable marker before canonical Stage 01 publication.
 bool SkillStage01WriteTransaction(const bool had_previous,const string phase,
-                                    const ulong market,const ulong target,
-                                    const ulong posterior)
+                                  const ulong market,const ulong target,
+                                  const ulong posterior)
   {
    if((phase!="prepared"&&phase!="previous_ready")||
       FileIsExist(ACSRM_STAGE01_TRANSACTION_FILE,FILE_COMMON))
@@ -3989,11 +4381,12 @@ bool SkillStage01WriteTransaction(const bool had_previous,const string phase,
    return(written);
   }
 //+------------------------------------------------------------------+
-//| Rewrites only a complete transaction marker state transition.    |
+//| SkillStage01AdvanceTransaction - Stage                           |
 //+------------------------------------------------------------------+
+//--- Rewrites only a complete transaction marker state transition.
 bool SkillStage01AdvanceTransaction(const bool had_previous,const string phase,
-                                      const ulong market,const ulong target,
-                                      const ulong posterior)
+                                    const ulong market,const ulong target,
+                                    const ulong posterior)
   {
    if(!SkillStage01DeleteFile(ACSRM_STAGE01_TRANSACTION_FILE))
       return(false);
@@ -4001,10 +4394,11 @@ bool SkillStage01AdvanceTransaction(const bool had_previous,const string phase,
    return(SkillStage01WriteTransaction(had_previous,phase,market,target,posterior));
   }
 //+------------------------------------------------------------------+
-//| Reads one strict Stage 01 transaction marker.                    |
+//| SkillStage01ReadTransaction - Stage skill 01 read transaction    |
 //+------------------------------------------------------------------+
+//--- Reads one strict Stage 01 transaction marker.
 bool SkillStage01ReadTransaction(bool &had_previous,string &phase,
-                                   string &market,string &target,string &posterior)
+                                 string &market,string &target,string &posterior)
   {
    had_previous=false;
    phase="";
@@ -4033,11 +4427,12 @@ bool SkillStage01ReadTransaction(bool &had_previous,string &phase,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Compares a complete tuple against its transaction marker.        |
+//| SkillStage01TupleMatches - Stage skill 01 tuple matches          |
 //+------------------------------------------------------------------+
+//--- Compares a complete tuple against its transaction marker.
 bool SkillStage01TupleMatches(const string market_file,const string target_file,
-                                const string manifest_file,const string market,
-                                const string target,const string posterior)
+                              const string manifest_file,const string market,
+                              const string target,const string posterior)
   {
    ulong actual_market=0,actual_target=0;
    ulong actual_posterior=ulong(1469598103934665603);
@@ -4049,8 +4444,9 @@ bool SkillStage01TupleMatches(const string market_file,const string target_file,
           StringFormat("%I64u",actual_posterior)==posterior);
   }
 //+------------------------------------------------------------------+
-//| Recovers only an interrupted Stage 01-owned publication.         |
+//| SkillStage01RecoverInterruptedCheckpoint - Stage                 |
 //+------------------------------------------------------------------+
+//--- Recovers only an interrupted Stage 01-owned publication.
 bool SkillStage01RecoverInterruptedCheckpoint(void)
   {
    const bool marker_exists=FileIsExist(ACSRM_STAGE01_TRANSACTION_FILE,FILE_COMMON);
@@ -4113,8 +4509,9 @@ bool SkillStage01RecoverInterruptedCheckpoint(void)
    return(SkillStage01Cleanup());
   }
 //+------------------------------------------------------------------+
-//| Publishes one fully validated Stage 01 checkpoint transaction.   |
+//| SkillStage01SaveCheckpoint - Stage skill 01 save checkpoint      |
 //+------------------------------------------------------------------+
+//--- Publishes one fully validated Stage 01 checkpoint transaction.
 bool SkillStage01SaveCheckpoint(const uint completed_epochs)
   {
    if(FileIsExist(ACSRM_STAGE01_TRANSACTION_FILE,FILE_COMMON)||
@@ -4182,12 +4579,13 @@ bool SkillStage01SaveCheckpoint(const uint completed_epochs)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Proves deterministic serialized parameters without live          |
+//| ACSRMStage02ReloadProofDeterministicTuple - Stage                |
 //+------------------------------------------------------------------+
+//--- Proves deterministic serialized parameters without live
 //--- mutation.
 bool ACSRMStage02ReloadProofDeterministicTuple(const string market_file,
-      const string target_file,
-      const string manifest_file)
+                                               const string target_file,
+                                               const string manifest_file)
   {
    ulong first_market=0,first_target=0;
    ulong first_posterior=ulong(1469598103934665603);
@@ -4203,8 +4601,9 @@ bool ACSRMStage02ReloadProofDeterministicTuple(const string market_file,
           first_posterior==second_posterior);
   }
 //+------------------------------------------------------------------+
-//| Detects any interrupted canonical or legacy publication state.   |
+//| ACSRMStage02CanonicalSidecarPresent - Stage                      |
 //+------------------------------------------------------------------+
+//--- Detects any interrupted canonical or legacy publication state.
 bool ACSRMStage02CanonicalSidecarPresent(string &sidecar_file)
   {
    sidecar_file="";
@@ -4234,8 +4633,9 @@ bool ACSRMStage02CanonicalSidecarPresent(string &sidecar_file)
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Resolves only the canonical production checkpoint or fails       |
+//| ACSRMStage02ResolveActiveCheckpoint - Stage                      |
 //+------------------------------------------------------------------+
+//--- Resolves only the canonical production checkpoint or fails
 //--- closed. Lightweight mode is valid only when the caller validates  the loaded graph.
 bool ACSRMStage02ResolveActiveCheckpoint(const bool validate_tuple=true)
   {
@@ -4286,8 +4686,9 @@ bool ACSRMStage02ResolveActiveCheckpoint(const bool validate_tuple=true)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Retains the previous selection before the one-file activation.   |
+//| ACSRMStage02PreparePreviousSelector - Stage                      |
 //+------------------------------------------------------------------+
+//--- Retains the previous selection before the one-file activation.
 bool ACSRMStage02PreparePreviousSelector(void)
   {
    string generation="",market_file="",target_file="",manifest_file="";
@@ -4335,8 +4736,9 @@ bool ACSRMStage02PreparePreviousSelector(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Switches exactly one active file after full generation proof.    |
+//| ACSRMStage02ActivateGeneration - Stage                           |
 //+------------------------------------------------------------------+
+//--- Switches exactly one active file after full generation proof.
 bool ACSRMStage02ActivateGeneration(const string generation)
   {
    if(FileIsExist(ACSRM_STAGE02_SELECTOR_NEXT,FILE_COMMON)||
@@ -4356,8 +4758,9 @@ bool ACSRMStage02ActivateGeneration(const string generation)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Restores a retained canonical tuple after failed reload proof.   |
+//| ACSRMStage02RestorePreviousSelector - Stage                      |
 //+------------------------------------------------------------------+
+//--- Restores a retained canonical tuple after failed reload proof.
 bool ACSRMStage02RestorePreviousSelector(void)
   {
    ulong previous_market=0,previous_target=0;
@@ -4391,8 +4794,9 @@ bool ACSRMStage02RestorePreviousSelector(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Stages and reload-probes the complete temporary canonical tuple. |
+//| ACSRMStage02StageCandidate - Stage ACSRM 02 stage candidate      |
 //+------------------------------------------------------------------+
+//--- Stages and reload-probes the complete temporary canonical tuple.
 bool ACSRMStage02StageCandidate(void)
   {
    ulong          posterior=ulong(1469598103934665603);
@@ -4430,8 +4834,9 @@ bool ACSRMStage02StageCandidate(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Publishes only a fully validated temporary canonical tuple.      |
+//| ACSRMStage02PublishCandidate - Stage ACSRM 02 publish candidate  |
 //+------------------------------------------------------------------+
+//--- Publishes only a fully validated temporary canonical tuple.
 bool ACSRMStage02PublishCandidate(void)
   {
    if(!ACSRMStage02CheckpointFingerprints(Skill_MARKET_FILE,Skill_TARGET_FILE,
@@ -4454,11 +4859,12 @@ bool ACSRMStage02PublishCandidate(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Loads exactly the supplied checkpoint without resolving a        |
+//| ACSRMStage02LoadExplicitCheckpoint - Stage                       |
 //+------------------------------------------------------------------+
+//--- Loads exactly the supplied checkpoint without resolving a
 //--- selector.
 bool ACSRMStage02LoadExplicitCheckpoint(const string market_file,const string target_file,
-                                       const string manifest_file)
+                                        const string manifest_file)
   {
    if(!ACSRMStage02ExplicitCheckpointFilesValid(market_file,target_file,manifest_file))
       return(false);
@@ -4484,7 +4890,9 @@ bool ACSRMStage02LoadExplicitCheckpoint(const string market_file,const string ta
       return(false);
 
    if(!SkillTarget.SetOpenCLChecked(SkillMarket.GetOpenCL()))
-      ReturnFalseEx("target OpenCL transfer failed");
+     {
+      ReturnFalseEx("target OpenCL transfer failed")
+     }
    SkillForecast=(CNeuronScenarioForecast *)SkillMarket.Layer(-1);
    if(!SkillForecast||SkillForecast.Type()!=defNeuronScenarioForecast||
       !ConfigureForecastRecoveryAge()||!SkillInitTrainingBuffers()||
@@ -4516,11 +4924,12 @@ bool ACSRMStage02LoadExplicitCheckpoint(const string market_file,const string ta
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Compares one immutable reload output and names the failed        |
+//| ACSRMStage02ReloadTensorEqual - Stage                            |
 //+------------------------------------------------------------------+
+//--- Compares one immutable reload output and names the failed
 //--- tensor.
 bool ACSRMStage02ReloadTensorEqual(const string tensor,CBufferFloat *actual,
-                                  CBufferFloat &expected)
+                                   CBufferFloat &expected)
   {
    if(!actual||!actual.BufferRead()||actual.Total()!=expected.Total())
      {
@@ -4544,14 +4953,17 @@ bool ACSRMStage02ReloadTensorEqual(const string tensor,CBufferFloat *actual,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Proves the first inference result after two clean explicit       |
+//| ACSRMStage02ReloadProofDeterministic - Stage                     |
 //+------------------------------------------------------------------+
+//--- Proves the first inference result after two clean explicit
 //--- loads.
 bool ACSRMStage02ReloadProofDeterministic(const string market_file,const string target_file,
-      const string manifest_file,const int position,
-      CBufferFloat *state,CBufferFloat *time)
+                                          const string manifest_file,const int position,
+                                          CBufferFloat *state,CBufferFloat *time)
   {
-   CBufferFloat z,u,pi;
+   CBufferFloat z;
+   CBufferFloat u;
+   CBufferFloat pi;
    if(position<0||!state||!time||
       !ACSRMStage02LoadExplicitCheckpoint(market_file,target_file,manifest_file)||
       !SkillForwardForecast(position,state,time)||
@@ -4569,12 +4981,13 @@ bool ACSRMStage02ReloadProofDeterministic(const string market_file,const string 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Reloads one selected checkpoint and proves deterministic mean    |
+//| ACSRMStage02ReloadCheckpointProof - Stage                        |
 //+------------------------------------------------------------------+
+//--- Reloads one selected checkpoint and proves deterministic mean
 //--- inference.
 bool ACSRMStage02ReloadCheckpointProof(const string market_file,const string target_file,
-                                      const string manifest_file,const ulong expected_market,
-                                      const ulong expected_target,const ulong expected_posterior)
+                                       const string manifest_file,const ulong expected_market,
+                                       const ulong expected_target,const ulong expected_posterior)
   {
    ACSRMStage02ReloadProofPassed=false;
    if(!ACSRMStage02ReloadProofDeterministic(market_file,target_file,manifest_file,
@@ -4595,11 +5008,12 @@ bool ACSRMStage02ReloadCheckpointProof(const string market_file,const string tar
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Reloads the canonical tuple and proves deterministic mean        |
+//| ACSRMStage02ReloadSmoke - Stage ACSRM 02 reload smoke            |
 //+------------------------------------------------------------------+
+//--- Reloads the canonical tuple and proves deterministic mean
 //--- inference.
 bool ACSRMStage02ReloadSmoke(const ulong expected_market,const ulong expected_target,
-                            const ulong expected_posterior)
+                             const ulong expected_posterior)
   {
    if(!ACSRMStage02SelectorActivated)
       return(false);
@@ -4609,8 +5023,9 @@ bool ACSRMStage02ReloadSmoke(const ulong expected_market,const ulong expected_ta
                                            expected_market,expected_target,expected_posterior));
   }
 //+------------------------------------------------------------------+
-//| Cleans temporary tuples only after deterministic canonical       |
+//| ACSRMStage02FinalizeSteadySelector - Stage                       |
 //+------------------------------------------------------------------+
+//--- Cleans temporary tuples only after deterministic canonical
 //--- reload.
 bool ACSRMStage02FinalizeSteadySelector(void)
   {
@@ -4647,8 +5062,9 @@ bool ACSRMStage02FinalizeSteadySelector(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Publishes only after canonical staging and deterministic reload. |
+//| ACSRMStage02SaveAcceptedCheckpoint - Stage                       |
 //+------------------------------------------------------------------+
+//--- Publishes only after canonical staging and deterministic reload.
 bool ACSRMStage02SaveAcceptedCheckpoint(void)
   {
    ulong          market=0,target=0,posterior=ulong(1469598103934665603);
@@ -4675,37 +5091,50 @@ bool ACSRMStage02SaveAcceptedCheckpoint(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Runs one frozen-graph ACSRM update. CNet owns full gradient      |
+//| ACSRMStage02RunBatch - Stage ACSRM 02 run batch                  |
 //+------------------------------------------------------------------+
+//--- Runs one frozen-graph ACSRM update. CNet owns full gradient
 //--- propagation but has parameter writes disabled; the explicit  ACSRM call below is therefore the only update in Stage 02.
 bool ACSRMStage02RunBatch(const int position,const bool source_anchor)
   {
    CNeuronOMPBOCL *ompb=GetACSRM();
    CNeuronBaseOCL *rank_tcm=GetRankTCM();
    if(!ompb||!rank_tcm)
-      ReturnFalseEx("Stage 02 batch layers are null");
+     {
+      ReturnFalseEx("Stage 02 batch layers are null")
+     }
    if(!ConfigureACSRM(OMPB_CALIBRATE))
-      ReturnFalseEx("Stage 02 batch configuration");
+     {
+      ReturnFalseEx("Stage 02 batch configuration")
+     }
    if(!ompb.SetSourceAnchor(source_anchor))
-      ReturnFalseEx("Stage 02 source-anchor setup");
+     {
+      ReturnFalseEx("Stage 02 source-anchor setup")
+     }
    ompb.TrainMode(true);
 
 //--- target batches publish Current only after the complete update succeeds.
    if(!source_anchor&&!ompb.BeginCurrentTransaction())
-      ReturnFalseEx("Stage 02 Current transaction begin");
+     {
+      ReturnFalseEx("Stage 02 Current transaction begin")
+     }
    if(!SkillTrainBatch(position))
      {
       if(source_anchor)
         {
          if(!ompb.SetSourceAnchor(false))
-            ReturnFalseEx("Stage 02 source-anchor cleanup after training failure");
+           {
+            ReturnFalseEx("Stage 02 source-anchor cleanup after training failure")
+           }
         }
       else
         {
          if(!ompb.RollbackCurrentTransaction())
-            ReturnFalseEx("Stage 02 Current rollback after training failure");
+           {
+            ReturnFalseEx("Stage 02 Current rollback after training failure")
+           }
         }
-      ReturnFalseEx("Stage 02 batch training");
+      ReturnFalseEx("Stage 02 batch training")
      }
 
 //--- A source anchor has already created its mean Forecast gradient.  Its
@@ -4716,11 +5145,17 @@ bool ACSRMStage02RunBatch(const int position,const bool source_anchor)
      {
       const bool accepted=ompb.ForwardAccepted();
       if(!ompb.SetSourceAnchor(false))
-         ReturnFalseEx("Stage 02 source-anchor cleanup");
+        {
+         ReturnFalseEx("Stage 02 source-anchor cleanup")
+        }
       if(!accepted)
-         ReturnFalseEx("Stage 02 source-anchor forward rejected");
+        {
+         ReturnFalseEx("Stage 02 source-anchor forward rejected")
+        }
       if(!ompb.UpdateInputWeights(rank_tcm))
-         ReturnFalseEx("Stage 02 source-anchor update");
+        {
+         ReturnFalseEx("Stage 02 source-anchor update")
+        }
 
       return(true);
      }
@@ -4729,27 +5164,34 @@ bool ACSRMStage02RunBatch(const int position,const bool source_anchor)
    if(!ompb.ForwardAccepted())
      {
       if(!ompb.RollbackCurrentTransaction())
-         ReturnFalseEx("Stage 02 Current rollback after rejected forward");
-      ReturnFalseEx("Stage 02 target forward rejected");
+        {
+         ReturnFalseEx("Stage 02 Current rollback after rejected forward")
+        }
+      ReturnFalseEx("Stage 02 target forward rejected")
      }
    if(!ompb.UpdateInputWeights(rank_tcm))
      {
       if(!ompb.RollbackCurrentTransaction())
-         ReturnFalseEx("Stage 02 Current rollback after update failure");
-      ReturnFalseEx("Stage 02 target update");
+        {
+         ReturnFalseEx("Stage 02 Current rollback after update failure")
+        }
+      ReturnFalseEx("Stage 02 target update")
      }
    if(!ompb.CommitCurrentTransaction())
      {
       if(!ompb.RollbackCurrentTransaction())
-         ReturnFalseEx("Stage 02 Current rollback after commit failure");
-      ReturnFalseEx("Stage 02 Current transaction commit");
+        {
+         ReturnFalseEx("Stage 02 Current rollback after commit failure")
+        }
+      ReturnFalseEx("Stage 02 Current transaction commit")
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Stage 02 online calibration. The outer network stays frozen;     |
+//| ACSRMStage02CalibrateEpoch - Stage ACSRM 02 calibrate epoch      |
 //+------------------------------------------------------------------+
+//--- Stage 02 online calibration. The outer network stays frozen;
 //--- only the ACSRM posterior and alpha receive explicit updates.
 bool ACSRMStage02CalibrateEpoch(void)
   {
@@ -4761,7 +5203,7 @@ bool ACSRMStage02CalibrateEpoch(void)
       !ConfigureACSRM(OMPB_CALIBRATE))
      {
       Print("ACSRM_STAGE02_CALIBRATION_FAIL reason=setup");
-      ReturnFalse;
+      ReturnFalse
      }
    SkillMarket.TrainMode(true);
    SkillTarget.TrainMode(false);
@@ -4791,7 +5233,7 @@ bool ACSRMStage02CalibrateEpoch(void)
    if(source_rows==0)
      {
       Print("ACSRM_STAGE02_CALIBRATION_FAIL reason=source_rows");
-      ReturnFalse;
+      ReturnFalse
      }
    ACSRMStage02ShowProgress("calibration",target_attempts,target_quota,target_attempts,
                            target_invalid,false,false,true,true,source_updates,source_attempts,
@@ -4800,21 +5242,29 @@ bool ACSRMStage02CalibrateEpoch(void)
        position>=ACSRMStage02TargetCalibrationLast&&!IsStopped(); position--)
      {
       target_attempts++;
-      uint target_reference_before,target_current_before;
-      uint target_invalid_fallbacks_before,target_kl_rejects_before;
-      float target_disagreement_before,target_kl_before,target_alpha_prior_before;
+      uint target_reference_before;
+      uint target_current_before;
+      uint target_invalid_fallbacks_before;
+      uint target_kl_rejects_before;
+      float target_disagreement_before;
+      float target_kl_before;
+      float target_alpha_prior_before;
       if(!ReadACSRMDiagnostics(target_reference_before,target_current_before,
                               target_disagreement_before,target_kl_before,
                               target_alpha_prior_before,target_invalid_fallbacks_before,
                               target_kl_rejects_before))
         {
          Print("ACSRM_STAGE02_CALIBRATION_FAIL reason=target_diagnostics_before");
-         ReturnFalse;
+         ReturnFalse
         }
       const bool target_committed=ACSRMStage02RunBatch(position,false);
-      uint target_reference_after,target_current_after;
-      uint target_invalid_fallbacks_after,target_kl_rejects_after;
-      float target_disagreement_preupdate,target_kl_preupdate,target_alpha_prior_preupdate;
+      uint target_reference_after;
+      uint target_current_after;
+      uint target_invalid_fallbacks_after;
+      uint target_kl_rejects_after;
+      float target_disagreement_preupdate;
+      float target_kl_preupdate;
+      float target_alpha_prior_preupdate;
       if(!ReadACSRMDiagnostics(target_reference_after,target_current_after,
                               target_disagreement_preupdate,target_kl_preupdate,
                               target_alpha_prior_preupdate,target_invalid_fallbacks_after,
@@ -4823,7 +5273,7 @@ bool ACSRMStage02CalibrateEpoch(void)
          target_kl_rejects_after<target_kl_rejects_before)
         {
          PrintFormat("ACSRM_STAGE02_CALIBRATION_FAIL reason=target_diagnostics_after position=%d",position);
-         ReturnFalse;
+         ReturnFalse
         }
       target_fallbacks_epoch += target_invalid_fallbacks_after-target_invalid_fallbacks_before;
       target_kl_rejects_epoch += target_kl_rejects_after-target_kl_rejects_before;
@@ -4838,7 +5288,7 @@ bool ACSRMStage02CalibrateEpoch(void)
             !ACSRMStage02Finite(target_alpha_prior_preupdate))
            {
             PrintFormat("ACSRM_STAGE02_CALIBRATION_FAIL reason=target_diagnostics position=%d",position);
-            ReturnFalse;
+            ReturnFalse
            }
          if(target_metric_count==0)
            {
@@ -4859,22 +5309,30 @@ bool ACSRMStage02CalibrateEpoch(void)
          if(ACSRMStage02SourcePeriod>0&&target_updates % ACSRMStage02SourcePeriod==0)
            {
             const int source_position=ACSRMStage02ReferenceFirst-int(source_updates % source_rows);
-            uint source_reference_before,source_current_before;
-            uint source_invalid_fallbacks_before,source_kl_rejects_before;
-            float source_disagreement_before,source_kl_before,source_alpha_prior_before;
+            uint source_reference_before;
+            uint source_current_before;
+            uint source_invalid_fallbacks_before;
+            uint source_kl_rejects_before;
+            float source_disagreement_before;
+            float source_kl_before;
+            float source_alpha_prior_before;
             if(!ReadACSRMDiagnostics(source_reference_before,source_current_before,
                                     source_disagreement_before,source_kl_before,
                                     source_alpha_prior_before,source_invalid_fallbacks_before,
                                     source_kl_rejects_before))
               {
                Print("ACSRM_STAGE02_CALIBRATION_FAIL reason=anchor_diagnostics_before");
-               ReturnFalse;
+               ReturnFalse
               }
             source_attempts++;
             const bool source_committed=ACSRMStage02RunBatch(source_position,true);
-            uint source_reference_after,source_current_after;
-            uint source_invalid_fallbacks_after,source_kl_rejects_after;
-            float source_disagreement_after,source_kl_after,source_alpha_prior_after;
+            uint source_reference_after;
+            uint source_current_after;
+            uint source_invalid_fallbacks_after;
+            uint source_kl_rejects_after;
+            float source_disagreement_after;
+            float source_kl_after;
+            float source_alpha_prior_after;
             if(!ReadACSRMDiagnostics(source_reference_after,source_current_after,
                                     source_disagreement_after,source_kl_after,
                                     source_alpha_prior_after,source_invalid_fallbacks_after,
@@ -4883,7 +5341,7 @@ bool ACSRMStage02CalibrateEpoch(void)
                source_kl_rejects_after<source_kl_rejects_before)
               {
                PrintFormat("ACSRM_STAGE02_CALIBRATION_FAIL reason=anchor_diagnostics_after position=%d",source_position);
-               ReturnFalse;
+               ReturnFalse
               }
             source_fallbacks_epoch += source_invalid_fallbacks_after-source_invalid_fallbacks_before;
             source_kl_rejects_epoch += source_kl_rejects_after-source_kl_rejects_before;
@@ -4900,7 +5358,7 @@ bool ACSRMStage02CalibrateEpoch(void)
                   !ACSRMStage02Finite(source_alpha_prior_after))
                  {
                   PrintFormat("ACSRM_STAGE02_CALIBRATION_FAIL reason=anchor_contract position=%d",source_position);
-                  ReturnFalse;
+                  ReturnFalse
                  }
                source_updates++;
               }
@@ -4923,8 +5381,18 @@ bool ACSRMStage02CalibrateEpoch(void)
 
       return(false);
      }
-   double lmix,router,trajectory,confidence,latent,observation;
-   double valid,invalid,entropy,distance,inactive,recovered;
+   double lmix;
+   double router;
+   double trajectory;
+   double confidence;
+   double latent;
+   double observation;
+   double valid;
+   double invalid;
+   double entropy;
+   double distance;
+   double inactive;
+   double recovered;
    if(target_attempts<target_quota||target_updates==0||target_metric_count==0||
       !SkillForecast.BuildEpochCodebookDiagnostics()||
       !SkillForecast.ReadEpochDiagnostics(lmix,router,trajectory,confidence,latent,
@@ -4939,7 +5407,7 @@ bool ACSRMStage02CalibrateEpoch(void)
       ACSRMStage02ShowProgress("calibration",target_attempts,target_quota,target_attempts,
                               target_invalid,true,false,true,true,source_updates,source_attempts,
                               source_invalid,StringFormat("target_updates=%u result=failed",target_updates));
-      ReturnFalse;
+      ReturnFalse
      }
    ACSRMStage02ShowProgress("calibration",target_attempts,target_quota,target_attempts,
                            target_invalid,true,true,true,true,source_updates,source_attempts,
@@ -4966,8 +5434,9 @@ bool ACSRMStage02CalibrateEpoch(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Runs chronological calibration epochs with retained parameters.  |
+//| ACSRMStage02Calibrate - Stage ACSRM 02 calibrate                 |
 //+------------------------------------------------------------------+
+//--- Runs chronological calibration epochs with retained parameters.
 bool ACSRMStage02Calibrate(void)
   {
 //--- clear in the epoch setup retains posterior, alpha and optimizer state.
@@ -4990,18 +5459,21 @@ bool ACSRMStage02Calibrate(void)
    return(!IsStopped()&&ExtACSRMCalibrationEpoch==ExtACSRMCalibrationEpochs);
   }
 //+------------------------------------------------------------------+
-//| Creates the Stage 02 reference study fixtures.                   |
+//| CreateACSRMStage02ReferenceStudy - Create                        |
 //+------------------------------------------------------------------+
+//--- Creates the Stage 02 reference study fixtures.
 bool CreateACSRMStage02ReferenceStudy(const datetime reference_start,const datetime reference_end,
-                                     const datetime calibration_start,const datetime calibration_end,
-                                     const uint anchor_period,const float tau_value,
-                                     const float lambda_dis,const float lambda_kl,
-                                     const float lambda_alpha,const float alpha_prior,
-                                     const float max_kl,const bool smoke,const uint smoke_limit,
-                                     const uint calibration_epochs=1)
+                                      const datetime calibration_start,const datetime calibration_end,
+                                      const uint anchor_period,const float tau_value,
+                                      const float lambda_dis,const float lambda_kl,
+                                      const float lambda_alpha,const float alpha_prior,
+                                      const float max_kl,const bool smoke,const uint smoke_limit,
+                                      const uint calibration_epochs=1)
   {
    if(calibration_epochs==0)
-      ReturnFalseEx("calibration epochs is zero");
+     {
+      ReturnFalseEx("calibration epochs is zero")
+     }
    ExtACSRMCalibrationEpochs=(smoke ? 1 : calibration_epochs);
    ExtACSRMCalibrationEpoch=0;
    ACSRMStage02SignaturesCaptured=false;
@@ -5017,7 +5489,7 @@ bool CreateACSRMStage02ReferenceStudy(const datetime reference_start,const datet
    if(!SkillLoadForecastTraining())
      {
       PrintFormat("ACSRM_STAGE02_PREFLIGHT_FAIL reason=stage01_checkpoint error=%d",GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    CNeuronBaseOCL *rank_tcm=SkillMarket.Layer(4);
    CNeuronBaseOCL *ompb_layer=SkillMarket.Layer(5);
@@ -5030,12 +5502,14 @@ bool CreateACSRMStage02ReferenceStudy(const datetime reference_start,const datet
       !SkillForecast.SetGradientNormalization(true))
      {
       Print("ACSRM_STAGE02_PREFLIGHT_FAIL reason=loaded_contract");
-      ReturnFalse;
+      ReturnFalse
      }
    if(!ACSRMStage02Configure(reference_start,reference_end,calibration_start,calibration_end,
                             anchor_period,tau_value,lambda_dis,lambda_kl,lambda_alpha,
                             alpha_prior,max_kl,smoke,smoke_limit))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    SkillTarget.TrainMode(false);
    SkillMarket.TrainMode(true);
    GetACSRM().TrainMode(false);
@@ -5044,15 +5518,16 @@ bool CreateACSRMStage02ReferenceStudy(const datetime reference_start,const datet
      {
       PrintFormat("ACSRM_STAGE02_PREFLIGHT_FAIL reason=chart_event error=%d",GetLastError());
       SkillReady=false;
-      ReturnFalse;
+      ReturnFalse
      }
    Print("ACSRM_STAGE02_CHECKPOINT_PASS mode=load_only production_save=forbidden");
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Runs the Stage 02 reference study end to end.                    |
+//| RunACSRMStage02ReferenceStudy - Run stage 02 reference study     |
 //+------------------------------------------------------------------+
+//--- Runs the Stage 02 reference study end to end.
 void RunACSRMStage02ReferenceStudy(void)
   {
    ACSRMStage02ShowProgress("preparing",0,1,0,0,false,false,false,false,
@@ -5081,7 +5556,10 @@ void RunACSRMStage02ReferenceStudy(void)
       return;
      }
    double source_loss=0.0,target_loss=0.0;
-   uint source_valid,source_invalid,target_valid,target_invalid;
+   uint source_valid;
+   uint source_invalid;
+   uint target_valid;
+   uint target_invalid;
    const bool source_ok=ACSRMStage02Baseline(ACSRMStage02SourceEvalFirst,
                           ACSRMStage02SourceEvalLast,"source_eval",
                           source_loss,source_valid,source_invalid);
@@ -5304,7 +5782,7 @@ void RunACSRMStage02ReferenceStudy(void)
    ExpertRemove();
   }
 //+------------------------------------------------------------------+
-//| Creates or initializes SkillForecastStudy.                       |
+//| CreateSkillForecastStudy - Create skill forecast study           |
 //+------------------------------------------------------------------+
 bool CreateSkillForecastStudy(void)
   {
@@ -5324,7 +5802,7 @@ bool CreateSkillForecastStudy(void)
       if(ACSRMStage02RecoveryFailed)
         {
          Print("ACSRM checkpoint recovery=FAIL before=training_create fail_closed=true");
-         ReturnFalse;
+         ReturnFalse
         }
       const int load_error=GetLastError();
       SkillForecast=NULL;
@@ -5335,7 +5813,7 @@ bool CreateSkillForecastStudy(void)
       if(!SkillCreateNetworks())
         {
          PrintFormat("%s init: forecast create=FAIL error=%d",ACSRM_LOG_PREFIX,GetLastError());
-         ReturnFalse;
+         ReturnFalse
         }
      }
 
@@ -5343,19 +5821,21 @@ bool CreateSkillForecastStudy(void)
    if(!SkillValidateShapes())
      {
       PrintFormat("%s init: shapes=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- stage 01 keeps ACSRM a non-trainable identity bridge.  Its posterior,
 //--- alpha and both histories remain untouched while ScenarioForecast trains.
    CNeuronOMPBOCL *ompb=GetACSRM();
    if(!ompb||!ConfigureACSRM(OMPB_BYPASS))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    ompb.TrainMode(false);
    if(!SkillInitIndicators())
      {
       PrintFormat("%s init: indicators=FAIL error=%d",ACSRM_LOG_PREFIX,GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
    PrintFormat("%s init: forecast=%s completed_epochs=%u batches=%I64u invalid=%I64u",ACSRM_LOG_PREFIX,
                (resumed ? "RESUMED" : "NEW"),SkillCompletedEpochs,SkillBatches,SkillInvalidBatches);
@@ -5365,13 +5845,13 @@ bool CreateSkillForecastStudy(void)
    if(!EventChartCustom(ChartID(),1,0,0,"Init"))
      {
       PrintFormat("%s init: chart event=FAIL error=%d",ACSRM_LOG_PREFIX,GetLastError());
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements ReleaseSkillForecastStudy.                            |
+//| ReleaseSkillForecastStudy - Release skill forecast study         |
 //+------------------------------------------------------------------+
 void ReleaseSkillForecastStudy(const int reason)
   {
@@ -5389,17 +5869,23 @@ bool SkillPrepareLatentTarget(CBufferFloat *market_latent)
       SkillFuture.Total()!=(NForecast * BarDescr)||SkillFuture.GetIndex()<0||
       SkillLatentTarget.Total()!=(BarDescr * NForecast * EmbeddingSize)||SkillLatentTarget.GetIndex()<0||
       SkillLatentDelta.Total()!=(BarDescr * NForecast * EmbeddingSize)||SkillLatentDelta.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- skillFuture is decoder-native [H,B].  The existing transpose changes
 //--- only this device layout to Target-native [B,H]; Market keeps its original
 //--- [BarDescr,HistoryBars] representation and is never transposed.
    if(!SkillFutureView.Bind(GetPointer(SkillFuture)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool transposed=SkillFutureTranspose.FeedForward(SkillFutureView.AsObject());
    SkillFutureView.Unbind();
    if(!transposed)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *target_input=SkillTarget.Layer(0);
    CNeuronBaseOCL *future_latent=SkillTarget.Layer(-1);
    if(!target_input||target_input.getOutput().Total()!=(BarDescr * NForecast)||
@@ -5407,10 +5893,14 @@ bool SkillPrepareLatentTarget(CBufferFloat *market_latent)
       !SkillDevice.Copy(SkillFutureTranspose.getOutput(),target_input.getOutput(),
                           BarDescr * NForecast)||
       !SkillTarget.feedForward(GetPointer(SkillTarget),0,(CBufferFloat*)NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!future_latent||future_latent.getOutput().Total()!=(BarDescr * NForecast * EmbeddingSize)||
       future_latent.getOutputIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- forecast loss compares full future Z against full generator Z. Codebook
 //--- EMA alone receives the detached delta future-current.
@@ -5418,11 +5908,15 @@ bool SkillPrepareLatentTarget(CBufferFloat *market_latent)
                           BarDescr * NForecast * EmbeddingSize)||
       !SkillDevice.Subtract(GetPointer(SkillLatentZero),market_latent,
                               GetPointer(SkillLatentNegativeMarket),EmbeddingSize))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillDevice.BroadcastSum(GetPointer(SkillLatentNegativeMarket),
                                   future_latent.getOutput(),GetPointer(SkillLatentDelta),
                                   EmbeddingSize,BarDescr))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -5432,13 +5926,17 @@ bool SkillPrepareLatentTarget(CBufferFloat *market_latent)
 bool SkillProbeNet(CNet &net,CBufferFloat *probe_state,double &latent[],const bool restore_training)
   {
    if(!probe_state||ArrayResize(latent,(BarDescr * EmbeddingSize))!=(BarDescr * EmbeddingSize))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- measure both epoch boundaries in inference mode from an empty recurrent
 //--- state.  Clear again afterwards so the diagnostic forward cannot seed the
 //--- first training batch or inherit the final training batch state.
    if(!net.TrainMode(false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bool result=net.Clear();
    if(result)
       result=net.feedForward(probe_state,1,false,(CBufferFloat*)NULL);
@@ -5496,15 +5994,18 @@ string FormatScenarioCounts(const uint &counts[])
    return(result+"]");
   }
 //+------------------------------------------------------------------+
-//| Smoke-only responsibility audit; all tensor reads are host-side  |
+//| SkillCollectRecoverySmoke - Collect skill recovery smoke         |
 //+------------------------------------------------------------------+
+//--- Smoke-only responsibility audit; all tensor reads are host-side
 bool SkillCollectRecoverySmoke(ulong &hits[],double &responsibility_sum[],double &scale_sum[],
-                                 double &absolute_sum[],double &absolute_over_scale_sum[])
+                               double &absolute_sum[],double &absolute_over_scale_sum[])
   {
    if(!SkillForecast||ArraySize(hits)!=NScenarios||ArraySize(responsibility_sum)!=NScenarios||
       ArraySize(scale_sum)!=NScenarios||ArraySize(absolute_sum)!=NScenarios||
       ArraySize(absolute_over_scale_sum)!=NScenarios)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *responsibilities=SkillForecast.GetResponsibilities();
    CBufferFloat *confidence=SkillForecast.GetConfidence();
    CBufferFloat *target=SkillForecast.GetTarget();
@@ -5515,12 +6016,16 @@ bool SkillCollectRecoverySmoke(ulong &hits[],double &responsibility_sum[],double
       confidence.Total()!=confidence_total||target.Total()!=target_total||
       forecast.Total()!=NScenarios * target_total||!responsibilities.BufferRead()||!confidence.BufferRead()||
       !target.BufferRead()||!forecast.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint scenario=0; scenario<NScenarios; scenario++)
      {
       const double responsibility=responsibilities[scenario];
       if(!MathIsValidNumber(responsibility)||responsibility<0.0)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(responsibility>0.0)
          hits[scenario]++;
       responsibility_sum[scenario] += responsibility;
@@ -5533,7 +6038,9 @@ bool SkillCollectRecoverySmoke(ulong &hits[],double &responsibility_sum[],double
          const double absolute_error=MathAbs(target[coordinate]-
                                                forecast[int(scenario) * target_total+coordinate]);
          if(!MathIsValidNumber(scale)||!MathIsValidNumber(absolute_error))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          scale_sum[scenario] += responsibility * scale;
          absolute_sum[scenario] += responsibility * absolute_error;
          absolute_over_scale_sum[scenario] += responsibility * absolute_error / scale;
@@ -5543,21 +6050,26 @@ bool SkillCollectRecoverySmoke(ulong &hits[],double &responsibility_sum[],double
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Logs the recovery-smoke responsibility and scale statistics.     |
+//| SkillLogRecoverySmoke - Log skill recovery smoke                 |
 //+------------------------------------------------------------------+
+//--- Logs the recovery-smoke responsibility and scale statistics.
 bool SkillLogRecoverySmoke(const ulong &hits[],const double &responsibility_sum[],
-                             const double &scale_sum[],const double &absolute_sum[],
-                             const double &absolute_over_scale_sum[],
-                             const uint &recovered[],const uint &age_zero[])
+                           const double &scale_sum[],const double &absolute_sum[],
+                           const double &absolute_over_scale_sum[],
+                           const uint &recovered[],const uint &age_zero[])
   {
    if(!SkillForecast||ArraySize(hits)!=NScenarios||ArraySize(responsibility_sum)!=NScenarios||
       ArraySize(scale_sum)!=NScenarios||ArraySize(absolute_sum)!=NScenarios||
       ArraySize(absolute_over_scale_sum)!=NScenarios||
       ArraySize(recovered)!=NScenarios||ArraySize(age_zero)!=NScenarios)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CScenarioCodebook *codebook=SkillForecast.GetCodebook();
    if(!codebook)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *ages=codebook.GetInactivityAge();
    CBufferFloat *counts=codebook.GetEMACounts();
    CBufferFloat *usage=codebook.GetUsage();
@@ -5565,12 +6077,16 @@ bool SkillLogRecoverySmoke(const ulong &hits[],const double &responsibility_sum[
    if(!ages||!counts||!usage||!inactive||ages.Total()!=NScenarios||counts.Total()!=NScenarios||
       usage.Total()!=NScenarios||inactive.Total()!=NScenarios||!ages.BufferRead()||!counts.BufferRead()||
       !usage.BufferRead()||!inactive.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint scenario=0; scenario<NScenarios; scenario++)
      {
       if(!MathIsValidNumber(ages[scenario])||!MathIsValidNumber(counts[scenario])||
          !MathIsValidNumber(usage[scenario])||!MathIsValidNumber(inactive[scenario]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       const double denominator=responsibility_sum[scenario] * double(BarDescr * NForecast * EmbeddingSize);
       const double mean_scale=(denominator>0.0 ? scale_sum[scenario] / denominator : 0.0);
       const double mean_absolute=(denominator>0.0 ? absolute_sum[scenario] / denominator : 0.0);
@@ -5595,9 +6111,13 @@ bool SkillTrainBatch(const int position)
 //--- build exactly the same X<=t state as CreateBuffers(position,...,future),
 //--- but do not touch any future sample until Market and Scenario are complete.
    if(!CreateBuffers(position+NForecast,GetPointer(SkillState),GetPointer(SkillTime),NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillMarket.feedForward(GetPointer(SkillState),1,false,(CBufferFloat*)NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- target supervision remains bound to raw RankTCM z_t.  ACSRM sits between
 //--- it and ScenarioForecast, so relative indexing would select the bridge.
@@ -5605,13 +6125,19 @@ bool SkillTrainBatch(const int position)
    CBufferFloat   *market_latent=(market_layer ? market_layer.getOutput() : NULL);
    if(!market_latent||
       market_latent.Total()!=(BarDescr * EmbeddingSize)||market_latent.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- only now is any future window presented to the detached Target Encoder.
    if(!CreateBuffers(position,GetPointer(SkillState),GetPointer(SkillTime),GetPointer(SkillFuture)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillPrepareLatentTarget(market_latent))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const ulong responsibility_started=GetMicrosecondCount();
 
 //--- function if.
@@ -5621,26 +6147,41 @@ bool SkillTrainBatch(const int position)
    //--- the transient control-valid flag false, so stale batch_control is ignored.
       if(SkillForecast.LastBatchControlValid()&&!SkillForecast.CommitBatchDiagnostics())
          PrintFormat("%s -> %d invalid diagnostic commit failed",__FUNCTION__,__LINE__);
-      ReturnFalse;
+      ReturnFalse
      }
    const ulong responsibility_elapsed=GetMicrosecondCount()-responsibility_started;
    if(!SkillForecast.CommitBatchDiagnostics())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- the unified CNet updates ScenarioForecast and all preceding Market layers.
    if(!SkillMarket.backPropGradient((CBufferFloat*)NULL,(CBufferFloat*)NULL,-1,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    SkillResponsibilityMicroseconds += responsibility_elapsed;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Current-epoch progress uses the existing 12-float device summ... |
+//| SkillShowForecastProgress - Show skill forecast progress         |
 //+------------------------------------------------------------------+
+//--- Current-epoch progress uses the existing 12-float device summ...
 void SkillShowForecastProgress(const double percent,const ulong failed_batches)
   {
-   double lmix,router,trajectory,confidence,latent,observation;
-   double valid,invalid,entropy,distance,inactive,recovered;
+   double lmix;
+   double router;
+   double trajectory;
+   double confidence;
+   double latent;
+   double observation;
+   double valid;
+   double invalid;
+   double entropy;
+   double distance;
+   double inactive;
+   double recovered;
    if(SkillForecast&&SkillForecast.ReadEpochDiagnostics(lmix,router,trajectory,confidence,
          latent,observation,valid,invalid,entropy,distance,inactive,recovered)&&valid>0.0)
      {
@@ -5656,7 +6197,7 @@ void SkillShowForecastProgress(const double percent,const ulong failed_batches)
 //+------------------------------------------------------------------+
 #ifndef Online
 //+------------------------------------------------------------------+
-//| TrainSkillForecast                                               |
+//| TrainSkillForecast - Train skill forecast                        |
 //+------------------------------------------------------------------+
 void TrainSkillForecast(void)
   {
@@ -5668,7 +6209,10 @@ void TrainSkillForecast(void)
    int bars=CopyRates(Symb.Name(),TimeFrame,0,start,Rates);
    if(bars<=0||!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-     { PrintFormat("%s -> %d",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
+      return;
+     }
    int  wait=-1;
    bool calculated=false;
    do
@@ -5680,16 +6224,25 @@ void TrainSkillForecast(void)
      }
    while(!calculated&&wait<100);
    if(!calculated)
-     { PrintFormat("%s -> %d data unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d data unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
    if(!ArraySetAsSeries(Rates,true))
-     { PrintFormat("%s -> %d data unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d data unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    bars -= end+HistoryBars+NForecast;
    if(bars<0)
-     { PrintFormat("%s -> %d insufficient history",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d insufficient history",__FUNCTION__,__LINE__);
+      return;
+     }
 
 //--- with a forecast buffer CreateBuffers(position,...) starts Market state at
 //--- position+H.  Reproduce that exact X<=t mapping with NULL, which also keeps
@@ -5699,7 +6252,10 @@ void TrainSkillForecast(void)
 
 //--- gets Pointer.
                      GetPointer(SkillProbeTime),NULL))
-     { PrintFormat("%s -> %d fixed probe unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d fixed probe unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    uint        ticks=GetTickCount();
    bool        stop=false;
    const uint  passes=(SkillRecoverySmoke ? 1 : uint(MathMax(Epochs,0)));
@@ -5722,24 +6278,42 @@ void TrainSkillForecast(void)
 
    //--- all temporary smoke buffers must resize to NScenarios.
           ArrayResize(smoke_absolute_over_scale_sum,NScenarios)!=NScenarios))
-        { PrintFormat("%s -> %d smoke counter allocation failed",__FUNCTION__,__LINE__); break; }
+        {
+         PrintFormat("%s -> %d smoke counter allocation failed",__FUNCTION__,__LINE__);
+         break;
+        }
       ArrayInitialize(smoke_hits,0);
       ArrayInitialize(smoke_responsibility_sum,0.0);
       ArrayInitialize(smoke_scale_sum,0.0);
       ArrayInitialize(smoke_absolute_sum,0.0);
       ArrayInitialize(smoke_absolute_over_scale_sum,0.0);
       if(!SkillMarket.Clear()||!SkillTarget.Clear())
-        { PrintFormat("%s -> %d clear failed",__FUNCTION__,__LINE__); break; }
+        {
+         PrintFormat("%s -> %d clear failed",__FUNCTION__,__LINE__);
+         break;
+        }
       SkillTarget.TrainMode(false);
       double latent_before[],latent_after[];
       if(!SkillProbeNet(SkillMarket,GetPointer(SkillProbeState),latent_before,true)||
          !ConfigureACSRM(OMPB_BYPASS))
-        { PrintFormat("%s -> %d fixed probe forward failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d fixed probe forward failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       if(!SkillForecast.ResetEpochDiagnostics())
-        { PrintFormat("%s -> %d diagnostic reset failed",__FUNCTION__,__LINE__); stop=true; break; }
-      uint ompb_reference_count_before,ompb_current_count_before;
-      uint ompb_invalid_fallbacks_before,ompb_kl_rejects_before;
-      float ompb_disagreement_before,ompb_kl_before,ompb_alpha_prior_before;
+        {
+         PrintFormat("%s -> %d diagnostic reset failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
+      uint ompb_reference_count_before;
+      uint ompb_current_count_before;
+      uint ompb_invalid_fallbacks_before;
+      uint ompb_kl_rejects_before;
+      float ompb_disagreement_before;
+      float ompb_kl_before;
+      float ompb_alpha_prior_before;
       if(!ReadACSRMDiagnostics(ompb_reference_count_before,ompb_current_count_before,
                               ompb_disagreement_before,ompb_kl_before,
                               ompb_alpha_prior_before,ompb_invalid_fallbacks_before,
@@ -5776,7 +6350,11 @@ void TrainSkillForecast(void)
            {
             if(!SkillCollectRecoverySmoke(smoke_hits,smoke_responsibility_sum,smoke_scale_sum,
                                             smoke_absolute_sum,smoke_absolute_over_scale_sum))
-              { PrintFormat("%s -> %d smoke responsibility read failed",__FUNCTION__,__LINE__); stop=true; break; }
+              {
+               PrintFormat("%s -> %d smoke responsibility read failed",__FUNCTION__,__LINE__);
+               stop=true;
+               break;
+              }
             smoke_batches++;
             if(smoke_batches>=smoke_limit)
                break;
@@ -5793,12 +6371,26 @@ void TrainSkillForecast(void)
             ticks=GetTickCount();
            }
         }
-      double lmix,lrouter,ltrajectory,lconfidence,latent,observation;
-      double valid_value,invalid_value,entropy,distance,inactive_value,recovered_value;
+      double lmix;
+      double lrouter;
+      double ltrajectory;
+      double lconfidence;
+      double latent;
+      double observation;
+      double valid_value;
+      double invalid_value;
+      double entropy;
+      double distance;
+      double inactive_value;
+      double recovered_value;
       if(!SkillForecast.BuildEpochCodebookDiagnostics()||
          !SkillForecast.ReadEpochDiagnostics(lmix,lrouter,ltrajectory,lconfidence,latent,observation,
                valid_value,invalid_value,entropy,distance,inactive_value,recovered_value))
-        { PrintFormat("%s -> %d diagnostic read failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d diagnostic read failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       const ulong valid=(ulong)MathRound(valid_value);
       const ulong invalid=(ulong)MathRound(invalid_value);
       const uint  inactive=(uint)MathRound(inactive_value);
@@ -5806,9 +6398,17 @@ void TrainSkillForecast(void)
       uint        recovered_by_scenario[];
       uint        age_zero_by_scenario[];
       if(!SkillForecast.ReadEpochRecoveryEvents(recovered_by_scenario))
-        { PrintFormat("%s -> %d recovery-event read failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d recovery-event read failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       if(!SkillForecast.ReadEpochAgeZeroEvents(age_zero_by_scenario))
-        { PrintFormat("%s -> %d age-zero-event read failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d age-zero-event read failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       ulong recovery_sum=0;
       for(int i=0; i<ArraySize(recovered_by_scenario); i++)
          recovery_sum += recovered_by_scenario[i];
@@ -5829,18 +6429,28 @@ void TrainSkillForecast(void)
       SkillBatches += valid;
       SkillInvalidBatches += invalid;
       if(valid==0)
-        { stop=true; break; }
+        {
+         stop=true;
+         break;
+        }
       if(!SkillCheckACSRMBypassInvariant(ompb_reference_count_before,ompb_current_count_before,
                                           ompb_disagreement_before,ompb_kl_before,ompb_alpha_prior_before,
                                           ompb_invalid_fallbacks_before,ompb_kl_rejects_before,
                                           StringFormat("epoch-%u",epoch+1)))
-        { stop=true; break; }
+        {
+         stop=true;
+         break;
+        }
 
    //--- target is an independently initialized inference-only encoder.  It is
    //--- never copied from Market and is absent from every backward/update path.
       if(!SkillProbeNet(SkillMarket,GetPointer(SkillProbeState),latent_after,true)||
          !ConfigureACSRM(OMPB_BYPASS))
-        { PrintFormat("%s -> %d Market epoch probe failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d Market epoch probe failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       const double latent_drift=SkillProbeDrift(latent_before,latent_after);
       PrintFormat("%s epoch=%d batches=%I64u L_mix=%.8f L_router=%.8f L_trajectory=%.8f "+
                   "L_confidence=%.8f NLL_confidence=%.8f usage_entropy=%.8f "+
@@ -5854,9 +6464,17 @@ void TrainSkillForecast(void)
       if(SkillRecoverySmoke&&!SkillLogRecoverySmoke(smoke_hits,smoke_responsibility_sum,smoke_scale_sum,
             smoke_absolute_sum,smoke_absolute_over_scale_sum,
             recovered_by_scenario,age_zero_by_scenario))
-        { PrintFormat("%s -> %d smoke state log failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d smoke state log failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       if(!SkillRecoverySmoke&&!SkillSaveCheckpoint(epoch+1))
-        { PrintFormat("%s -> %d checkpoint failed",__FUNCTION__,__LINE__); stop=true; break; }
+        {
+         PrintFormat("%s -> %d checkpoint failed",__FUNCTION__,__LINE__);
+         stop=true;
+         break;
+        }
       if(SkillRecoverySmoke)
          PrintFormat("%s smoke complete valid=%I64u recovery_age=%u checkpoint=SKIPPED",ACSRM_LOG_PREFIX,valid,
                      SkillForecast.RecoveryAge());
@@ -5878,8 +6496,9 @@ void TrainSkillForecast(void)
   }
 #endif
 //+------------------------------------------------------------------+
-//| Actor-Critic inference and composition helpers Implements ORI... |
+//| SkillManifestValue - Return the skill manifest value             |
 //+------------------------------------------------------------------+
+//--- Actor-Critic inference and composition helpers Implements ORI...
 string SkillManifestValue(const string file_name,const string key)
   {
    int handle=FileOpen(file_name,FILE_READ | FILE_TXT | FILE_ANSI | FILE_COMMON | FILE_SHARE_READ);
@@ -5905,7 +6524,7 @@ string SkillManifestValue(const string file_name,const string key)
    return(value);
   }
 //+------------------------------------------------------------------+
-//| Implements SkillValidateForecastManifestHeader. Static checkp... |
+//| SkillValidateForecastManifestHeader - Validate                   |
 //+------------------------------------------------------------------+
 bool SkillValidateForecastManifestHeader(void)
   {
@@ -5928,14 +6547,18 @@ bool SkillValidateForecastManifestHeader(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements SkillValidateForecastManifest.                        |
+//| SkillValidateForecastManifest - Validate skill forecast manifest |
 //+------------------------------------------------------------------+
 bool SkillValidateForecastManifest(const ulong signature,const bool training=false)
   {
    if(signature==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillValidateForecastManifestHeader())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #define Skill_MANIFEST_EQ(KEY,VALUE) if(SkillManifestValue(SkillActiveManifestFile,KEY)!=(VALUE)) ReturnFalse
    Skill_MANIFEST_EQ("contract_signature",StringFormat("%I64u",SkillForecast.ContractSignature()));
    Skill_MANIFEST_EQ("forecast_signature",StringFormat("%I64u",signature));
@@ -5951,7 +6574,9 @@ bool SkillValidateForecastManifest(const ulong signature,const bool training=fal
          SkillManifestValue(SkillActiveManifestFile,"completed_epochs")==""||
          SkillManifestValue(SkillActiveManifestFile,"training_batches")==""||
          SkillManifestValue(SkillActiveManifestFile,"invalid_batches")=="")
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 #undef Skill_MANIFEST_EQ
    return(true);
@@ -5969,22 +6594,28 @@ bool SkillCaptureFrozenBuffer(CBufferFloat *source,CBufferFloat &baseline)
 bool SkillFrozenBufferEqual(CBufferFloat *source,CBufferFloat &baseline)
   {
    if(!source||!source.BufferRead()||source.Total()!=baseline.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<source.Total(); i++)
       if(source[i]!=baseline[i])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements SkillCaptureFrozenForecastBaseline.                   |
+//| SkillCaptureFrozenForecastBaseline - Capture                     |
 //+------------------------------------------------------------------+
 bool SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast=NULL)
   {
    CNeuronScenarioForecast *current=(forecast ? forecast : SkillForecast);
    SkillFrozenBaselineReady=false;
    if(!current||!current.GetCodebook())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *generator=current.GetGenerator().GetWeightsConv();
    CBufferFloat *router=current.GetRouter().GetWeightsConv();
    CBufferFloat *confidence=current.GetConfidenceHead().GetWeightsConv();
@@ -6001,19 +6632,23 @@ bool SkillCaptureFrozenForecastBaseline(CNeuronScenarioForecast *forecast=NULL)
       !SkillCaptureFrozenBuffer(current.GetCodebook().GetUsage(),SkillFrozenUsage)||
       !SkillCaptureFrozenBuffer(current.GetCodebook().GetInactive(),SkillFrozenInactive)||
       !SkillCaptureFrozenBuffer(current.GetCodebook().GetInactivityAge(),SkillFrozenInactivityAge))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    SkillFrozenBaselineReady=true;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements SkillVerifyFrozenWeightsExact.                        |
+//| SkillVerifyFrozenWeightsExact - Verify                           |
 //+------------------------------------------------------------------+
 bool SkillVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast=NULL)
   {
    CNeuronScenarioForecast *current=(forecast ? forecast : SkillForecast);
    if(!SkillFrozenBaselineReady||!current)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *generator=current.GetGenerator().GetWeightsConv();
    CBufferFloat *router=current.GetRouter().GetWeightsConv();
    CBufferFloat *confidence=current.GetConfidenceHead().GetWeightsConv();
@@ -6026,13 +6661,15 @@ bool SkillVerifyFrozenWeightsExact(CNeuronScenarioForecast *forecast=NULL)
            SkillFrozenBufferEqual(confidence,SkillFrozenConfidenceWeights));
   }
 //+------------------------------------------------------------------+
-//| Implements SkillVerifyFrozenCodebookExact.                       |
+//| SkillVerifyFrozenCodebookExact - Verify                          |
 //+------------------------------------------------------------------+
 bool SkillVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast=NULL)
   {
    CNeuronScenarioForecast *current=(forecast ? forecast : SkillForecast);
    if(!SkillFrozenBaselineReady||!current||!current.GetCodebook())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(SkillFrozenBufferEqual(current.GetCodebook().GetPrototypes(),SkillFrozenPrototypes)&&
            SkillFrozenBufferEqual(current.GetCodebook().GetEMASums(),SkillFrozenEMASums)&&
            SkillFrozenBufferEqual(current.GetCodebook().GetEMACounts(),SkillFrozenEMACounts)&&
@@ -6041,14 +6678,14 @@ bool SkillVerifyFrozenCodebookExact(CNeuronScenarioForecast *forecast=NULL)
            SkillFrozenBufferEqual(current.GetCodebook().GetInactivityAge(),SkillFrozenInactivityAge));
   }
 //+------------------------------------------------------------------+
-//| Implements SkillVerifyFrozenForecastExact.                       |
+//| SkillVerifyFrozenForecastExact - Verify                          |
 //+------------------------------------------------------------------+
 bool SkillVerifyFrozenForecastExact(CNeuronScenarioForecast *forecast=NULL)
   {
    return(SkillVerifyFrozenWeightsExact(forecast)&&SkillVerifyFrozenCodebookExact(forecast));
   }
 //+------------------------------------------------------------------+
-//| Implements SkillLoadForecastInference.                           |
+//| SkillLoadForecastInference - Load skill forecast inference       |
 //+------------------------------------------------------------------+
 bool SkillLoadForecastInference(void)
   {
@@ -6057,7 +6694,7 @@ bool SkillLoadForecastInference(void)
    if(!ACSRMStage02ResolveActiveCheckpoint(false))
      {
       Print("ACSRM checkpoint selector=FAIL before=inference_load");
-      ReturnFalse;
+      ReturnFalse
      }
    float    error=0,undefine=0,forecast=0;
    datetime studied=0;
@@ -6066,7 +6703,7 @@ bool SkillLoadForecastInference(void)
    if(!SkillMarket.Load(SkillActiveMarketFile,error,undefine,forecast,studied,true))
      {
       PrintFormat("%s inference: model load=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
    SkillForecast=(CNeuronScenarioForecast*)SkillMarket.Layer(-1);
 
@@ -6074,23 +6711,25 @@ bool SkillLoadForecastInference(void)
    if(!SkillForecast||SkillForecast.Type()!=defNeuronScenarioForecast)
      {
       PrintFormat("%s inference: forecast layer=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
    if(!ConfigureForecastRecoveryAge())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- function if.
    if(SkillForecast.GetTopK()!=TopK)
      {
       PrintFormat("%s inference: TopK expected=%d actual=%d",ACSRM_LOG_PREFIX,TopK,SkillForecast.GetTopK());
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- only the Market/Forecast path. Target and its future-window b...
    if(!SkillValidateShapes(false))
      {
       PrintFormat("%s inference: shape audit=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
    SkillMarket.TrainMode(false);
    const ulong signature=SkillForecastSignature();
@@ -6099,65 +6738,82 @@ bool SkillLoadForecastInference(void)
    if(!SkillValidateForecastManifest(signature))
      {
       PrintFormat("%s inference: manifest=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(!SkillCaptureFrozenForecastBaseline())
      {
       PrintFormat("%s inference: frozen baseline=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
    SkillLastSignature=signature;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Full forecast-training restore. Target is required here becau... |
+//| SkillLoadForecastTraining - Load skill forecast training         |
 //+------------------------------------------------------------------+
+//--- Full forecast-training restore. Target is required here becau...
 bool SkillLoadForecastTraining(void)
   {
    if(!ACSRMStage02ResolveActiveCheckpoint())
      {
       Print("ACSRM checkpoint selector=FAIL before=training_load");
-      ReturnFalse;
+      ReturnFalse
      }
    if(!FileIsExist(SkillActiveManifestFile,FILE_COMMON)||
       !FileIsExist(SkillActiveMarketFile,FILE_COMMON)||
       !FileIsExist(SkillActiveTargetFile,FILE_COMMON))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- avoid a partial CNet::Load before the fallback random graph i...
    if(!SkillValidateForecastManifestHeader())
      {
       PrintFormat("%s restore: manifest static contract=FAIL",ACSRM_LOG_PREFIX);
-      ReturnFalse;
+      ReturnFalse
      }
    float    error=0,undefine=0,forecast=0;
    datetime studied=0;
    if(!SkillMarket.Load(SkillActiveMarketFile,error,undefine,forecast,studied,true)||
       !SkillTarget.Load(SkillActiveTargetFile,error,undefine,forecast,studied,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillTarget.SetOpenCLChecked(SkillMarket.GetOpenCL()))
-      ReturnFalseEx("target OpenCL transfer failed");
+     {
+      ReturnFalseEx("target OpenCL transfer failed")
+     }
    SkillForecast=(CNeuronScenarioForecast*)SkillMarket.Layer(-1);
    if(!SkillForecast||SkillForecast.Type()!=defNeuronScenarioForecast)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!ConfigureForecastRecoveryAge())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- these are transient training tensors and are intentionally absent from
 //--- *.nnw. Recreate them before the common shape audit.
    if(!SkillInitTrainingBuffers()||!SkillValidateShapes())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const ulong signature=SkillForecastSignature();
    if(!SkillValidateForecastManifest(signature,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const string completed=SkillManifestValue(SkillActiveManifestFile,"completed_epochs");
    const string batches=SkillManifestValue(SkillActiveManifestFile,"training_batches");
    const string invalid=SkillManifestValue(SkillActiveManifestFile,"invalid_batches");
    if(completed==""||batches==""||invalid=="")
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    SkillCompletedEpochs=(uint)StringToInteger(completed);
    SkillBatches=(ulong)StringToInteger(batches);
    SkillInvalidBatches=(ulong)StringToInteger(invalid);
@@ -6168,8 +6824,9 @@ bool SkillLoadForecastTraining(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Configures the loaded Stage 02 graph for frozen Stage 03 use.    |
+//| SkillConfigureProductionACSRMCheckpoint - Configure              |
 //+------------------------------------------------------------------+
+//--- Configures the loaded Stage 02 graph for frozen Stage 03 use.
 bool SkillConfigureProductionACSRMCheckpoint(void)
   {
    CNeuronOMPBOCL          *ompb=GetACSRM();
@@ -6177,7 +6834,9 @@ bool SkillConfigureProductionACSRMCheckpoint(void)
    if(!ompb||!forecast||!SetACSRMMode(OMPB_INFERENCE)||
       !SkillMarket.SetWeightsUpdate(false)||
       !forecast.SetCodebookUpdate(false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    SkillMarket.TrainMode(false);
    ompb.TrainMode(false);
    forecast.TrainMode(false);
@@ -6185,8 +6844,9 @@ bool SkillConfigureProductionACSRMCheckpoint(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Checks the strict published Stage 02 contract before Stage 03.   |
+//| SkillValidateProductionACSRMCheckpoint - Validate                |
 //+------------------------------------------------------------------+
+//--- Checks the strict published Stage 02 contract before Stage 03.
 bool SkillValidateProductionACSRMCheckpoint(void)
   {
    const string            checkpoint="canonical";
@@ -6216,7 +6876,7 @@ bool SkillValidateProductionACSRMCheckpoint(void)
                                   ompb_info.units[0]==ACSRMReferenceSize&&
                                   ompb_info.units[1]==ACSRMCurrentWindow&&
                                   ompb_info.batch==BatchSize);
-   DeleteObj(ompb_info);
+   DeleteObj(ompb_info)
    const bool forecast_tail_valid=(forecast_layer!=NULL&&market_tail!=NULL&&
                                      forecast_layer==market_tail&&forecast_base!=NULL&&
                                      forecast_layer==forecast_base&&
@@ -6252,8 +6912,9 @@ bool SkillValidateProductionACSRMCheckpoint(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Captures Market-base and ACSRM parameter fingerprints for Stage  |
+//| SkillCaptureProductionACSRMFingerprints - Capture                |
 //+------------------------------------------------------------------+
+//--- Captures Market-base and ACSRM parameter fingerprints for Stage
 //--- 03.
 bool SkillCaptureProductionACSRMFingerprints(void)
   {
@@ -6264,7 +6925,9 @@ bool SkillCaptureProductionACSRMFingerprints(void)
    if(!ompb||!ACSRMStage02MarketFingerprint(0,4,SkillProductionBaseFingerprint)||
       !ompb.AppendParameterFingerprint(SkillProductionACSRMFingerprint)||
       SkillProductionBaseFingerprint==0||SkillProductionACSRMFingerprint==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    SkillProductionSignatureReady=true;
    PrintFormat("%s_STAGE03_SIGNATURES_BEFORE base=%I64u posterior=%I64u",FileName,
                SkillProductionBaseFingerprint,SkillProductionACSRMFingerprint);
@@ -6272,8 +6935,9 @@ bool SkillCaptureProductionACSRMFingerprints(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Verifies that Stage 03 preserved the frozen Market and ACSRM.    |
+//| SkillVerifyProductionACSRMFingerprints - Verify                  |
 //+------------------------------------------------------------------+
+//--- Verifies that Stage 03 preserved the frozen Market and ACSRM.
 bool SkillVerifyProductionACSRMFingerprints(void)
   {
    ulong          base=0;
@@ -6283,7 +6947,9 @@ bool SkillVerifyProductionACSRMFingerprints(void)
       !ACSRMStage02MarketFingerprint(0,4,base)||
       !ompb.AppendParameterFingerprint(posterior)||
       !SkillValidateProductionACSRMCheckpoint())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool unchanged=(base==SkillProductionBaseFingerprint&&
                            posterior==SkillProductionACSRMFingerprint);
    PrintFormat("%s_STAGE03_SIGNATURES_AFTER base=%I64u posterior=%I64u unchanged=%s",FileName,
@@ -6298,7 +6964,10 @@ bool SkillAddCross(CArrayObj *description,const bool critic)
   {
    CLayerDescription *descr=new CLayerDescription();
    if(!description||!descr)
-     { DeleteObj(descr); ReturnFalse; }
+     {
+      DeleteObj(descr)
+      ReturnFalse
+     }
    descr.type=defNeuronScenarioCrossAttention;
    descr.count=NScenarios;
    descr.variables=(critic ? 5 : 3);
@@ -6313,18 +6982,22 @@ bool SkillAddCross(CArrayObj *description,const bool critic)
    if(description.Add(descr))
       return(true);
 
-   DeleteObj(descr);
-   ReturnFalse;
+   DeleteObj(descr)
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| Appends one convolutional layer description to the graph.        |
+//| SkillAddConv - Add skill conv                                    |
 //+------------------------------------------------------------------+
+//--- Appends one convolutional layer description to the graph.
 bool SkillAddConv(CArrayObj *description,const uint count,const uint window,const uint output,
-                    const uint variables,const ENUM_ACTIVATION activation)
+                  const uint variables,const ENUM_ACTIVATION activation)
   {
    CLayerDescription *descr=new CLayerDescription();
    if(!description||!descr)
-     { DeleteObj(descr); ReturnFalse; }
+     {
+      DeleteObj(descr)
+      ReturnFalse
+     }
    descr.type=defNeuronConvOCL;
    descr.count=count;
    descr.window=window;
@@ -6337,8 +7010,8 @@ bool SkillAddConv(CArrayObj *description,const uint count,const uint window,cons
    if(description.Add(descr))
       return(true);
 
-   DeleteObj(descr);
-   ReturnFalse;
+   DeleteObj(descr)
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
 //| SkillForwardForecast - implements SkillForwardForecast.          |
@@ -6351,15 +7024,18 @@ bool SkillForwardForecast(const int position,CBufferFloat *state,CBufferFloat *t
 //--- chosen as the post-decision execution price.
    if(!SkillForecast||!CreateBuffers(position+shift_bars,state,time,NULL)||
       !SkillMarket.feedForward(state,1,false,(CBufferFloat*)NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *z=SkillForecast.GetZ(),*u=SkillForecast.GetU(),*pi=SkillForecast.GetPi();
    return(z!=NULL&&u!=NULL&&pi!=NULL&&z.Total()==NScenarios * BarDescr * NForecast * EmbeddingSize&&
            u.Total()==NScenarios * BarDescr * NForecast&&
            pi.Total()==NScenarios&&z.GetIndex()>=0&&u.GetIndex()>=0&&pi.GetIndex()>=0);
   }
 //+------------------------------------------------------------------+
-//| Stable Owner index of one offline training example.              |
+//| SkillObservationOwner - Return the skill observation owner       |
 //+------------------------------------------------------------------+
+//--- Stable Owner index of one offline training example.
 int SkillObservationOwner(const int position,const int slot,const int seed)
   {
 //--- A deal (position, slot) is the example; the Owner is a stable function
@@ -6370,15 +7046,18 @@ int SkillObservationOwner(const int position,const int slot,const int seed)
                ulong(MathMax(seed,0))) & 1));
   }
 //+------------------------------------------------------------------+
-//| Converts the actor gradient to the pre-activation gradient:      |
+//| ApplyActorSigmoidDerivative - Apply actor sigmoid derivative     |
 //+------------------------------------------------------------------+
+//--- Converts the actor gradient to the pre-activation gradient:
 //--- dU/dz = dU/da * a * (1 - a) for the final SIGMOID.
 bool ApplyActorSigmoidDerivative(CNeuronBaseOCL *output_layer)
   {
    if(!output_layer||output_layer.getOutput().Total()!=(int)NActions||
       output_layer.getGradient().Total()!=(int)NActions||
       output_layer.getOutput().GetIndex()<0||output_layer.getGradient().GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!ActorDerivOneMinus.BufferInit(NActions,0)||
       !ActorDerivOneMinus.BufferCreate(SkillMarket.GetOpenCL())||
       !ActorDerivOneMinus.BufferWrite()||
@@ -6389,7 +7068,9 @@ bool ApplyActorSigmoidDerivative(CNeuronBaseOCL *output_layer)
       !ActorGradScratch.BufferCreate(SkillMarket.GetOpenCL())||
       !ActorGradScratch.BufferWrite()||
       !SkillDevice.Bind(SkillMarket.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- dU/dz = dU/da * a * (1 - a) through the genuine per-element
 //--- deActivation primitive: every component scales by its OWN (1 - a_i).
@@ -6399,7 +7080,9 @@ bool ApplyActorSigmoidDerivative(CNeuronBaseOCL *output_layer)
    if(!SkillDevice.DeActivationOnDevice(output_layer.getOutput(),GetPointer(ActorGradScratch),
                                         output_layer.getGradient(),SIGMOID)||
       !SkillDevice.Copy(GetPointer(ActorGradScratch),output_layer.getGradient(),NActions))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -6410,27 +7093,39 @@ bool BuildCriticInput(CBufferFloat *account,CBufferFloat *action,CBufferFloat *c
   {
    if(!account||!action||!combined||account.Total()!=AccountDescr||action.Total()!=NActions||
       account.GetIndex()<0||action.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- GPU Join/Copy transfer: both sources bind the Market context and the
 //--- concatenation is assembled on device from the CURRENT tensors, so the
 //--- target-action can never arrive from a stale host snapshot.  The final
 //--- read-back refreshes the host copy that the first CNet layer consumes.
    if(!combined.BufferInit(AccountDescr+NActions,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(combined.GetIndex()<0&&!combined.BufferCreate(SkillMarket.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!combined.BufferWrite()||!account.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillDevice.Bind(SkillMarket.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillDevice.Join2(account,AccountDescr,action,NActions,combined))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(combined.BufferRead());
   }
 //+------------------------------------------------------------------+
-//| Implements EvaluateAction. lot instead of the former balance-... |
+//| EvaluateAction - Evaluate action                                 |
 //+------------------------------------------------------------------+
 double EvaluateAction(CBufferFloat *action,const double balance,const uint position,
                       const int horizon_bars,int &outcome_tag)
@@ -6445,8 +7140,9 @@ double EvaluateAction(CBufferFloat *action,const double balance,const uint posit
    return(reward);
   }
 //+------------------------------------------------------------------+
-//| Builds TeacherAction. raw future window here; the live Market... |
+//| BuildTeacherAction - Build teacher action                        |
 //+------------------------------------------------------------------+
+//--- Builds TeacherAction. raw future window here; the live Market...
 bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *action,
                         double &reward,const int horizon_bars,int &outcome_tag)
   {
@@ -6458,16 +7154,17 @@ bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *a
      {
       PrintFormat("BuildTeacherAction input position=%d rates=%d account=%d action=%d",
                   position,Rates.Size(),(account ? account.Total() :-1),(action ? action.Total() :-1));
-      ReturnFalse;
+      ReturnFalse
      }
-   CBufferFloat teacher_state,teacher_time;
+   CBufferFloat teacher_state;
+   CBufferFloat teacher_time;
 
 //--- function if.
    if(!CreateBuffers(position,GetPointer(teacher_state),GetPointer(teacher_time),GetPointer(SkillFuture)))
      {
       PrintFormat("BuildTeacherAction CreateBuffers position=%d future=%d index=%d",
                   position,SkillFuture.Total(),SkillFuture.GetIndex());
-      ReturnFalse;
+      ReturnFalse
      }
    vector<float>account_values;
 
@@ -6475,7 +7172,7 @@ bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *a
    if(account.GetData(account_values)!=AccountDescr)
      {
       PrintFormat("BuildTeacherAction account data total=%d index=%d",account.Total(),account.GetIndex());
-      ReturnFalse;
+      ReturnFalse
      }
    const vector<float>teacher=OraculAction(account_values,GetPointer(SkillFuture));
 
@@ -6483,28 +7180,28 @@ bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *a
    if(teacher.Size()!=NActions)
      {
       PrintFormat("BuildTeacherAction oracle size=%d expected=%d",teacher.Size(),NActions);
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(!action.AssignArray(teacher))
      {
       Print("BuildTeacherAction action AssignArray");
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(action.GetIndex()<0&&!action.BufferCreate(SkillMarket.GetOpenCL()))
      {
       PrintFormat("BuildTeacherAction action BufferCreate total=%d index=%d",action.Total(),action.GetIndex());
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- function if.
    if(action.GetIndex()>=0&&!action.BufferWrite())
      {
       PrintFormat("BuildTeacherAction action BufferWrite total=%d index=%d",action.Total(),action.GetIndex());
-      ReturnFalse;
+      ReturnFalse
      }
    reward=EvaluateAction(action,MathMax(0.0,double(account_values[0]) * EtalonBalance),
                            (uint)position,horizon_bars,outcome_tag);
@@ -6513,37 +7210,48 @@ bool BuildTeacherAction(const int position,CBufferFloat *account,CBufferFloat *a
    if(!MathIsValidNumber(reward))
      {
       PrintFormat("BuildTeacherAction reward invalid %.8f",reward);
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| A valid random policy action expands Critic coverage only. Bu... |
+//| BuildRandomAction - Build random action                          |
 //+------------------------------------------------------------------+
+//--- A valid random policy action expands Critic coverage only. Bu...
 bool BuildRandomAction(const int position,CBufferFloat *account,CBufferFloat *action,
                        double &reward,const int horizon_bars,int &outcome_tag)
   {
    reward=0;
    if(!account||!action||position<0||position>=int(Rates.Size())||
       account.Total()!=AccountDescr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    vector<float>account_values;
    if(account.GetData(account_values)!=AccountDescr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double balance=MathMax(0.0,double(account_values[0]) * EtalonBalance);
    double       margin=0;
    if(balance<=0||!OrderCalcMargin(ORDER_TYPE_BUY,Symb.Name(),1,Rates[position].open,margin)||margin<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double min_lot=Symb.LotsMin();
    const double max_lot=MathMin(Symb.LotsMax(),balance / (2.0 * margin));
    if(min_lot<=0||max_lot<min_lot)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double stop_points=MathMax(Symb.StopsLevel(),10);
    const double min_tp=stop_points / MathMax(MaxTP,1);
    const double min_sl=(stop_points+Symb.Spread()) / MathMax(MaxSL,1);
    if(min_tp>=1.0||min_sl>=1.0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double uniform=MathRand() / 32767.0;
    const double lot=MathMin(max_lot,NormalizeLot(min_lot+(max_lot-min_lot) * uniform));
    const double tp=min_tp+(1.0-min_tp) * (MathRand() / 32767.0);
@@ -6556,11 +7264,17 @@ bool BuildRandomAction(const int position,CBufferFloat *account,CBufferFloat *ac
    values[1]=values[4]=float(tp);
    values[2]=values[5]=float(sl);
    if(!action.AssignArray(values))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(action.GetIndex()<0&&!action.BufferCreate(SkillMarket.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(action.GetIndex()>=0&&!action.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    reward=EvaluateAction(action,balance,(uint)position,horizon_bars,outcome_tag);
 
    return(MathIsValidNumber(reward));
@@ -6572,20 +7286,25 @@ bool SkillClampAction(CBufferFloat *source,CBufferFloat *target)
   {
    if(!source||!target||!source.BufferRead()||source.Total()!=NActions||
       !target.BufferInit(NActions,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint i=0; i<NActions; i++)
      {
       if(!MathIsValidNumber(source[i])||!target.Update(i,float(MathMax(0.0,MathMin(1.0,double(source[i]))))))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(target.GetIndex()<0||target.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Checks the canonical AC tuple file names.                        |
+//| SkillACTupleNamesValid - Check skill AC tuple names              |
 //+------------------------------------------------------------------+
+//--- Checks the canonical AC tuple file names.
 bool SkillACTupleNamesValid(const string actor_file,const string q1_file,
-                              const string q2_file,const string manifest_file)
+                            const string q2_file,const string manifest_file)
   {
    return(actor_file!=""&&q1_file!=""&&q2_file!=""&&manifest_file!=""&&
           actor_file!=q1_file&&actor_file!=q2_file&&actor_file!=manifest_file&&
@@ -6599,37 +7318,49 @@ bool SkillACDeleteFile(const string file_name)
    return(!FileIsExist(file_name,FILE_COMMON)||FileDelete(file_name,FILE_COMMON));
   }
 //+------------------------------------------------------------------+
-//| Copies the AC tuple files to a new canonical set.                |
+//| SkillACCopyTuple - Copy skill AC tuple                           |
 //+------------------------------------------------------------------+
+//--- Copies the AC tuple files to a new canonical set.
 bool SkillACCopyTuple(const string source_actor,const string source_q1,
-                        const string source_q2,const string source_manifest,
-                        const string destination_actor,const string destination_q1,
-                        const string destination_q2,const string destination_manifest,
-                        const bool rewrite)
+                      const string source_q2,const string source_manifest,
+                      const string destination_actor,const string destination_q1,
+                      const string destination_q2,const string destination_manifest,
+                      const bool rewrite)
   {
    if(!SkillACTupleNamesValid(source_actor,source_q1,source_q2,source_manifest)||
       !SkillACTupleNamesValid(destination_actor,destination_q1,destination_q2,
                                 destination_manifest))
-      ReturnFalseEx("Actor-Critic tuple names");
+     {
+      ReturnFalseEx("Actor-Critic tuple names")
+     }
    const uint flags=(rewrite ? FILE_COMMON | FILE_REWRITE : FILE_COMMON);
    if(!FileCopy(source_actor,FILE_COMMON,destination_actor,flags))
-      ReturnFalseEx("Actor-Critic Actor copy");
+     {
+      ReturnFalseEx("Actor-Critic Actor copy")
+     }
    if(!FileCopy(source_q1,FILE_COMMON,destination_q1,flags))
-      ReturnFalseEx("Actor-Critic Q1 copy");
+     {
+      ReturnFalseEx("Actor-Critic Q1 copy")
+     }
    if(!FileCopy(source_q2,FILE_COMMON,destination_q2,flags))
-      ReturnFalseEx("Actor-Critic Q2 copy");
+     {
+      ReturnFalseEx("Actor-Critic Q2 copy")
+     }
 
 //--- write the manifest last so a complete tuple has an unambiguous commit point.
    if(!FileCopy(source_manifest,FILE_COMMON,destination_manifest,flags))
-      ReturnFalseEx("Actor-Critic manifest copy");
+     {
+      ReturnFalseEx("Actor-Critic manifest copy")
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Checks that an AC tuple file triplet is complete.                |
+//| SkillACTupleComplete - Complete skill AC tuple                   |
 //+------------------------------------------------------------------+
+//--- Checks that an AC tuple file triplet is complete.
 bool SkillACTupleComplete(const string actor_file,const string q1_file,
-                            const string q2_file,const string manifest_file)
+                          const string q2_file,const string manifest_file)
   {
    const ulong seed=ulong(1469598103934665603);
    return(SkillACTupleNamesValid(actor_file,q1_file,q2_file,manifest_file)&&
@@ -6640,9 +7371,9 @@ bool SkillACTupleComplete(const string actor_file,const string q1_file,
 //| SkillACTuplesEqual - compares two AC tuples byte-for-byte.       |
 //+------------------------------------------------------------------+
 bool SkillACTuplesEqual(const string first_actor,const string first_q1,
-                          const string first_q2,const string first_manifest,
-                          const string second_actor,const string second_q1,
-                          const string second_q2,const string second_manifest)
+                        const string first_q2,const string first_manifest,
+                        const string second_actor,const string second_q1,
+                        const string second_q2,const string second_manifest)
   {
    const ulong seed=ulong(1469598103934665603);
    return(SkillACTupleComplete(first_actor,first_q1,first_q2,first_manifest)&&
@@ -6653,10 +7384,11 @@ bool SkillACTuplesEqual(const string first_actor,const string first_q1,
           SkillHashFile(seed,first_manifest)==SkillHashFile(seed,second_manifest));
   }
 //+------------------------------------------------------------------+
-//| Writes one transaction line to the AC transaction file.          |
+//| SkillACWriteTransactionLine - Write skill AC transaction line    |
 //+------------------------------------------------------------------+
+//--- Writes one transaction line to the AC transaction file.
 bool SkillACWriteTransactionLine(const int handle,const string value,
-                                   const string context)
+                                 const string context)
   {
    if(FileWrite(handle,value)<=0)
      {
@@ -6672,18 +7404,22 @@ bool SkillACWriteTransactionLine(const int handle,const string value,
 //| SkillACWriteTransaction - writes the AC transaction record set.  |
 //+------------------------------------------------------------------+
 bool SkillACWriteTransaction(const string transaction_file,const bool had_previous,
-                               const string phase,const ulong actor_hash,
-                               const ulong q1_hash,const ulong q2_hash,
-                               const ulong manifest_hash)
+                             const string phase,const ulong actor_hash,
+                             const ulong q1_hash,const ulong q2_hash,
+                             const ulong manifest_hash)
   {
    const string staged_file=transaction_file+".next";
    if(transaction_file==""||(phase!="prepared"&&phase!="previous_ready")||
       actor_hash==0||q1_hash==0||q2_hash==0||manifest_hash==0||
       FileIsExist(transaction_file,FILE_COMMON)||FileIsExist(staged_file,FILE_COMMON))
-      ReturnFalseEx("Actor-Critic transaction arguments");
+     {
+      ReturnFalseEx("Actor-Critic transaction arguments")
+     }
    int handle=FileOpen(staged_file,FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(handle==INVALID_HANDLE)
-      ReturnFalseEx("Actor-Critic transaction open");
+     {
+      ReturnFalseEx("Actor-Critic transaction open")
+     }
    if(!SkillACWriteTransactionLine(handle,"format=ACSRM_ACTOR_CRITIC_TRANSACTION","format")||
       !SkillACWriteTransactionLine(handle,
                                      StringFormat("version=%u",Skill_AC_TRANSACTION_VERSION),
@@ -6700,14 +7436,16 @@ bool SkillACWriteTransaction(const string transaction_file,const bool had_previo
      {
       FileClose(handle);
       SkillACDeleteFile(staged_file);
-      ReturnFalse;
+      ReturnFalse
      }
    FileFlush(handle);
    FileClose(handle);
 
 //--- publish the complete marker in one rename after all fields are flushed.
    if(!FileMove(staged_file,FILE_COMMON,transaction_file,FILE_COMMON | FILE_REWRITE))
-      ReturnFalseEx("Actor-Critic transaction publish");
+     {
+      ReturnFalseEx("Actor-Critic transaction publish")
+     }
 
    return(true);
   }
@@ -6715,8 +7453,8 @@ bool SkillACWriteTransaction(const string transaction_file,const bool had_previo
 //| SkillACReadTransaction - reads the AC transaction record set.    |
 //+------------------------------------------------------------------+
 bool SkillACReadTransaction(const string transaction_file,bool &had_previous,
-                              string &phase,ulong &actor_hash,ulong &q1_hash,
-                              ulong &q2_hash,ulong &manifest_hash)
+                            string &phase,ulong &actor_hash,ulong &q1_hash,
+                            ulong &q2_hash,ulong &manifest_hash)
   {
    had_previous=false;
    phase="";
@@ -6749,15 +7487,17 @@ bool SkillACReadTransaction(const string transaction_file,bool &had_previous,
    return(actor_hash!=0&&q1_hash!=0&&q2_hash!=0&&manifest_hash!=0);
   }
 //+------------------------------------------------------------------+
-//| Advances the AC transaction selector.                            |
+//| SkillACAdvanceTransaction - Advances the AC transaction selector |
 //+------------------------------------------------------------------+
 bool SkillACAdvanceTransaction(const string transaction_file,const bool had_previous,
-                                 const string phase,const ulong actor_hash,
-                                 const ulong q1_hash,const ulong q2_hash,
-                                 const ulong manifest_hash)
+                               const string phase,const ulong actor_hash,
+                               const ulong q1_hash,const ulong q2_hash,
+                               const ulong manifest_hash)
   {
    if(!SkillACDeleteFile(transaction_file))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(SkillACWriteTransaction(transaction_file,had_previous,phase,
                                     actor_hash,q1_hash,q2_hash,manifest_hash));
   }
@@ -6765,10 +7505,10 @@ bool SkillACAdvanceTransaction(const string transaction_file,const bool had_prev
 //| SkillACCleanupTransaction - cleans up the AC transaction files.  |
 //+------------------------------------------------------------------+
 bool SkillACCleanupTransaction(const string transaction_file,
-                                 const string next_actor,const string next_q1,
-                                 const string next_q2,const string next_manifest,
-                                 const string previous_actor,const string previous_q1,
-                                 const string previous_q2,const string previous_manifest)
+                               const string next_actor,const string next_q1,
+                               const string next_q2,const string next_manifest,
+                               const string previous_actor,const string previous_q1,
+                               const string previous_q2,const string previous_manifest)
   {
    const string staged_transaction=transaction_file+".next";
    const string files[]={next_manifest,next_q2,next_q1,next_actor,
@@ -6787,15 +7527,16 @@ bool SkillACCleanupTransaction(const string transaction_file,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Recovers the AC transaction state after a failed write.          |
+//| SkillACRecoverTransaction - Recover skill AC transaction         |
 //+------------------------------------------------------------------+
+//--- Recovers the AC transaction state after a failed write.
 bool SkillACRecoverTransaction(const string canonical_actor,const string canonical_q1,
-                                 const string canonical_q2,const string canonical_manifest,
-                                 const string next_actor,const string next_q1,
-                                 const string next_q2,const string next_manifest,
-                                 const string previous_actor,const string previous_q1,
-                                 const string previous_q2,const string previous_manifest,
-                                 const string transaction_file)
+                               const string canonical_q2,const string canonical_manifest,
+                               const string next_actor,const string next_q1,
+                               const string next_q2,const string next_manifest,
+                               const string previous_actor,const string previous_q1,
+                               const string previous_q2,const string previous_manifest,
+                               const string transaction_file)
   {
    const bool marker_exists=FileIsExist(transaction_file,FILE_COMMON);
    const bool staged_marker_exists=FileIsExist(transaction_file+".next",FILE_COMMON);
@@ -6832,14 +7573,16 @@ bool SkillACRecoverTransaction(const string canonical_actor,const string canonic
          return(SkillACCleanupTransaction(transaction_file,next_actor,next_q1,next_q2,
                                             next_manifest,previous_actor,previous_q1,
                                             previous_q2,previous_manifest));
-      ReturnFalse;
+      ReturnFalse
      }
    bool   had_previous=false;
    string phase="";
    ulong  actor_hash=0,q1_hash=0,q2_hash=0,manifest_hash=0;
    if(!SkillACReadTransaction(transaction_file,had_previous,phase,actor_hash,q1_hash,
                                 q2_hash,manifest_hash))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(SkillHashFile(ulong(1469598103934665603),canonical_actor)==actor_hash&&
       SkillHashFile(ulong(1469598103934665603),canonical_q1)==q1_hash&&
       SkillHashFile(ulong(1469598103934665603),canonical_q2)==q2_hash&&
@@ -6871,27 +7614,34 @@ bool SkillACRecoverTransaction(const string canonical_actor,const string canonic
       return(SkillACCleanupTransaction(transaction_file,next_actor,next_q1,next_q2,
                                          next_manifest,previous_actor,previous_q1,
                                          previous_q2,previous_manifest));
-   ReturnFalse;
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| Writes the AC manifest file for a forecast signature.            |
+//| SkillWriteACManifestFile - Write skill AC manifest file          |
 //+------------------------------------------------------------------+
+//--- Writes the AC manifest file for a forecast signature.
 bool SkillWriteACManifestFile(const ulong forecast_signature,const string actor_file,
-                                const string q1_file,const string q2_file,
-                                const string manifest_file)
+                              const string q1_file,const string q2_file,
+                              const string manifest_file)
   {
    if(forecast_signature==0||forecast_signature!=SkillLastSignature||
       !SkillACTupleNamesValid(actor_file,q1_file,q2_file,manifest_file))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const ulong seed=ulong(1469598103934665603);
    const ulong actor_hash=SkillHashFile(seed,actor_file);
    const ulong q1_hash=SkillHashFile(seed,q1_file);
    const ulong q2_hash=SkillHashFile(seed,q2_file);
    if(actor_hash==0||q1_hash==0||q2_hash==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int handle=FileOpen(manifest_file,FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool written=(FileWrite(handle,"format=ACSRM_ACTOR_CRITIC")>0&&
                          FileWrite(handle,StringFormat("version=%u",Skill_AC_FORMAT_VERSION))>0&&
                          FileWrite(handle,StringFormat("forecast_signature=%I64u",forecast_signature))>0&&
@@ -6952,11 +7702,12 @@ bool SkillWriteACManifest(const ulong forecast_signature)
                                      Skill_AC_MANIFEST_FILE));
   }
 //+------------------------------------------------------------------+
-//| Validates the AC manifest tuple presence and fields.             |
+//| SkillValidateACManifestTuple - Validate skill AC manifest tuple  |
 //+------------------------------------------------------------------+
+//--- Validates the AC manifest tuple presence and fields.
 bool SkillValidateACManifestTuple(const bool required,const string manifest_file,
-                                    const string actor_file,const string q1_file,
-                                    const string q2_file,const bool allow_bank_reset)
+                                  const string actor_file,const string q1_file,
+                                  const string q2_file,const bool allow_bank_reset)
   {
    if(!SkillACTupleNamesValid(actor_file,q1_file,q2_file,manifest_file)||
       SkillManifestValue(manifest_file,"format")=="")
@@ -6978,16 +7729,28 @@ bool SkillValidateACManifestTuple(const bool required,const string manifest_file
    Skill_AC_MANIFEST_EQ("offline_target","tp_sl_horizon_discounted_by_elapsed_bars");
    { const string bootstrap=SkillManifestValue(manifest_file,"online_bootstrap_state");
      if(bootstrap!=""&&bootstrap!="next_closed_bar")
-       { PrintFormat("Skill policy manifest: online_bootstrap_state expected=next_closed_bar actual=%s",bootstrap); ReturnFalse; } }
+       {
+        PrintFormat("Skill policy manifest: online_bootstrap_state expected=next_closed_bar actual=%s",bootstrap);
+        ReturnFalse
+       } }
    { const string pretrain=SkillManifestValue(manifest_file,"critic_pretrain_target");
      if(pretrain!=""&&pretrain!="deal_outcome_tp_sl_horizon")
-       { PrintFormat("Skill policy manifest: critic_pretrain_target expected=deal_outcome_tp_sl_horizon actual=%s",pretrain); ReturnFalse; } }
+       {
+        PrintFormat("Skill policy manifest: critic_pretrain_target expected=deal_outcome_tp_sl_horizon actual=%s",pretrain);
+        ReturnFalse
+       } }
    { const string online_target=SkillManifestValue(manifest_file,"critic_online_target");
      if(online_target!=""&&online_target!="cross_target_td")
-       { PrintFormat("Skill policy manifest: critic_online_target expected=cross_target_td actual=%s",online_target); ReturnFalse; } }
+       {
+        PrintFormat("Skill policy manifest: critic_online_target expected=cross_target_td actual=%s",online_target);
+        ReturnFalse
+       } }
    { const string final_semantics=SkillManifestValue(manifest_file,"critic_final_semantics");
      if(final_semantics!=""&&final_semantics!="discounted_live_return")
-       { PrintFormat("Skill policy manifest: critic_final_semantics expected=discounted_live_return actual=%s",final_semantics); ReturnFalse; } }
+       {
+        PrintFormat("Skill policy manifest: critic_final_semantics expected=discounted_live_return actual=%s",final_semantics);
+        ReturnFalse
+       } }
    Skill_AC_MANIFEST_EQ("deal_horizon_bars",IntegerToString(SkillManifestDealHorizon));
    Skill_AC_MANIFEST_EQ("ambiguous_level_rule","sl_before_tp_within_same_bar");
    Skill_AC_MANIFEST_EQ("actor_policy_gradient","executable_single_critic_sigmoid_derivative");
@@ -7008,8 +7771,10 @@ bool SkillValidateACManifestTuple(const bool required,const string manifest_file
    Skill_AC_MANIFEST_EQ("srm_invalid_policy","skip_actor_update");
    { const string version_actual=SkillManifestValue(manifest_file,"config_version");
      if(version_actual!=IntegerToString(Skill_AC_CONFIG_VERSION)&&version_actual!="7"&&version_actual!="8"&&version_actual!="9")
-       { PrintFormat("Skill policy manifest: config_version expected=%s or 7 actual=%s",
-                     IntegerToString(Skill_AC_CONFIG_VERSION),version_actual); ReturnFalse; } }
+       {
+        PrintFormat("Skill policy manifest: config_version expected=%s or 7 actual=%s",
+                     IntegerToString(Skill_AC_CONFIG_VERSION),version_actual); ReturnFalse
+       } }
    Skill_AC_MANIFEST_EQ("actor_hash",
                           StringFormat("%I64u",
                                        SkillHashFile(ulong(1469598103934665603),actor_file)));
@@ -7024,7 +7789,7 @@ bool SkillValidateACManifestTuple(const bool required,const string manifest_file
    if(SkillManifestValue(manifest_file,"generation")=="")
      {
       Print("Skill policy manifest: generation is absent");
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -7033,31 +7798,37 @@ bool SkillValidateACManifestTuple(const bool required,const string manifest_file
 //| SkillValidateACManifestFile - validates one AC manifest file.    |
 //+------------------------------------------------------------------+
 bool SkillValidateACManifestFile(const bool required,const string manifest_file,
-                                   const bool allow_bank_reset)
+                                 const bool allow_bank_reset)
   {
    return(SkillValidateACManifestTuple(required,manifest_file,Skill_ACTOR_FILE,
                                          Skill_Q1_FILE,Skill_Q2_FILE,allow_bank_reset));
   }
 //+------------------------------------------------------------------+
-//| Validates the complete AC manifest state.                        |
+//| SkillValidateACManifest - Validate skill AC manifest             |
 //+------------------------------------------------------------------+
+//--- Validates the complete AC manifest state.
 bool SkillValidateACManifest(const bool required)
   {
    return(SkillValidateACManifestFile(required,Skill_AC_MANIFEST_FILE,false));
   }
 //+------------------------------------------------------------------+
-//| Binds Actor and both Critics to the Market OpenCL context.       |
+//| SkillBindPolicyOpenCLChecked - Bind skill policy open CL checked |
 //+------------------------------------------------------------------+
+//--- Binds Actor and both Critics to the Market OpenCL context.
 bool SkillBindPolicyOpenCLChecked(CNet &actor,CNet &q1,CNet &q2)
   {
    COpenCLMy *target=SkillMarket.GetOpenCL();
    if(CheckPointer(target)==POINTER_INVALID||
       !actor.SupportsOpenCLChecked()||!q1.SupportsOpenCLChecked()||
       !q2.SupportsOpenCLChecked())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!actor.SetOpenCLChecked(target)||!q1.SetOpenCLChecked(target)||
       !q2.SetOpenCLChecked(target))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -7079,10 +7850,10 @@ bool SkillLoadPolicyNet(CNet &net,const string file_name)
 //| Closes the offline episode through paired utility then reset.    |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
-//| SkillCanPublishACCheckpoint validates replacement permission     |
+//| SkillCanPublishACCheckpoint - validates replacement permission   |
 //+------------------------------------------------------------------+
 bool SkillCanPublishACCheckpoint(const bool canonical_exists,
-                                   const bool canonical_valid)
+                                 const bool canonical_valid)
   {
    if(!canonical_exists||canonical_valid)
       return(true);
@@ -7105,7 +7876,9 @@ bool SkillSavePolicySet(CNet &actor,CNet &q1,CNet &q2)
   {
    if(!SkillVerifyFrozenWeightsExact()||!SkillVerifyFrozenCodebookExact()||
       SkillForecastSignature()!=SkillLastSignature)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillACRecoverTransaction(Skill_ACTOR_FILE,Skill_Q1_FILE,Skill_Q2_FILE,
                                    Skill_AC_MANIFEST_FILE,Skill_ACTOR_NEXT_FILE,
                                    Skill_Q1_NEXT_FILE,Skill_Q2_NEXT_FILE,
@@ -7113,7 +7886,9 @@ bool SkillSavePolicySet(CNet &actor,CNet &q1,CNet &q2)
                                    Skill_Q1_PREVIOUS_FILE,Skill_Q2_PREVIOUS_FILE,
                                    Skill_AC_MANIFEST_PREVIOUS_FILE,
                                    Skill_AC_TRANSACTION_FILE))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool canonical_exists=(FileIsExist(Skill_ACTOR_FILE,FILE_COMMON)||
                                   FileIsExist(Skill_Q1_FILE,FILE_COMMON)||
                                   FileIsExist(Skill_Q2_FILE,FILE_COMMON)||
@@ -7123,7 +7898,7 @@ bool SkillSavePolicySet(CNet &actor,CNet &q1,CNet &q2)
    if(!SkillCanPublishACCheckpoint(canonical_exists,canonical_valid))
      {
       Print("Skill policy checkpoint=FAIL reason=canonical_tuple_invalid");
-      ReturnFalse;
+      ReturnFalse
      }
    if(canonical_exists&&!canonical_valid)
       Print("Skill policy checkpoint=RECREATE reason=canonical_tuple_invalid");
@@ -7131,19 +7906,29 @@ bool SkillSavePolicySet(CNet &actor,CNet &q1,CNet &q2)
 
 //--- stage every model and write the candidate manifest without touching the active tuple.
    if(!actor.Save(Skill_ACTOR_NEXT_FILE,0,0,0,now,true))
-      ReturnFalseEx("Actor-Critic Actor candidate");
+     {
+      ReturnFalseEx("Actor-Critic Actor candidate")
+     }
    if(!q1.Save(Skill_Q1_NEXT_FILE,q1.getRecentAverageError(),0,0,now,true))
-      ReturnFalseEx("Actor-Critic Q1 candidate");
+     {
+      ReturnFalseEx("Actor-Critic Q1 candidate")
+     }
    if(!q2.Save(Skill_Q2_NEXT_FILE,q2.getRecentAverageError(),0,0,now,true))
-      ReturnFalseEx("Actor-Critic Q2 candidate");
+     {
+      ReturnFalseEx("Actor-Critic Q2 candidate")
+     }
    if(!SkillWriteACManifestFile(SkillLastSignature,Skill_ACTOR_NEXT_FILE,
                                   Skill_Q1_NEXT_FILE,Skill_Q2_NEXT_FILE,
                                   Skill_AC_MANIFEST_NEXT_FILE))
-      ReturnFalseEx("Actor-Critic candidate manifest");
+     {
+      ReturnFalseEx("Actor-Critic candidate manifest")
+     }
    if(!SkillValidateACManifestTuple(true,Skill_AC_MANIFEST_NEXT_FILE,
                                       Skill_ACTOR_NEXT_FILE,Skill_Q1_NEXT_FILE,
                                       Skill_Q2_NEXT_FILE,false))
-      ReturnFalseEx("Actor-Critic candidate validation");
+     {
+      ReturnFalseEx("Actor-Critic candidate validation")
+     }
    const ulong seed=ulong(1469598103934665603);
    const ulong actor_hash=SkillHashFile(seed,Skill_ACTOR_NEXT_FILE);
    const ulong q1_hash=SkillHashFile(seed,Skill_Q1_NEXT_FILE);
@@ -7151,7 +7936,9 @@ bool SkillSavePolicySet(CNet &actor,CNet &q1,CNet &q2)
    const ulong manifest_hash=SkillHashFile(seed,Skill_AC_MANIFEST_NEXT_FILE);
    if(!SkillACWriteTransaction(Skill_AC_TRANSACTION_FILE,had_previous,"prepared",
                                  actor_hash,q1_hash,q2_hash,manifest_hash))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(had_previous)
      {
       if(!SkillACCopyTuple(Skill_ACTOR_FILE,Skill_Q1_FILE,Skill_Q2_FILE,
@@ -7163,38 +7950,51 @@ bool SkillSavePolicySet(CNet &actor,CNet &q1,CNet &q2)
                                          Skill_Q2_PREVIOUS_FILE,false)||
          !SkillACAdvanceTransaction(Skill_AC_TRANSACTION_FILE,true,"previous_ready",
                                       actor_hash,q1_hash,q2_hash,manifest_hash))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- publish the candidate tuple and validate it before removing recovery sidecars.
    if(!SkillACCopyTuple(Skill_ACTOR_NEXT_FILE,Skill_Q1_NEXT_FILE,Skill_Q2_NEXT_FILE,
                           Skill_AC_MANIFEST_NEXT_FILE,Skill_ACTOR_FILE,
                           Skill_Q1_FILE,Skill_Q2_FILE,Skill_AC_MANIFEST_FILE,true))
-      ReturnFalseEx("Actor-Critic canonical publication");
+     {
+      ReturnFalseEx("Actor-Critic canonical publication")
+     }
    if(!SkillValidateACManifestFile(true,Skill_AC_MANIFEST_FILE,false))
-      ReturnFalseEx("Actor-Critic canonical validation");
+     {
+      ReturnFalseEx("Actor-Critic canonical validation")
+     }
    if(SkillHashFile(seed,Skill_ACTOR_FILE)!=actor_hash||
       SkillHashFile(seed,Skill_Q1_FILE)!=q1_hash||
       SkillHashFile(seed,Skill_Q2_FILE)!=q2_hash||
       SkillHashFile(seed,Skill_AC_MANIFEST_FILE)!=manifest_hash)
-      ReturnFalseEx("Actor-Critic canonical hash");
+     {
+      ReturnFalseEx("Actor-Critic canonical hash")
+     }
    if(!SkillACCleanupTransaction(Skill_AC_TRANSACTION_FILE,Skill_ACTOR_NEXT_FILE,
                                    Skill_Q1_NEXT_FILE,Skill_Q2_NEXT_FILE,
                                    Skill_AC_MANIFEST_NEXT_FILE,Skill_ACTOR_PREVIOUS_FILE,
                                    Skill_Q1_PREVIOUS_FILE,Skill_Q2_PREVIOUS_FILE,
                                    Skill_AC_MANIFEST_PREVIOUS_FILE))
-      ReturnFalseEx("Actor-Critic transaction cleanup");
+     {
+      ReturnFalseEx("Actor-Critic transaction cleanup")
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Saves a Stage 03 checkpoint only for the active production       |
+//| SkillSaveStage03StopCheckpoint - Save                            |
 //+------------------------------------------------------------------+
+//--- Saves a Stage 03 checkpoint only for the active production
 //--- ACSRM.
 bool SkillSaveStage03StopCheckpoint(CNet &actor,CNet &q1,CNet &q2)
   {
    if(!SkillVerifyProductionACSRMFingerprints())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SkillSavePolicySet(actor,q1,q2));
   }
@@ -7210,7 +8010,9 @@ bool ReadAction(CNet &net,CBufferFloat *target)
 //--- the final actor layer is allowed to be host-only, therefore its live
 //--- output must not be read through CBufferFloat::BufferRead().
    if(!target)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- CNet::getResults reuses a valid result object.  Passing target directly
 //--- avoids an allocation and the subsequent CPU-to-CPU AssignArray copy.
@@ -7227,55 +8029,76 @@ bool SkillAdvanceAccountTime(CBufferFloat *current,const datetime next_time,CBuf
    if(!current||!next||current.Total()!=AccountDescr||
       (current.GetIndex()>=0&&!current.BufferRead())||
       !next.BufferInit(AccountDescr,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint i=0; i<9; i++)
       if(!next.Update(i,current[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    double x=next_time / (double)(D'2024.01.01'-D'2023.01.01');
    if(!next.Update(9,float(MathSin(x!=0 ? 2.0 * M_PI*x : 0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    x=next_time / (double)PeriodSeconds(PERIOD_MN1);
    if(!next.Update(10,float(MathCos(x!=0 ? 2.0 * M_PI*x : 0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    x=next_time / (double)PeriodSeconds(PERIOD_W1);
    if(!next.Update(11,float(MathSin(x!=0 ? 2.0 * M_PI*x : 0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    x=next_time / (double)PeriodSeconds(PERIOD_D1);
    if(!next.Update(12,float(MathSin(x!=0 ? 2.0 * M_PI*x : 0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(next.GetIndex()<0||next.BufferWrite());
   }
 //+------------------------------------------------------------------+
-//| Implements SkillForwardForecastState.                            |
+//| SkillForwardForecastState - Check skill forward forecast state   |
 //+------------------------------------------------------------------+
 bool SkillForwardForecastState(CBufferFloat *state)
   {
 //--- CNet accepts a host-only input buffer and uploads it through its first
 //--- layer.  Do not require a device allocation from the caller here.
    if(!SkillForecast||!state||state.Total()!=HistoryBars * BarDescr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillMarket.feedForward(state,1,false,(CBufferFloat*)NULL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *z=SkillForecast.GetZ(),*u=SkillForecast.GetU(),*pi=SkillForecast.GetPi();
    if(!z||!u||!pi||z.Total()!=NScenarios * BarDescr * NForecast * EmbeddingSize||
       u.Total()!=NScenarios * BarDescr * NForecast||pi.Total()!=NScenarios||
       z.GetIndex()<0||u.GetIndex()<0||pi.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Builds the live-account feature vector from balance/equity       |
+//| SkillBuildLiveAccount - Build skill live account                 |
 //+------------------------------------------------------------------+
+//--- Builds the live-account feature vector from balance/equity
 //--- changes.
 bool SkillBuildLiveAccount(const double previous_balance,const double previous_equity,
-                             const datetime state_time,CBufferFloat *account,
-                             double &buy_value,double &sell_value)
+                           const datetime state_time,CBufferFloat *account,
+                           double &buy_value,double &sell_value)
   {
    if(!account||!MathIsValidNumber(previous_balance)||
       !MathIsValidNumber(previous_equity)||previous_balance<=0||previous_equity<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    double buy_profit=0,sell_profit=0,position_discount=0;
    buy_value=0;
    sell_value=0;
@@ -7286,7 +8109,10 @@ bool SkillBuildLiveAccount(const double previous_balance,const double previous_e
          continue;
       const double profit=PositionGetDouble(POSITION_PROFIT);
       if((int)PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY)
-        { buy_value += PositionGetDouble(POSITION_VOLUME); buy_profit += profit; }
+        {
+         buy_value += PositionGetDouble(POSITION_VOLUME);
+         buy_profit += profit;
+        }
       else
         { sell_value += PositionGetDouble(POSITION_VOLUME); sell_profit += profit; }
       position_discount += (current-PositionGetInteger(POSITION_TIME)) *
@@ -7314,7 +8140,9 @@ bool SkillBuildLiveAccount(const double previous_balance,const double previous_e
    values[12]=float(MathSin(x!=0 ? 2.0 * M_PI*x : 0));
    for(uint i=0; i<AccountDescr; i++)
       if(!MathIsValidNumber(values[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(account.AssignArray(values)&&(account.GetIndex()<0||account.BufferWrite()));
   }
@@ -7333,7 +8161,9 @@ bool SkillRefreshLiveMarket(CBufferFloat *state,CBufferFloat *time_state)
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars)||
       RSI.BarsCalculated()<bars||CCI.BarsCalculated()<bars||
       ATR.BarsCalculated()<bars||MACD.BarsCalculated()<bars)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
@@ -7344,8 +8174,9 @@ bool SkillRefreshLiveMarket(CBufferFloat *state,CBufferFloat *time_state)
    return(CreateBuffers(0,state,time_state,(CBufferFloat*)NULL));
   }
 //+------------------------------------------------------------------+
-//| Checks ExecutableOrder. One execution contract for historical... |
+//| IsExecutableOrder - Check executable order                       |
 //+------------------------------------------------------------------+
+//--- Checks ExecutableOrder. One execution contract for historical...
 bool IsExecutableOrder(const double lot,const double tp_fraction,const double sl_fraction)
   {
    const double stops=(MathMax(Symb.StopsLevel(),1)+Symb.Spread()) * Symb.Point();
@@ -7369,34 +8200,46 @@ bool SkillValidateAction(CBufferFloat *action)
   {
    if(!action||action.Total()!=NActions||
       (action.GetIndex()>=0&&!action.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(uint i=0; i<NActions; i++)
       if(!MathIsValidNumber(action[i])||action[i]<0||action[i]>1)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Executes the actor action, places the real deal and returns      |
+//| SkillExecuteAction - Execute skill action                        |
 //+------------------------------------------------------------------+
+//--- Executes the actor action, places the real deal and returns
 //--- margins.
 bool SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_value,double &margin_penalty,
-                          bool &market_closed)
+                        bool &market_closed)
   {
    margin_penalty=0;
    market_closed=false;
    if(!SkillValidateAction(action))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- canonical CogDriver mutual exclusion and broker constraints.
    if(action[0]>=action[3])
-     { action.Update(0,(action[0]-action[3])); action.Update(3,0); }
+     {
+      action.Update(0,(action[0]-action[3]));
+      action.Update(3,0);
+     }
    else
      { action.Update(3,(action[3]-action[0])); action.Update(0,0); }
 //---
    const double min_lot=Symb.LotsMin();
    if(!IsExecutableOrder(action[0],action[1],action[2]))
-     { if(buy_value>0) CloseByDirection(POSITION_TYPE_BUY); }
+     {
+      if(buy_value>0) CloseByDirection(POSITION_TYPE_BUY);
+     }
    else
      {
       const double lot=NormalizeLot(action[0]);
@@ -7425,7 +8268,7 @@ bool SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_value,
             if(retcode!=10019)
               {
                PrintFormat("Skill buy execution failed: retcode=%u %s",retcode,Trade.ResultRetcodeDescription());
-               ReturnFalse;
+               ReturnFalse
               }
 
       //--- preserve CogDriver's insufficient-margin feedback, but keep the
@@ -7434,7 +8277,9 @@ bool SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_value,
            }
      }
    if(!IsExecutableOrder(action[3],action[4],action[5]))
-     { if(sell_value>0) CloseByDirection(POSITION_TYPE_SELL); }
+     {
+      if(sell_value>0) CloseByDirection(POSITION_TYPE_SELL);
+     }
    else
      {
       const double lot=NormalizeLot(action[3]);
@@ -7463,7 +8308,7 @@ bool SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_value,
             if(retcode!=10019)
               {
                PrintFormat("Skill sell execution failed: retcode=%u %s",retcode,Trade.ResultRetcodeDescription());
-               ReturnFalse;
+               ReturnFalse
               }
             margin_penalty -= 100.0 * (lot-sell_value);
            }
@@ -7472,7 +8317,7 @@ bool SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_value,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements SkillExecuteAction. Inference callers do not train... |
+//| SkillExecuteAction - Execute skill action                        |
 //+------------------------------------------------------------------+
 bool SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_value)
   {
@@ -7483,27 +8328,33 @@ bool SkillExecuteAction(CBufferFloat *action,double buy_value,double sell_value)
   }
 #endif
 //+------------------------------------------------------------------+
-//| Finalizes projected balance before writing terminal account      |
+//| SkillFinalizeAccountBalance - Finalize skill account balance     |
 //+------------------------------------------------------------------+
+//--- Finalizes projected balance before writing terminal account
 //--- state.
 bool SkillFinalizeAccountBalance(const double balance,const double realized,
-                                   const double min_balance,double &next_balance,
-                                   bool &terminal)
+                                 const double min_balance,double &next_balance,
+                                 bool &terminal)
   {
    if(!MathIsValidNumber(balance)||!MathIsValidNumber(realized)||
       !MathIsValidNumber(min_balance)||min_balance<0.0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double projected_balance=balance+realized;
    if(!MathIsValidNumber(projected_balance))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    terminal=(projected_balance<=min_balance);
    next_balance=(terminal ? min_balance : projected_balance);
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| One historical-bar account transition.  CheckAction remains the  |
+//| AdvanceAccount - Advance account                                 |
 //+------------------------------------------------------------------+
+//--- One historical-bar account transition.  CheckAction remains the
 bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int position,
                     const double min_balance,CBufferFloat *next,double &reward,bool &terminal)
   {
@@ -7513,13 +8364,17 @@ bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int positio
       current.Total()!=AccountDescr||action.Total()!=NActions||
       (current.GetIndex()>=0&&!current.BufferRead())||
       (action.GetIndex()>=0&&!action.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double balance=MathMax(0.0,double(current[0]) * EtalonBalance);
    const double buy=MathMax(0.0,double(action[0]-action[3]));
    const double sell=MathMax(0.0,double(action[3]-action[0]));
    double       margin=0;
    if(!OrderCalcMargin(ORDER_TYPE_BUY,Symb.Name(),1,Rates[position].open,margin))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double min_lot=Symb.LotsMin();
 
 //--- function if.
@@ -7621,7 +8476,9 @@ bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int positio
    double next_balance=0.0;
    bool   balance_terminal=false;
    if(!SkillFinalizeAccountBalance(balance,realized,min_balance,next_balance,balance_terminal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double current_equity=balance+double(current[6]) * balance+double(current[7]) * balance;
    const double next_equity=next_balance+next_buy_profit+next_sell_profit;
 
@@ -7632,10 +8489,14 @@ bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int positio
 //--- added to money-dimensioned distribution samples).
    reward=(next_equity-current_equity);
    if(!MathIsValidNumber(reward))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SkillAdvanceAccountTime(current,Rates[position-1].time,next)||
       (next.GetIndex()>=0&&!next.BufferRead()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!next.Update(0,float(next_balance / EtalonBalance))||
       !next.Update(1,float((next_balance-balance) / MathMax(balance,1.0)))||
       !next.Update(2,float(next_equity / MathMax(balance,1.0)))||
@@ -7644,7 +8505,9 @@ bool AdvanceAccount(CBufferFloat *current,CBufferFloat *action,const int positio
       !next.Update(6,float(next_buy_profit / MathMax(next_balance,1.0)))||
       !next.Update(7,float(next_sell_profit / MathMax(next_balance,1.0)))||
       !next.Update(8,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    terminal=(balance_terminal||next_equity<margin * min_lot);
 
    return(next.GetIndex()<0||next.BufferWrite());

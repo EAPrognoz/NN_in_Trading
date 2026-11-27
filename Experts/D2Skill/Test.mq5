@@ -30,7 +30,10 @@ datetime Start=0;
 datetime End=0;
 int      Epochs=0;
 CNet     Actor;
-CBufferFloat State,TimeState,Account,Action;
+CBufferFloat State;
+CBufferFloat TimeState;
+CBufferFloat Account;
+CBufferFloat Action;
 double   PreviousBalance=0,PreviousEquity=0;
 bool     D2SkillTestInitialized=false;
 ulong    OOSTransitions=0,OOSExecutableActions=0;
@@ -47,7 +50,9 @@ ulong    OOSGpuBoundaryLatencySamples=0;
 bool D2SkillWriteD2OOSHeader(const int handle)
   {
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(FileWrite(handle,
                 "run_time","symbol","timeframe","stage","stage_name",
                 "mode","mode_name","execution_mode","execution_mode_name","utility_aware","min_utility","utility_scale",
@@ -63,7 +68,9 @@ bool D2SkillWriteD2OOSHeader(const int handle)
                 "paired_terminal_updates","task_selection_valid","selected_task_slot",
                 "selected_task_score","step_selection_valid","selected_step_slot",
                 "selected_step_score")<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -109,7 +116,7 @@ string D2SkillD2ModeToString(const ENUM_D2SKILL_BANK_MODE mode)
    return("unknown");
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillD2ExecutionModeToString.                       |
+//| D2SkillD2ExecutionModeToString - Return                          |
 //+------------------------------------------------------------------+
 string D2SkillD2ExecutionModeToString(const ENUM_D2SKILL_MODE mode)
   {
@@ -148,13 +155,19 @@ bool D2SkillReadD2Selection(const bool task_bank,int &selected_slot,float &selec
    selected_score=0.0f;
    CNeuronBaseOCL *layer=Actor.Layer(1);
    if(!layer||layer.Type()!=defNeuronD2Skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2Skill *skill=(CD2Skill*)layer;
    if(!skill||!skill.Ready())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2SkillBank *bank=(task_bank ? skill.TaskBank() : skill.StepBank());
    if(!bank)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- BASE/disabled branches intentionally expose no device selection state.
 //--- OOS renders this normal control flow as selection_unavailable / NA.
@@ -162,18 +175,23 @@ bool D2SkillReadD2Selection(const bool task_bank,int &selected_slot,float &selec
       return(false);
 
    if(!bank.SelectedSlot()||!bank.SelectedScore())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!bank.SelectedSlot().BufferRead()||!bank.SelectedScore().BufferRead()||
       bank.SelectedSlot().Total()!=1||bank.SelectedScore().Total()!=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    selected_slot=(int)bank.SelectedSlot()[0];
    selected_score=bank.SelectedScore()[0];
    return(selected_slot>=0&&(uint)selected_slot<bank.Slots()&&
           MathIsValidNumber(double(selected_score))&&selected_score>-1.0e30f);
   }
 //+------------------------------------------------------------------+
-//| Reads diagnostic counters only at the OOS reporting boundary.    |
+//| D2SkillReadD2OOSBankStats - Read d 2 OOS bank stats              |
 //+------------------------------------------------------------------+
+//--- Reads diagnostic counters only at the OOS reporting boundary.
 bool D2SkillReadD2OOSBankStats(const bool task_bank,ulong &retrievals,
                                ulong &no_skill,ulong &promotions,
                                ulong &replacements)
@@ -184,23 +202,31 @@ bool D2SkillReadD2OOSBankStats(const bool task_bank,ulong &retrievals,
    replacements=0;
    CNeuronBaseOCL *layer=Actor.Layer(1);
    if(!layer||layer.Type()!=defNeuronD2Skill)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2Skill *skill=(CD2Skill*)layer;
    if(!skill||!skill.Ready())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CD2SkillBank *bank=(task_bank ? skill.TaskBank() : skill.StepBank());
 
 //--- base/disabled branches intentionally have no device diagnostics.  Their
 //--- counters remain zero and OOS reporting must not allocate scratch to read
 //--- them.
    if(!bank)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!bank.Enabled())
       return(true);
 
    if(!bank.RefreshDiagnostics()||!bank.Diagnostics()||
       !bank.Diagnostics().BufferRead()||bank.Diagnostics().Total()!=D2SKILL_DIAGNOSTICS)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *diagnostics=bank.Diagnostics();
    retrievals=(ulong)MathMax(0.0,double(diagnostics[0]));
    no_skill=(ulong)MathMax(0.0,double(diagnostics[1]));
@@ -234,18 +260,20 @@ string D2SkillD2OOSReadError(const bool valid)
    return(valid ? "none" : "bank_or_diagnostics_unavailable");
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillWriteD2OOSBankConfiguration.                   |
+//| D2SkillWriteD2OOSBankConfiguration - Write bank configuration    |
 //+------------------------------------------------------------------+
 bool D2SkillWriteD2OOSBankConfiguration(const int handle,const string prefix,
                                         CD2SkillBank *bank)
   {
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!bank)
      {
       FileWrite(handle,prefix+"_configuration_valid=false");
       FileWrite(handle,prefix+"_configuration_error=bank_unavailable");
-      ReturnFalse;
+      ReturnFalse
      }
    FileWrite(handle,prefix+"_configuration_valid=true");
    FileWrite(handle,StringFormat("%s_slots=%u",prefix,bank.Slots()));
@@ -275,8 +303,9 @@ bool D2SkillWriteD2OOSBankConfiguration(const int handle,const string prefix,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Counts closed position exits in the exact tested symbol window.  |
+//| D2SkillOOSClosedTrades - Return the OOS closed trades            |
 //+------------------------------------------------------------------+
+//--- Counts closed position exits in the exact tested symbol window.
 ulong D2SkillOOSClosedTrades(void)
   {
    if(OOSStartTime<=0||!HistorySelect(OOSStartTime,TimeCurrent()))
@@ -297,20 +326,22 @@ ulong D2SkillOOSClosedTrades(void)
    return(trades);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillAppendOOSResultRow.                            |
+//| D2SkillAppendOOSResultRow - Append OOS result row                |
 //+------------------------------------------------------------------+
 bool D2SkillAppendOOSResultRow(const double final_balance,const double final_equity)
   {
    const int handle=FileOpen(D2Skill_OOS_FILE,
                                FILE_WRITE | FILE_READ | FILE_CSV | FILE_ANSI | FILE_COMMON,',');
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const bool need_header=(FileSize(handle)<=0);
    FileSeek(handle,0,SEEK_END);
    if(need_header&&!D2SkillWriteD2OOSHeader(handle))
      {
       FileClose(handle);
-      ReturnFalse;
+      ReturnFalse
      }
    int        task_slot=-1,step_slot=-1;
    float      task_score=0.0f;
@@ -394,13 +425,15 @@ bool D2SkillAppendOOSResultRow(const double final_balance,const double final_equ
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Implements D2SkillWriteD2OOSManifest.                            |
+//| D2SkillWriteD2OOSManifest - Write d 2 OOS manifest               |
 //+------------------------------------------------------------------+
 bool D2SkillWriteD2OOSManifest(const double final_balance,const double final_equity)
   {
    const int handle=FileOpen(D2Skill_OOS_MANIFEST_FILE,FILE_WRITE | FILE_TXT | FILE_ANSI | FILE_COMMON);
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    FileWrite(handle,"format=D2Skill_D2_OOS");
    FileWrite(handle,StringFormat("run_time=%s",TimeToString(TimeCurrent(),TIME_DATE | TIME_MINUTES | TIME_SECONDS)));
    FileWrite(handle,StringFormat("symbol=%s",_Symbol));
@@ -497,17 +530,35 @@ int OnInit(void)
                                false,false,InpD2SkillRepresentation,
                                InpD2SkillResetBanksOnRepresentationMismatch,
                                InpD2SkillRecreateIncompatibleCheckpoint))
-     { Print("D2Skill test init: runtime configuration=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill test init: runtime configuration=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillInitIndicators())
-     { Print("D2Skill test init: indicators=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill test init: indicators=FAIL");
+      return(INIT_FAILED);
+     }
    if(!Trade.SetTypeFillingBySymbol(Symb.Name()))
-     { Print("D2Skill test init: trade filling=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill test init: trade filling=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillLoadForecastInference())
-     { Print("D2Skill test init: forecast=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill test init: forecast=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillLoadInferenceActor(Actor))
-     { Print("D2Skill test init: actor checkpoint=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill test init: actor checkpoint=FAIL");
+      return(INIT_FAILED);
+     }
    if(!D2SkillVerifyFrozenForecastExact())
-     { Print("D2Skill test init: frozen forecast=FAIL"); return(INIT_FAILED); }
+     {
+      Print("D2Skill test init: frozen forecast=FAIL");
+      return(INIT_FAILED);
+     }
    PreviousBalance=AccountInfoDouble(ACCOUNT_BALANCE);
    PreviousEquity=AccountInfoDouble(ACCOUNT_EQUITY);
    OOSInitialBalance=PreviousBalance;
@@ -584,22 +635,34 @@ void OnTick(void)
    if(!D2SkillRefreshLiveMarket(GetPointer(State),GetPointer(TimeState))||
       !D2SkillMarket.Clear()||
       !D2SkillForwardForecastState(GetPointer(State)))
-     { PrintFormat("%s -> %d market/forecast",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d market/forecast",__FUNCTION__,__LINE__);
+      return;
+     }
    double buy_value=0,sell_value=0;
    if(!D2SkillBuildLiveAccount(PreviousBalance,PreviousEquity,Rates[0].time,
                                GetPointer(Account),buy_value,sell_value))
-     { PrintFormat("%s -> %d account",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d account",__FUNCTION__,__LINE__);
+      return;
+     }
    const ulong forward_started=GetMicrosecondCount();
    if(!Actor.feedForward(GetPointer(Account),1,false,GetPointer(D2SkillMarket),-1)||
       !ReadAction(Actor,GetPointer(Action)))
-     { PrintFormat("%s -> %d actor/read",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d actor/read",__FUNCTION__,__LINE__);
+      return;
+     }
    const ulong forward_elapsed=GetMicrosecondCount()-forward_started;
    OOSGpuBoundaryLatencyTotal += forward_elapsed;
    if(forward_elapsed>OOSGpuBoundaryLatencyMaximum)
       OOSGpuBoundaryLatencyMaximum=forward_elapsed;
    OOSGpuBoundaryLatencySamples++;
    if(!D2SkillExecuteAction(GetPointer(Action),buy_value,sell_value))
-     { PrintFormat("%s -> %d actor/execute",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d actor/execute",__FUNCTION__,__LINE__);
+      return;
+     }
    OOSTransitions++;
    if(IsExecutableOrder(double(Action[0]),double(Action[1]),double(Action[2]))||
       IsExecutableOrder(double(Action[3]),double(Action[4]),double(Action[5])))

@@ -25,14 +25,20 @@ input bool  SelectiveOpenCL=true;
 //|                                                                  |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
-//| Global variables                                                 |
+//| CTD3Actor - Expose full OpenCL initialization for the actor      |
 //+------------------------------------------------------------------+
 class CTD3Actor:public CNet
   {
 public:
+//+------------------------------------------------------------------+
+//| InitializeFull - Initialize full                                 |
+//+------------------------------------------------------------------+
    bool InitializeFull(void) { return(OpenCLInit()); }
   };
 
+//+------------------------------------------------------------------+
+//| Global variables                                                 |
+//+------------------------------------------------------------------+
 CSelectiveOpenCL SelectiveRuntime;
 STrajectory Buffer[];
 CTD3Actor   Actor;
@@ -68,16 +74,22 @@ bool InitializeStudyModels(const bool load_checkpoints,const bool common=true)
       device=NN_OPENCL_DEVICE;
 #endif
       if(!SelectiveRuntime.Begin(device)||!Actor.UseOpenCLRuntime(GetPointer(SelectiveRuntime)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else if(!Actor.InitializeFull())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OpenCL=Actor.GetOpenCL();
    if(!Critic1.UseOpenCLRuntime(OpenCL)||!Critic2.UseOpenCLRuntime(OpenCL)||
       !TargetActor.UseOpenCLRuntime(OpenCL)||!TargetCritic1.UseOpenCLRuntime(OpenCL)||
       !TargetCritic2.UseOpenCLRuntime(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- load models
    float temp;
@@ -88,7 +100,9 @@ bool InitializeStudyModels(const bool load_checkpoints,const bool common=true)
                       TargetCritic1.Load(FileName+"Crt1.nnw",temp,temp,temp,dtStudied,common)&&
                       TargetCritic2.Load(FileName+"Crt2.nnw",temp,temp,temp,dtStudied,common));
    if(load_checkpoints&&!common&&!loaded)
-      ReturnFalseEx("TD3 benchmark checkpoint could not be loaded");
+     {
+      ReturnFalseEx("TD3 benchmark checkpoint could not be loaded")
+     }
    if(!loaded)
      {
       CArrayObj actor;
@@ -99,15 +113,21 @@ bool InitializeStudyModels(const bool load_checkpoints,const bool common=true)
          !Actor.Create(actor_description)||!Critic1.Create(critic_description)||!Critic2.Create(critic_description)||
          !TargetActor.Create(actor_description)||!TargetCritic1.Create(critic_description)||
          !TargetCritic2.Create(critic_description))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(SelectiveOpenCL&&!SelectiveRuntime.Build())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!loaded&&(!TargetActor.WeightsUpdate(GetPointer(Actor),1.0f)||
                !TargetCritic1.WeightsUpdate(GetPointer(Critic1),1.0f)||
                !TargetCritic2.WeightsUpdate(GetPointer(Critic2),1.0f)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    PrintFormat("TD3 OpenCL init: mode=%s elapsed_ms=%I64u context=%d program=%d",
                SelectiveOpenCL?"selective":"full",GetTickCount64()-started,
@@ -118,7 +138,7 @@ bool InitializeStudyModels(const bool load_checkpoints,const bool common=true)
      {
       PrintFormat("The scope of the actor does not match the actions count (%d <> %d)",NActions,Result.Total());
 
-      ReturnFalse;
+      ReturnFalse
      }
 //---
    Actor.GetLayerOutput(0,Result);
@@ -126,7 +146,7 @@ bool InitializeStudyModels(const bool load_checkpoints,const bool common=true)
      {
       PrintFormat("Input size of Actor doesn't match state description (%d <> %d)",Result.Total(),(HistoryBars * BarDescr));
 
-      ReturnFalse;
+      ReturnFalse
      }
 //---
    Actor.GetLayerOutput(LatentLayer,Result);
@@ -136,7 +156,7 @@ bool InitializeStudyModels(const bool load_checkpoints,const bool common=true)
      {
       PrintFormat("Input size of Critic doesn't match latent state Actor (%d <> %d)",Result.Total(),latent_state);
 
-      ReturnFalse;
+      ReturnFalse
      }
 //---
    Gradient.BufferInit(AccountDescr,0);
@@ -200,7 +220,7 @@ void OnChartEvent(const int id,
 #endif // TD3_OPENCL_BENCHMARK
 
 //+------------------------------------------------------------------+
-//| ForwardCritic - Use the actor's device output and latent gradient |
+//| ForwardCritic - Use actor output and latent gradient on device   |
 //+------------------------------------------------------------------+
 bool ForwardCritic(CNet &critic,CNet &actor,const bool policy=false)
   {
@@ -209,7 +229,9 @@ bool ForwardCritic(CNet &critic,CNet &actor,const bool policy=false)
    CNeuronBaseOCL *previous=critic.Layer(0);
    if(!latent||!action||!previous||latent.Neurons()!=previous.Neurons()||
       actor.GetOpenCL()!=critic.GetOpenCL())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *input_layer=previous;
    CBufferFloat   *output=input_layer.getOutput();
@@ -219,7 +241,9 @@ bool ForwardCritic(CNet &critic,CNet &actor,const bool policy=false)
    if(!output||!gradient||!latent_output||!latent_gradient||
       output.Total()!=latent_output.Total()||gradient.Total()!=latent_gradient.Total()||
       !input_layer.SetOutput(latent_output,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ENUM_ACTIVATION activation=(ENUM_ACTIVATION)input_layer.Activation();
    input_layer.SetActivationFunction((ENUM_ACTIVATION)latent.Activation());
@@ -287,13 +311,13 @@ bool Train(void)
       if(!TargetActor.feedForward(GetPointer(State),1,false,GetPointer(Account)))
         {
          PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
       //---
       if(!ForwardCritic(TargetCritic1,TargetActor)||!ForwardCritic(TargetCritic2,TargetActor))
         {
          PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
       TargetCritic1.getResults(Result);
       float reward=Result[0];
@@ -320,7 +344,7 @@ bool Train(void)
       if(!Actor.feedForward(GetPointer(State),1,false,GetPointer(Account)))
         {
          PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
       Actor.GetLayerOutput(LatentLayer,Result);
       Actions.AssignArray(Buffer[tr].States[i].action);
@@ -331,7 +355,7 @@ bool Train(void)
          !Critic2.feedForward(Result,1,false,GetPointer(Actions)))
         {
          PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
       Result.Clear();
       Result.Add(reward);
@@ -339,7 +363,7 @@ bool Train(void)
          !Critic2.backProp(Result,GetPointer(Actions),GetPointer(Gradient)))
         {
          PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
 
    //--- policy study
@@ -366,12 +390,14 @@ bool Train(void)
          if(!Actor.feedForward(GetPointer(State),1,false,GetPointer(Account)))
            {
             PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
-            ReturnFalse;
+            ReturnFalse
            }
          //---
          if(!ForwardCritic(Critic1,Actor,true)||
             !Actor.backPropGradient(GetPointer(Account),GetPointer(Gradient)))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
    //--- update Target Nets
@@ -380,7 +406,9 @@ bool Train(void)
          if(!TargetActor.WeightsUpdate(GetPointer(Actor),Tau)||
             !TargetCritic1.WeightsUpdate(GetPointer(Critic1),Tau)||
             !TargetCritic2.WeightsUpdate(GetPointer(Critic2),Tau))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       //---
       if(GetTickCount()-ticks>500)

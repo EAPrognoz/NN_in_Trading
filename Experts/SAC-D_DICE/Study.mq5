@@ -201,7 +201,8 @@ void Train(void)
       //---
       if(GetTickCount()-ticks>500)
         {
-         float loss1,loss2;
+         float loss1;
+         float loss2;
          Net.GetLoss(loss1,loss2);
          string str=StringFormat("%-15s %5.2f%% -> Error %15.8f\n","Critic1",iter * 100.0 / (double)(Iterations),loss1);
          str += StringFormat("%-15s %5.2f%% -> Error %15.8f\n","Critic2",iter * 100.0 / (double)(Iterations),loss2);
@@ -211,7 +212,8 @@ void Train(void)
      }
    Comment("");
 //---
-   float loss1,loss2;
+   float loss1;
+   float loss2;
    Net.GetLoss(loss1,loss2);
    Net.TargetsUpdate(Tau);
    PrintFormat("%s -> %d -> %-15s %10.7f",__FUNCTION__,__LINE__,"Critic1",loss1);

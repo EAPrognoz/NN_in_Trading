@@ -65,8 +65,9 @@ double LivePrevEquity=0;
 bool   LiveReady=false;
 bool   LiveFinalized=false;
 //+------------------------------------------------------------------+
-//| Validates the AC-SRM policy shapes (no D2 banks, ACSRM heads).   |
+//| ValidatePolicyShapeACSRM - Validate policy shape ACSRM           |
 //+------------------------------------------------------------------+
+//--- Validates the AC-SRM policy shapes (no D2 banks, ACSRM heads).
 bool ValidatePolicyShapeACSRM(CNet &actor,CNet &q1,CNet &q2)
   {
    CNeuronBaseOCL *a0=actor.Layer(0);
@@ -75,7 +76,9 @@ bool ValidatePolicyShapeACSRM(CNet &actor,CNet &q1,CNet &q2)
    if(!a0||!a1||!a3||a0.getOutput().Total()!=(int)AccountDescr||
       a1.Type()!=defNeuronScenarioCrossAttention||
       a3.getOutput().Total()!=(int)NActions)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<2; i++)
      {
       CNet           *critic=(i==0 ? GetPointer(q1) : GetPointer(q2));
@@ -87,14 +90,17 @@ bool ValidatePolicyShapeACSRM(CNet &actor,CNet &q1,CNet &q2)
          c3.getOutput().Total()!=32||
          c4.Type()!=defNeuronACSRM||
          c4.getOutput().Total()!=1)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Inference requires the published Stage 03 checkpoint; creation   |
+//| LoadPoliciesInference - Load policies inference                  |
 //+------------------------------------------------------------------+
+//--- Inference requires the published Stage 03 checkpoint; creation
 //--- is intentionally impossible in Test mode.
 bool LoadPoliciesInference(void)
   {
@@ -107,12 +113,12 @@ bool LoadPoliciesInference(void)
                                    Skill_AC_TRANSACTION_FILE))
      {
       Print("Skill policy recovery=FAIL; incomplete checkpoint requires repair");
-      ReturnFalse;
+      ReturnFalse
      }
    if(!FileIsExist(Skill_AC_MANIFEST_FILE,FILE_COMMON))
      {
       Print("Skill inference policy=FAIL reason=manifest_missing");
-      ReturnFalse;
+      ReturnFalse
      }
    if(!SkillValidateACManifestFile(true,Skill_AC_MANIFEST_FILE,false)||
       !SkillLoadPolicyNet(Actor,Skill_ACTOR_FILE)||
@@ -120,69 +126,91 @@ bool LoadPoliciesInference(void)
       !SkillLoadPolicyNet(Q2,Skill_Q2_FILE))
      {
       Print("Skill inference policy=FAIL reason=tuple_invalid");
-      ReturnFalse;
+      ReturnFalse
      }
    if(!SkillBindPolicyOpenCLChecked(Actor,Q1,Q2)||
       !ValidatePolicyShapeACSRM(Actor,Q1,Q2))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    Actor.TrainMode(false);
    Q1.TrainMode(false);
    Q2.TrainMode(false);
    if(!Actor.SetWeightsUpdate(false)||!Q1.SetWeightsUpdate(false)||
       !Q2.SetWeightsUpdate(false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Returns the SRM risk score of one critic head distribution.      |
+//| CriticRiskValue - Return the critic risk value                   |
 //+------------------------------------------------------------------+
+//--- Returns the SRM risk score of one critic head distribution.
 bool CriticRiskValue(CNet &critic,double &value)
   {
    CNeuronBaseOCL *head=critic.Layer(4);
    if(!head||head.Type()!=defNeuronACSRM)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronACSRM *acsrm=(CNeuronACSRM*)head;
    if(!SRMValue.BufferInit(1,0)||!SRMValue.BufferCreate(SkillMarket.GetOpenCL())||
       !SRMValue.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!acsrm.SRMForward(GetPointer(SRMValue),1,InpRiskType,InpRiskParameter,InpMeanWeight))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SRMValue.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    value=double(SRMValue[0]);
 
    return(MathIsValidNumber(value));
   }
 //+------------------------------------------------------------------+
-//| Refreshes the live market state from the last CLOSED bar and the |
+//| LiveRefreshState - Check live refresh state                      |
 //+------------------------------------------------------------------+
+//--- Refreshes the live market state from the last CLOSED bar and the
 //--- scenario (forecast) context consumed by the actor cross-  attention.  SkillRefreshLiveMarket fills the Rates/indicator  window; the explicit Market feed refreshes z/u/pi.
 bool LiveRefreshState(CBufferFloat *state,CBufferFloat *time_state)
   {
    if(!SkillRefreshLiveMarket(state,time_state))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(SkillMarket.feedForward(state,1,false,(CBufferFloat*)NULL)&&
           SkillForecast!=NULL);
   }
 //+------------------------------------------------------------------+
-//| Keeps the PREVIOUS (account, action) host copies: the action is  |
+//| LiveKeepPrevious - Check live keep previous                      |
 //+------------------------------------------------------------------+
+//--- Keeps the PREVIOUS (account, action) host copies: the action is
 //--- reported with its own bar and classified by executable contract.
 bool LiveKeepPrevious(void)
   {
    if(PrevAccount.Total()!=(int)AccountDescr&&
       !PrevAccount.BufferInit((int)AccountDescr,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(PrevAction.Total()!=(int)NActions&&
       !PrevAction.BufferInit((int)NActions,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(PrevAccount.AssignArray(GetPointer(Account))&&
           PrevAction.AssignArray(GetPointer(CurrentAction)));
   }
 //+------------------------------------------------------------------+
-//| Executes the bar decision on the LIVE account: builds the real   |
+//| LiveExecuteBar - Execute live bar                                |
 //+------------------------------------------------------------------+
+//--- Executes the bar decision on the LIVE account: builds the real
 //--- account vector, runs the frozen Actor, retains this bar's  (state, action) critic tuple for next-bar diagnostics and re-  targets this expert's positions (CogDriver).  The post-execution  LIVE balance/equity snapshot is the reward base of this bar.
 bool LiveExecuteBar(const double previous_balance,const double previous_equity)
   {
@@ -190,32 +218,48 @@ bool LiveExecuteBar(const double previous_balance,const double previous_equity)
 //--- skillRefreshLiveMarket (CopyRates offset 1 + Symb.RefreshRates)
 //--- which SkillExecuteAction needs to derive valid SL/TP distances.
    if(!LiveRefreshState(GetPointer(State),GetPointer(TimeState)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    datetime now=TimeCurrent();
    double   buy_value=0,sell_value=0;
    if(!SkillBuildLiveAccount(previous_balance,previous_equity,now,
                              GetPointer(Account),buy_value,sell_value))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(Account.GetIndex()<0&&!Account.BufferCreate(SkillMarket.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(Account.GetIndex()>=0&&!Account.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!Actor.Clear()||!Actor.feedForward(GetPointer(Account),1,false,
                                            GetPointer(SkillMarket),-1)||
       !ReadAction(Actor,GetPointer(CurrentAction)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronBaseOCL *context_layer=Actor.Layer(0);
    CNeuronBaseOCL *actor_layer=Actor.Layer(3);
    if(!context_layer||!actor_layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!BuildCriticInput(context_layer.getOutput(),actor_layer.getOutput(),
                         GetPointer(CriticInput)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    double margin_penalty=0;
    bool   market_closed=false;
    if(!SkillExecuteAction(GetPointer(CurrentAction),buy_value,sell_value,
                           margin_penalty,market_closed))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- post-execution LIVE snapshot: the reward of this bar is evaluated
 //--- from it on the next bar open.
@@ -225,15 +269,18 @@ bool LiveExecuteBar(const double previous_balance,const double previous_equity)
    return(LiveKeepPrevious());
   }
 //+------------------------------------------------------------------+
-//| First bar: no previous bar exists, only the opening decision.    |
+//| LiveFirstBar - Check live first bar                              |
 //+------------------------------------------------------------------+
+//--- First bar: no previous bar exists, only the opening decision.
 bool LiveFirstBar(void)
   {
    LiveReady=true;
    LivePrevBalance=AccountInfoDouble(ACCOUNT_BALANCE);
    LivePrevEquity=AccountInfoDouble(ACCOUNT_EQUITY);
    if(!LiveExecuteBar(LivePrevBalance,LivePrevEquity))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    PrintFormat("ACSRM_TEST_LIVE_BAR1 time=%s balance=%.2f equity=%.2f act=(%.8f %.8f %.8f %.8f %.8f %.8f)",
                TimeToString(TimeCurrent(),TIME_DATE | TIME_SECONDS),
                LivePrevBalance,LivePrevEquity,
@@ -243,8 +290,9 @@ bool LiveFirstBar(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| One new-bar live transition: evaluates the just-closed bar from  |
+//| LiveEvaluateBar - Evaluate live bar                              |
 //+------------------------------------------------------------------+
+//--- One new-bar live transition: evaluates the just-closed bar from
 //--- the LIVE account (reward = equity change vs the post-execution  snapshot of the previous bar), emits critic SRM diagnostics on  the retained tuple and places the new bar order target.
 bool LiveEvaluateBar(void)
   {
@@ -257,7 +305,9 @@ bool LiveEvaluateBar(void)
    const double reward=equity_now-LivePrevEquity;
    if(!MathIsValidNumber(reward)||!MathIsValidNumber(balance_now)||
       !MathIsValidNumber(equity_now))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    TestBars++;
    double srm1=0,srm2=0;
 
@@ -265,7 +315,9 @@ bool LiveEvaluateBar(void)
    if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(SkillMarket),-1)||
       !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(SkillMarket),-1)||
       !CriticRiskValue(Q1,srm1)||!CriticRiskValue(Q2,srm2))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double buy_lot=MathMax(0.0,double(PrevAction[0]-PrevAction[3]));
    const double sell_lot=MathMax(0.0,double(PrevAction[3]-PrevAction[0]));
    const bool executable=(IsExecutableOrder(buy_lot,PrevAction[1],PrevAction[2])||
@@ -381,8 +433,9 @@ void OnDeinit(const int reason)
    SkillForecast=NULL;
   }
 //+------------------------------------------------------------------+
-//| LIVE bar-driven evaluation on the tester account stream.  Each   |
+//| OnTick - Process the latest market tick                          |
 //+------------------------------------------------------------------+
+//--- LIVE bar-driven evaluation on the tester account stream.  Each
 //--- new bar triggers one decision + one next-bar live evaluation.
 void OnTick(void)
   {

@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                      NeuroNet_AlphaQCMOpenCL.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_OPENCL_MQH
 #define NEURONET_ALPHAQCM_OPENCL_MQH
@@ -18,7 +19,7 @@
 #define AQCM_KERNEL_COUNT     640
 
 //+------------------------------------------------------------------+
-//| CAlphaQCMOpenCL - Collect and build the model's kernel graph      |
+//| CAlphaQCMOpenCL - Collect and build the model's kernel graph     |
 //+------------------------------------------------------------------+
 class CAlphaQCMOpenCL:public COpenCLMy
   {
@@ -34,9 +35,15 @@ private:
    long              m_max_allocation;
 
 public:
+//+------------------------------------------------------------------+
+//| CAlphaQCMOpenCL - Initialize the object state                    |
+//+------------------------------------------------------------------+
    CAlphaQCMOpenCL(void):m_collecting(false),m_mode(AQCM_TRAIN),m_required_count(0),
                                            m_local_memory(0),m_global_memory(0),m_max_allocation(0) {}
    bool Begin(const int device=CL_USE_GPU_ONLY);
+//+------------------------------------------------------------------+
+//| IsCollectingSelectiveKernels - Check selective kernel collection |
+//+------------------------------------------------------------------+
    virtual bool IsCollectingSelectiveKernels(void) const override
      {
       return(m_collecting&&GetContext()!=INVALID_HANDLE);
@@ -95,7 +102,9 @@ bool CAlphaQCMOpenCL::DeviceLimits(void)
    const long fp32_required=(1<<1)|(1<<2); // Inf/NaN and round-to-nearest.
    const long type=GetDeviceInfo(device_type);
    if(type<0||(type&gpu_bit)==0)
-      ReturnFalseEx("RESOURCE_UNSUPPORTED: the OpenCL context does not expose a GPU device");
+     {
+      ReturnFalseEx("RESOURCE_UNSUPPORTED: the OpenCL context does not expose a GPU device")
+     }
 
    string version;
    string version_c;
@@ -105,13 +114,17 @@ bool CAlphaQCMOpenCL::DeviceLimits(void)
       !CLGetInfoString(context,CL_DEVICE_OPENCL_C_VERSION,version_c)||!Supports12(version_c,"OpenCL C ")||
       !CLGetInfoString(context,CL_DEVICE_PROFILE,profile)||profile!="FULL_PROFILE"||
       GetDeviceInfo(compiler_available)!=1)
+     {
       ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: OpenCL 1.2 full-profile compiler required (device=%s C=%s profile=%s)",
-                                version,version_c,profile));
+                                version,version_c,profile))
+     }
 
    const long fp32=GetDeviceInfo(single_fp_config);
    const long bits=GetDeviceInfo(address_bits);
    if(fp32<0||(fp32&fp32_required)!=fp32_required||(bits!=32&&bits!=64))
-      ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: FP32 configuration=%I64d address bits=%I64d",fp32,bits));
+     {
+      ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: FP32 configuration=%I64d address bits=%I64d",fp32,bits))
+     }
 
    const long dimensions=GetDeviceInfoInteger(CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS);
    const long group=GetDeviceInfoInteger(CL_DEVICE_MAX_WORK_GROUP_SIZE);
@@ -120,11 +133,15 @@ bool CAlphaQCMOpenCL::DeviceLimits(void)
    if(dimensions<3||group<2||
       !CLGetDeviceInfo(context,CL_DEVICE_MAX_WORK_ITEM_SIZES,work_item_bytes,size)||
       (long)size>ArraySize(work_item_bytes)||(long)size%dimensions!=0)
-      ReturnFalseEx("RESOURCE_UNSUPPORTED: invalid OpenCL work-group geometry");
+     {
+      ReturnFalseEx("RESOURCE_UNSUPPORTED: invalid OpenCL work-group geometry")
+     }
 
    const int width=(int)(size/dimensions);
    if(width!=4&&width!=8)
-      ReturnFalseEx("RESOURCE_UNSUPPORTED: unrecognized OpenCL work-item limit size");
+     {
+      ReturnFalseEx("RESOURCE_UNSUPPORTED: unrecognized OpenCL work-item limit size")
+     }
 
    for(int dimension=0;dimension<3;dimension++)
      {
@@ -133,7 +150,9 @@ bool CAlphaQCMOpenCL::DeviceLimits(void)
          value|=(ulong)work_item_bytes[dimension*width+byte_index]<<(8*byte_index);
 
       if(value<1||value>LONG_MAX)
-         ReturnFalseEx("RESOURCE_UNSUPPORTED: invalid OpenCL per-dimension work-item limit");
+        {
+         ReturnFalseEx("RESOURCE_UNSUPPORTED: invalid OpenCL per-dimension work-item limit")
+        }
 
       uLocalDimension.data[dimension]=(long)value;
      }
@@ -143,7 +162,9 @@ bool CAlphaQCMOpenCL::DeviceLimits(void)
    m_global_memory=GetDeviceInfoInteger(CL_DEVICE_GLOBAL_MEM_SIZE);
    m_max_allocation=GetDeviceInfo(max_alloc_size);
    if(m_local_memory<1||m_global_memory<1||m_max_allocation<1||GetMaxLocalSize(0)<2)
-      ReturnFalseEx("RESOURCE_UNSUPPORTED: insufficient OpenCL memory or parallel work-item limits");
+     {
+      ReturnFalseEx("RESOURCE_UNSUPPORTED: insufficient OpenCL memory or parallel work-item limits")
+     }
 
    string name;
    string driver;
@@ -210,7 +231,9 @@ bool CAlphaQCMOpenCL::SelectSource(string &source) const
    const string marker="\n__kernel void ";
    int seen[];
    if(ArrayResize(seen,AQCM_KERNEL_COUNT)!=AQCM_KERNEL_COUNT)
-      ReturnFalseEx("Cannot allocate the selected kernel table");
+     {
+      ReturnFalseEx("Cannot allocate the selected kernel table")
+     }
    ArrayInitialize(seen,0);
 
    int cursor=0;
@@ -221,7 +244,9 @@ bool CAlphaQCMOpenCL::SelectSource(string &source) const
       const int name_start=begin+StringLen(marker);
       const int paren=StringFind(full,"(",name_start);
       if(paren<0)
-         ReturnFalseEx("Invalid OpenCL kernel declaration");
+        {
+         ReturnFalseEx("Invalid OpenCL kernel declaration")
+        }
 
       string name=StringSubstr(full,name_start,paren-name_start);
       StringTrimRight(name);
@@ -235,7 +260,9 @@ bool CAlphaQCMOpenCL::SelectSource(string &source) const
 
       const int end=KernelEnd(full,paren);
       if(end<=paren)
-         ReturnFalseEx(StringFormat("Incomplete OpenCL kernel %s",name));
+        {
+         ReturnFalseEx(StringFormat("Incomplete OpenCL kernel %s",name))
+        }
 
       if(selected<0)
         {
@@ -245,7 +272,9 @@ bool CAlphaQCMOpenCL::SelectSource(string &source) const
       else
         {
          if(seen[selected]!=0)
-            ReturnFalseEx(StringFormat("Duplicate OpenCL source kernel %s",name));
+           {
+            ReturnFalseEx(StringFormat("Duplicate OpenCL source kernel %s",name))
+           }
          seen[selected]=1;
          found++;
         }
@@ -256,7 +285,9 @@ bool CAlphaQCMOpenCL::SelectSource(string &source) const
    if(found!=m_required_count)
       for(int id=0;id<AQCM_KERNEL_COUNT;id++)
          if(m_required[id]!=""&&seen[id]==0)
-            ReturnFalseEx(StringFormat("OpenCL source is missing kernel %d %s",id,m_required[id]));
+           {
+            ReturnFalseEx(StringFormat("OpenCL source is missing kernel %d %s",id,m_required[id]))
+           }
 
    return(true);
   }
@@ -275,7 +306,9 @@ bool CAlphaQCMOpenCL::CreateKernels(const int program)
       //--- Free a failed build without invalidating the context of the live models.
       const int kernel=CLKernelCreate(program,name);
       if(kernel==INVALID_HANDLE)
-         ReturnFalseEx(StringFormat("Cannot create OpenCL kernel %s (error=%d)",name,GetLastError()));
+        {
+         ReturnFalseEx(StringFormat("Cannot create OpenCL kernel %s (error=%d)",name,GetLastError()))
+        }
 
       m_kernels[id]=kernel;
       m_kernel_names[id]=name;
@@ -283,8 +316,10 @@ bool CAlphaQCMOpenCL::CreateKernels(const int program)
       m_kernel_local[id]=CLGetInfoInteger(kernel,CL_KERNEL_LOCAL_MEM_SIZE);
       const long private_bytes=CLGetInfoInteger(kernel,CL_KERNEL_PRIVATE_MEM_SIZE);
       if(m_kernel_group[id]<1||m_kernel_local[id]<0||m_kernel_local[id]>m_local_memory||private_bytes<0)
+        {
          ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: kernel=%s group=%I64d local_bytes=%I64d private_bytes=%I64d",
-                                   name,m_kernel_group[id],m_kernel_local[id],private_bytes));
+                                   name,m_kernel_group[id],m_kernel_local[id],private_bytes))
+        }
       long minimum=1;
       if(id>=AQCMPoolOrderedKernel&&id<=AQCMPoolHistoryGlobalKernel)
          minimum=id==AQCMPoolOrderedKernel?4:2;
@@ -307,7 +342,9 @@ bool CAlphaQCMOpenCL::CreateKernels(const int program)
             break;
         }
       if(MathMin(m_kernel_group[id],MathMin(GetMaxWorkGroupSize(),GetMaxLocalSize(0)))<minimum)
-         ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: kernel %s needs %I64d parallel lanes",name,minimum));
+        {
+         ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: kernel %s needs %I64d parallel lanes",name,minimum))
+        }
      }
 
    return(true);
@@ -319,11 +356,17 @@ bool CAlphaQCMOpenCL::CreateKernels(const int program)
 bool CAlphaQCMOpenCL::Begin(const int device)
   {
    if(GetContext()!=INVALID_HANDLE)
-      ReturnFalseEx("AlphaQCM OpenCL already owns a context");
+     {
+      ReturnFalseEx("AlphaQCM OpenCL already owns a context")
+     }
    if(AlphaQCMLoadMode!=AQCM_TRAIN&&AlphaQCMLoadMode!=AQCM_INFER&&AlphaQCMLoadMode!=AQCM_VERIFY)
-      ReturnFalseEx("Invalid AlphaQCM load mode");
+     {
+      ReturnFalseEx("Invalid AlphaQCM load mode")
+     }
    if(ArrayResize(m_required,AQCM_KERNEL_COUNT)!=AQCM_KERNEL_COUNT)
-      ReturnFalseEx("Cannot allocate the AlphaQCM OpenCL registry");
+     {
+      ReturnFalseEx("Cannot allocate the AlphaQCM OpenCL registry")
+     }
 
    m_collecting=false;
    m_mode=AlphaQCMLoadMode;
@@ -332,11 +375,13 @@ bool CAlphaQCMOpenCL::Begin(const int device)
       m_required[id]="";
 
    if(!ContextCreate(device))
-      ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: OpenCL device selection %d failed (error=%d)",device,GetLastError()));
+     {
+      ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: OpenCL device selection %d failed (error=%d)",device,GetLastError()))
+     }
    if(!DeviceLimits())
      {
       Shutdown();
-      ReturnFalse;
+      ReturnFalse
      }
 
    m_collecting=true;
@@ -350,14 +395,20 @@ bool CAlphaQCMOpenCL::Begin(const int device)
 bool CAlphaQCMOpenCL::Require(const int id,const string name)
   {
    if(!IsCollectingSelectiveKernels()||id<0||id>=AQCM_KERNEL_COUNT||name=="")
-      ReturnFalseEx(StringFormat("Cannot collect kernel %d %s",id,name));
+     {
+      ReturnFalseEx(StringFormat("Cannot collect kernel %d %s",id,name))
+     }
    if(m_required[id]==name)
       return(true);
    if(m_required[id]!="")
-      ReturnFalseEx(StringFormat("Kernel ID %d already belongs to %s",id,m_required[id]));
+     {
+      ReturnFalseEx(StringFormat("Kernel ID %d already belongs to %s",id,m_required[id]))
+     }
    for(int other_id=0;other_id<AQCM_KERNEL_COUNT;other_id++)
       if(m_required[other_id]==name)
-         ReturnFalseEx(StringFormat("Kernel %s already has ID %d",name,other_id));
+        {
+         ReturnFalseEx(StringFormat("Kernel %s already has ID %d",name,other_id))
+        }
 
    m_required[id]=name;
    m_required_count++;
@@ -371,7 +422,9 @@ bool CAlphaQCMOpenCL::Require(const int id,const string name)
 bool CAlphaQCMOpenCL::RegisterSelectiveLayer(const int type,const ENUM_OPTIMIZATION optimizer)
   {
    if(!IsCollectingSelectiveKernels()||optimizer!=ADAM)
-      ReturnFalseEx("AlphaQCM selective runtime requires Adam layers and an active collection");
+     {
+      ReturnFalseEx("AlphaQCM selective runtime requires Adam layers and an active collection")
+     }
 
    if(type==defNeuronBaseOCL||type==defNeuronAlphaGenEvaluatorOCL||type==defNeuronLSTMOCL)
       return(true);
@@ -379,18 +432,24 @@ bool CAlphaQCMOpenCL::RegisterSelectiveLayer(const int type,const ENUM_OPTIMIZAT
    if(type==defNeuronAlphaQCMEncoderOCL)
      {
       if(m_mode!=AQCM_TRAIN)
-         ReturnFalseEx("AlphaQCM encoder requires TRAIN mode");
+        {
+         ReturnFalseEx("AlphaQCM encoder requires TRAIN mode")
+        }
       for(int id=570;id<620;id++)
         {
          const string name=AlphaQCMNetworkKernelName(id);
          if(name!=""&&!Require(id,name))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       return(true);
      }
 
    if(type!=defNeuronAlphaQCMOCL)
-      ReturnFalseEx(StringFormat("Unsupported AlphaQCM layer type %d",type));
+     {
+      ReturnFalseEx(StringFormat("Unsupported AlphaQCM layer type %d",type))
+     }
 
    if(!Require(def_k_AGContextMetadata,"AGContextMetadata")||
       !Require(def_k_AGCopySlice,"AGCopySlice")||
@@ -408,7 +467,9 @@ bool CAlphaQCMOpenCL::RegisterSelectiveLayer(const int type,const ENUM_OPTIMIZAT
       !Require(501,"AQCMPoolScore")||
       !Require(502,"AQCMPoolAdvance")||
       !Require(504,"AQCMPoolHistoryGlobal"))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_mode!=AQCM_TRAIN)
       return(true);
@@ -438,7 +499,9 @@ bool CAlphaQCMOpenCL::RegisterSelectiveLayer(const int type,const ENUM_OPTIMIZAT
       !Require(def_k_AQCMGenerate,"AQCMGenerate")||
       !Require(def_k_AQCMGridFeatures,"AQCMGridFeatures")||
       !Require(def_k_AQCMGridCosines,"AQCMGridCosines"))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -449,7 +512,9 @@ bool CAlphaQCMOpenCL::RegisterSelectiveLayer(const int type,const ENUM_OPTIMIZAT
 bool CAlphaQCMOpenCL::Build(void)
   {
    if(!IsCollectingSelectiveKernels()||GetProgram()!=INVALID_HANDLE||m_required_count<1)
-      ReturnFalseEx("AlphaQCM OpenCL needs an active, populated kernel registry");
+     {
+      ReturnFalseEx("AlphaQCM OpenCL needs an active, populated kernel registry")
+     }
 
    m_collecting=false;
    const ulong started=GetTickCount64();
@@ -460,12 +525,16 @@ bool CAlphaQCMOpenCL::Build(void)
       ArrayResize(m_kernels,AQCM_KERNEL_COUNT)!=AQCM_KERNEL_COUNT||
       ArrayResize(m_kernel_names,AQCM_KERNEL_COUNT)!=AQCM_KERNEL_COUNT||
       !SetKernelsCount(AQCM_KERNEL_COUNT))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    string build_log;
    const int program=CLProgramCreate(GetContext(),source,build_log);
    if(program==INVALID_HANDLE)
-      ReturnFalseEx(StringFormat("AlphaQCM OpenCL build failed (error=%d) %s",GetLastError(),build_log));
+     {
+      ReturnFalseEx(StringFormat("AlphaQCM OpenCL build failed (error=%d) %s",GetLastError(),build_log))
+     }
 
    if(!CreateKernels(program))
      {
@@ -473,7 +542,7 @@ bool CAlphaQCMOpenCL::Build(void)
          if(m_kernels[id]!=INVALID_HANDLE)
             KernelFree(id);
       CLProgramFree(program);
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- Both donor dense launches use local size {1, lanes} and read the
@@ -525,12 +594,16 @@ bool CAlphaQCMOpenCL::ValidateLocalMemory(const int kernel)
   {
    const int handle=GetKernel(kernel);
    if(handle==INVALID_HANDLE)
-      ReturnFalseEx("OpenCL kernel is unavailable");
+     {
+      ReturnFalseEx("OpenCL kernel is unavailable")
+     }
 
    const long bytes=CLGetInfoInteger(handle,CL_KERNEL_LOCAL_MEM_SIZE);
    if(bytes<0||bytes>m_local_memory)
+     {
       ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: kernel %s uses %I64d local bytes of %I64d",
-                                GetKernelName(kernel),bytes,m_local_memory));
+                                GetKernelName(kernel),bytes,m_local_memory))
+     }
 
    return(true);
   }
@@ -541,15 +614,19 @@ bool CAlphaQCMOpenCL::ValidateLocalMemory(const int kernel)
 bool CAlphaQCMOpenCL::ValidateTradingLocalMemory(const int hidden)
   {
    if(GetProgram()==INVALID_HANDLE||hidden<1||hidden>INT_MAX/(22*(int)sizeof(float)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int forward=def_k_AGLSTMForward;
    const int forward_bytes=hidden*22*sizeof(float);
    if(forward_bytes>m_local_memory||
       !SetArgumentLocalMemory(forward,def_ag_AGLSTMForward_state,forward_bytes)||
       !ValidateLocalMemory(forward)||AlphaGenGroupSize(forward,128,4)==0)
+     {
       ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: trading LSTM forward needs four lanes and %d dynamic local bytes",
-                                 forward_bytes));
+                                 forward_bytes))
+     }
 
    long backward_bytes=0;
    const int backward=def_k_AGLSTMBackward;
@@ -562,8 +639,10 @@ bool CAlphaQCMOpenCL::ValidateTradingLocalMemory(const int hidden)
       if(columns<1||backward_bytes>INT_MAX||
          !SetArgumentLocalMemory(backward,def_ag_AGLSTMBackward_scratch,(int)backward_bytes)||
          !ValidateLocalMemory(backward)||AlphaGenGroupSize(backward,256,4)==0)
+        {
          ReturnFalseEx(StringFormat("RESOURCE_UNSUPPORTED: trading LSTM backward needs four lanes and %I64d dynamic local bytes",
-                                    backward_bytes));
+                                    backward_bytes))
+        }
      }
    PrintFormat("AlphaQCM trading LSTM floor: four parallel lanes, local bytes forward=%I64d backward=%I64d (including kernel storage)",
                GetKernelInfoInteger(forward,CL_KERNEL_LOCAL_MEM_SIZE),

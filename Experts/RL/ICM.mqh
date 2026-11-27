@@ -15,7 +15,7 @@
 #define defICM              0x7793   ///<Neuron Net \details Identified class #CICM
 #define TargetNetFile       "ICM.upd"
 //+------------------------------------------------------------------+
-//| CReplayState                                                     |
+//| CReplayState - Represent a state for experience replay           |
 //+------------------------------------------------------------------+
 class CReplayState : public CObject
   {
@@ -26,12 +26,15 @@ protected:
 
 public:
                      CReplayState(CBufferFloat *state,int action,double reward);
+//+------------------------------------------------------------------+
+//| ~CReplayState - Use automatic member cleanup                     |
+//+------------------------------------------------------------------+
                     ~CReplayState(void) {};
    bool              GetCurrent(CBufferFloat *&state,int &action);
    bool              GetNext(CBufferFloat *&state,double &reward);
   };
 //+------------------------------------------------------------------+
-//| CReplayState                                                     |
+//| CReplayState - Represent a state for experience replay           |
 //+------------------------------------------------------------------+
 CReplayState::CReplayState(CBufferFloat *state,int action,double reward)
   {
@@ -40,7 +43,7 @@ CReplayState::CReplayState(CBufferFloat *state,int action,double reward)
    dReaward=reward;
   }
 //+------------------------------------------------------------------+
-//| GetCurrent                                                       |
+//| GetCurrent - Get current                                         |
 //+------------------------------------------------------------------+
 bool CReplayState::GetCurrent(CBufferFloat *&state,int &action)
   {
@@ -50,7 +53,7 @@ bool CReplayState::GetCurrent(CBufferFloat *&state,int &action)
    return(GetNext(state,reward));
   }
 //+------------------------------------------------------------------+
-//| GetNext                                                          |
+//| GetNext - Get next                                               |
 //+------------------------------------------------------------------+
 bool CReplayState::GetNext(CBufferFloat *&state,double &reward)
   {
@@ -65,18 +68,24 @@ bool CReplayState::GetNext(CBufferFloat *&state,double &reward)
    return(state.AssignArray(GetPointer(cState)));
   }
 //+------------------------------------------------------------------+
-//| CReplayBuffer                                                    |
+//| CReplayBuffer - Store and sample experience for replay           |
 //+------------------------------------------------------------------+
 class CReplayBuffer : protected CArrayObj
   {
 protected:
    uint iMaxSize;
 public:
+//+------------------------------------------------------------------+
+//| CReplayBuffer - Initialize the object state                      |
+//+------------------------------------------------------------------+
                      CReplayBuffer(void) : iMaxSize(500) {};
+//+------------------------------------------------------------------+
+//| ~CReplayBuffer - Use automatic member cleanup                    |
+//+------------------------------------------------------------------+
                     ~CReplayBuffer(void) {};
    //---
 //+------------------------------------------------------------------+
-//| SetMaxSize                                                       |
+//| SetMaxSize - Set max size                                        |
 //+------------------------------------------------------------------+
    void              SetMaxSize(uint size)
      {
@@ -86,7 +95,7 @@ public:
    bool              GetRendomState(CBufferFloat *&state1,int &action,double &reward,CBufferFloat*& state2);
    bool              GetState(int position,CBufferFloat *&state1,int &action,double &reward,CBufferFloat*& state2);
 //+------------------------------------------------------------------+
-//| Total                                                            |
+//| Total - Return the total                                         |
 //+------------------------------------------------------------------+
    int               Total(void)
      {
@@ -94,7 +103,7 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//| AddState                                                         |
+//| AddState - Add state                                             |
 //+------------------------------------------------------------------+
 bool CReplayBuffer::AddState(CBufferFloat *state,int action,double reward)
   {
@@ -109,7 +118,7 @@ bool CReplayBuffer::AddState(CBufferFloat *state,int action,double reward)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| GetRendomState                                                   |
+//| GetRendomState - Get rendom state                                |
 //+------------------------------------------------------------------+
 bool CReplayBuffer::GetRendomState(CBufferFloat *&state1,int &action,double &reward,CBufferFloat *&state2)
   {
@@ -118,7 +127,7 @@ bool CReplayBuffer::GetRendomState(CBufferFloat *&state1,int &action,double &rew
    return(GetState(position,state1,action,reward,state2));
   }
 //+------------------------------------------------------------------+
-//| GetState                                                         |
+//| GetState - Get state                                             |
 //+------------------------------------------------------------------+
 bool CReplayBuffer::GetState(int position,CBufferFloat *&state1,int &action,double &reward,CBufferFloat *&state2)
   {
@@ -136,7 +145,7 @@ bool CReplayBuffer::GetState(int position,CBufferFloat *&state1,int &action,doub
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CICM                                                             |
+//| CICM - Compute intrinsic curiosity rewards                       |
 //+------------------------------------------------------------------+
 class CICM : protected CNet
   {
@@ -149,9 +158,6 @@ protected:
    CReplayBuffer cReplay;
    CNet          cInverseNet;
    CNet          cForwardNet;
-
-   virtual bool      AddInputData(CArrayFloat *inputVals);
-
 public:
    /** Constructor */
                      CICM(void);
@@ -163,7 +169,7 @@ public:
    int               getAction(void);                ///< Method to get results of feed forward process.@param[out] resultVals Array of result values
    int               getSample(void);
 //+------------------------------------------------------------------+
-//| getRecentAverageError                                            |
+//| getRecentAverageError - Read the recent average error            |
 //+------------------------------------------------------------------+
    float             getRecentAverageError()
      {
@@ -177,21 +183,21 @@ public:
    ///< Load method. @param[in] file_name File name to save @param[out] error Average error @param[out] undefine Undefined percent @param[out] Foecast percent @param[out] time Last study time @param[in] common Common flag
    //---
 //+------------------------------------------------------------------+
-//| Type                                                             |
+//| Type - Return the object type identifier                         |
 //+------------------------------------------------------------------+
    virtual int       Type(void)   const
      {
       return(defICM);
      }///< Identificator of class.@return Type of class
 //+------------------------------------------------------------------+
-//| TrainMode                                                        |
+//| TrainMode - Set the training mode                                |
 //+------------------------------------------------------------------+
    virtual bool      TrainMode(bool flag)
      {
       return(CNet::TrainMode(flag)&&cForwardNet.TrainMode(flag)&&cInverseNet.TrainMode(flag));
      } ///< Set Training Mode Flag
 //+------------------------------------------------------------------+
-//| GetLayerOutput                                                   |
+//| GetLayerOutput - Read the layer output                           |
 //+------------------------------------------------------------------+
    virtual bool      GetLayerOutput(uint layer,CBufferFloat *&result) ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
      {
@@ -200,16 +206,19 @@ public:
    //---
    virtual bool      UpdateTarget(string file_name);
 //+------------------------------------------------------------------+
-//| SetStateEmbedingLayer                                            |
+//| SetStateEmbedingLayer - Set state embeding layer                 |
 //+------------------------------------------------------------------+
    virtual void      SetStateEmbedingLayer(uint layer)
      {
       iStateEmbedingLayer=layer;
      }
    virtual void      SetBufferSize(uint min,uint max);
+protected:
+
+   virtual bool      AddInputData(CArrayFloat *inputVals);
   };
 //+------------------------------------------------------------------+
-//| CICM                                                             |
+//| CICM - Compute intrinsic curiosity rewards                       |
 //+------------------------------------------------------------------+
 CICM::CICM(void)   :  iMinBufferSize(100)
   {
@@ -217,13 +226,13 @@ CICM::CICM(void)   :  iMinBufferSize(100)
    Create(NULL,NULL,NULL);
   }
 //+------------------------------------------------------------------+
-//| ~CICM                                                            |
+//| ~CICM - Release owned resources                                  |
 //+------------------------------------------------------------------+
 CICM::~CICM()
   {
   }
 //+------------------------------------------------------------------+
-//| Create                                                           |
+//| Create - Check create                                            |
 //+------------------------------------------------------------------+
 bool CICM::Create(CArrayObj *Description,CArrayObj *Forward,CArrayObj *Inverse)
   {
@@ -240,7 +249,7 @@ bool CICM::Create(CArrayObj *Description,CArrayObj *Forward,CArrayObj *Inverse)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| backProp                                                         |
+//| backProp - Check back prop                                       |
 //+------------------------------------------------------------------+
 bool CICM::backProp(int batch,float discount=0.999000f)
   {
@@ -250,7 +259,9 @@ bool CICM::backProp(int batch,float discount=0.999000f)
 //if(!UpdateTarget(TargetNetFile))
 //   return false;
 //---
-   CLayer *currentLayer,*nextLayer,*prevLayer;
+   CLayer *currentLayer;
+   CLayer *nextLayer;
+   CLayer *prevLayer;
    CNeuronBaseOCL *neuron;
    CBufferFloat *state1,*state2,*targetVals=new CBufferFloat();
    vector<float>target,actions,st1,st2,result;
@@ -392,7 +403,7 @@ bool CICM::backProp(int batch,float discount=0.999000f)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| getAction                                                        |
+//| getAction - Get action                                           |
 //+------------------------------------------------------------------+
 int CICM::getAction(void)
   {
@@ -404,7 +415,7 @@ int CICM::getAction(void)
    return(temp.Argmax());
   }
 //+------------------------------------------------------------------+
-//| getSample                                                        |
+//| getSample - Get sample                                           |
 //+------------------------------------------------------------------+
 int CICM::getSample(void)
   {
@@ -438,14 +449,16 @@ int CICM::getSample(void)
    return(-1);
   }
 //+------------------------------------------------------------------+
-//| UpdateTarget                                                     |
+//| UpdateTarget - Update target                                     |
 //+------------------------------------------------------------------+
 bool CICM::UpdateTarget(string file_name)
   {
    if(!CNet::Save(file_name,0,0,0,true))
       return(false);
 
-   float error,undefine,forecast;
+   float error;
+   float undefine;
+   float forecast;
    datetime time;
    if(!cTargetNet.Load(file_name,error,undefine,forecast,time,true))
       return(false);
@@ -453,7 +466,7 @@ bool CICM::UpdateTarget(string file_name)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| AddInputData                                                     |
+//| AddInputData - Add input data                                    |
 //+------------------------------------------------------------------+
 bool CICM::AddInputData(CArrayFloat *inputVals)
   {
@@ -506,7 +519,7 @@ bool CICM::AddInputData(CArrayFloat *inputVals)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| feedForward                                                      |
+//| feedForward - Compute the layer output                           |
 //+------------------------------------------------------------------+
 int CICM::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true,bool sample=true)
   {
@@ -526,7 +539,7 @@ int CICM::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true,bool sam
    return(action);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CICM::Save(string file_name,bool common=true)
   {
@@ -535,7 +548,9 @@ bool CICM::Save(string file_name,bool common=true)
 //---
    int handle=FileOpen(file_name,(common ? FILE_COMMON : 0) | FILE_BIN | FILE_WRITE);
    if(handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    if(FileWriteInteger(handle,iMinBufferSize)<=0||FileWriteInteger(handle,iStateEmbedingLayer)<=0)
      {
@@ -552,7 +567,7 @@ bool CICM::Save(string file_name,bool common=true)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CICM::Load(string file_name,bool common=true)
   {
@@ -561,7 +576,9 @@ bool CICM::Load(string file_name,bool common=true)
 //---
    int handle=FileOpen(file_name,(common ? FILE_COMMON : 0) | FILE_BIN | FILE_READ);
    if(handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    iMinBufferSize=(uint)FileReadInteger(handle);
    iStateEmbedingLayer=(uint)FileReadInteger(handle);
@@ -579,7 +596,7 @@ bool CICM::Load(string file_name,bool common=true)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CICM::Save(string dqn,string forward,string invers,bool common=true)
   {
@@ -595,7 +612,7 @@ bool CICM::Save(string dqn,string forward,string invers,bool common=true)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CICM::Load(string dqn,string forward,string invers,uint state_layer,bool common=true)
   {
@@ -603,7 +620,9 @@ bool CICM::Load(string dqn,string forward,string invers,uint state_layer,bool co
       return(false);
 
    bool result=true;
-   float err,undef,forecast;
+   float err;
+   float undef;
+   float forecast;
    datetime date;
    if(!CNet::Load(dqn,err,undef,forecast,date,common)||
       !cForwardNet.Load(forward,err,undef,forecast,date,common)||
@@ -615,7 +634,7 @@ bool CICM::Load(string dqn,string forward,string invers,uint state_layer,bool co
    return(result);
   }
 //+------------------------------------------------------------------+
-//| SetBufferSize                                                    |
+//| SetBufferSize - Set buffer size                                  |
 //+------------------------------------------------------------------+
 void CICM::SetBufferSize(uint min,uint max)
   {

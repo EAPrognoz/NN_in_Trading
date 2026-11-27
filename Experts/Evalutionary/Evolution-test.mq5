@@ -89,7 +89,8 @@ int OnInit()
    if(!MACD.Create(Symb.Name(),TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice))
       return(INIT_FAILED);
 //---
-   float temp1,temp2;
+   float temp1;
+   float temp2;
    if(!StudyNet.Load(FileName+".nnw",dError,temp1,temp2,dtStudied,true))
       return(INIT_FAILED);
 //---

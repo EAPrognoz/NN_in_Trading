@@ -86,7 +86,7 @@ CiCCI       CCI;
 CiATR       ATR;
 CiMACD      MACD;
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -98,15 +98,22 @@ struct SState
    bool              Save(int file_handle);
    bool              Load(int file_handle);
    // Overloading.
-   void              operator=(const SState &obj)
-     {
-      ArrayCopy(state,obj.state);
-      ArrayCopy(account,obj.account);
-      ArrayCopy(action,obj.action);
-      ArrayCopy(rewards,obj.rewards);
-     }
+   void              operator=(const SState &obj);
   };
+//+------------------------------------------------------------------+
+//| operator= - Copies state data.                                   |
+//+------------------------------------------------------------------+
+void SState::operator=(const SState &obj)
+  {
+   ArrayCopy(state,obj.state);
+   ArrayCopy(account,obj.account);
+   ArrayCopy(action,obj.action);
+   ArrayCopy(rewards,obj.rewards);
+  }
 //| SState implementation.                                           |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| SState - Initialize the trajectory state                         |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
@@ -117,80 +124,96 @@ SState::SState(void)
   }
 //| Save implementation.                                             |
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Save - Write the trajectory state to a file                      |
+//+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int total=ArraySize(state);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,state[i])
+     }
    total=ArraySize(account);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,account[i])
+     }
    total=ArraySize(action);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,action[i])
+     }
    total=ArraySize(rewards);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      ReturnFalse;
+   dFileWriteUInt(file_handle,total)
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,rewards[i])<sizeof(float))
-         ReturnFalse;
+     {
+      dFileWriteFloat(file_handle,rewards[i])
+     }
 
    return(true);
   }
 //| Load implementation.                                             |
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| Load - Read the trajectory state from a file                     |
+//+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int total=FileReadInteger(file_handle);
    if(total!=ArraySize(state))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      state[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,state[i])
      }
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(account))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      account[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,account[i])
      }
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(action))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<total; i++)
      {
       if(FileIsEnding(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       action[i]=MathMin(MathMax(FileReadFloat(file_handle),0),1);
      }
    total=FileReadInteger(file_handle);
    if(total!=ArraySize(rewards))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         ReturnFalse;
-      rewards[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,rewards[i])
      }
 
    return(true);
@@ -207,65 +230,89 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
      {
       encoder=new CArrayObj();
       if(!encoder)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!decoder)
      {
       decoder=new CArrayObj();
       if(!decoder)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 // State Encoder.
    encoder.Clear();
 // Input layer.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    uint prev_count=descr.count=HistoryBars * BarDescr;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 1.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBatchNormOCL;
    descr.count=prev_count;
    descr.batch=1e4;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 2.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronDropoutOCL;
    descr.count=prev_count;
    descr.probability=0.1f;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 3.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverData;
    descr.window=HistoryBars;
    descr.count=BarDescr;
      {
       uint temp[]={StackSize,StackSize,Quantiles};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.probability=1.0f;
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 4.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronCogDriverRankTCM;
    descr.window=HistoryBars * (2 * Quantiles+1);
    descr.count=EmbeddingSize;
@@ -273,16 +320,22 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
      {
       uint temp[]={StackSize,NHeads};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 5.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConv;
    descr.window=EmbeddingSize;
    descr.step=EmbeddingSize;
@@ -292,40 +345,56 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 6.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=EmbeddingSize;
    descr.batch=BatchSize;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 7.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeActivation;
    descr.count=EmbeddingSize;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!encoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // Forecast Decoder.
    decoder.Clear();
 // Input layer.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=EmbeddingSize;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 1.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=1;
    descr.window=EmbeddingSize;
@@ -335,10 +404,14 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 2.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -348,10 +421,14 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 3.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=2 * EmbeddingSize;
@@ -361,10 +438,14 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 4.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NForecast;
    descr.window=EmbeddingSize;
@@ -374,17 +455,23 @@ bool CreateStateDescriptions(CArrayObj *&encoder,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 5.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBatchNormOCL;
    descr.count=NForecast * BarDescr;
    descr.batch=1e4;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!decoder.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
    return(true);
   }
@@ -400,41 +487,55 @@ bool CreateDescriptions(CArrayObj *&actor,
      {
       actor=new CArrayObj();
       if(!actor)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!critic)
      {
       critic=new CArrayObj();
       if(!critic)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 // Actor.
    actor.Clear();
 // Input layer.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    uint prev_count=descr.count=AccountDescr;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iLatentLayer=0;
 // layer 1: account/position/time candidate projection.
 //    This learned FC projection turns the compact AccountDescr into the three
 //    primary MPI candidates; market and RAG remain auxiliary contexts.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NScenarios * EmbeddingSize;
    descr.activation=GELU;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 2: MPI primary candidates, market second input and bound RAG third input.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronVLADriverRAGMPI;
    descr.window=EmbeddingSize;
    descr.count=StackSize;
@@ -443,7 +544,9 @@ bool CreateDescriptions(CArrayObj *&actor,
       // through its second input and learns NHeads market K/V tokens locally.
       uint temp[]={NScenarios,EmbeddingSize,NHeads};
       if(ArrayCopy(descr.units,temp,0,0,temp.Size())<int(temp.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.probability=ActorMPITopK;
    descr.step=NHeads;
@@ -456,11 +559,15 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    iLatentLayer=2;
 // layer 3.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=1;
    descr.window=EmbeddingSize;
@@ -470,18 +577,26 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 4.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NActions;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 5.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronConvOCL;
    descr.count=NActions / 3;
    descr.window=3;
@@ -490,21 +605,29 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=SIGMOID;
    descr.optimization=ADAM;
    if(!actor.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // Critic.
    critic.Clear();
 // Input layer.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    descr.count=NActions;
    descr.activation=None;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 1.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronMHCrossFAT;
      {
       uint temp[]={3,                      // Inputs window
@@ -513,14 +636,18 @@ bool CreateDescriptions(CArrayObj *&actor,
                      EmbeddingSize           // Embedding size
                     };
       if(ArrayCopy(descr.windows,temp)<(int)temp.Size())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
      {
       uint temp[]={NActions / 3,           // Query units
                      BarDescr                // Cross units
                     };
       if(ArrayCopy(descr.units,temp)<(int)temp.Size())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    descr.step=NHeads;                      // Heads
    descr.batch=1e4;
@@ -529,10 +656,14 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.activation=None;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 2.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=NActions / 3;
    descr.window=3;
@@ -542,10 +673,14 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 4.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronSpikeConvBlock;
    descr.count=NActions / 3;
    descr.window=EmbeddingSize;
@@ -555,27 +690,37 @@ bool CreateDescriptions(CArrayObj *&actor,
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 5.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=LatentCount;
    descr.activation=SIGMOID;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 // layer 6.
    if(!(descr=new CLayerDescription()))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
    descr.type=defNeuronBaseOCL;
    prev_count=descr.count=NRewards;
    descr.activation=None;
    descr.batch=BatchSize;
    descr.optimization=ADAM;
    if(!critic.Add(descr))
-      DeleteObjAndFalse(descr);
+     {
+      DeleteObjAndFalse(descr)
+     }
 
    return(true);
   }
@@ -584,7 +729,7 @@ bool CreateDescriptions(CArrayObj *&actor,
 //+------------------------------------------------------------------+
 //| Implements CreateRAGMemoryDescription                            |
 //+------------------------------------------------------------------+
-//| CreateRAGMemoryDescription                                       |
+//| CreateRAGMemoryDescription - Create RAG memory description       |
 //+------------------------------------------------------------------+
 bool CreateRAGMemoryDescription(CLayerDescription &descr)
   {
@@ -600,12 +745,17 @@ bool CreateRAGMemoryDescription(CLayerDescription &descr)
    uint action_capacity[]={RAGActionCentroids};
    if(ArrayCopy(descr.units,scenario_capacity,0,0,scenario_capacity.Size())<int(scenario_capacity.Size())||
       ArrayCopy(descr.heads,action_capacity,0,0,action_capacity.Size())<int(action_capacity.Size()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 #ifndef Study
 //| IsNewBar implementation.                                         |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| IsNewBar - Detect a new bar                                      |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -618,6 +768,9 @@ bool IsNewBar(void)
    return(true);
   }
 //| CloseByDirection implementation.                                 |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| CloseByDirection - Close positions of the specified type         |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -635,6 +788,9 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
    return(result);
   }
 //| TrailPosition implementation.                                    |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| TrailPosition - Adjust trailing stops on open positions          |
 //+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
   {
@@ -687,6 +843,9 @@ bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
   }
 //| ClosePartial implementation.                                     |
 //+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| ClosePartial - Close part of the position volume                 |
+//+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {
    if(value<=0)
@@ -719,14 +878,16 @@ bool ClosePartial(ENUM_POSITION_TYPE type,double value)
 #endif
 //| Implements CreateBuffers                                         |
 //+------------------------------------------------------------------+
-//| CreateBuffers                                                    |
+//| CreateBuffers - Allocate working buffers                         |
 //+------------------------------------------------------------------+
 bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CBufferFloat* forecast)
   {
    int total_bars=(start_bar+HistoryBars+(!!forecast ? NForecast : 0));
    if(!state||!time||start_bar<0||
       total_bars>int(Rates.Size()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    matrix<float>mState=matrix<float>::Zeros(BarDescr,HistoryBars);
    vector<float>vForecast=vector<float>::Zeros(NForecast * BarDescr);
    time.Clear();
@@ -741,7 +902,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       float macd=(float)MACD.Main(b+bar);
       float sign=(float)MACD.Signal(b+bar);
       if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       mState[0,b]=(float)(Rates[b+bar].close-open);
       mState[1,b]=(float)(Rates[b+bar].high-open);
       mState[2,b]=(float)(Rates[b+bar].low-open);
@@ -752,13 +915,19 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       mState[7,b]=macd;
       mState[8,b]=sign;
       if(!time.Add(float(Rates[b+bar].time)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!state.AssignArray(mState))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(time.GetIndex()>=0)
       if(!time.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    if(!forecast)
       return(true);
 
@@ -771,7 +940,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       float macd=(float)MACD.Main(bar-b);
       float sign=(float)MACD.Signal(bar-b);
       if(rsi==EMPTY_VALUE||cci==EMPTY_VALUE||atr==EMPTY_VALUE||macd==EMPTY_VALUE||sign==EMPTY_VALUE)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       int shift=(NForecast-b) * BarDescr;
       vForecast[shift]=(float)(Rates[bar-b].close-open);
       vForecast[shift+1]=(float)(Rates[bar-b].high-open);
@@ -784,7 +955,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
       vForecast[shift+8]=sign;
      }
    if(!forecast.AssignArray(vForecast))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -799,6 +972,9 @@ enum ENUM_MEMORY_ACTION_NORMALIZATION_STAGE
   };
 //| MemoryActionNormalizationStageName implementation.               |
 //| Returns a human-readable name for each normalization stage.      |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| MemoryActionNormalizationStageName - Stage                       |
 //+------------------------------------------------------------------+
 string MemoryActionNormalizationStageName(const ENUM_MEMORY_ACTION_NORMALIZATION_STAGE stage)
   {
@@ -819,7 +995,7 @@ string MemoryActionNormalizationStageName(const ENUM_MEMORY_ACTION_NORMALIZATION
      }
   }
 //+------------------------------------------------------------------+
-//| NormalizeMemoryAction (with diagnostics).                        |
+//| NormalizeMemoryAction - Normalize memory action                  |
 //+------------------------------------------------------------------+
 bool NormalizeMemoryAction(CNeuronRAGMemory &memory,CBufferFloat *action,const uint start_position,
                            const double equity,float &destination[],
@@ -829,17 +1005,25 @@ bool NormalizeMemoryAction(CNeuronRAGMemory &memory,CBufferFloat *action,const u
    ArrayInitialize(destination,0.0f);
    if(action==NULL||action.Total()<NActions||ArraySize(destination)<NActions||
       equity<=0||start_position>=Rates.Size())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    stage=MEMORY_ACTION_NORMALIZATION_MARKET;
    if(!Symb.RefreshRates())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const double volatility=ATR.Main(start_position);
    const double point_cost=Symb.TickValue() / Symb.TickSize();
    if(point_cost<=0||Symb.Point()<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    stage=MEMORY_ACTION_NORMALIZATION_VOLATILITY;
    if(volatility==EMPTY_VALUE||volatility<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    float raw[NActions];
    for(int i=0; i<NActions; i++)
       raw[i]=action[i];
@@ -847,20 +1031,25 @@ bool NormalizeMemoryAction(CNeuronRAGMemory &memory,CBufferFloat *action,const u
    stage=MEMORY_ACTION_NORMALIZATION_DESCRIPTOR;
    if(!memory.NormalizeActionDescriptor(raw,equity,risk_budget,point_cost,Symb.Point(),
                                         volatility,MemoryVolatilityRange,MaxTP,MaxSL,destination))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    double action_square=0.0;
    for(int i=0; i<NActions; i++)
       action_square += destination[i] * destination[i];
    stage=MEMORY_ACTION_NORMALIZATION_ZERO;
    if(action_square<=DBL_EPSILON)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    stage=MEMORY_ACTION_NORMALIZATION_OK;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Preserve the existing callers that do not need diagnostics.      |
+//| NormalizeMemoryAction - Normalize memory action                  |
 //+------------------------------------------------------------------+
+//--- Preserve the existing callers that do not need diagnostics.
 bool NormalizeMemoryAction(CNeuronRAGMemory &memory,CBufferFloat *action,const uint start_position,
                            const double equity,float &destination[])
   {
@@ -958,7 +1147,7 @@ void UpdateTerminalPath(const double balance,const double profit,const uint bars
 // one-bar balance delta. It reports normalized return, drawdown, costs, risk
 // usage and duration; CheckAction below remains its scalar compatibility view.
 //+------------------------------------------------------------------+
-//| EvaluateTerminalOutcome                                          |
+//| EvaluateTerminalOutcome - Evaluate terminal outcome              |
 //+------------------------------------------------------------------+
 bool EvaluateTerminalOutcome(CNeuronRAGMemory &memory,CBufferFloat *action,double balance,
                              uint start_position,SRAGTerminalOutcome &outcome)
@@ -966,12 +1155,16 @@ bool EvaluateTerminalOutcome(CNeuronRAGMemory &memory,CBufferFloat *action,doubl
    const double risk_budget=balance * MemoryRiskBudgetFraction;
    memory.NormalizeTerminalOutcome(0,0,0,0,0,balance,risk_budget,NForecast,outcome);
    if(!action||start_position>=Rates.Size())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    double buy_lot=MathMax(double(action[0]-action[3]),0);
    double sell_lot=MathMax(double(action[3]-action[0]),0);
    double marg=0;
    if(!OrderCalcMargin(ORDER_TYPE_BUY,Symb.Name(),1,Symb.Ask(),marg))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    double point_cost=Symb.TickValue() / Symb.TickSize();
    if(MathMax(buy_lot,sell_lot)<Symb.LotsMin())
      {

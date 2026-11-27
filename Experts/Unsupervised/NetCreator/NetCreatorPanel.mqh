@@ -63,12 +63,18 @@
 #define ON_EVENT_CONTROL(event,control,handler)          if(id==(event+CHARTEVENT_CUSTOM) && lparam==control.Id()) { handler(control); return(true); }
 
 //+------------------------------------------------------------------+
-//| CNetModify                                                       |
+//| CNetModify - Modify the neural network layout                    |
 //+------------------------------------------------------------------+
 class CNetModify :  public CNet
   {
 public:
+//+------------------------------------------------------------------+
+//| CNetModify - Use the default member initialization               |
+//+------------------------------------------------------------------+
                      CNetModify(void) {};
+//+------------------------------------------------------------------+
+//| ~CNetModify - Use automatic member cleanup                       |
+//+------------------------------------------------------------------+
                     ~CNetModify(void) {};
    //---
    uint              LayersTotal(void);
@@ -77,14 +83,14 @@ public:
    virtual bool      AddLayers(CArrayObj* new_layers);
    virtual CLayer*   GetLayer(uint layer);
 //+------------------------------------------------------------------+
-//| GetOpenCL                                                        |
+//| GetOpenCL - Return the OpenCL context                            |
 //+------------------------------------------------------------------+
    COpenCLMy*        GetOpenCL(void)
      {
       return(opencl);
      }
 //+------------------------------------------------------------------+
-//| SetOpenCL                                                        |
+//| SetOpenCL - Assign the OpenCL context                            |
 //+------------------------------------------------------------------+
    void              SetOpenCL(COpenCLMy *OpenCL)
      {
@@ -92,7 +98,7 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//| LayersTotal                                                      |
+//| LayersTotal - Return the layers total                            |
 //+------------------------------------------------------------------+
 uint CNetModify::LayersTotal(void)
   {
@@ -102,7 +108,7 @@ uint CNetModify::LayersTotal(void)
    return(layers.Total());
   }
 //+------------------------------------------------------------------+
-//| GetLayersDiscriptions                                            |
+//| GetLayersDiscriptions - Get layers discriptions                  |
 //+------------------------------------------------------------------+
 CArrayObj* CNetModify::GetLayersDiscriptions(void)
   {
@@ -122,7 +128,7 @@ CArrayObj* CNetModify::GetLayersDiscriptions(void)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| GetLayer                                                         |
+//| GetLayer - Get layer                                             |
 //+------------------------------------------------------------------+
 CLayer* CNetModify::GetLayer(uint layer)
   {
@@ -132,7 +138,7 @@ CLayer* CNetModify::GetLayer(uint layer)
    return(layers.At(layer));
   }
 //+------------------------------------------------------------------+
-//| AddLayer                                                         |
+//| AddLayer - Add layer                                             |
 //+------------------------------------------------------------------+
 bool CNetModify::AddLayer(CLayer *new_layer)
   {
@@ -149,7 +155,7 @@ bool CNetModify::AddLayer(CLayer *new_layer)
    return(layers.Add(new_layer));
   }
 //+------------------------------------------------------------------+
-//| AddLayers                                                        |
+//| AddLayers - Add layers                                           |
 //+------------------------------------------------------------------+
 bool CNetModify::AddLayers(CArrayObj *new_layers)
   {
@@ -546,7 +552,7 @@ bool CNetModify::AddLayers(CArrayObj *new_layers)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CNetCreatorPanel                                                 |
+//| CNetCreatorPanel - Present the network editor controls           |
 //+------------------------------------------------------------------+
 class CNetCreatorPanel : protected CAppDialog
   {
@@ -560,13 +566,6 @@ protected:
    CListView  m_lstPTModel;
    CArrayObj  *        m_arPTModelDescription;
    bool       b_UseCommonDirectory;
-
-   virtual CLabel*   CreateLabel(const int id,const string text,const int x1,const int y1,const int x2,const int y2);
-   virtual bool      CreateEdit(const int id,CEdit& object,const int x1,const int y1,const int x2,const int y2,bool read_only);
-   virtual bool      EditReedOnly(CEdit& object,const bool flag);
-   virtual string    LayerTypeToString(int type);
-   virtual int       LayerDescriptionToString(const CLayerDescription* layer,string& result[]);
-   virtual bool      LoadModel(string file_name);
 
 //--- add layers
    CComboBox m_cbNewNeuronType;
@@ -586,16 +585,49 @@ protected:
    CButton   m_btDeleteLayer;
    CArrayObj m_arAddLayers;
 
+//--- new model
+   CListView m_lstNewModel;
+   CButton   m_btSave;
+public:
+                     CNetCreatorPanel();
+                    ~CNetCreatorPanel();
+
+//--- main application dialog creation and destroy
+   virtual bool      Create(const long chart,const string name,const int subwin,const int x1,const int y1,bool common);
+//+------------------------------------------------------------------+
+//| Destroy - Return the destroy                                     |
+//+------------------------------------------------------------------+
+   virtual void      Destroy(const int reason=REASON_PROGRAM) override
+     {
+      CAppDialog::Destroy(reason);
+     }
+
+//--- chart event handler
+   void              ChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam);
+   virtual bool      OnEvent(const int id,const long &lparam,const double &dparam,const string &sparam);
+
+//+------------------------------------------------------------------+
+//| Run - Check run                                                  |
+//+------------------------------------------------------------------+
+   bool              Run(void)
+     {
+      return(CAppDialog::Run());
+     }
+protected:
+
+   virtual CLabel*   CreateLabel(const int id,const string text,const int x1,const int y1,const int x2,const int y2);
+   virtual bool      CreateEdit(const int id,CEdit& object,const int x1,const int y1,const int x2,const int y2,bool read_only);
+   virtual bool      EditReedOnly(CEdit& object,const bool flag);
+   virtual string    LayerTypeToString(int type);
+   virtual int       LayerDescriptionToString(const CLayerDescription* layer,string& result[]);
+   virtual bool      LoadModel(string file_name);
+
    virtual bool      CreateComboBoxType(const int x1,const int y1,const int x2,const int y2);
    virtual bool      CreateComboBoxActivation(const int x1,const int y1,const int x2,const int y2);
    virtual bool      ActivationListMain(void);
    virtual bool      ActivationListEmpty(void);
    virtual bool      CreateComboBoxOptimization(const int x1,const int y1,const int x2,const int y2);
    virtual bool      SetCounts(const uint type);
-
-//--- new model
-   CListView m_lstNewModel;
-   CButton   m_btSave;
 
 //--- events
    virtual bool      OpenPreTrainedModel(void);
@@ -609,48 +641,22 @@ protected:
    virtual bool      OnChangeWindowStep(void);
    virtual bool      OnEndEdit(CEdit& object);
    virtual bool      OnEndEditProbability(void);
-
-public:
-                     CNetCreatorPanel();
-                    ~CNetCreatorPanel();
-
-//--- main application dialog creation and destroy
-   virtual bool      Create(const long chart,const string name,const int subwin,const int x1,const int y1,bool common);
-//+------------------------------------------------------------------+
-//| Destroy                                                          |
-//+------------------------------------------------------------------+
-   virtual void      Destroy(const int reason=REASON_PROGRAM) override
-     {
-      CAppDialog::Destroy(reason);
-     }
-
-//--- chart event handler
-   void              ChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam);
-   virtual bool      OnEvent(const int id,const long &lparam,const double &dparam,const string &sparam);
-
-//+------------------------------------------------------------------+
-//| Run                                                              |
-//+------------------------------------------------------------------+
-   bool              Run(void)
-     {
-      return(CAppDialog::Run());
-     }
   };
 //+------------------------------------------------------------------+
-//| CNetCreatorPanel                                                 |
+//| CNetCreatorPanel - Present the network editor controls           |
 //+------------------------------------------------------------------+
 CNetCreatorPanel::CNetCreatorPanel()
   {
   }
 //+------------------------------------------------------------------+
-//| ~CNetCreatorPanel                                                |
+//| ~CNetCreatorPanel - Release owned resources                      |
 //+------------------------------------------------------------------+
 CNetCreatorPanel::~CNetCreatorPanel()
   {
    DeleteObj(m_arPTModelDescription)
   }
 //+------------------------------------------------------------------+
-//| Create                                                           |
+//| Create - Check create                                            |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::Create(const long chart,const string name,const int subwin,const int x1,const int y1,bool common)
   {
@@ -867,7 +873,7 @@ bool CNetCreatorPanel::Create(const long chart,const string name,const int subwi
    return(true);
   }
 //+------------------------------------------------------------------+
-//| EVENT_MAP_BEGIN                                                  |
+//| EVENT_MAP_BEGIN - Return the BEGIN                               |
 //+------------------------------------------------------------------+
 EVENT_MAP_BEGIN(CNetCreatorPanel)
 ON_EVENT(ON_CLICK,m_edPTModel,OpenPreTrainedModel)
@@ -905,11 +911,13 @@ bool CNetCreatorPanel::OpenPreTrainedModel(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| LoadModel                                                        |
+//| LoadModel - Load model                                           |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::LoadModel(string file_name)
   {
-   float error,undefine,forecast;
+   float error;
+   float undefine;
+   float forecast;
    datetime time;
    ResetLastError();
    if(!m_Model.Load(file_name,error,undefine,forecast,time,b_UseCommonDirectory))
@@ -959,7 +967,7 @@ bool CNetCreatorPanel::LoadModel(string file_name)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| LayerTypeToString                                                |
+//| LayerTypeToString - Return the layer type to string              |
 //+------------------------------------------------------------------+
 string CNetCreatorPanel::LayerTypeToString(int type)
   {
@@ -1010,7 +1018,7 @@ string CNetCreatorPanel::LayerTypeToString(int type)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| LayerDescriptionToString                                         |
+//| LayerDescriptionToString - Return                                |
 //+------------------------------------------------------------------+
 int CNetCreatorPanel::LayerDescriptionToString(const CLayerDescription *layer,string& result[])
   {
@@ -1022,49 +1030,49 @@ int CNetCreatorPanel::LayerDescriptionToString(const CLayerDescription *layer,st
    switch(layer.type)
      {
       case defNeuronBaseOCL:
-         temp=StringFormat("Dense (outputs %d, \activation %s, \optimization %s)",layer.count,EnumToString(layer.activation),EnumToString(layer.optimization));
+         temp=StringFormat("Dense (outputs %d, \\activation %s, \\optimization %s)",layer.count,EnumToString(layer.activation),EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
          break;
       case defNeuronConvOCL:
-         temp=StringFormat("Conolution (outputs %d, \window %d, step %d, window out %d, \activation %s, \optimization %s)",layer.count * layer.window_out,layer.window,layer.step,layer.window_out,EnumToString(layer.activation),EnumToString(layer.optimization));
+         temp=StringFormat("Conolution (outputs %d, \\window %d, step %d, window out %d, \\activation %s, \\optimization %s)",layer.count * layer.window_out,layer.window,layer.step,layer.window_out,EnumToString(layer.activation),EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
          break;
       case defNeuronProofOCL:
-         temp=StringFormat("Proof (outputs %d, \window %d, step %d, \optimization %s)",layer.count,layer.window,layer.step,EnumToString(layer.activation),EnumToString(layer.optimization));
+         temp=StringFormat("Proof (outputs %d, \\window %d, step %d, \\optimization %s)",layer.count,layer.window,layer.step,EnumToString(layer.activation),EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
          break;
       case defNeuronAttentionOCL:
-         temp=StringFormat("Self Attention (outputs %d, \units %d, window %d, \optimization %d)",layer.count * layer.window,layer.count,layer.window,EnumToString(layer.optimization));
+         temp=StringFormat("Self Attention (outputs %d, \\units %d, window %d, \\optimization %d)",layer.count * layer.window,layer.count,layer.window,EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
          break;
       case defNeuronMHAttentionOCL:
-         temp=StringFormat("Multi-Head Attention (outputs %d, \units %d, window %d, heads %d, \optimization %s)",layer.count * layer.window,layer.count,layer.window,layer.step,EnumToString(layer.optimization));
+         temp=StringFormat("Multi-Head Attention (outputs %d, \\units %d, window %d, heads %d, \\optimization %s)",layer.count * layer.window,layer.count,layer.window,layer.step,EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
          break;
       case defNeuronMLMHAttentionOCL:
-         temp=StringFormat("Multi-Layer MH Attention (outputs %d, \units %d, window %d, key size %d, \heads %d, layers %d, \optimization %s)",layer.count * layer.window,layer.count,layer.window,layer.window_out,layer.step,layer.layers,EnumToString(layer.optimization));
+         temp=StringFormat("Multi-Layer MH Attention (outputs %d, \\units %d, window %d, key size %d, \\heads %d, layers %d, \\optimization %s)",layer.count * layer.window,layer.count,layer.window,layer.window_out,layer.step,layer.layers,EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
          break;
       case defNeuronDropoutOCL:
-         temp=StringFormat("Dropout (outputs %d, \probability %d, \optimization %s)",layer.count,layer.probability,EnumToString(layer.optimization));
+         temp=StringFormat("Dropout (outputs %d, \\probability %d, \\optimization %s)",layer.count,layer.probability,EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
          break;
       case defNeuronBatchNormOCL:
-         temp=StringFormat("Batchnorm (outputs %d, \batch size %d, \optimization %s)",layer.count,layer.batch,EnumToString(layer.optimization));
+         temp=StringFormat("Batchnorm (outputs %d, \\batch size %d, \\optimization %s)",layer.count,layer.batch,EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
@@ -1076,7 +1084,7 @@ int CNetCreatorPanel::LayerDescriptionToString(const CLayerDescription *layer,st
 
          break;
       case defNeuronLSTMOCL:
-         temp=StringFormat("LSTM (outputs %d, \optimization %s)",layer.count,EnumToString(layer.optimization));
+         temp=StringFormat("LSTM (outputs %d, \\optimization %s)",layer.count,EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
@@ -1088,13 +1096,13 @@ int CNetCreatorPanel::LayerDescriptionToString(const CLayerDescription *layer,st
 
          break;
       case defNeuronFQF:
-         temp=StringFormat("FQF (outputs %d, quantiles %d, \optimization %s))",layer.count,layer.window_out,EnumToString(layer.optimization));
+         temp=StringFormat("FQF (outputs %d, quantiles %d, \\optimization %s))",layer.count,layer.window_out,EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
 
          break;
       default:
-         temp=StringFormat("Unknown type %#x (outputs %d, \activation %s, \optimization %s)",layer.type,layer.count,EnumToString(layer.activation),EnumToString(layer.optimization));
+         temp=StringFormat("Unknown type %#x (outputs %d, \\activation %s, \\optimization %s)",layer.type,layer.count,EnumToString(layer.activation),EnumToString(layer.optimization));
          if(StringSplit(temp,'\\',result)<0)
             return(-1);
          break;
@@ -1103,7 +1111,7 @@ int CNetCreatorPanel::LayerDescriptionToString(const CLayerDescription *layer,st
    return(ArraySize(result));
   }
 //+------------------------------------------------------------------+
-//| ChangeNumberOfLayers                                             |
+//| ChangeNumberOfLayers - Check change number of layers             |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::ChangeNumberOfLayers(void)
   {
@@ -1161,7 +1169,7 @@ bool CNetCreatorPanel::ChangeNumberOfLayers(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CreateLabel                                                      |
+//| CreateLabel - Create label                                       |
 //+------------------------------------------------------------------+
 CLabel* CNetCreatorPanel::CreateLabel(const int id,const string text,const int x1,const int y1,const int x2,const int y2)
   {
@@ -1191,7 +1199,7 @@ CLabel* CNetCreatorPanel::CreateLabel(const int id,const string text,const int x
    return(tmp_label);
   }
 //+------------------------------------------------------------------+
-//| CreateEdit                                                       |
+//| CreateEdit - Create edit                                         |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::CreateEdit(const int id,CEdit& object,const int x1,const int y1,const int x2,const int y2,bool read_only)
   {
@@ -1209,7 +1217,7 @@ bool CNetCreatorPanel::CreateEdit(const int id,CEdit& object,const int x1,const 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| EditReedOnly                                                     |
+//| EditReedOnly - Check edit reed only                              |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::EditReedOnly(CEdit& object,const bool flag)
   {
@@ -1221,7 +1229,7 @@ bool CNetCreatorPanel::EditReedOnly(CEdit& object,const bool flag)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CreateComboBoxType                                               |
+//| CreateComboBoxType - Create combo box type                       |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::CreateComboBoxType(const int x1,const int y1,const int x2,const int y2)
   {
@@ -1269,7 +1277,7 @@ bool CNetCreatorPanel::CreateComboBoxType(const int x1,const int y1,const int x2
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CreateComboBoxActivation                                         |
+//| CreateComboBoxActivation - Create combo box activation           |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::CreateComboBoxActivation(const int x1,const int y1,const int x2,const int y2)
   {
@@ -1284,7 +1292,7 @@ bool CNetCreatorPanel::CreateComboBoxActivation(const int x1,const int y1,const 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| ActivationListMain                                               |
+//| ActivationListMain - Check activation list main                  |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::ActivationListMain(void)
   {
@@ -1300,7 +1308,7 @@ bool CNetCreatorPanel::ActivationListMain(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| ActivationListEmpty                                              |
+//| ActivationListEmpty - Check activation list empty                |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::ActivationListEmpty(void)
   {
@@ -1312,7 +1320,7 @@ bool CNetCreatorPanel::ActivationListEmpty(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CreateComboBoxOptimization                                       |
+//| CreateComboBoxOptimization - Create combo box optimization       |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::CreateComboBoxOptimization(const int x1,const int y1,const int x2,const int y2)
   {
@@ -1331,7 +1339,7 @@ bool CNetCreatorPanel::CreateComboBoxOptimization(const int x1,const int y1,cons
    return(true);
   }
 //+------------------------------------------------------------------+
-//| OnChangeListPTModel                                              |
+//| OnChangeListPTModel - Check on change list PT model              |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnChangeListPTModel(void)
   {
@@ -1340,7 +1348,7 @@ bool CNetCreatorPanel::OnChangeListPTModel(void)
    return(m_spPTModelLayers.Value((int)value));
   }
 //+------------------------------------------------------------------+
-//| OnChangeListNewModel                                             |
+//| OnChangeListNewModel - Check on change list new model            |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnChangeListNewModel(void)
   {
@@ -1349,7 +1357,7 @@ bool CNetCreatorPanel::OnChangeListNewModel(void)
    return(m_lstNewModel.SelectByValue(value));
   }
 //+------------------------------------------------------------------+
-//| OnClickAddButton                                                 |
+//| OnClickAddButton - Add on click button                           |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnClickAddButton(void)
   {
@@ -1400,7 +1408,7 @@ bool CNetCreatorPanel::OnClickAddButton(void)
    return(ChangeNumberOfLayers());
   }
 //+------------------------------------------------------------------+
-//| OnClickDeleteButton                                              |
+//| OnClickDeleteButton - Delete on click button                     |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnClickDeleteButton(void)
   {
@@ -1432,7 +1440,7 @@ bool CNetCreatorPanel::OnClickDeleteButton(void)
    return(ChangeNumberOfLayers());
   }
 //+------------------------------------------------------------------+
-//| OnClickSaveButton                                                |
+//| OnClickSaveButton - Save on click button                         |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnClickSaveButton(void)
   {
@@ -1478,7 +1486,7 @@ bool CNetCreatorPanel::OnClickSaveButton(void)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| ChartEvent                                                       |
+//| ChartEvent - Process chart event                                 |
 //+------------------------------------------------------------------+
 void CNetCreatorPanel::ChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
   {
@@ -1500,7 +1508,7 @@ void CNetCreatorPanel::ChartEvent(const int id,const long &lparam,const double &
      }
   }
 //+------------------------------------------------------------------+
-//| OnChangeNeuronType                                               |
+//| OnChangeNeuronType - Check on change neuron type                 |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnChangeNeuronType(void)
   {
@@ -1782,7 +1790,7 @@ bool CNetCreatorPanel::OnChangeNeuronType(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| SetCounts                                                        |
+//| SetCounts - Set counts                                           |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::SetCounts(const uint type)
   {
@@ -1855,7 +1863,7 @@ bool CNetCreatorPanel::SetCounts(const uint type)
    return(m_edCount.Text((string)counts));
   }
 //+------------------------------------------------------------------+
-//| OnChangeWindowStep                                               |
+//| OnChangeWindowStep - Check on change window step                 |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnChangeWindowStep(void)
   {
@@ -1865,7 +1873,7 @@ bool CNetCreatorPanel::OnChangeWindowStep(void)
    return(SetCounts((uint)m_cbNewNeuronType.Value()));
   }
 //+------------------------------------------------------------------+
-//| OnEndEdit                                                        |
+//| OnEndEdit - End on edit                                          |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnEndEdit(CEdit& object)
   {
@@ -1874,7 +1882,7 @@ bool CNetCreatorPanel::OnEndEdit(CEdit& object)
    return(object.Text((string)fmax(1,value)));
   }
 //+------------------------------------------------------------------+
-//| OnEndEditProbability                                             |
+//| OnEndEditProbability - End on edit probability                   |
 //+------------------------------------------------------------------+
 bool CNetCreatorPanel::OnEndEditProbability(void)
   {

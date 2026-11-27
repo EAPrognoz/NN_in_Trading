@@ -2,6 +2,7 @@
 //|                                                        Study.mq5 |
 //|                                                         AlphaQCM |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #define ALPHAGEN_STUDY
 //+------------------------------------------------------------------+
@@ -71,7 +72,7 @@ void OnTimer()
      }
   }
 //+------------------------------------------------------------------+
-//| Record the user stop request between atomic operations.          |
+//| OnChartEvent - Record a stop request between atomic operations   |
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
   {

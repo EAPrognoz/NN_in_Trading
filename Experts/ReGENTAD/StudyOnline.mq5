@@ -112,8 +112,8 @@ int OnInit()
       for(uint i=0; i<cCritic.Size(); i++)
          if(!cCritic[i].Create(critic))
            {
-            DeleteObj(actor);
-            DeleteObj(critic);
+            DeleteObj(actor)
+            DeleteObj(critic)
 
             return(INIT_FAILED);
            }
@@ -122,15 +122,15 @@ int OnInit()
          cCritic[i].SetOpenCL(cCritic[0].GetOpenCL());
          if(!cCritic[i].WeightsUpdate(GetPointer(cCritic[0]),1))
            {
-            DeleteObj(actor);
-            DeleteObj(critic);
+            DeleteObj(actor)
+            DeleteObj(critic)
 
             return(INIT_FAILED);
            }
         }
      }
-   DeleteObj(actor);
-   DeleteObj(critic);
+   DeleteObj(actor)
+   DeleteObj(critic)
 //---
    for(int i=0; i<2; i++)
      {
@@ -182,8 +182,8 @@ void OnDeinit(const int reason)
       cActor[0].Save(FileName+"Act.nnw",0,0,0,TimeCurrent(),true);
       cCritic[0].Save(FileName+"Crt.nnw",0,0,0,TimeCurrent(),true);
      }
-   DeleteObj(Result);
-   DeleteObj(bAction);
+   DeleteObj(Result)
+   DeleteObj(bAction)
   }
 //+------------------------------------------------------------------+
 //| OnTick - expert tick function                                    |
@@ -508,23 +508,31 @@ bool FillStack(void)
 //---
    if(!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    if(RSI.BarsCalculated()<bars||
       CCI.BarsCalculated()<bars||
       ATR.BarsCalculated()<bars||
       MACD.BarsCalculated()<bars)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
 //---
    if(!ArraySetAsSeries(Rates,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bars -= end+HistoryBars;
    if(bars<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 //---
    vector<float>result,target,neg_target;
 //---
@@ -534,19 +542,25 @@ bool FillStack(void)
    for(uint i=0; i<cActor.Size(); i++)
      {
       if(!cActor[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       cActor[i].TrainMode(false);
      }
    for(uint i=0; i<cCritic.Size(); i++)
      {
       if(!cCritic[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       cCritic[i].TrainMode(false);
      }
    for(int posit=start-HistoryBars-1; (posit>=end&&!IsStopped()); posit--)
      {
       if(!CreateBuffers(posit,GetPointer(bState),GetPointer(bTime),NULL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       vector<float>account=vector<float>::Zeros(AccountDescr);
       account[0]=float(AccountInfoDouble(ACCOUNT_BALANCE) / EtalonBalance);
       account[2]=1;
@@ -561,15 +575,21 @@ bool FillStack(void)
       account[12]=(float)MathSin(x!=0 ? 2.0 * M_PI * x : 0);
       //---
       if(!bState.AddArray(account))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    //--- feed Forward
       for(uint i=0; (i<cActor.Size()&&!IsStopped()); i++)
          if(!cActor[i].feedForward((CBufferFloat*)GetPointer(bState),1,false,(CBufferFloat*)GetPointer(bTime)))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
       for(uint i=0; (i<cCritic.Size()&&!IsStopped()); i++)
          if(!cCritic[i].feedForward(GetPointer(cActor[int(i>0)]),-1,GetPointer(cActor[int(i>0)]),LatentLayer))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
       //---
       if(GetTickCount()-ticks>500)
         {

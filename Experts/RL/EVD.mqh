@@ -28,9 +28,6 @@ protected:
    CNet          cTargetNet;
    CReplayBuffer cReplay;
    CNet          cForwardNet;
-
-   virtual bool      AddInputData(CArrayFloat *inputVals);
-
 public:
                      CEVD();
                      CEVD(CArrayObj *Description,CArrayObj *Forward);
@@ -40,7 +37,7 @@ public:
    bool              backProp(int batch,float discount=0.999f);
    int               getAction(int state_size=0);              ///< Method to get results of feed forward process.@param[out] resultVals Array of result values
 //+------------------------------------------------------------------+
-//| getRecentAverageError                                            |
+//| getRecentAverageError - Read the recent average error            |
 //+------------------------------------------------------------------+
    float             getRecentAverageError()
      {
@@ -54,14 +51,14 @@ public:
    ///< Load method. @param[in] file_name File name to save @param[out] error Average error @param[out] undefine Undefined percent @param[out] Foecast percent @param[out] time Last study time @param[in] common Common flag
    //---
 //+------------------------------------------------------------------+
-//| Type                                                             |
+//| Type - Return the object type identifier                         |
 //+------------------------------------------------------------------+
    virtual int       Type(void)   const
      {
       return(defEVD);
      }///< Identificator of class.@return Type of class
 //+------------------------------------------------------------------+
-//| TrainMode                                                        |
+//| TrainMode - Set the training mode                                |
 //+------------------------------------------------------------------+
    virtual bool      TrainMode(bool flag)
      {
@@ -70,7 +67,7 @@ public:
       return(CNet::TrainMode(flag)&&cForwardNet.TrainMode(flag));
      } ///< Set Training Mode Flag
 //+------------------------------------------------------------------+
-//| GetLayerOutput                                                   |
+//| GetLayerOutput - Read the layer output                           |
 //+------------------------------------------------------------------+
    virtual bool      GetLayerOutput(uint layer,CBufferFloat *&result) ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
      {
@@ -78,16 +75,19 @@ public:
      }
    //---
 //+------------------------------------------------------------------+
-//| SetStateEmbedingLayer                                            |
+//| SetStateEmbedingLayer - Set state embeding layer                 |
 //+------------------------------------------------------------------+
    virtual void      SetStateEmbedingLayer(uint layer)
      {
       iStateEmbedingLayer=layer;
      }
    virtual void      SetBufferSize(uint min,uint max);
+protected:
+
+   virtual bool      AddInputData(CArrayFloat *inputVals);
   };
 //+------------------------------------------------------------------+
-//| CEVD                                                             |
+//| CEVD - Initialize the object state                               |
 //+------------------------------------------------------------------+
 CEVD::CEVD()   :  iMinBufferSize(100),
    bUseTargetNet(false),
@@ -96,18 +96,20 @@ CEVD::CEVD()   :  iMinBufferSize(100),
    Create(NULL,NULL);
   }
 //+------------------------------------------------------------------+
-//| ~CEVD                                                            |
+//| ~CEVD - Release owned resources                                  |
 //+------------------------------------------------------------------+
 CEVD::~CEVD()
   {
   }
 //+------------------------------------------------------------------+
-//| Create                                                           |
+//| Create - Check create                                            |
 //+------------------------------------------------------------------+
 bool CEVD::Create(CArrayObj *Description,CArrayObj *Forward)
   {
    if(!CNet::Create(Description))
-      return(false);
+     {
+      ReturnFalseEx("CNet::Create failed")
+     }
 
    if(!cForwardNet.Create(Forward))
       return(false);
@@ -119,7 +121,7 @@ bool CEVD::Create(CArrayObj *Description,CArrayObj *Forward)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| backProp                                                         |
+//| backProp - Check back prop                                       |
 //+------------------------------------------------------------------+
 bool CEVD::backProp(int batch,float discount=0.999000f)
   {
@@ -141,7 +143,7 @@ bool CEVD::backProp(int batch,float discount=0.999000f)
          return(false);
 
    //--- forward pass of the trainable model (current state)
-      if(!CNet::feedForward(state1,1,false))
+      if(!CNet::feedForward(state1,1,false,(CBufferFloat*)NULL))
          return(false);
       getResults(target);
 
@@ -150,7 +152,7 @@ bool CEVD::backProp(int batch,float discount=0.999000f)
          return(false);
 
    //--- forward pass of the target network
-      if(!cTargetNet.feedForward(state2,1,false))
+      if(!cTargetNet.feedForward(state2,1,false,(CBufferFloat*)NULL))
          return(false);
 
    //--- adjust the reward
@@ -164,10 +166,10 @@ bool CEVD::backProp(int batch,float discount=0.999000f)
          return(false);
 
    //--- backward pass of the trainable model
-      CNet::backProp(targetVals);
+      CNet::backProp(targetVals,(CBufferFloat*)NULL);
 
    //--- forward pass of the forward model to predict the next state
-      if(!cForwardNet.feedForward(state1,1,false))
+      if(!cForwardNet.feedForward(state1,1,false,(CBufferFloat*)NULL))
          return(false);
 
    //--- retrieve the next-state embedding
@@ -188,7 +190,7 @@ bool CEVD::backProp(int batch,float discount=0.999000f)
 
    //--- backward pass of the forward model
       targetVals.AssignArray(forward);
-      if(!cForwardNet.backProp(targetVals))
+      if(!cForwardNet.backProp(targetVals,(CBufferFloat*)NULL))
          return(false);
      }
 //---
@@ -199,7 +201,7 @@ bool CEVD::backProp(int batch,float discount=0.999000f)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| getAction                                                        |
+//| getAction - Get action                                           |
 //+------------------------------------------------------------------+
 int CEVD::getAction(int state_size=0)
   {
@@ -245,7 +247,7 @@ cForwardNet.GetLayerOutput(1,temp);
    return(temp.Argmax());
   }
 //+------------------------------------------------------------------+
-//| AddInputData                                                     |
+//| AddInputData - Add input data                                    |
 //+------------------------------------------------------------------+
 bool CEVD::AddInputData(CArrayFloat *inputVals)
   {
@@ -298,14 +300,14 @@ bool CEVD::AddInputData(CArrayFloat *inputVals)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| feedForward                                                      |
+//| feedForward - Compute the layer output                           |
 //+------------------------------------------------------------------+
 int CEVD::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true)
   {
    if(!AddInputData(inputVals))
       return(-1);
 //---
-   if(!CNet::feedForward(inputVals,window,tem))
+   if(!CNet::feedForward(inputVals,window,tem,(CBufferFloat*)NULL))
       return(-1);
 //---
    int action=-1;
@@ -317,7 +319,7 @@ int CEVD::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true)
       if(!GetLayerOutput(iStateEmbedingLayer,state))
          return(-1);
 
-      if(!cForwardNet.feedForward(state,1,false))
+      if(!cForwardNet.feedForward(state,1,false,(CBufferFloat*)NULL))
         {
          delete state;
 
@@ -340,7 +342,7 @@ int CEVD::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true)
    return(action);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CEVD::Save(string file_name,bool common=true)
   {
@@ -349,7 +351,9 @@ bool CEVD::Save(string file_name,bool common=true)
 //---
    int handle=FileOpen(file_name,(common ? FILE_COMMON : 0) | FILE_BIN | FILE_WRITE);
    if(handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    if(FileWriteInteger(handle,iMinBufferSize)<=0||FileWriteInteger(handle,iStateEmbedingLayer)<=0)
      {
@@ -366,7 +370,7 @@ bool CEVD::Save(string file_name,bool common=true)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CEVD::Load(string file_name,bool common=true)
   {
@@ -375,7 +379,9 @@ bool CEVD::Load(string file_name,bool common=true)
 //---
    int handle=FileOpen(file_name,(common ? FILE_COMMON : 0) | FILE_BIN | FILE_READ);
    if(handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    iMinBufferSize=(uint)FileReadInteger(handle);
    iStateEmbedingLayer=(uint)FileReadInteger(handle);
@@ -395,7 +401,7 @@ bool CEVD::Load(string file_name,bool common=true)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CEVD::Save(string dqn,string forward,bool common=true)
   {
@@ -410,7 +416,7 @@ bool CEVD::Save(string dqn,string forward,bool common=true)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CEVD::Load(string dqn,string forward,uint state_layer,bool common=true)
   {
@@ -418,7 +424,9 @@ bool CEVD::Load(string dqn,string forward,uint state_layer,bool common=true)
       return(false);
 
    bool result=true;
-   float err,undef,forecast;
+   float err;
+   float undef;
+   float forecast;
    datetime date;
    if(!CNet::Load(dqn,err,undef,forecast,date,common)||
       !cForwardNet.Load(forward,err,undef,forecast,date,common)||
@@ -431,7 +439,7 @@ bool CEVD::Load(string dqn,string forward,uint state_layer,bool common=true)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| SetBufferSize                                                    |
+//| SetBufferSize - Set buffer size                                  |
 //+------------------------------------------------------------------+
 void CEVD::SetBufferSize(uint min,uint max)
   {

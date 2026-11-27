@@ -216,7 +216,7 @@ void Train(void)
          State.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
          x=(double)Buffer[tr].States[st].account[7] / (double)PeriodSeconds(PERIOD_D1);
          State.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
-         if(!Convolution.feedForward(GetPointer(State),1,false,NULL))
+         if(!Convolution.feedForward(GetPointer(State),1,false,(CBufferFloat*)NULL))
            {
             PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
             ExpertRemove();
@@ -378,7 +378,7 @@ void Train(void)
       vector<float>forecast=ForecastAccount(Buffer[tr].States[i].account,rewards1,prof_1l,Buffer[tr].States[i+1].account[7]);
       TargetState.AddArray(forecast);
       if(!critic.feedForward(GetPointer(Actor),LatentLayer,GetPointer(Actor))||
-         !Convolution.feedForward(GetPointer(TargetState)))
+         !Convolution.feedForward(GetPointer(TargetState),1,true,(CBufferFloat*)NULL))
         {
          PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
          break;

@@ -47,7 +47,9 @@ bool CD2SkillItem::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,numNeurons,
                             optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(EnsureItemState());
   }
@@ -65,7 +67,9 @@ bool CD2SkillItem::SetCorrectionBuffer(CBufferFloat*correction)
 
    if(!Output||correction.Total()!=Output.Total()||
       correction.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_correction=correction;
 
@@ -194,7 +198,9 @@ bool CD2SkillBank::ValidateBuffers(void)
    if(total<=0||total>2147483647||
       !Output||!Gradient||Output.Total()!=(int)m_dimension||
       Gradient.Total()!=(int)m_dimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(m_keys.Total()==(int)total&&
           m_corrections.Total()==(int)total&&
@@ -274,7 +280,9 @@ bool CD2SkillBank::Enabled(void)const
 bool CD2SkillBank::SetThresholds(const float similarity,const float direction)
   {
    if(!MathIsValidNumber(similarity)||!MathIsValidNumber(direction))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_similarity_threshold=similarity;
    m_direction_threshold=direction;
@@ -287,7 +295,9 @@ bool CD2SkillBank::SetThresholds(const float similarity,const float direction)
 bool CD2SkillBank::SetUtilityWeight(const float value)
   {
    if(!MathIsValidNumber(value))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_utility_weight=value;
 
@@ -299,7 +309,9 @@ bool CD2SkillBank::SetUtilityWeight(const float value)
 bool CD2SkillBank::SetAlpha(const float value)
   {
    if(!MathIsValidNumber(value)||value<0.0f||value>1.0f)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_alpha=value;
 
@@ -318,7 +330,9 @@ float CD2SkillBank::Alpha(void)const
 bool CD2SkillBank::SetUtilityPolicy(const bool utility_aware,const float min_utility)
   {
    if(!MathIsValidNumber(min_utility)||min_utility<-1.0f||min_utility>1.0f)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_utility_aware=utility_aware;
    m_min_utility=min_utility;
@@ -346,7 +360,9 @@ bool CD2SkillBank::SetLifecycle(const uint confirmations,const uint protection_a
                                 const uint inactivity_age)
   {
    if(confirmations==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_min_confirmations=confirmations;
    m_protection_age=protection_age;
@@ -360,7 +376,9 @@ bool CD2SkillBank::SetLifecycle(const uint confirmations,const uint protection_a
 bool CD2SkillBank::SetMaxCorrection(const float value)
   {
    if(!MathIsValidNumber(value)||value<0.0f)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_max_correction=value;
 
@@ -662,43 +680,63 @@ bool CD2Skill::SetOpenCLChecked(COpenCLMy*obj)
   {
 //--- validate the exact model and both Bank states before either Bank is prepared.
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalseEx("checked target or capability");
+     {
+      ReturnFalseEx("checked target or capability")
+     }
 
    if(m_task_bank_materialized&&!m_task_bank.SupportsOpenCLChecked(obj))
-      ReturnFalseEx("checked Task prevalidation");
+     {
+      ReturnFalseEx("checked Task prevalidation")
+     }
 
    if(!m_task_bank_materialized&&!m_task_bank.SupportsDeferredOpenCLChecked(obj))
-      ReturnFalseEx("checked Task prevalidation");
+     {
+      ReturnFalseEx("checked Task prevalidation")
+     }
 
    if(m_step_bank_materialized&&!m_step_bank.SupportsOpenCLChecked(obj))
-      ReturnFalseEx("checked Step prevalidation");
+     {
+      ReturnFalseEx("checked Step prevalidation")
+     }
 
    if(!m_step_bank_materialized&&!m_step_bank.SupportsDeferredOpenCLChecked(obj))
-      ReturnFalseEx("checked Step prevalidation");
+     {
+      ReturnFalseEx("checked Step prevalidation")
+     }
 
 //--- prepare and transfer Task before publishing its readiness.
    if(!m_task_bank_materialized&&!m_task_bank.PrepareOpenCLChecked(obj))
-      ReturnFalseEx("checked Task prepare");
+     {
+      ReturnFalseEx("checked Task prepare")
+     }
 
    if(!m_task_bank.SetOpenCLChecked(obj))
-      ReturnFalseEx("checked Task context");
+     {
+      ReturnFalseEx("checked Task context")
+     }
 
    if(!m_task_bank_materialized)
       m_task_bank_materialized=true;
 
 //--- prepare and transfer Step before publishing its readiness.
    if(!m_step_bank_materialized&&!m_step_bank.PrepareOpenCLChecked(obj))
-      ReturnFalseEx("checked Step prepare");
+     {
+      ReturnFalseEx("checked Step prepare")
+     }
 
    if(!m_step_bank.SetOpenCLChecked(obj))
-      ReturnFalseEx("checked Step context");
+     {
+      ReturnFalseEx("checked Step context")
+     }
 
    if(!m_step_bank_materialized)
       m_step_bank_materialized=true;
 
 //--- publish the Scenario parent only after both Bank transfers succeed.
    if(!CNeuronScenarioCrossAttention::SetOpenCLChecked(obj))
-      ReturnFalseEx("checked Scenario context");
+     {
+      ReturnFalseEx("checked Scenario context")
+     }
 
    return(true);
   }
@@ -709,31 +747,47 @@ bool CD2Skill::Enable(const bool task,const bool step)
   {
 //--- validate every requested Bank before preparing either deferred branch.
    if(!m_ready||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(task&&m_task_bank_materialized&&!m_task_bank.SupportsOpenCLChecked(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(task&&!m_task_bank_materialized&&!m_task_bank.SupportsDeferredOpenCLChecked(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(step&&m_step_bank_materialized&&!m_step_bank.SupportsOpenCLChecked(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(step&&!m_step_bank_materialized&&!m_step_bank.SupportsDeferredOpenCLChecked(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- prepare and transfer requested deferred Banks without changing enabled state.
    if(task&&!m_task_bank_materialized)
      {
       if(!m_task_bank.PrepareOpenCLChecked(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!m_task_bank.SetOpenCLChecked(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!m_task_bank.SetCorrectionBuffer(m_task_bank.SelectedCorrection()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       m_task_bank_materialized=true;
      }
@@ -741,13 +795,19 @@ bool CD2Skill::Enable(const bool task,const bool step)
    if(step&&!m_step_bank_materialized)
      {
       if(!m_step_bank.PrepareOpenCLChecked(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!m_step_bank.SetOpenCLChecked(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!m_step_bank.SetCorrectionBuffer(m_step_bank.SelectedCorrection()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       m_step_bank_materialized=true;
      }
@@ -755,11 +815,15 @@ bool CD2Skill::Enable(const bool task,const bool step)
 //--- bind selected correction aliases only after all requested transfers succeed.
    if(task&&m_task_bank.GetCorrectionBuffer()==NULL&&
       !m_task_bank.SetCorrectionBuffer(m_task_bank.SelectedCorrection()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(step&&m_step_bank.GetCorrectionBuffer()==NULL&&
       !m_step_bank.SetCorrectionBuffer(m_step_bank.SelectedCorrection()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_task_bank.SetEnabled(task);
    m_step_bank.SetEnabled(step);
@@ -802,7 +866,9 @@ bool CD2Skill::TaskUtility(const float delta_j,bool&applied)
    applied=false;
 
    if(!m_ready||(m_mode!=D2_EVALUATE&&m_mode!=D2_ONLINE_CALIBRATION))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(m_task_bank.UpdateUtility(delta_j,applied));
   }
@@ -823,7 +889,9 @@ bool CD2Skill::StepUtility(const float delta_j,bool&applied)
    applied=false;
 
    if(!m_ready||(m_mode!=D2_EVALUATE&&m_mode!=D2_ONLINE_CALIBRATION))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(m_step_bank.UpdateUtility(delta_j,applied));
   }
@@ -852,7 +920,9 @@ bool CD2Skill::Init(uint numOutputs,uint myIndex,COpenCLMy*opencl,
                     uint              variables,uint stack_size,uint top_k)
   {
    if(critic)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_ready=false;
    m_mode=D2_DISABLED;
@@ -861,10 +931,14 @@ bool CD2Skill::Init(uint numOutputs,uint myIndex,COpenCLMy*opencl,
                                            scenarios,horizon,latent,false,
                                            optimization_type,batch,variables,
                                            stack_size,top_k))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!InitBanks(optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_task_bank_materialized=true;
    m_step_bank_materialized=true;
@@ -883,15 +957,21 @@ bool CD2Skill::InitBanks(ENUM_OPTIMIZATION optimization_type,uint batch)
    const uint step_dimension=iScenarios*iVariables*iHorizon*iDimension;
 
    if(task_dimension==0||step_dimension==0||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_task_bank.Init(task_dimension,100000,OpenCL,iScenarios,
                         optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_step_bank.Init(step_dimension,100001,OpenCL,iScenarios,
                         optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_task_bank.SetActivationFunction(None);
    m_step_bank.SetActivationFunction(None);
@@ -939,7 +1019,9 @@ bool CD2Skill::UpdateOnlineDirection(CD2SkillBank*bank,CBufferFloat*gradient)
       return(true);
 
    if(!gradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(bank.UpdateDirectionFromGradient(gradient));
   }
@@ -951,7 +1033,9 @@ bool CD2Skill::feedForwardSecond(CNeuronBaseOCL*NeuronOCL,
   {
    if(!OpenCL||!NeuronOCL||!Forecast||Forecast.Type()!=defNeuronScenarioForecast||
       NeuronOCL.Neurons()!=int(bCritic?19:13))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronScenarioForecast *forecast=Forecast;
 
@@ -960,106 +1044,158 @@ bool CD2Skill::feedForwardSecond(CNeuronBaseOCL*NeuronOCL,
       Forecast.Neurons()!=int(iScenarios*iVariables*iHorizon*iDimension)||
       !forecast.GetLogU()||forecast.GetLogU().Total()!=int(iScenarios*iVariables*iHorizon)||
       !forecast.GetPi()||forecast.GetPi().Total()!=int(iScenarios))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQueryProjection.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *task_source=cQueryProjection.AsObject();
 
    if(TaskSkillEnabled())
      {
       if(!m_task_bank.FeedForward(task_source))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       task_source=m_task_bank.AsObject();
      }
    else
       if(m_mode==D2_COLLECT&&m_task_bank.Enabled()&&
          !m_task_bank.Observe(task_source))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cWz.FeedForward(Forecast))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *step_source=cWz.AsObject();
 
    if(StepSkillEnabled())
      {
       if(!m_step_bank.FeedForward(step_source))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       step_source=m_step_bank.AsObject();
      }
    else
       if(m_mode==D2_COLLECT&&m_step_bank.Enabled()&&
          !m_step_bank.Observe(step_source))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cWu.FeedForwardBuffer(forecast.GetLogU()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(step_source.getOutput(),cWu.getOutput(),cTokenSum.getOutput(),
                        1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTokenPE.FeedForward(cTokenSum.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTokensTranspose.FeedForward(cTokenPE.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!Concat(cTokensTranspose.getOutput(),cTokensTranspose.getOutput(),cKV.getOutput(),
               iScenarios*iDimension,iScenarios*iDimension,iVariables*iHorizon))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAttention.FeedForward(task_source,cKV.getOutput()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cAttentionTranspose.FeedForward(cAttention.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!bCritic)
      {
       if(!cHistoryStack.FeedForward(GetPointer(this)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cHistoryTTM.FeedForward(cAttentionTranspose.AsObject(),cHistoryStack.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cHistoryTokenProjection.FeedForward(cTokenPE.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cHistoryMarket.FeedForward(cHistoryStack.AsObject(),cHistoryTokenProjection.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cHistoryContext.FeedForward(cHistoryTTM.AsObject(),cHistoryMarket.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cScenarioHistory.FeedForward(cAttentionTranspose.AsObject(),cHistoryContext.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!ScalarToVector(forecast.GetPi(),cScenarioHistory.getOutput(),cHeadGate.getOutput(),
                          iQueries*iDimension))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
       if(!ScalarToVector(forecast.GetPi(),cAttentionTranspose.getOutput(),cHeadGate.getOutput(),
                          iQueries*iDimension))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cHeadGateTranspose.FeedForward(cHeadGate.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cOutputProjection.FeedForward(cHeadGateTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQueryResidual.FeedForward(task_source))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(cOutputProjection.getOutput(),cQueryResidual.getOutput(),cMHAOutput.getOutput(),
                        iDimension,true,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(CNeuronMSRes::feedForward(cMHAOutput.AsObject()));
   }
@@ -1070,64 +1206,96 @@ bool CD2Skill::calcInputGradientsSecond(CNeuronBaseOCL*NeuronOCL,
                                         CNeuronBaseOCL *Forecast)
   {
    if(!OpenCL||!NeuronOCL||!Forecast||Forecast.Type()!=defNeuronScenarioForecast)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronScenarioForecast *forecast=Forecast;
 
    if(!forecast.GetPi())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronMSRes::calcInputGradients(cMHAOutput.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!DeActivation(cOutputProjection.getOutput(),cOutputProjection.getGradient(),cMHAOutput.getGradient(),
                     cOutputProjection.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!DeActivation(cQueryResidual.getOutput(),cQueryResidual.getGradient(),cMHAOutput.getGradient(),
                     cQueryResidual.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHeadGateTranspose.CalcHiddenGradients(cOutputProjection.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cHeadGate.CalcHiddenGradients(cHeadGateTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!bCritic)
      {
       if(!ScalarToVector(forecast.GetPi(),cHeadGate.getGradient(),cScenarioHistory.getGradient(),
                          iQueries*iDimension))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cAttentionTranspose.CalcHiddenGradients(cScenarioHistory.AsObject(),cHistoryContext.getOutput(),
                                                   cHistoryContext.getGradient(),None))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cHistoryTTM.CalcHiddenGradients(cHistoryContext.AsObject(),cHistoryMarket.getOutput(),
                                           cHistoryMarket.getGradient(),None))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cAttentionTranspose.CalcHiddenGradients(cHistoryTTM.AsObject(),cHistoryStack.getOutput(),NULL,None))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cHistoryStack.CalcHiddenGradients(cHistoryMarket.AsObject(),cHistoryTokenProjection.getOutput(),
                                             cHistoryTokenProjection.getGradient(),None))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cTokenPE.CalcHiddenGradients(cHistoryTokenProjection.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
       if(!ScalarToVector(forecast.GetPi(),cHeadGate.getGradient(),cAttentionTranspose.getGradient(),
                          iQueries*iDimension))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cAttention.CalcHiddenGradients(cAttentionTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQueryGradient.CalcHiddenGradients(cQueryResidual.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(TaskSkillEnabled())
      {
@@ -1135,37 +1303,55 @@ bool CD2Skill::calcInputGradientsSecond(CNeuronBaseOCL*NeuronOCL,
    //--- its query input writes dL/d(Bank output) to the Bank without weights.
       if(!m_task_bank.CalcHiddenGradients(cAttention.AsObject(),cKV.getOutput(),
                                           cKV.getGradient(),None))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if((m_mode==D2_EVALUATE||m_mode==D2_ONLINE_CALIBRATION)&&
          !m_task_bank.AccumulateInfluenceFromGradient(m_task_bank.getGradient()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cQueryProjection.CalcHiddenGradients(m_task_bank.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
       if(!cQueryProjection.CalcHiddenGradients(cAttention.AsObject(),cKV.getOutput(),
                                                cKV.getGradient(),None))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!SumAndNormalize(cQueryProjection.getGradient(),cQueryGradient.getGradient(),cQueryProjection.getGradient(),
                        1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!DeConcat(cKVGradK.getGradient(),cKVGradV.getGradient(),cKV.getGradient(),
                 iScenarios*iDimension,iScenarios*iDimension,iVariables*iHorizon))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(cKVGradK.getGradient(),cKVGradV.getGradient(),
                        cTokensTranspose.getGradient(),1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTokenPE.CalcHiddenGradients(cTokensTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTokenSum.CalcHiddenGradients(cTokenPE.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(StepSkillEnabled())
      {
@@ -1174,35 +1360,51 @@ bool CD2Skill::calcInputGradientsSecond(CNeuronBaseOCL*NeuronOCL,
       if(!CopyBufferRaw(cTokenSum.getGradient(),m_step_bank.getGradient(),
                         m_step_bank.Neurons())||
          !m_step_bank.calcInputGradients(cWz.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if((m_mode==D2_EVALUATE||m_mode==D2_ONLINE_CALIBRATION)&&
          !m_step_bank.AccumulateInfluenceFromGradient(m_step_bank.getGradient()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
       if(!Concat(cTokenSum.getGradient(),cTokenSum.getGradient(),cWz.getGradient(),
                  iScenarios*iVariables*iHorizon*iDimension,0,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!Concat(cTokenSum.getGradient(),cTokenSum.getGradient(),cWu.getGradient(),
               iScenarios*iVariables*iHorizon*iDimension,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cQueryProjection.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(SkillUpdatesEnabled()&&m_task_bank.Enabled()&&
       !m_task_bank.UpdateFromGradient(cQueryProjection.getOutput(),cQueryProjection.getGradient()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(SkillUpdatesEnabled()&&m_step_bank.Enabled()&&
       !m_step_bank.UpdateFromGradient(cWz.getOutput(),cWz.getGradient()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!UpdateOnlineDirection(GetPointer(m_task_bank),m_task_bank.getGradient())||
       !UpdateOnlineDirection(GetPointer(m_step_bank),m_step_bank.getGradient()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(NeuronOCL.Activation()!=None)
       return(DeActivation(NeuronOCL.getOutput(),NeuronOCL.getGradient(),NeuronOCL.getGradient(),
@@ -1217,7 +1419,9 @@ bool CD2Skill::updateInputWeightsSecond(CNeuronBaseOCL*NeuronOCL,
                                         CNeuronBaseOCL *Forecast)
   {
    if(!NeuronOCL||!Forecast||Forecast.Type()!=defNeuronScenarioForecast)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- collection records bank observations but freezes the Actor highway.
 //--- evaluation, inference, and online calibration are read-only for Actor weights.
@@ -1228,39 +1432,61 @@ bool CD2Skill::updateInputWeightsSecond(CNeuronBaseOCL*NeuronOCL,
    CNeuronScenarioForecast *forecast=Forecast;
 
    if(!forecast.GetLogU())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQueryProjection.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cWz.UpdateInputWeights(Forecast))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cWu.UpdateInputWeightsBuffer(forecast.GetLogU()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTokenPE.UpdateInputWeights(cTokenSum.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cOutputProjection.UpdateInputWeights(cHeadGateTranspose.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cQueryResidual.UpdateInputWeights(cQueryProjection.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!bCritic)
      {
       if(!cHistoryTokenProjection.UpdateInputWeights(cTokenPE.AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cHistoryMarket.UpdateInputWeights(cHistoryStack.AsObject(),cHistoryTokenProjection.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cHistoryContext.UpdateInputWeights(cHistoryTTM.AsObject(),cHistoryMarket.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cScenarioHistory.UpdateInputWeights(cAttentionTranspose.AsObject(),cHistoryContext.getOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(true);
@@ -1271,9 +1497,11 @@ bool CD2Skill::updateInputWeightsSecond(CNeuronBaseOCL*NeuronOCL,
 bool CD2Skill::Save(const int file_handle)
   {
    if(!m_ready||!CNeuronScenarioCrossAttention::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
-   dFileWriteUInt(file_handle,D2SKILL_LAYER_FORMAT);
+   dFileWriteUInt(file_handle,D2SKILL_LAYER_FORMAT)
 
    return(m_task_bank.Save(file_handle)&&m_step_bank.Save(file_handle));
   }
@@ -1283,12 +1511,16 @@ bool CD2Skill::Save(const int file_handle)
 bool CD2Skill::Load(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE||!CNeuronScenarioCrossAttention::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint format=(uint)FileReadInteger(file_handle);
 
    if(format!=D2SKILL_LAYER_FORMAT||bCritic||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_ready=false;
    m_task_bank_materialized=false;
@@ -1303,14 +1535,18 @@ bool CD2Skill::Load(const int file_handle)
       !m_task_bank.Load(file_handle)||
       FileReadInteger(file_handle,INT_VALUE)!=defNeuronD2SkillBank||
       !m_step_bank.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint task_dimension=iQueries*iScenarios*iDimension;
    const uint step_dimension=iScenarios*iVariables*iHorizon*iDimension;
 
    if(m_task_bank.Dimension()!=task_dimension||m_task_bank.Slots()!=iScenarios||
       m_step_bank.Dimension()!=step_dimension||m_step_bank.Slots()!=iScenarios)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_ready=true;
 
@@ -1322,7 +1558,9 @@ bool CD2Skill::Load(const int file_handle)
 bool CD2Skill::Load(const int file_handle,COpenCLMy*opencl)
   {
    if(file_handle==INVALID_HANDLE||!opencl||FileReadInteger(file_handle)!=Type())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OpenCL=opencl;
 
@@ -1360,7 +1598,9 @@ void CD2Skill::TrainMode(bool flag)
 bool CD2Skill::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!source||source.Type()!=Type())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- skill banks are accumulated model parameters, not trainable copies of
 //--- the scenario-attention weights.  Polyak update applies only to the base
@@ -1374,7 +1614,9 @@ bool CD2Skill::UpdateInputStateSecond(CObject*SourceObject,
                                       CNeuronBaseOCL *Forecast)
   {
    if(CheckPointer(SourceObject)==POINTER_INVALID||!Forecast||!m_ready)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *source=SourceObject;
 
@@ -1390,7 +1632,9 @@ bool CD2Skill::Clear(void)
    const bool ready=m_ready;
 
    if(!CNeuronScenarioCrossAttention::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_ready=ready;
 
@@ -1402,7 +1646,9 @@ bool CD2Skill::Clear(void)
 bool CD2Skill::SetMode(const ENUM_D2SKILL_MODE mode)
   {
    if(mode<D2_DISABLED||mode>D2_ONLINE_CALIBRATION)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_mode=mode;
 
@@ -1424,7 +1670,9 @@ bool CD2Skill::ResetEpisodeInfluence(void)
   {
    if(!m_ready||!m_task_bank.ResetEpisodeInfluence()||
       !m_step_bank.ResetEpisodeInfluence())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -1435,12 +1683,16 @@ bool CD2SkillItem::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||CheckPointer(NeuronOCL)==POINTER_INVALID||
       CheckPointer(Output)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *source=NeuronOCL.getOutput();
 
    if(!source||source.Total()!=Output.Total()||source.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(m_correction)==POINTER_INVALID)
       return(SumAndNormalize(source,source,Output,source.Total(),false,
@@ -1456,13 +1708,17 @@ bool CD2SkillItem::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||CheckPointer(NeuronOCL)==POINTER_INVALID||
       CheckPointer(Gradient)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *source_gradient=NeuronOCL.getGradient();
 
    if(!source_gradient||source_gradient.Total()!=Gradient.Total()||
       source_gradient.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- a skill item has no weights: dL/dx receives dL/dy.  Preserve any
 //--- gradient already accumulated by another branch (for example the
@@ -1476,15 +1732,21 @@ bool CD2SkillItem::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CD2SkillItem::EnsureItemState(void)
   {
    if(!OpenCL||m_item_dimension==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_item_correction.Total()!=(int)m_item_dimension&&
       !m_item_correction.BufferInit((int)m_item_dimension,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((m_item_correction.GetOpenCL()!=OpenCL||m_item_correction.GetIndex()<0)&&
       !m_item_correction.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_correction==NULL)
      {
@@ -1493,32 +1755,48 @@ bool CD2SkillItem::EnsureItemState(void)
 
    if(m_item_direction.Total()!=(int)m_item_dimension&&
       !m_item_direction.BufferInit((int)m_item_dimension,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((m_item_direction.GetOpenCL()!=OpenCL||m_item_direction.GetIndex()<0)&&
       !m_item_direction.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_item_scale.Total()!=1&&!m_item_scale.BufferInit(1,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((m_item_scale.GetOpenCL()!=OpenCL||m_item_scale.GetIndex()<0)&&
       !m_item_scale.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_item_observations.Total()!=1&&!m_item_observations.BufferInit(1,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((m_item_observations.GetOpenCL()!=OpenCL||m_item_observations.GetIndex()<0)&&
       !m_item_observations.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_item_mass.Total()!=1&&!m_item_mass.BufferInit(1,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((m_item_mass.GetOpenCL()!=OpenCL||m_item_mass.GetIndex()<0)&&
       !m_item_mass.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(m_correction&&m_correction.GetOpenCL()==OpenCL&&
           m_correction.Total()==(int)m_item_dimension&&
@@ -1573,12 +1851,16 @@ bool CD2SkillItem::PrepareItemOwnedCheckedState(void)
           (buffers[i].Total()!=0||buffers[i].GetIndex()>=0))||
          (buffers[i].GetIndex()>=0&&
           CheckPointer(buffers[i].GetOpenCL())==POINTER_INVALID))
-         ReturnFalseEx("item "+slots[i]+" checked state");
+        {
+         ReturnFalseEx("item "+slots[i]+" checked state")
+        }
      }
 
    for(int i=0;i<7;i++)
       if(buffers[i].Total()==0&&!buffers[i].BufferInit(totals[i],0.0f))
-         ReturnFalseEx("item "+slots[i]+" host init");
+        {
+         ReturnFalseEx("item "+slots[i]+" host init")
+        }
 
    return(true);
   }
@@ -1589,13 +1871,17 @@ bool CD2SkillItem::ItemLaunchLayout(uint&local_size,uint&groups,
                                     uint &partial_count)const
   {
    if(!OpenCL||m_item_dimension==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    long limit=OpenCL.GetMaxWorkGroupSize();
    limit=MathMin(limit,OpenCL.GetMaxLocalSize(0));
 
    if(limit<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    local_size=1;
    while(local_size<=(uint)limit/2)
@@ -1612,7 +1898,9 @@ bool CD2SkillItem::ItemLaunchLayout(uint&local_size,uint&groups,
      }
 
    if(total==0||total>2147483647)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    partial_count=(uint)total;
 
@@ -1628,22 +1916,32 @@ bool CD2SkillItem::EnsureItemScratch(void)
    uint partial_count=0;
 
    if(!ItemLaunchLayout(local_size,groups,partial_count))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_item_partials.Total()!=(int)partial_count&&
       !m_item_partials.BufferInit(partial_count,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((m_item_partials.GetOpenCL()!=OpenCL||m_item_partials.GetIndex()<0)&&
       !m_item_partials.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_item_reduced_norm.Total()!=2&&!m_item_reduced_norm.BufferInit(2,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if((m_item_reduced_norm.GetOpenCL()!=OpenCL||m_item_reduced_norm.GetIndex()<0)&&
       !m_item_reduced_norm.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -1655,7 +1953,9 @@ bool CD2SkillItem::CalculateItemNorm(CBufferFloat*source,const uint local_size,
   {
    if(!source||source.GetOpenCL()!=OpenCL||source.GetIndex()<0||
       local_size==0||groups==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int partial_kernel=def_k_D2SkillItemPartial;
    setBuffer(partial_kernel,def_k_d2ip_source,source.GetIndex())
@@ -1705,7 +2005,9 @@ bool CD2SkillItem::UpdateFromGradient(CBufferFloat*gradient)
    if(!gradient||!OpenCL||gradient.GetOpenCL()!=OpenCL||
       gradient.Total()!=(int)m_item_dimension||gradient.GetIndex()<0||
       !EnsureItemState())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint local_size=0;
    uint groups=0;
@@ -1713,7 +2015,9 @@ bool CD2SkillItem::UpdateFromGradient(CBufferFloat*gradient)
 
    if(!ItemLaunchLayout(local_size,groups,partial_count)||
       !CalculateItemNorm(gradient,local_size,groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int kernel=def_k_D2SkillItemApply;
    setBuffer(kernel,def_k_d2ia_gradient,gradient.GetIndex())
@@ -1740,7 +2044,9 @@ bool CD2SkillItem::UpdateFromGradient(CBufferFloat*gradient)
    if(m_representation==D2SkillDirectionMagnitude)
      {
       if(!CalculateItemNorm(GetPointer(m_item_direction),local_size,groups))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       setArgument(kernel,def_k_d2ia_phase,1)
       kernelExecuteLoc(kernel,offset,global,local)
@@ -1756,14 +2062,16 @@ bool CD2SkillItem::Save(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE||!CNeuronBaseOCL::Save(file_handle)||
       m_item_dimension==0||!EnsureItemState())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
-   dFileWriteUInt(file_handle,D2SKILL_ITEM_FORMAT);
-   dFileWriteUInt(file_handle,m_item_dimension);
-   dFileWriteUInt(file_handle,(uint)m_representation);
-   dFileWriteFloat(file_handle,m_beta_correction);
-   dFileWriteFloat(file_handle,m_beta_direction);
-   dFileWriteFloat(file_handle,m_beta_magnitude);
+   dFileWriteUInt(file_handle,D2SKILL_ITEM_FORMAT)
+   dFileWriteUInt(file_handle,m_item_dimension)
+   dFileWriteUInt(file_handle,(uint)m_representation)
+   dFileWriteFloat(file_handle,m_beta_correction)
+   dFileWriteFloat(file_handle,m_beta_direction)
+   dFileWriteFloat(file_handle,m_beta_magnitude)
 
    return(m_item_correction.Save(file_handle)&&m_item_direction.Save(file_handle)&&
           m_item_scale.Save(file_handle)&&m_item_observations.Save(file_handle)&&
@@ -1775,32 +2083,42 @@ bool CD2SkillItem::Save(const int file_handle)
 bool CD2SkillItem::Load(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE||!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint format=(uint)FileReadInteger(file_handle);
 
    if(format!=D2SKILL_ITEM_FORMAT)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_item_dimension=(uint)FileReadInteger(file_handle);
    m_representation=(ED2SkillRepresentation)FileReadInteger(file_handle);
-   dFileReadUFloat(file_handle,m_beta_correction);
-   dFileReadUFloat(file_handle,m_beta_direction);
-   dFileReadUFloat(file_handle,m_beta_magnitude);
+   dFileReadUFloat(file_handle,m_beta_correction)
+   dFileReadUFloat(file_handle,m_beta_direction)
+   dFileReadUFloat(file_handle,m_beta_magnitude)
 
    if(m_item_dimension==0||m_representation<D2SkillFullResidual||
       m_representation>D2SkillDirectionMagnitude)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_item_correction.Load(file_handle)||!m_item_direction.Load(file_handle)||
       !m_item_scale.Load(file_handle)||!m_item_observations.Load(file_handle)||
       !m_item_mass.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_item_correction.Total()!=(int)m_item_dimension||
       m_item_direction.Total()!=(int)m_item_dimension||m_item_scale.Total()!=1||
       m_item_observations.Total()!=1||m_item_mass.Total()!=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetOpenCL(OpenCL);
    m_correction=GetPointer(m_item_correction);
@@ -1814,7 +2132,9 @@ bool CD2SkillItem::Load(const int file_handle,COpenCLMy*opencl)
   {
    if(file_handle==INVALID_HANDLE||!opencl||
       FileReadInteger(file_handle,INT_VALUE)!=Type())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    AttachOpenCL(opencl);
 
@@ -1930,103 +2250,151 @@ bool CD2SkillItem::SetOpenCLChecked(COpenCLMy*obj)
   {
 //--- reject an invalid target, incomplete item or foreign borrowed correction before mutation.
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalseEx("checked item target or capability");
+     {
+      ReturnFalseEx("checked item target or capability")
+     }
 
    if(m_correction!=NULL&&m_correction!=GetPointer(m_item_correction)&&
       (CheckPointer(m_correction)==POINTER_INVALID||
        m_correction.GetOpenCL()!=obj||
        m_correction.Total()!=(int)m_item_dimension||m_correction.GetIndex()<0))
-      ReturnFalseEx("borrowed item correction target");
+     {
+      ReturnFalseEx("borrowed item correction target")
+     }
 
 //--- read every allocated foreign direct buffer before any item buffer is recreated.
    if(m_item_correction.GetIndex()>=0&&
       CheckPointer(m_item_correction.GetOpenCL())==POINTER_INVALID)
-      ReturnFalseEx("item correction owner");
+     {
+      ReturnFalseEx("item correction owner")
+     }
 
    if(m_item_correction.GetIndex()>=0&&m_item_correction.GetOpenCL()!=obj&&
       !m_item_correction.BufferRead())
-      ReturnFalseEx("item correction read");
+     {
+      ReturnFalseEx("item correction read")
+     }
 
    if(m_item_direction.GetIndex()>=0&&
       CheckPointer(m_item_direction.GetOpenCL())==POINTER_INVALID)
-      ReturnFalseEx("item direction owner");
+     {
+      ReturnFalseEx("item direction owner")
+     }
 
    if(m_item_direction.GetIndex()>=0&&m_item_direction.GetOpenCL()!=obj&&
       !m_item_direction.BufferRead())
-      ReturnFalseEx("item direction read");
+     {
+      ReturnFalseEx("item direction read")
+     }
 
    if(m_item_scale.GetIndex()>=0&&
       CheckPointer(m_item_scale.GetOpenCL())==POINTER_INVALID)
-      ReturnFalseEx("item scale owner");
+     {
+      ReturnFalseEx("item scale owner")
+     }
 
    if(m_item_scale.GetIndex()>=0&&m_item_scale.GetOpenCL()!=obj&&
       !m_item_scale.BufferRead())
-      ReturnFalseEx("item scale read");
+     {
+      ReturnFalseEx("item scale read")
+     }
 
    if(m_item_observations.GetIndex()>=0&&
       CheckPointer(m_item_observations.GetOpenCL())==POINTER_INVALID)
-      ReturnFalseEx("item observations owner");
+     {
+      ReturnFalseEx("item observations owner")
+     }
 
    if(m_item_observations.GetIndex()>=0&&m_item_observations.GetOpenCL()!=obj&&
       !m_item_observations.BufferRead())
-      ReturnFalseEx("item observations read");
+     {
+      ReturnFalseEx("item observations read")
+     }
 
    if(m_item_mass.GetIndex()>=0&&
       CheckPointer(m_item_mass.GetOpenCL())==POINTER_INVALID)
-      ReturnFalseEx("item mass owner");
+     {
+      ReturnFalseEx("item mass owner")
+     }
 
    if(m_item_mass.GetIndex()>=0&&m_item_mass.GetOpenCL()!=obj&&
       !m_item_mass.BufferRead())
-      ReturnFalseEx("item mass read");
+     {
+      ReturnFalseEx("item mass read")
+     }
 
    if(m_item_partials.GetIndex()>=0&&
       CheckPointer(m_item_partials.GetOpenCL())==POINTER_INVALID)
-      ReturnFalseEx("item partials owner");
+     {
+      ReturnFalseEx("item partials owner")
+     }
 
    if(m_item_partials.GetIndex()>=0&&m_item_partials.GetOpenCL()!=obj&&
       !m_item_partials.BufferRead())
-      ReturnFalseEx("item partials read");
+     {
+      ReturnFalseEx("item partials read")
+     }
 
    if(m_item_reduced_norm.GetIndex()>=0&&
       CheckPointer(m_item_reduced_norm.GetOpenCL())==POINTER_INVALID)
-      ReturnFalseEx("item reduced norm owner");
+     {
+      ReturnFalseEx("item reduced norm owner")
+     }
 
    if(m_item_reduced_norm.GetIndex()>=0&&m_item_reduced_norm.GetOpenCL()!=obj&&
       !m_item_reduced_norm.BufferRead())
-      ReturnFalseEx("item reduced norm read");
+     {
+      ReturnFalseEx("item reduced norm read")
+     }
 
 //--- recreate only direct item buffers that are foreign to the target or host-only.
    if(m_item_correction.GetOpenCL()!=obj||m_item_correction.GetIndex()<0)
       if(!m_item_correction.BufferCreate(obj))
-         ReturnFalseEx("item correction create");
+        {
+         ReturnFalseEx("item correction create")
+        }
 
    if(m_item_direction.GetOpenCL()!=obj||m_item_direction.GetIndex()<0)
       if(!m_item_direction.BufferCreate(obj))
-         ReturnFalseEx("item direction create");
+        {
+         ReturnFalseEx("item direction create")
+        }
 
    if(m_item_scale.GetOpenCL()!=obj||m_item_scale.GetIndex()<0)
       if(!m_item_scale.BufferCreate(obj))
-         ReturnFalseEx("item scale create");
+        {
+         ReturnFalseEx("item scale create")
+        }
 
    if(m_item_observations.GetOpenCL()!=obj||m_item_observations.GetIndex()<0)
       if(!m_item_observations.BufferCreate(obj))
-         ReturnFalseEx("item observations create");
+        {
+         ReturnFalseEx("item observations create")
+        }
 
    if(m_item_mass.GetOpenCL()!=obj||m_item_mass.GetIndex()<0)
       if(!m_item_mass.BufferCreate(obj))
-         ReturnFalseEx("item mass create");
+        {
+         ReturnFalseEx("item mass create")
+        }
 
    if(m_item_partials.GetOpenCL()!=obj||m_item_partials.GetIndex()<0)
       if(!m_item_partials.BufferCreate(obj))
-         ReturnFalseEx("item partials create");
+        {
+         ReturnFalseEx("item partials create")
+        }
 
    if(m_item_reduced_norm.GetOpenCL()!=obj||m_item_reduced_norm.GetIndex()<0)
       if(!m_item_reduced_norm.BufferCreate(obj))
-         ReturnFalseEx("item reduced norm create");
+        {
+         ReturnFalseEx("item reduced norm create")
+        }
 
 //--- publish inherited owners only after every owned item buffer reached the target.
    if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
-      ReturnFalseEx("inherited item base context");
+     {
+      ReturnFalseEx("inherited item base context")
+     }
 
 //--- finalize the checked item transfer without replacing the correction alias.
    return(true);
@@ -2039,7 +2407,9 @@ bool CD2SkillItem::Clear(void)
    m_correction=NULL;
 
    if(!CNeuronBaseOCL::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return((m_item_correction.Total()==0||m_item_correction.Fill(0))&&
           (m_item_direction.Total()==0||m_item_direction.Fill(0))&&
@@ -2055,19 +2425,25 @@ bool CD2SkillItem::Clear(void)
 uint CD2SkillBank::D2LaunchLocalSize(const uint work_items)const
   {
    if(!OpenCL||work_items==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const long device_limit=MathMin(OpenCL.GetMaxWorkGroupSize(),
                                    OpenCL.GetMaxLocalSize(0));
 
    if(device_limit<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong capped_items=MathMin((ulong)device_limit,
                                     (ulong)MathMax(work_items,(uint)32));
 
    if(capped_items==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint local_size=1;
    while(local_size<=(uint)capped_items/2)
@@ -2083,12 +2459,16 @@ bool CD2SkillBank::RetrievalLaunchLayout(uint&local_size,uint&partial_count)cons
    if(!OpenCL||m_slots==0||m_dimension==0||m_slots>RAG_FLOAT_INDEX_LIMIT||
       OpenCL.GetMaxWorkGroupSize()<RAG_TOPK_LOCAL_WIDTH||
       OpenCL.GetMaxLocalSize(0)<RAG_TOPK_LOCAL_WIDTH)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong score_items=(ulong)m_slots*m_dimension;
 
    if(score_items==0||score_items>UINT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    local_size=D2LaunchLocalSize((uint)score_items);
    partial_count=(m_slots+RAG_TOPK_LOCAL_WIDTH-1)/RAG_TOPK_LOCAL_WIDTH;
@@ -2101,10 +2481,14 @@ bool CD2SkillBank::RetrievalLaunchLayout(uint&local_size,uint&partial_count)cons
 bool CD2SkillBank::EnsureRetrievalBuffer(CBufferFloat&buffer,const int total)
   {
    if(!OpenCL||total<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(buffer.Total()!=total&&!buffer.BufferInit(total,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(buffer.GetOpenCL()==OpenCL&&buffer.GetIndex()>=0)
       return(true);
@@ -2123,7 +2507,9 @@ bool CD2SkillBank::ReductionScratchCount(const uint items,const uint batches,
    const uint reduction_radix=8;
 
    if(items==0||batches==0||fields==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong stage=items;
    ulong count=(ulong)batches*fields*stage;
@@ -2137,14 +2523,18 @@ bool CD2SkillBank::ReductionScratchCount(const uint items,const uint batches,
          count=(ulong)batches*fields*stage;
 
          if(required>2147483647-count)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          required+=count;
         }
      }
 
    if(required==0||required>2147483647)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    total=(uint)required;
 
@@ -2167,7 +2557,9 @@ bool CD2SkillBank::RunStagedReduction(CBufferFloat&partials,CBufferFloat&reduced
       partials.Total()<(int)required||reduced_total>2147483647||
       reduced.GetOpenCL()!=OpenCL||reduced.GetIndex()<0||
       reduced.Total()<(int)reduced_total)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      input_count=items;
    uint      input_offset=0;
@@ -2191,17 +2583,23 @@ bool CD2SkillBank::RunStagedReduction(CBufferFloat&partials,CBufferFloat&reduced
       const ulong active=(ulong)batches*output_count*fields;
 
       if(active==0||active>UINT_MAX)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       const uint stage_local_size=D2LaunchLocalSize((uint)active);
 
       if(stage_local_size==0)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       const ulong padded=((active+stage_local_size-1)/stage_local_size)*stage_local_size;
 
       if(padded>UINT_MAX)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       uint global[1]={(uint)padded};
       uint local[1]={stage_local_size};
@@ -2227,7 +2625,9 @@ bool CD2SkillBank::RunStagedReduction(CBufferFloat&source,CBufferFloat&partials,
   {
    if(!OpenCL||items==0||source.GetOpenCL()!=OpenCL||
       source.GetIndex()<0||source.Total()!=(int)items)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(source.GetIndex()!=partials.GetIndex())
      {
@@ -2254,7 +2654,9 @@ bool CD2SkillBank::EnsureRetrievalScratch(void)
    if(!RetrievalLaunchLayout(local_size,partial_count)||partial_count>INT_MAX/2||
       !ReductionScratchCount(m_dimension,m_slots,4,score_scratch)||
       m_slots>INT_MAX/4)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int pairs=(int)(2*partial_count);
 
@@ -2271,12 +2673,16 @@ bool CD2SkillBank::EnsureRetrievalScratch(void)
 bool CD2SkillBank::UpdateLaunchLayout(uint&local_size,uint&groups)const
   {
    if(!OpenCL||m_dimension==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint limit=(uint)MathMin(OpenCL.GetMaxWorkGroupSize(),OpenCL.GetMaxLocalSize(0));
 
    if(limit==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    local_size=1;
    while(local_size<=limit/2)
@@ -2304,7 +2710,9 @@ bool CD2SkillBank::EnsureUpdateScratch(void)
       !ReductionScratchCount(m_slots,1,D2SKILL_DIAGNOSTIC_PARTIALS,diagnostic_scratch)||
       !ReductionScratchCount(m_slots,1,1,influence_scratch)||
       !ReductionScratchCount(m_dimension,1,1,gradient_influence_scratch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(EnsureRetrievalBuffer(m_free_scores,(int)m_slots)&&
           EnsureRetrievalBuffer(m_eviction_scores,(int)m_slots)&&
@@ -2329,7 +2737,9 @@ bool CD2SkillBank::RunTop1(CBufferFloat&scores,CBufferFloat&top)
    uint partial_count=0;
 
    if(!RetrievalLaunchLayout(local_size,partial_count)||!EnsureRetrievalScratch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint       offset[1]={0};
    const uint block_size=RAG_TOPK_LOCAL_WIDTH;
@@ -2380,7 +2790,9 @@ bool CD2SkillBank::RunMetrics(CBufferFloat*state,CBufferFloat*gradient,
                               const uint local_size,const uint groups)
   {
    if(!state||!gradient)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      offset[1]={0};
    const int partial_kernel=def_k_D2SkillMetricPartial;
@@ -2409,7 +2821,9 @@ bool CD2SkillBank::RunMetrics(CBufferFloat*state,CBufferFloat*gradient,
 bool CD2SkillBank::CalculateBankVectorNorm(const uint local_size,const uint groups)
   {
    if(local_size==0||groups==0||!EnsureItemScratch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      offset[1]={0};
    const int partial_kernel=def_k_D2SkillBankVectorPartial;
@@ -2437,7 +2851,9 @@ bool CD2SkillBank::Init(uint dimension,uint myIndex,COpenCLMy*open_cl,
   {
    if(!open_cl||dimension==0||slots==0||slots>RAG_FLOAT_INDEX_LIMIT||
       !CD2SkillItem::Init(0,myIndex,open_cl,dimension,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_dimension=dimension;
    m_slots=slots;
@@ -2445,7 +2861,9 @@ bool CD2SkillBank::Init(uint dimension,uint myIndex,COpenCLMy*open_cl,
    const long total=(long)m_slots*(long)m_dimension;
 
    if(total<=0||total>2147483647)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!InitBuffer(m_keys,(int)total)||!InitBuffer(m_corrections,(int)total)||
       !InitBuffer(m_directions,(int)total)||!InitBuffer(m_scales,(int)m_slots)||
@@ -2464,10 +2882,14 @@ bool CD2SkillBank::Init(uint dimension,uint myIndex,COpenCLMy*open_cl,
       !InitBuffer(m_utility_distribution,D2SKILL_DISTRIBUTION_BINS)||
       !InitBuffer(m_usage_distribution,D2SKILL_DISTRIBUTION_BINS)||
       !EnsureRetrievalScratch()||!EnsureUpdateScratch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SetCorrectionBuffer(GetPointer(m_selected_correction)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -2733,25 +3155,39 @@ bool CD2SkillBank::PrepareOpenCLChecked(COpenCLMy*target)
    uint gradient_influence_partials=0;
 
    if(!RetrievalLaunchLayout(retrieval_local,retrieval_partials))
-      ReturnFalseEx("bank retrieval launch layout");
+     {
+      ReturnFalseEx("bank retrieval launch layout")
+     }
 
    if(!ReductionScratchCount(m_dimension,m_slots,4,score_partials))
-      ReturnFalseEx("bank score partials shape");
+     {
+      ReturnFalseEx("bank score partials shape")
+     }
 
    if(!ReductionScratchCount(m_dimension,1,D2SKILL_METRICS,metric_partials))
-      ReturnFalseEx("bank metric partials shape");
+     {
+      ReturnFalseEx("bank metric partials shape")
+     }
 
    if(!ReductionScratchCount(m_dimension,m_slots,1,diagnostic_norm_partials))
-      ReturnFalseEx("bank diagnostic norm partials shape");
+     {
+      ReturnFalseEx("bank diagnostic norm partials shape")
+     }
 
    if(!ReductionScratchCount(m_slots,1,D2SKILL_DIAGNOSTIC_PARTIALS,diagnostic_partials))
-      ReturnFalseEx("bank diagnostic partials shape");
+     {
+      ReturnFalseEx("bank diagnostic partials shape")
+     }
 
    if(!ReductionScratchCount(m_slots,1,1,influence_partials))
-      ReturnFalseEx("bank influence partials shape");
+     {
+      ReturnFalseEx("bank influence partials shape")
+     }
 
    if(!ReductionScratchCount(m_dimension,1,1,gradient_influence_partials))
-      ReturnFalseEx("bank gradient influence partials shape");
+     {
+      ReturnFalseEx("bank gradient influence partials shape")
+     }
 
 //--- map transient Bank slots to their established host shapes.
    CBufferFloat *buffers[23];
@@ -2820,12 +3256,16 @@ bool CD2SkillBank::PrepareOpenCLChecked(COpenCLMy*target)
           (buffers[i].Total()!=0||buffers[i].GetIndex()>=0))||
          (buffers[i].GetIndex()>=0&&
           CheckPointer(buffers[i].GetOpenCL())==POINTER_INVALID))
-         ReturnFalseEx("bank "+slots[i]+" checked state");
+        {
+         ReturnFalseEx("bank "+slots[i]+" checked state")
+        }
 
 //--- initialize only the accepted unallocated transient buffers on the CPU.
    for(int i=0;i<23;i++)
       if(buffers[i].Total()==0&&!buffers[i].BufferInit(totals[i],0.0f))
-         ReturnFalseEx("bank "+slots[i]+" host init");
+        {
+         ReturnFalseEx("bank "+slots[i]+" host init")
+        }
 
    return(true);
   }
@@ -2836,14 +3276,18 @@ bool CD2SkillBank::SetOpenCLChecked(COpenCLMy*obj)
   {
 //--- reject a foreign borrowed alias before any owned Bank mutation.
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalseEx("checked bank target or capability");
+     {
+      ReturnFalseEx("checked bank target or capability")
+     }
 
    if(m_correction!=NULL&&m_correction!=GetPointer(m_item_correction)&&
       m_correction!=GetPointer(m_selected_correction)&&
       (m_correction.GetOpenCL()!=obj||m_correction.GetIndex()<0||
        m_correction.Total()!=(int)m_dimension||
        CheckPointer(m_correction.GetOpenCL())==POINTER_INVALID))
-      ReturnFalseEx("borrowed bank correction target");
+     {
+      ReturnFalseEx("borrowed bank correction target")
+     }
 
 //--- read every foreign allocated Bank buffer before any Bank buffer is recreated.
    CBufferFloat *buffers[42];
@@ -2937,22 +3381,30 @@ bool CD2SkillBank::SetOpenCLChecked(COpenCLMy*obj)
      {
       if(buffers[i].GetIndex()>=0&&
          CheckPointer(buffers[i].GetOpenCL())==POINTER_INVALID)
-         ReturnFalseEx(labels[i]+" owner");
+        {
+         ReturnFalseEx(labels[i]+" owner")
+        }
 
       if(buffers[i].GetIndex()>=0&&buffers[i].GetOpenCL()!=obj&&
          !buffers[i].BufferRead())
-         ReturnFalseEx(labels[i]+" read");
+        {
+         ReturnFalseEx(labels[i]+" read")
+        }
      }
 
 //--- recreate only foreign or host-only Bank slots, retaining target-resident values.
    for(int i=0;i<42;i++)
       if(buffers[i].GetOpenCL()!=obj||buffers[i].GetIndex()<0)
          if(!buffers[i].BufferCreate(obj))
-            ReturnFalseEx(labels[i]+" create");
+           {
+            ReturnFalseEx(labels[i]+" create")
+           }
 
 //--- transfer Item-owned state and publish the outer context only after Bank success.
    if(!CD2SkillItem::SetOpenCLChecked(obj))
-      ReturnFalseEx("checked bank item transfer");
+     {
+      ReturnFalseEx("checked bank item transfer")
+     }
 
 //--- finalize after the qualified Item transfer publishes the outer context.
    return(true);
@@ -2965,13 +3417,17 @@ bool CD2SkillBank::Retrieve(CBufferFloat*state,const bool mark_retrieved)
    if(!m_enabled||!state||state.Total()!=(int)m_dimension||
       state.GetOpenCL()!=OpenCL||state.GetIndex()<0||
       !EnsureRetrievalScratch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint score_local_size=0;
    uint partial_count=0;
 
    if(!RetrievalLaunchLayout(score_local_size,partial_count))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      offset[1]={0};
    const int score_kernel=def_k_D2SkillScoreSlots;
@@ -2988,7 +3444,9 @@ bool CD2SkillBank::Retrieve(CBufferFloat*state,const bool mark_retrieved)
 
    if(!RunStagedReduction(m_score_partials,m_score_metrics,m_dimension,m_slots,4,
                           score_local_size))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int finalize_kernel=def_k_D2SkillScoreFinalize;
    setBuffer(finalize_kernel,def_k_d2sf_metrics,m_score_metrics.GetIndex())
@@ -3004,7 +3462,9 @@ bool CD2SkillBank::Retrieve(CBufferFloat*state,const bool mark_retrieved)
    const uint finalize_local_size=D2LaunchLocalSize(m_slots);
 
    if(finalize_local_size==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint finalize_padded=((m_slots+finalize_local_size-1)/
                                  finalize_local_size)*finalize_local_size;
@@ -3082,7 +3542,9 @@ bool CD2SkillBank::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||CheckPointer(NeuronOCL)==POINTER_INVALID||
       CheckPointer(Output)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *source=NeuronOCL.getOutput();
 
@@ -3091,14 +3553,16 @@ bool CD2SkillBank::feedForward(CNeuronBaseOCL*NeuronOCL)
       PrintFormat("D2SkillBank forward contract: source=%p total=%d expected=%u source_cl=%p bank_cl=%p",
                   source,(source?source.Total():-1),m_dimension,
                   (source?source.GetOpenCL():NULL),OpenCL);
-      ReturnFalse;
+      ReturnFalse
      }
 
    if(!m_enabled)
       return(CopyBufferRaw(source,Output,m_dimension));
 
    if(!Retrieve(source))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- cD2SkillItem owns the residual application.  The bank only selects
 //--- m_selected_correction and exposes it through the inherited buffer.
@@ -3110,13 +3574,17 @@ bool CD2SkillBank::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CD2SkillBank::Observe(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||!m_enabled||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *source=NeuronOCL.getOutput();
 
    if(!source||source.Total()!=(int)m_dimension||source.GetOpenCL()!=OpenCL||
       source.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(Retrieve(source,false));
   }
@@ -3129,13 +3597,17 @@ bool CD2SkillBank::AccumulateInfluenceFromGradient(CBufferFloat*gradient)
       gradient.GetOpenCL()!=OpenCL||gradient.GetIndex()<0||
       m_selected_correction.GetIndex()<0||m_selected_slot.GetIndex()<0||
       m_influence.GetIndex()<0||!EnsureUpdateScratch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint local_size=0;
    uint groups=0;
 
    if(!UpdateLaunchLayout(local_size,groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      offset[1]={0};
    uint      local[1]={local_size};
@@ -3149,7 +3621,9 @@ bool CD2SkillBank::AccumulateInfluenceFromGradient(CBufferFloat*gradient)
 
    if(!RunStagedReduction(m_gradient_influence_partials,m_gradient_influence_total,
                           m_dimension,1,1,local_size))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int accumulate_kernel=def_k_D2SkillInfluenceAccumulate;
    setBuffer(accumulate_kernel,def_k_d2sia_selected_slot,m_selected_slot.GetIndex())
@@ -3170,14 +3644,18 @@ bool CD2SkillBank::UpdateDirectionFromGradient(CBufferFloat*gradient)
    if(!m_enabled||!OpenCL||!gradient||gradient.Total()!=(int)m_dimension||
       gradient.GetOpenCL()!=OpenCL||gradient.GetIndex()<0||
       m_selected_slot.GetIndex()<0||!EnsureItemState())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint local_size=0;
    uint groups=0;
    uint partial_count=0;
 
    if(!ItemLaunchLayout(local_size,groups,partial_count))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int normalize_kernel=def_k_D2SkillNormalizeDirection;
    setBuffer(normalize_kernel,def_k_d2nd_directions,m_directions.GetIndex())
@@ -3196,13 +3674,17 @@ bool CD2SkillBank::UpdateDirectionFromGradient(CBufferFloat*gradient)
 
    if(!RunStagedReduction(m_item_partials,m_item_reduced_norm,m_dimension,1,1,
                           local_size))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setArgument(normalize_kernel,def_k_d2nd_phase,1)
    kernelExecuteLoc(normalize_kernel,offset,global,local)
 
    if(!CalculateItemNorm(gradient,local_size,groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int kernel=def_k_D2SkillDirectionEMA;
    setBuffer(kernel,def_k_d2de_gradient,gradient.GetIndex())
@@ -3220,7 +3702,9 @@ bool CD2SkillBank::UpdateDirectionFromGradient(CBufferFloat*gradient)
 
    if(!RunStagedReduction(m_item_partials,m_item_reduced_norm,m_dimension,1,1,
                           local_size))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setArgument(kernel,def_k_d2de_phase,1)
    kernelExecuteLoc(kernel,offset,global,local)
@@ -3241,13 +3725,17 @@ bool CD2SkillBank::UpdateFromGradient(CBufferFloat*state,CBufferFloat*gradient)
       state.Total()!=(int)m_dimension||gradient.Total()!=(int)m_dimension||
       state.GetOpenCL()!=OpenCL||gradient.GetOpenCL()!=OpenCL||
       !EnsureUpdateScratch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint local_size=0;
    uint groups=0;
 
    if(!UpdateLaunchLayout(local_size,groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      offset[1]={0};
    const int age_kernel=def_k_D2SkillAgeLifecycle;
@@ -3268,7 +3756,9 @@ bool CD2SkillBank::UpdateFromGradient(CBufferFloat*state,CBufferFloat*gradient)
    if(!RunTop1(m_free_scores,m_free_top)||!RunTop1(m_eviction_scores,m_eviction_top)||
       !RunTop1(m_retrieval_scores,m_retrieval_top)||
       !RunMetrics(state,gradient,local_size,groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int leader_kernel=def_k_D2SkillCandidateLeader;
    setBuffer(leader_kernel,def_k_d2cl_selected_slot,m_selected_slot.GetIndex())
@@ -3320,7 +3810,9 @@ bool CD2SkillBank::UpdateFromGradient(CBufferFloat*state,CBufferFloat*gradient)
    kernelExecuteLoc(vector_kernel,offset,vector_global,vector_local)
 
    if(!CalculateBankVectorNorm(local_size,groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setArgument(vector_kernel,def_k_d2vu_phase,1)
    kernelExecuteLoc(vector_kernel,offset,vector_global,vector_local)
@@ -3353,13 +3845,17 @@ bool CD2SkillBank::UpdateUtility(const float delta_j,bool&applied)
    applied=false;
 
    if(!m_enabled||!OpenCL||!MathIsValidNumber(delta_j)||!EnsureUpdateScratch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint local_size=0;
    uint groups=0;
 
    if(!UpdateLaunchLayout(local_size,groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int total_kernel=def_k_D2SkillInfluenceTotal;
    setBuffer(total_kernel,def_k_d2it_influence,m_influence.GetIndex())
@@ -3375,7 +3871,9 @@ bool CD2SkillBank::UpdateUtility(const float delta_j,bool&applied)
 
    if(!RunStagedReduction(m_influence_partials,m_influence_total,m_slots,1,1,
                           local_size))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int kernel=def_k_D2SkillUtility;
    setBuffer(kernel,def_k_d2ut_influence,m_influence.GetIndex())
@@ -3393,7 +3891,9 @@ bool CD2SkillBank::UpdateUtility(const float delta_j,bool&applied)
    if(!RunStagedReduction(m_utility_applied,m_influence_partials,
                           m_influence_total,m_slots,1,1,
                           local_size)||!m_influence_total.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    applied=(m_influence_total[0]>0.5f);
 
@@ -3419,7 +3919,9 @@ bool CD2SkillBank::ResetEpisodeInfluence(void)
       return(true);
 
    if(!OpenCL||m_slots==0||m_influence.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int kernel=def_k_D2SkillResetInfluence;
    setBuffer(kernel,def_k_d2ri_influence,m_influence.GetIndex())
@@ -3441,13 +3943,17 @@ bool CD2SkillBank::RefreshDiagnostics(void)
       return(true);
 
    if(!OpenCL||!ValidateBuffers()||!EnsureUpdateScratch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint local_size=0;
    uint groups=0;
 
    if(!UpdateLaunchLayout(local_size,groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint       offset[1]={0};
    uint       local[1]={local_size};
@@ -3463,7 +3969,9 @@ bool CD2SkillBank::RefreshDiagnostics(void)
 
    if(!RunStagedReduction(m_diagnostics_norm_partials,m_diagnostics_norms,
                           m_dimension,m_slots,1,local_size))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int partial_kernel=def_k_D2SkillDiagnosticsPartial;
    setBuffer(partial_kernel,def_k_d2dp_norms,m_diagnostics_norms.GetIndex())
@@ -3480,7 +3988,9 @@ bool CD2SkillBank::RefreshDiagnostics(void)
 
    if(!RunStagedReduction(m_diagnostics_partials,m_diagnostics_totals,m_slots,1,
                           D2SKILL_DIAGNOSTIC_PARTIALS,local_size,9,10))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int reduce_kernel=def_k_D2SkillDiagnosticsReduce;
    setBuffer(reduce_kernel,def_k_d2dr_totals,m_diagnostics_totals.GetIndex())
@@ -3500,28 +4010,30 @@ bool CD2SkillBank::RefreshDiagnostics(void)
 bool CD2SkillBank::Save(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE||!RefreshDiagnostics()||!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
-   dFileWriteUInt(file_handle,D2SKILL_FORMAT);
-   dFileWriteUInt(file_handle,m_slots);
-   dFileWriteUInt(file_handle,m_dimension);
-   dFileWriteUInt(file_handle,(uint)m_representation);
-   dFileWriteUInt(file_handle,(uint)m_enabled);
-   dFileWriteUInt(file_handle,m_min_confirmations);
-   dFileWriteUInt(file_handle,m_protection_age);
-   dFileWriteUInt(file_handle,m_inactivity_age);
-   dFileWriteFloat(file_handle,m_similarity_threshold);
-   dFileWriteFloat(file_handle,m_direction_threshold);
-   dFileWriteFloat(file_handle,m_utility_weight);
-   dFileWriteFloat(file_handle,m_alpha);
-   dFileWriteFloat(file_handle,m_min_utility);
-   dFileWriteUInt(file_handle,(uint)m_utility_aware);
-   dFileWriteFloat(file_handle,m_beta_key);
-   dFileWriteFloat(file_handle,m_beta_utility);
-   dFileWriteFloat(file_handle,m_max_correction);
-   dFileWriteFloat(file_handle,m_beta_correction);
-   dFileWriteFloat(file_handle,m_beta_direction);
-   dFileWriteFloat(file_handle,m_beta_magnitude);
+   dFileWriteUInt(file_handle,D2SKILL_FORMAT)
+   dFileWriteUInt(file_handle,m_slots)
+   dFileWriteUInt(file_handle,m_dimension)
+   dFileWriteUInt(file_handle,(uint)m_representation)
+   dFileWriteUInt(file_handle,(uint)m_enabled)
+   dFileWriteUInt(file_handle,m_min_confirmations)
+   dFileWriteUInt(file_handle,m_protection_age)
+   dFileWriteUInt(file_handle,m_inactivity_age)
+   dFileWriteFloat(file_handle,m_similarity_threshold)
+   dFileWriteFloat(file_handle,m_direction_threshold)
+   dFileWriteFloat(file_handle,m_utility_weight)
+   dFileWriteFloat(file_handle,m_alpha)
+   dFileWriteFloat(file_handle,m_min_utility)
+   dFileWriteUInt(file_handle,(uint)m_utility_aware)
+   dFileWriteFloat(file_handle,m_beta_key)
+   dFileWriteFloat(file_handle,m_beta_utility)
+   dFileWriteFloat(file_handle,m_max_correction)
+   dFileWriteFloat(file_handle,m_beta_correction)
+   dFileWriteFloat(file_handle,m_beta_direction)
+   dFileWriteFloat(file_handle,m_beta_magnitude)
 
    return(m_keys.Save(file_handle)&&m_corrections.Save(file_handle)&&
           m_directions.Save(file_handle)&&m_scales.Save(file_handle)&&
@@ -3540,12 +4052,16 @@ bool CD2SkillBank::Save(const int file_handle)
 bool CD2SkillBank::Load(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE||!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint format=(uint)FileReadInteger(file_handle);
 
    if(format!=D2SKILL_FORMAT)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_slots=(uint)FileReadInteger(file_handle);
    m_dimension=(uint)FileReadInteger(file_handle);
@@ -3555,14 +4071,14 @@ bool CD2SkillBank::Load(const int file_handle)
    m_min_confirmations=(uint)FileReadInteger(file_handle);
    m_protection_age=(uint)FileReadInteger(file_handle);
    m_inactivity_age=(format>=4?(uint)FileReadInteger(file_handle):256);
-   dFileReadUFloat(file_handle,m_similarity_threshold);
-   dFileReadUFloat(file_handle,m_direction_threshold);
-   dFileReadUFloat(file_handle,m_utility_weight);
+   dFileReadUFloat(file_handle,m_similarity_threshold)
+   dFileReadUFloat(file_handle,m_direction_threshold)
+   dFileReadUFloat(file_handle,m_utility_weight)
 
    if(format>=5)
      {
-      dFileReadUFloat(file_handle,m_alpha);
-      dFileReadUFloat(file_handle,m_min_utility);
+      dFileReadUFloat(file_handle,m_alpha)
+      dFileReadUFloat(file_handle,m_min_utility)
       m_utility_aware=(FileReadInteger(file_handle)!=0);
      }
    else
@@ -3571,15 +4087,17 @@ bool CD2SkillBank::Load(const int file_handle)
       m_min_utility=-1.0f;
       m_utility_aware=false;
      }
-   dFileReadUFloat(file_handle,m_beta_key);
-   dFileReadUFloat(file_handle,m_beta_utility);
-   dFileReadUFloat(file_handle,m_max_correction);
-   dFileReadUFloat(file_handle,m_beta_correction);
-   dFileReadUFloat(file_handle,m_beta_direction);
-   dFileReadUFloat(file_handle,m_beta_magnitude);
+   dFileReadUFloat(file_handle,m_beta_key)
+   dFileReadUFloat(file_handle,m_beta_utility)
+   dFileReadUFloat(file_handle,m_max_correction)
+   dFileReadUFloat(file_handle,m_beta_correction)
+   dFileReadUFloat(file_handle,m_beta_direction)
+   dFileReadUFloat(file_handle,m_beta_magnitude)
 
    if(m_slots==0||m_dimension==0||m_min_confirmations==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const long total=(long)m_slots*(long)m_dimension;
 
@@ -3590,24 +4108,34 @@ bool CD2SkillBank::Load(const int file_handle)
       !m_state.Load(file_handle)||!m_age.Load(file_handle)||!m_protection.Load(file_handle)||
       !m_influence.Load(file_handle)||!m_selected_correction.Load(file_handle)||
       !m_selected_slot.Load(file_handle)||!m_selected_score.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_diagnostics.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_diagnostics.Total()!=D2SKILL_DIAGNOSTICS)
       if(!InitBuffer(m_diagnostics,D2SKILL_DIAGNOSTICS))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!m_utility_distribution.Load(file_handle)||
       !m_usage_distribution.Load(file_handle)||!m_utility_applied.BufferInit((int)m_slots,0.0f)||
       !m_influence_total.BufferInit(1,0.0f)||
       !m_gradient_influence_total.BufferInit(1,0.0f)||
       !m_retrieved.BufferInit((int)m_slots,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(total>2147483647||!ValidateBuffers())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- device attachment is intentionally deferred to CD2Skill::Enable().
 //--- this keeps disabled Task/Step banks out of a baseline checkpoint load.
@@ -3622,12 +4150,16 @@ bool CD2SkillBank::Load(const int file_handle,COpenCLMy*opencl)
   {
    if(file_handle==INVALID_HANDLE||!opencl||
       FileReadInteger(file_handle,INT_VALUE)!=defNeuronD2SkillBank)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OpenCL=opencl;
 
    if(!Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetOpenCL(opencl);
 
@@ -3641,7 +4173,9 @@ bool CD2SkillBank::Clear(void)
    m_correction=NULL;
 
    if(!CNeuronBaseOCL::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_active_slot=UINT_MAX;
 
@@ -3669,7 +4203,9 @@ bool CD2SkillBank::Clear(void)
         (m_diagnostics_norms.Total()==0||m_diagnostics_norms.Fill(0))&&
         (m_diagnostics_partials.Total()==0||m_diagnostics_partials.Fill(0))&&
         (m_diagnostics_totals.Total()==0||m_diagnostics_totals.Fill(0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SetCorrectionBuffer(GetPointer(m_selected_correction)));
   }
@@ -3679,7 +4215,9 @@ bool CD2SkillBank::Clear(void)
 bool CD2SkillBank::ResetDurableState(void)
   {
    if(!Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!(m_keys.Fill(0)&&m_corrections.Fill(0)&&m_directions.Fill(0)&&
         m_scales.Fill(0)&&m_utility.Fill(0)&&m_observations.Fill(0)&&
@@ -3710,7 +4248,9 @@ bool CD2SkillBank::ResetDurableState(void)
         (m_diagnostics_norms.Total()==0||m_diagnostics_norms.Fill(0))&&
         (m_diagnostics_partials.Total()==0||m_diagnostics_partials.Fill(0))&&
         (m_diagnostics_totals.Total()==0||m_diagnostics_totals.Fill(0))))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SetCorrectionBuffer(GetPointer(m_selected_correction)));
   }

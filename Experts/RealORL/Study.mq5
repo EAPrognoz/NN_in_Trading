@@ -247,7 +247,7 @@ void Train(void)
          x=(double)Buffer[tr].States[st].account[7] / (double)PeriodSeconds(PERIOD_D1);
          State.Add((float)MathSin(x!=0 ? 2.0 * M_PI * x : 0));
          State.AddArray(vector<float>::Zeros(NActions));
-         if(!Convolution.feedForward(GetPointer(State),1,false,NULL))
+         if(!Convolution.feedForward(GetPointer(State),1,false,(CBufferFloat*)NULL))
            {
             PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
             ExpertRemove();
@@ -387,7 +387,7 @@ void Train(void)
         }
       //---
       if(!State.AddArray(GetPointer(Account))||!State.AddArray(vector<float>::Zeros(NActions))||
-         !Convolution.feedForward(GetPointer(State),1,false,NULL))
+         !Convolution.feedForward(GetPointer(State),1,false,(CBufferFloat*)NULL))
         {
          PrintFormat("%s -> %d",__FUNCTION__,__LINE__);
          break;

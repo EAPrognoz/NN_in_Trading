@@ -1,5 +1,7 @@
 //+------------------------------------------------------------------+
-//| AlphaGen.cl                                                      |
+//|                                                      AlphaGen.cl |
+//|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/25872 |
 //+------------------------------------------------------------------+
 //--- a typed stack admits DeltaT only at its top. Once covered by Expr,
 //--- deltaT could never be consumed by this grammar. This invariant makes
@@ -803,7 +805,7 @@ __kernel void AGLSTMForward(__global const float*input,const int length,
    int           width=inputs+hidden+1;
    __local float *partial=state+6*hidden;
 
-   //--- keep recurrent state and gates within this work group.
+//--- keep recurrent state and gates within this work group.
    for(int j=lane;j<2*hidden;j+=lanes)
       state[j]=anchor[j];
    barrier(CLK_LOCAL_MEM_FENCE);
@@ -1003,8 +1005,8 @@ __kernel void AGSequence(__global const float*input,__global float*output,
 inline float3 AGTradeEntropy(const float mu,const float sigma)
   {
 //--- eight-point Gauss-Hermite rule for an expectation under N(0,1).
-   const float nodes[]={0.539079811351f,1.636519042435f,2.802485861288f,4.144547186126f};
-   const float weights[]={0.373012257679f,0.117239907662f,0.009635220121f,0.000112614538f};
+   const float nodes[]= {0.539079811351f,1.636519042435f,2.802485861288f,4.144547186126f};
+   const float weights[]= {0.373012257679f,0.117239907662f,0.009635220121f,0.000112614538f};
    float3 result=(float3)(0.5f*log(2.0f*M_PI_F*M_E_F)+log(sigma),0.0f,1.0f/sigma);
 
    for(int i=0;i<4;i++)
@@ -1551,7 +1553,6 @@ __kernel void AGSearchGenerate(__global const float*cfg,
      }
   }
 //+------------------------------------------------------------------+
-//+------------------------------------------------------------------+
 //| AGSearchRecord - Validate and record one search transition       |
 //+------------------------------------------------------------------+
 __kernel void AGSearchRecord(__global const float*sample,__global const float*metadata,
@@ -1617,13 +1618,11 @@ __kernel void AGSearchRecord(__global const float*sample,__global const float*me
    result[0]=AG_OK;
   }
 //+------------------------------------------------------------------+
-
-//+------------------------------------------------------------------+
-//| Local formula helpers - Bound scratch to one history tile         |
+//| Local formula helpers - Bound scratch to one history tile        |
 //+------------------------------------------------------------------+
 int AGApplyTokenLocal(const int token,__global const float*cfg,
-                        __local int *types,__local int*lookback,
-                        __local int *dependent,int depth)
+                      __local int *types,__local int*lookback,
+                      __local int *dependent,int depth)
   {
    const int limit=(int)cfg[AG_CFG_LOOKBACK];
 
@@ -1716,12 +1715,15 @@ int AGApplyTokenLocal(const int token,__global const float*cfg,
 
    return(-1);
   }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void AGFormulaEvaluateLocal(__global const float*market,
-                              __global const float *tokens,const int length,
-                              __global const float *cfg,__local float*stack,
-                              __local float        *validity,__global float*result,
-                              __global float       *status,const int token_stride,__local int*syntax_state,
-                              const int market_count,const int offset,const int count,const int first)
+                            __global const float *tokens,const int length,
+                            __global const float *cfg,__local float*stack,
+                            __local float        *validity,__global float*result,
+                            __global float       *status,const int token_stride,__local int*syntax_state,
+                            const int market_count,const int offset,const int count,const int first)
   {
    int lane=get_local_id(0);
    int lanes=get_local_size(0);
@@ -1970,3 +1972,4 @@ void AGFormulaEvaluateLocal(__global const float*market,
       status[i]=validity[i];
      }
   }
+//+------------------------------------------------------------------+

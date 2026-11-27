@@ -39,7 +39,7 @@ struct STrajectory;
 //+------------------------------------------------------------------+
 extern STrajectory Buffer[];
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| SState - Store one trajectory state                              |
 //+------------------------------------------------------------------+
 struct SState
   {
@@ -56,25 +56,33 @@ struct SState
 //+------------------------------------------------------------------+
 //| Clear                                                            |
 //+------------------------------------------------------------------+
-   void              Clear(void)
-     {
-      ArrayInitialize(state,0);
-      ArrayInitialize(account,0);
-      ArrayInitialize(action,0);
-      ArrayInitialize(scheduler,0);
-     }
+   void              Clear(void);
 
 //--- overloading
-   void              operator=(const SState &obj)
-     {
-      ArrayCopy(state,obj.state);
-      ArrayCopy(account,obj.account);
-      ArrayCopy(action,obj.action);
-      ArrayCopy(scheduler,obj.scheduler);
-     }
+   void              operator=(const SState &obj);
   };
 //+------------------------------------------------------------------+
-//| SState                                                           |
+//| Clear - Clears state data.                                       |
+//+------------------------------------------------------------------+
+void SState::Clear(void)
+  {
+   ArrayInitialize(state,0);
+   ArrayInitialize(account,0);
+   ArrayInitialize(action,0);
+   ArrayInitialize(scheduler,0);
+  }
+//+------------------------------------------------------------------+
+//| operator= - Copies state data.                                   |
+//+------------------------------------------------------------------+
+void SState::operator=(const SState &obj)
+  {
+   ArrayCopy(state,obj.state);
+   ArrayCopy(account,obj.account);
+   ArrayCopy(action,obj.action);
+   ArrayCopy(scheduler,obj.scheduler);
+  }
+//+------------------------------------------------------------------+
+//| SState - Initialize the trajectory state                         |
 //+------------------------------------------------------------------+
 SState::SState(void)
   {
@@ -84,54 +92,58 @@ SState::SState(void)
    ArrayInitialize(scheduler,0);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Write the trajectory state to a file                      |
 //+------------------------------------------------------------------+
 bool SState::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalse
+     }
 //---
    int total=ArraySize(state);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,state[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,state[i])
+     }
 //---
    total=ArraySize(account);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,account[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,account[i])
+     }
 //---
    total=ArraySize(action);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,action[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,action[i])
+     }
 //---
    total=ArraySize(scheduler);
-   if(FileWriteInteger(file_handle,total)<sizeof(int))
-      return(false);
+   dFileWriteUInt(file_handle,total)
 
    for(int i=0; i<total; i++)
-      if(FileWriteFloat(file_handle,scheduler[i])<sizeof(float))
-         return(false);
+     {
+      dFileWriteFloat(file_handle,scheduler[i])
+     }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Read the trajectory state from a file                     |
 //+------------------------------------------------------------------+
 bool SState::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
    if(FileIsEnding(file_handle))
       return(false);
 //---
@@ -141,9 +153,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      state[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,state[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -152,9 +162,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      account[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,account[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -163,9 +171,7 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      action[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,action[i])
      }
 //---
    total=FileReadInteger(file_handle);
@@ -174,15 +180,13 @@ bool SState::Load(int file_handle)
 //---
    for(int i=0; i<total; i++)
      {
-      if(FileIsEnding(file_handle))
-         return(false);
-      scheduler[i]=FileReadFloat(file_handle);
+      dFileReadUFloat(file_handle,scheduler[i])
      }
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| STrajectory - Store a simulated trading trajectory               |
 //+------------------------------------------------------------------+
 struct STrajectory
   {
@@ -199,28 +203,34 @@ struct STrajectory
    bool              Load(int file_handle);
 
 //--- overloading
-   void              operator=(const STrajectory &obj)
-     {
-      Total=obj.Total;
-      Profit=obj.Profit;
-      for(int i=0; i<Buffer_Size; i++)
-         States[i]=obj.States[i];
-     }
+   void              operator=(const STrajectory &obj);
   };
 //+------------------------------------------------------------------+
-//| STrajectory                                                      |
+//| operator= - Copies trajectory data.                              |
+//+------------------------------------------------------------------+
+void STrajectory::operator=(const STrajectory &obj)
+  {
+   Total=obj.Total;
+   Profit=obj.Profit;
+   for(int i=0; i<Buffer_Size; i++)
+      States[i]=obj.States[i];
+  }
+//+------------------------------------------------------------------+
+//| STrajectory - Initialize an empty trajectory                     |
 //+------------------------------------------------------------------+
 STrajectory::STrajectory(void)  :   Total(0),
    Profit(0)
   {
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Write the trajectory to a file                            |
 //+------------------------------------------------------------------+
 bool STrajectory::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    if(FileWriteInteger(file_handle,Total)<sizeof(int))
       return(false);
@@ -235,12 +245,14 @@ bool STrajectory::Save(int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Read the trajectory from a file                           |
 //+------------------------------------------------------------------+
 bool STrajectory::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    Total=FileReadInteger(file_handle);
    if(FileIsEnding(file_handle)||Total>=ArraySize(States))
@@ -254,7 +266,7 @@ bool STrajectory::Load(int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Add                                                              |
+//| Add - Append a state to the trajectory                           |
 //+------------------------------------------------------------------+
 bool STrajectory::Add(SState &state)
   {
@@ -266,7 +278,7 @@ bool STrajectory::Add(SState &state)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| ClearFirstN                                                      |
+//| ClearFirstN - Remove the oldest trajectory states                |
 //+------------------------------------------------------------------+
 void STrajectory::ClearFirstN(const int n)
   {
@@ -277,7 +289,7 @@ void STrajectory::ClearFirstN(const int n)
       States[i].Clear();
   }
 //+------------------------------------------------------------------+
-//| SaveTotalBase                                                    |
+//| SaveTotalBase - Write the trajectory buffer to a file            |
 //+------------------------------------------------------------------+
 int SaveTotalBase(int min_bars)
   {
@@ -317,7 +329,7 @@ int SaveTotalBase(int min_bars)
    return(count);
   }
 //+------------------------------------------------------------------+
-//| LoadTotalBase                                                    |
+//| LoadTotalBase - Read the trajectory buffer from a file           |
 //+------------------------------------------------------------------+
 bool LoadTotalBase(void)
   {
@@ -350,7 +362,7 @@ bool LoadTotalBase(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CreateAgentDescriptions                                          |
+//| CreateAgentDescriptions - Create agent descriptions              |
 //+------------------------------------------------------------------+
 bool CreateAgentDescriptions(CArrayObj *agent)
   {
@@ -597,7 +609,7 @@ bool CreateAgentDescriptions(CArrayObj *agent)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CreateSchedulerDescriptions                                      |
+//| CreateSchedulerDescriptions - Create scheduler descriptions      |
 //+------------------------------------------------------------------+
 bool CreateSchedulerDescriptions(CArrayObj *scheduler)
   {
@@ -747,7 +759,7 @@ bool CreateSchedulerDescriptions(CArrayObj *scheduler)
   }
 #ifndef Study
 //+------------------------------------------------------------------+
-//| IsNewBar                                                         |
+//| IsNewBar - Detect a new bar                                      |
 //+------------------------------------------------------------------+
 bool IsNewBar(void)
   {
@@ -760,7 +772,7 @@ bool IsNewBar(void)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| CloseByDirection                                                 |
+//| CloseByDirection - Close positions of the specified type         |
 //+------------------------------------------------------------------+
 bool CloseByDirection(ENUM_POSITION_TYPE type)
   {
@@ -778,7 +790,7 @@ bool CloseByDirection(ENUM_POSITION_TYPE type)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| TrailPosition                                                    |
+//| TrailPosition - Adjust trailing stops on open positions          |
 //+------------------------------------------------------------------+
 bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
   {
@@ -828,7 +840,7 @@ bool TrailPosition(ENUM_POSITION_TYPE type,double sl,double tp)
    return(result);
   }
 //+------------------------------------------------------------------+
-//| ClosePartial                                                     |
+//| ClosePartial - Close part of the position volume                 |
 //+------------------------------------------------------------------+
 bool ClosePartial(ENUM_POSITION_TYPE type,double value)
   {
@@ -905,7 +917,7 @@ vector<double>GetProbTrajectories(STrajectory &buffer[],float lanbda)
    return(rewards);
   }
 //+------------------------------------------------------------------+
-//| SampleTrajectory                                                 |
+//| SampleTrajectory - Sample a trajectory from the replay buffer    |
 //+------------------------------------------------------------------+
 int SampleTrajectory(vector<double>&probability)
   {

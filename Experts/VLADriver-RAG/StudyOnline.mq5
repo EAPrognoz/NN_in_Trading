@@ -73,7 +73,7 @@ enum ENUM_VLADriverModifyResult
    VLADriverModifyRejected=2
   };
 //+------------------------------------------------------------------+
-//| ClearOnlinePendingScenario                                       |
+//| ClearOnlinePendingScenario - Clear online pending scenario       |
 //+------------------------------------------------------------------+
 void ClearOnlinePendingScenario(void)
   {
@@ -96,22 +96,25 @@ void ClearOnlinePendingScenario(void)
    OnlinePendingPrepared=false;
   }
 //+------------------------------------------------------------------+
-//| Capture the observed state before the new market order is sent.  |
+//| AnchorOnlinePendingScenario - Check online pending scenario      |
 //+------------------------------------------------------------------+
+//--- Capture the observed state before the new market order is sent.
 bool AnchorOnlinePendingScenario(void)
   {
    if(OnlinePendingId!=0||OnlinePendingPrepared||bAction==NULL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CBufferFloat *scenario_embedding=NULL;
    if(!cStateEncoder.GetLayerOutputDevice(StateScenarioLayer,scenario_embedding))
      {
       PrintFormat("%s -> %d pending scenario output failed",__FUNCTION__,__LINE__);
-      ReturnFalse;
+      ReturnFalse
      }
    if(scenario_embedding.Total()!=EmbeddingSize)
      {
       PrintFormat("%s -> %d pending scenario embedding size mismatch",__FUNCTION__,__LINE__);
-      ReturnFalse;
+      ReturnFalse
      }
    float scenario_embedding_data[];
    uint  replaced_values=0;
@@ -122,15 +125,21 @@ bool AnchorOnlinePendingScenario(void)
    if(!scenario_read)
      {
       PrintFormat("%s -> %d pending scenario anchor read failed",__FUNCTION__,__LINE__);
-      ReturnFalse;
+      ReturnFalse
      }
    for(int i=0; i<NActions; i++)
       if(!OnlinePendingAction.Update(i,bAction[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
    if(!OnlinePendingScenarioEmbedding.BufferInit(EmbeddingSize,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!OnlinePendingScenarioEmbedding.AssignArray(scenario_embedding_data))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    OnlinePendingStartTime=TimeCurrent();
    OnlinePendingStartBalance=AccountInfoDouble(ACCOUNT_BALANCE);
    OnlinePendingStartEquity=AccountInfoDouble(ACCOUNT_EQUITY);
@@ -140,8 +149,9 @@ bool AnchorOnlinePendingScenario(void)
    return(true);
    }
 //+------------------------------------------------------------------+
-//| Create library pending state only after a market order is known. |
+//| OpenConfirmedOnlinePendingScenario - Open                        |
 //+------------------------------------------------------------------+
+//--- Create library pending state only after a market order is known.
 bool OpenConfirmedOnlinePendingScenario(const ulong deal)
   {
    if(!OnlinePendingPrepared||OnlinePendingId!=0||deal==0||
@@ -149,14 +159,14 @@ bool OpenConfirmedOnlinePendingScenario(const ulong deal)
       ulong(HistoryDealGetInteger(deal,DEAL_POSITION_ID))==0)
      {
       ClearOnlinePendingScenario();
-      ReturnFalse;
+      ReturnFalse
      }
    float normalized_action[NActions];
    if(!NormalizeMemoryAction(RAGMemory,GetPointer(OnlinePendingAction),0,
                                OnlinePendingStartEquity,normalized_action))
      {
       ClearOnlinePendingScenario();
-      ReturnFalse;
+      ReturnFalse
      }
    float scenario_embedding_data[EmbeddingSize];
    for(int i=0;i<EmbeddingSize;i++)
@@ -167,14 +177,15 @@ bool OpenConfirmedOnlinePendingScenario(const ulong deal)
       if(OnlinePendingId!=0)
          RAGMemory.CancelPending(OnlinePendingId);
       ClearOnlinePendingScenario();
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Apply one uniform Critic-only penalty for rejected execution.    |
+//| PenalizeRejectedExecution - Check penalize rejected execution    |
 //+------------------------------------------------------------------+
+//--- Apply one uniform Critic-only penalty for rejected execution.
 bool PenalizeRejectedExecution(const double requested_volume)
   {
    if(requested_volume<=0)
@@ -185,15 +196,15 @@ bool PenalizeRejectedExecution(const double requested_volume)
       !cCritic[0].backProp(Result,GetPointer(cStateEncoder),StateTokenLayer))
      {
       PrintFormat("%s -> %d rejected execution Critic update failed",__FUNCTION__,__LINE__);
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Classify terminal acknowledgement without treating no-op as      |
-//| data.                                                            |
+//| ClassifyOnlineTradeResult - Return                               |
 //+------------------------------------------------------------------+
+//--- Classify terminal acknowledgement without treating no-op as data.
 ENUM_VLADriverModifyResult ClassifyOnlineTradeResult(const bool request_sent)
   {
    const uint retcode=Trade.ResultRetcode();
@@ -206,12 +217,15 @@ ENUM_VLADriverModifyResult ClassifyOnlineTradeResult(const bool request_sent)
    return(VLADriverModifyRejected);
   }
 //+------------------------------------------------------------------+
-//| Check whether one position belongs to the current trade plan.    |
+//| OnlinePendingHasPosition - Check online pending position         |
 //+------------------------------------------------------------------+
+//--- Check whether one position belongs to the current trade plan.
 bool OnlinePendingHasPosition(const ulong position)
   {
    if(position==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const int total=ArraySize(OnlinePendingPositionIds);
    for(int i=0;i<total;i++)
       if(OnlinePendingPositionIds[i]==position)
@@ -220,25 +234,31 @@ bool OnlinePendingHasPosition(const ulong position)
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Add a unique position identity to the current trade plan.        |
+//| AddOnlinePendingPosition - Add online pending position           |
 //+------------------------------------------------------------------+
+//--- Add a unique position identity to the current trade plan.
 bool AddOnlinePendingPosition(const ulong position)
   {
    if(position==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(OnlinePendingHasPosition(position))
       return(true);
 
    const int total=ArraySize(OnlinePendingPositionIds);
    if(ArrayResize(OnlinePendingPositionIds,total+1)!=total+1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    OnlinePendingPositionIds[total]=position;
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Undo a just-reserved position when event confirmation failed.    |
+//| RemoveOnlinePendingPosition - Remove online pending position     |
 //+------------------------------------------------------------------+
+//--- Undo a just-reserved position when event confirmation failed.
 bool RemoveOnlinePendingPosition(const ulong position)
   {
    const int total=ArraySize(OnlinePendingPositionIds);
@@ -248,16 +268,18 @@ bool RemoveOnlinePendingPosition(const ulong position)
          for(int j=i+1;j<total;j++)
             OnlinePendingPositionIds[j-1]=OnlinePendingPositionIds[j];
          if(ArrayResize(OnlinePendingPositionIds,total-1)!=total-1)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          return(true);
         }
-   ReturnFalse;
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| A plan remains open while any of its netting/hedging positions   |
-//| remains open.                                                    |
+//| OnlinePendingPositionsAreOpen - Open                             |
 //+------------------------------------------------------------------+
+//--- A plan remains open while any of its netting/hedging positions remains open.
 bool OnlinePendingPositionsAreOpen(void)
   {
    if(ArraySize(OnlinePendingPositionIds)<=0)
@@ -271,15 +293,17 @@ bool OnlinePendingPositionsAreOpen(void)
    return(false);
   }
 //+------------------------------------------------------------------+
-//| Compatibility helper for partial-close classification.           |
+//| OnlinePendingPositionIsOpen - Check online pending position open |
 //+------------------------------------------------------------------+
+//--- Compatibility helper for partial-close classification.
 bool OnlinePendingPositionIsOpen(void)
   {
    return(OnlinePendingPositionsAreOpen());
   }
 //+------------------------------------------------------------------+
-//| Execute TP/SL change and classify no-op, accepted and rejected.  |
+//| ModifyOnlinePosition - Return the modify online position         |
 //+------------------------------------------------------------------+
+//--- Execute TP/SL change and classify no-op, accepted and rejected.
 ENUM_VLADriverModifyResult ModifyOnlinePosition(const ENUM_POSITION_TYPE type,
                                                 const double sl,const double tp)
   {
@@ -297,16 +321,28 @@ ENUM_VLADriverModifyResult ModifyOnlinePosition(const ENUM_POSITION_TYPE type,
       if(type==POSITION_TYPE_BUY)
         {
          if((sl-position_sl)>=Symb.Point())
-           { position_sl=sl; modify=true; }
+           {
+            position_sl=sl;
+            modify=true;
+           }
          if(MathAbs(tp-position_tp)>=Symb.Point())
-           { position_tp=tp; modify=true; }
+           {
+            position_tp=tp;
+            modify=true;
+           }
         }
       else
         {
          if((position_sl-sl)>=Symb.Point())
-           { position_sl=sl; modify=true; }
+           {
+            position_sl=sl;
+            modify=true;
+           }
          if(MathAbs(tp-position_tp)>=Symb.Point())
-           { position_tp=tp; modify=true; }
+           {
+            position_tp=tp;
+            modify=true;
+           }
         }
       if(!modify)
          continue;
@@ -318,17 +354,17 @@ ENUM_VLADriverModifyResult ModifyOnlinePosition(const ENUM_POSITION_TYPE type,
    return((ENUM_VLADriverModifyResult)result);
   }
 //+------------------------------------------------------------------+
-//| Full close is terminal and therefore never creates RAG           |
-//| correction.                                                      |
+//| CloseOnlineByDirection - Close online by direction               |
 //+------------------------------------------------------------------+
+//--- Full close is terminal and therefore never creates RAG correction.
 ENUM_VLADriverModifyResult CloseOnlineByDirection(const ENUM_POSITION_TYPE type)
   {
    return(ClassifyOnlineTradeResult(CloseByDirection(type)));
   }
 //+------------------------------------------------------------------+
-//| Partial close is an action correction only while episode         |
-//| remains.                                                         |
+//| CloseOnlinePartial - Close online partial                        |
 //+------------------------------------------------------------------+
+//--- Partial close is an action correction only while episode remains.
 ENUM_VLADriverModifyResult CloseOnlinePartial(const ENUM_POSITION_TYPE type,
                                               const double volume)
   {
@@ -339,9 +375,9 @@ ENUM_VLADriverModifyResult CloseOnlinePartial(const ENUM_POSITION_TYPE type,
    return(VLADriverModifyAccepted);
   }
 //+------------------------------------------------------------------+
-//| Sample actual account exposure for a confirmed pending           |
-//| execution.                                                       |
+//| SampleOnlinePendingScenario - Sample online pending scenario     |
 //+------------------------------------------------------------------+
+//--- Sample actual account exposure for a confirmed pending execution.
 void SampleOnlinePendingScenario(void)
   {
    if(OnlinePendingId==0||!OnlinePendingExecuted)
@@ -363,8 +399,9 @@ void SampleOnlinePendingScenario(void)
      }
   }
 //+------------------------------------------------------------------+
-//| Bind only a confirmed market deal to the causal pending anchor.  |
+//| RegisterOnlinePendingExecution - Register                        |
 //+------------------------------------------------------------------+
+//--- Bind only a confirmed market deal to the causal pending anchor.
 bool RegisterOnlinePendingExecution(const ulong deal)
   {
    if(OnlinePendingId==0||deal==0||!HistoryDealSelect(deal))
@@ -372,20 +409,20 @@ bool RegisterOnlinePendingExecution(const ulong deal)
       if(OnlinePendingId!=0)
          RAGMemory.CancelPending(OnlinePendingId);
       ClearOnlinePendingScenario();
-      ReturnFalse;
+      ReturnFalse
      }
    ulong position_id=ulong(HistoryDealGetInteger(deal,DEAL_POSITION_ID));
    if(position_id==0)
      {
       RAGMemory.CancelPending(OnlinePendingId);
       ClearOnlinePendingScenario();
-      ReturnFalse;
+      ReturnFalse
      }
    if(!RAGMemory.ConfirmPendingExecution(OnlinePendingId,deal,position_id))
      {
       RAGMemory.CancelPending(OnlinePendingId);
       ClearOnlinePendingScenario();
-      ReturnFalse;
+      ReturnFalse
      }
    OnlinePendingExecutionDeal=deal;
    OnlinePendingPositionId=position_id;
@@ -393,7 +430,7 @@ bool RegisterOnlinePendingExecution(const ulong deal)
      {
       RAGMemory.CancelPending(OnlinePendingId);
       ClearOnlinePendingScenario();
-      ReturnFalse;
+      ReturnFalse
      }
    OnlinePendingExecuted=true;
    SampleOnlinePendingScenario();
@@ -401,41 +438,50 @@ bool RegisterOnlinePendingExecution(const ulong deal)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Add only an accepted position correction to the pending episode. |
+//| RegisterOnlinePendingCorrection - Register                       |
 //+------------------------------------------------------------------+
+//--- Add only an accepted position correction to the pending episode.
 bool RegisterOnlinePendingCorrection(const ulong deal=0)
   {
     if(OnlinePendingId==0||!OnlinePendingExecuted||OnlinePendingPositionId==0||bAction==NULL)
-       ReturnFalse;
+      {
+       ReturnFalse
+      }
     ulong position=OnlinePendingPositionId;
     if(deal>0)
       {
        if(!HistoryDealSelect(deal))
-          ReturnFalse;
+         {
+          ReturnFalse
+         }
        position=ulong(HistoryDealGetInteger(deal,DEAL_POSITION_ID));
        if(position==0||HistoryDealGetInteger(deal,DEAL_ENTRY)!=DEAL_ENTRY_IN)
-          ReturnFalse;
+         {
+          ReturnFalse
+         }
       }
     float normalized_action[NActions];
    for(int i=0;i<NActions;i++)
       OnlinePendingAction.Update(i,bAction[i]);
    if(!NormalizeMemoryAction(RAGMemory,GetPointer(OnlinePendingAction),0,OnlinePendingStartEquity,normalized_action)||
        !RAGMemory.CorrectPending(OnlinePendingId,normalized_action))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(deal>0)
      {
       const bool already_added=OnlinePendingHasPosition(position);
       if(!already_added&&!AddOnlinePendingPosition(position))
         {
          RAGMemory.CancelPendingCorrection(OnlinePendingId);
-         ReturnFalse;
+         ReturnFalse
         }
       if(!RAGMemory.ConfirmPendingCorrection(OnlinePendingId,deal,position))
         {
          if(!already_added)
             RemoveOnlinePendingPosition(position);
          RAGMemory.CancelPendingCorrection(OnlinePendingId);
-         ReturnFalse;
+         ReturnFalse
         }
 
       return(true);
@@ -444,11 +490,12 @@ bool RegisterOnlinePendingCorrection(const ulong deal=0)
       return(true);
 
    RAGMemory.CancelPendingCorrection(OnlinePendingId);
-   ReturnFalse;
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| Persist one validated snapshot/manifest publication pair.        |
+//| SaveOnlineBaseMemory - Save online base memory                   |
 //+------------------------------------------------------------------+
+//--- Persist one validated snapshot/manifest publication pair.
 bool SaveOnlineBaseMemory(void)
   {
    if(RAGMemory.ScenarioCount()==0)
@@ -457,8 +504,9 @@ bool SaveOnlineBaseMemory(void)
    return(RAGMemory.SavePublishedSnapshot(BaseMemorySnapshotPath));
    }
 //+------------------------------------------------------------------+
-//| Rebind both Actor copies before any later forward pass.          |
+//| RebindOnlineRAGMemory - Check rebind online RAG memory           |
 //+------------------------------------------------------------------+
+//--- Rebind both Actor copies before any later forward pass.
 bool RebindOnlineRAGMemory(void)
   {
    const bool actor0_bound=cActor[0].BindRAGMemory(2,GetPointer(RAGMemory));
@@ -469,11 +517,12 @@ bool RebindOnlineRAGMemory(void)
    PrintFormat("%s -> %d online RAG Actor rebind failed",__FUNCTION__,__LINE__);
    DetachOnlineRAGMemory();
    ExpertRemove();
-   ReturnFalse;
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| Detach both consumers before COW deletes the old device buffers. |
+//| DetachOnlineRAGMemory - Check detach online RAG memory           |
 //+------------------------------------------------------------------+
+//--- Detach both consumers before COW deletes the old device buffers.
 bool DetachOnlineRAGMemory(void)
   {
    const bool actor0_detached=cActor[0].UnbindRAGMemory(2);
@@ -483,11 +532,12 @@ bool DetachOnlineRAGMemory(void)
 
    PrintFormat("%s -> %d online RAG Actor detach failed",__FUNCTION__,__LINE__);
    ExpertRemove();
-   ReturnFalse;
+   ReturnFalse
   }
 //+------------------------------------------------------------------+
-//| Build and swap only an immutable Base Memory snapshot.           |
+//| PublishOnlineMemory - Publish online memory                      |
 //+------------------------------------------------------------------+
+//--- Build and swap only an immutable Base Memory snapshot.
 bool PublishOnlineMemory(const bool episode_completed)
   {
    const uint pending=RAGMemory.PendingRecordCount();
@@ -497,22 +547,29 @@ bool PublishOnlineMemory(const bool episode_completed)
       return(true);
 
    if(!DetachOnlineRAGMemory())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!RAGMemory.Publish(episode_completed))
      {
       if(!RebindOnlineRAGMemory())
-         ReturnFalse;
-      ReturnFalse;
+        {
+         ReturnFalse
+        }
+      ReturnFalse
      }
    if(!RebindOnlineRAGMemory())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    BaseMemoryNullBound=false;
 
    return(SaveOnlineBaseMemory());
   }
 //+------------------------------------------------------------------+
-//| Store the actual, fully closed execution as one completed case.  |
+//| CollectOnlineCompletedScenario - Collect                         |
 //+------------------------------------------------------------------+
+//--- Store the actual, fully closed execution as one completed case.
 void CollectOnlineCompletedScenario(void)
   {
    if(OnlinePendingId==0||!OnlinePendingExecuted)
@@ -664,8 +721,8 @@ int OnInit()
       for(uint i=0; i<cCritic.Size(); i++)
          if(!cCritic[i].Create(critic))
            {
-            DeleteObj(actor);
-            DeleteObj(critic);
+            DeleteObj(actor)
+            DeleteObj(critic)
 
             return(INIT_FAILED);
            }
@@ -674,15 +731,15 @@ int OnInit()
          cCritic[i].SetOpenCL(cCritic[0].GetOpenCL());
          if(!cCritic[i].WeightsUpdate(GetPointer(cCritic[0]),1))
            {
-            DeleteObj(actor);
-            DeleteObj(critic);
+            DeleteObj(actor)
+            DeleteObj(critic)
 
             return(INIT_FAILED);
            }
         }
      }
-   DeleteObj(actor);
-   DeleteObj(critic);
+   DeleteObj(actor)
+   DeleteObj(critic)
    for(int i=0; i<2; i++)
      {
       cActor[i].TrainMode(i==0);
@@ -776,8 +833,8 @@ void OnDeinit(const int reason)
       cActor[0].Save(FileName+"Act.nnw",0,0,0,TimeCurrent(),true);
       cCritic[0].Save(FileName+CriticCheckpointFile,0,0,0,TimeCurrent(),true);
      }
-   DeleteObj(Result);
-   DeleteObj(bAction);
+   DeleteObj(Result)
+   DeleteObj(bAction)
   }
 //+------------------------------------------------------------------+
 //| OnTick - expert tick function                                    |
@@ -1226,7 +1283,7 @@ void OnTick()
      }
   }
 //+------------------------------------------------------------------+
-//| FillStack                                                        |
+//| FillStack - Populate the training stack                          |
 //+------------------------------------------------------------------+
 bool FillStack(void)
   {
@@ -1234,46 +1291,64 @@ bool FillStack(void)
    int end=0;
    int bars=CopyRates(Symb.Name(),TimeFrame,2,start,Rates);
    if(bars<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(RSI.BarsCalculated()<bars||
       CCI.BarsCalculated()<bars||
       ATR.BarsCalculated()<bars||
       MACD.BarsCalculated()<bars)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
    if(!ArraySetAsSeries(Rates,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bars -= end+HistoryBars;
    if(bars<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    vector<float>result,target,neg_target;
    uint ticks=GetTickCount();
    uint tester_print=0;
    for(uint i=0; i<cActor.Size(); i++)
      {
       if(!cActor[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       cActor[i].TrainMode(false);
      }
    for(uint i=0; i<cCritic.Size(); i++)
      {
       if(!cCritic[i].Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       cCritic[i].TrainMode(false);
      }
    if(!cStateEncoder.Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    cStateEncoder.TrainMode(false);
    for(int posit=start-HistoryBars-1; (posit>=end&&!IsStopped()); posit--)
      {
       if(!CreateBuffers(posit,GetPointer(bState),GetPointer(bTime),NULL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       vector<float>account=vector<float>::Zeros(AccountDescr);
       account[0]=float(AccountInfoDouble(ACCOUNT_BALANCE) / EtalonBalance);
       account[2]=1;
@@ -1287,23 +1362,31 @@ bool FillStack(void)
       x=time / (double)PeriodSeconds(PERIOD_D1);
       account[12]=(float)MathSin(x!=0 ? 2.0 * M_PI * x : 0);
       if(!bContext.AssignArray(account))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!cStateEncoder.feedForward((CBufferFloat*)GetPointer(bState),1,false,(CBufferFloat*)NULL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!RAGMemory.Retrieve(GetPointer(cStateEncoder),StateScenarioLayer))
         {
          PrintFormat("%s -> %d RAG retrieval failed",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
       // Feed Forward.
       for(uint i=0; (i<cActor.Size()&&!IsStopped()); i++)
          if(!cActor[i].feedForward((CBufferFloat*)GetPointer(bContext),1,false,
                                    GetPointer(cStateEncoder),StateScenarioLayer))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
       for(uint i=0; (i<cCritic.Size()&&!IsStopped()); i++)
          if(!cCritic[i].feedForward(GetPointer(cActor[int(i>0)]),-1,
                                     GetPointer(cStateEncoder),StateTokenLayer))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
       if(GetTickCount()-ticks>500)
         {
          double percent=(1.0-double(posit-end) / (start-end-HistoryBars-NForecast))  * 100.0;

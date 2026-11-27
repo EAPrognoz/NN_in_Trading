@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                   NeuroNet_AlphaQCMComposite.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_COMPOSITE_MQH
 #define NEURONET_ALPHAQCM_COMPOSITE_MQH
@@ -9,7 +10,7 @@
 #define AQCM_NETWORK_COUNT 4
 
 //+------------------------------------------------------------------+
-//| CNeuronAlphaQCMOCL - Own the search and trading lifecycles.        |
+//| CNeuronAlphaQCMOCL - Own the search and trading lifecycles.      |
 //+------------------------------------------------------------------+
 class CNeuronAlphaQCMOCL : public CNeuronAlphaGenOCL
   {
@@ -51,33 +52,75 @@ protected:
 public:
    CNeuronAlphaQCMOCL(void);
    virtual bool      Init(uint outputs,uint index,COpenCLMy *context,uint count,ENUM_OPTIMIZATION method,uint batch) override;
+//+------------------------------------------------------------------+
+//| Type - Return the layer type identifier                          |
+//+------------------------------------------------------------------+
    virtual int       Type(void) const override { return(defNeuronAlphaQCMOCL); }
    virtual bool      Save(const int handle) override;
    virtual bool      Load(const int handle) override;
    bool              Configure(const float &config[],const ulong seed);
    bool              AfterBuild(const bool created);
    bool              FinishSearch(const bool drain=true);
+//+------------------------------------------------------------------+
+//| BootstrapPending - Check whether bootstrap is pending            |
+//+------------------------------------------------------------------+
    bool              BootstrapPending(void) const { return(m_bootstrap&&m_bSearchBudgetPending); }
    bool              ContinueBootstrap(void);
+//+------------------------------------------------------------------+
+//| SetBoundedLearner - Set bounded learner                          |
+//+------------------------------------------------------------------+
    void              SetBoundedLearner(const bool bounded) { m_boundedLearner=bounded; }
    bool              HasSearchDebt(void);
    bool              DrainSearchStep(void);
    bool              CanRecover(void) const;
    bool              ResumeRecovery(void);
+//+------------------------------------------------------------------+
+//| SearchAttempts - Return the search attempts                      |
+//+------------------------------------------------------------------+
    ulong             SearchAttempts(void) const { return(m_searchAttempts); }
+//+------------------------------------------------------------------+
+//| SearchEpisodes - Return the search episodes                      |
+//+------------------------------------------------------------------+
    ulong             SearchEpisodes(void) const { return(m_searchEpisodes); }
    bool              SafeToSave(void) const;
    bool              CausalIdentity(const string symbol,const ENUM_TIMEFRAMES timeframe);
+//+------------------------------------------------------------------+
+//| LastServiceEvent - Return the last service event                 |
+//+------------------------------------------------------------------+
    ulong             LastServiceEvent(void) const { return(m_lastEvent); }
+//+------------------------------------------------------------------+
+//| LastServiceDecision - Return the last service decision           |
+//+------------------------------------------------------------------+
    ulong             LastServiceDecision(void) const { return(m_lastDecision); }
    bool              IssueEvent(ulong &id);
    bool              IssueDecision(ulong &id);
+//+------------------------------------------------------------------+
+//| SearchV - Return the search v                                    |
+//+------------------------------------------------------------------+
    ulong             SearchV(void) { return(m_replay.Verified()); }
+//+------------------------------------------------------------------+
+//| SearchU - Return the search u                                    |
+//+------------------------------------------------------------------+
    ulong             SearchU(void) const { return(m_updates); }
+//+------------------------------------------------------------------+
+//| TargetSyncs - Return the target syncs                            |
+//+------------------------------------------------------------------+
    ulong             TargetSyncs(void) const { return(m_syncs); }
+//+------------------------------------------------------------------+
+//| ActiveGeneration - Return the active generation                  |
+//+------------------------------------------------------------------+
    ulong             ActiveGeneration(void) const { return(m_activeGeneration); }
+//+------------------------------------------------------------------+
+//| PreparedRevision - Return the prepared revision                  |
+//+------------------------------------------------------------------+
    ulong             PreparedRevision(void) const { return(m_preparedRevision); }
+//+------------------------------------------------------------------+
+//| CausalWatermark - Return the causal watermark                    |
+//+------------------------------------------------------------------+
    ulong             CausalWatermark(void) const { return(m_observationWatermark); }
+//+------------------------------------------------------------------+
+//| SetPoolWarmupHistory - Set pool warmup history                   |
+//+------------------------------------------------------------------+
    bool              SetPoolWarmupHistory(const float &history[],const int count)
      {
       return(m_cPool.SetWarmupHistory(history,count));
@@ -109,7 +152,9 @@ protected:
 bool CNeuronAlphaQCMOCL::IssueEvent(ulong &id)
   {
    if(m_lastEvent==ULONG_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    id=++m_lastEvent;
    return(true);
   }
@@ -120,14 +165,17 @@ bool CNeuronAlphaQCMOCL::IssueEvent(ulong &id)
 bool CNeuronAlphaQCMOCL::IssueDecision(ulong &id)
   {
    if(m_lastDecision==ULONG_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    id=++m_lastDecision;
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| Initialize without allocating the legacy token PPO.               |
+//| CNeuronAlphaQCMOCL - Initialize the object state                 |
 //+------------------------------------------------------------------+
+//--- Initialize without allocating the legacy token PPO.
 CNeuronAlphaQCMOCL::CNeuronAlphaQCMOCL(void)
    : m_loadMode(AlphaQCMLoadMode),m_updates(0),m_syncs(0),m_candidate(0),m_lastEvent(0),m_lastDecision(0),
      m_preparedRevision(0),m_activeGeneration(0),m_preparedWindow(0),m_preparedIC(0),m_preparedUsable(false),
@@ -137,18 +185,24 @@ CNeuronAlphaQCMOCL::CNeuronAlphaQCMOCL(void)
   {
   }
 
+//+------------------------------------------------------------------+
+//| Init - Initialize the trainable AlphaQCM layer                   |
+//+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::Init(uint outputs,uint index,COpenCLMy *context,uint count,
-                             ENUM_OPTIMIZATION method,uint batch)
+                              ENUM_OPTIMIZATION method,uint batch)
   {
    if(!context||method!=ADAM||m_loadMode!=AQCM_TRAIN)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(CNeuronAlphaGenOCL::Init(outputs,index,context,count,method,batch));
   }
 
 //+------------------------------------------------------------------+
-//| Retain only the working and training buffers used by trading.      |
+//| TradeWorkspace - Check trade workspace                           |
 //+------------------------------------------------------------------+
+//--- Retain only the working and training buffers used by trading.
 bool CNeuronAlphaQCMOCL::TradeWorkspace(void)
   {
    int capacity=(int)m_fConfig[AG_CFG_TRADE_ROLLOUT];
@@ -158,7 +212,9 @@ bool CNeuronAlphaQCMOCL::TradeWorkspace(void)
    if(context<1||hidden<1||
       !Allocate(m_cAccount,AG_ACCOUNT)||!Allocate(m_cWorkMetadata,(long)context*8)||
       !Allocate(m_cWorkAnchor,hidden*2)||!Allocate(m_cStageAnchor,hidden*2)||!Allocate(m_cEvicted,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_loadMode!=AQCM_TRAIN)
       return(true);
@@ -177,20 +233,24 @@ bool CNeuronAlphaQCMOCL::TradeWorkspace(void)
       !Allocate(m_cReplayAccount,AG_ACCOUNT)||
       ArrayResize(m_uTradeDecisions,capacity)!=capacity||
       ArrayResize(m_fTradeRewards,capacity)!=capacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| Configure the shared pool, trading objects and search networks.    |
+//| Configure - the shared pool, trading objects and search networks |
 //+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::Configure(const float &config[],const ulong seed)
   {
    if(m_bConfigured||m_loadMode!=AQCM_TRAIN||ArraySize(config)!=AQCM_CFG_SIZE||
       ArrayCopy(m_fConfig,config,0,0,AG_CFG_SIZE)!=AG_CFG_SIZE||
       ArrayCopy(m_qcmConfig,config,0,AG_CFG_SIZE,AQCM_CFG_SIZE-AG_CFG_SIZE)!=AQCM_CFG_SIZE-AG_CFG_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_uSeed=seed;
    uint mixed=(uint)(seed^(seed>>32));
@@ -201,13 +261,18 @@ bool CNeuronAlphaQCMOCL::Configure(const float &config[],const ulong seed)
    if(!m_cEvaluator.Configure(OpenCL,m_fConfig)||!m_cPool.Configure(OpenCL,m_fConfig)||
       !m_cTrading.Configure(OpenCL,m_fConfig,mixed+0x85ebca6b)||
       !TradeWorkspace()||!SearchWorkspace(true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bConfigured=true;
 
    return(true);
   }
 
+//+------------------------------------------------------------------+
+//| BuildNetwork - Build a search encoder and head                   |
+//+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::BuildNetwork(CNet *net,const bool iqn,const bool configure)
   {
    CArrayObj descriptions;
@@ -218,7 +283,7 @@ bool CNeuronAlphaQCMOCL::BuildNetwork(CNet *net,const bool iqn,const bool config
      {
       DeleteObj(inputDescription)
       DeleteObj(encoder)
-      ReturnFalse;
+      ReturnFalse
      }
 
    inputDescription.type=defNeuronBaseOCL;
@@ -235,26 +300,33 @@ bool CNeuronAlphaQCMOCL::BuildNetwork(CNet *net,const bool iqn,const bool config
      {
       DeleteObj(inputDescription)
       DeleteObj(encoder)
-      ReturnFalse;
+      ReturnFalse
      }
    if(!descriptions.Add(encoder))
      {
       DeleteObj(encoder)
-      ReturnFalse;
+      ReturnFalse
      }
 
    if(!net.UseOpenCLRuntime(OpenCL)||!net.Create(GetPointer(descriptions)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronAlphaQCMEncoderOCL *layer=(CNeuronAlphaQCMEncoderOCL *)net.Layer(1);
    if(!layer||(configure&&!layer.Configure(OpenCL,iqn,(int)m_fConfig[AG_CFG_MAX_TOKENS],AG_VOCABULARY,
                                (int)m_fConfig[AG_CFG_EMBEDDING],(int)m_fConfig[AG_CFG_SEARCH_HIDDEN],
                                (int)m_qcmConfig[AQCM_CFG_FREQUENCIES-AG_CFG_SIZE])))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 
+//+------------------------------------------------------------------+
+//| SearchWorkspace - Reserve search training storage                |
+//+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::SearchWorkspace(const bool create)
   {
    if(m_loadMode!=AQCM_TRAIN)
@@ -271,22 +343,29 @@ bool CNeuronAlphaQCMOCL::SearchWorkspace(const bool create)
                           m_qcmConfig[AQCM_CFG_PER_ALPHA-AG_CFG_SIZE])||
       !Allocate(m_preflight,3)||!Allocate(m_reward,1)||
       !Allocate(m_cSearchMarket,(long)m_fConfig[AG_CFG_W]*5+AG_ACCOUNT))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(create&&(!BuildNetwork(GetPointer(m_qOnline),false)||!BuildNetwork(GetPointer(m_qTarget),false)||
                !BuildNetwork(GetPointer(m_zOnline),true)||!BuildNetwork(GetPointer(m_zTarget),true)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| Initialize device-only state once after selective Build.          |
+//| AfterBuild - Build after                                         |
 //+------------------------------------------------------------------+
+//--- Initialize device-only state once after selective Build.
 bool CNeuronAlphaQCMOCL::AfterBuild(const bool created)
   {
    if(!m_bConfigured||m_qReady||m_loadMode==AQCM_VERIFY)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CAlphaQCMOpenCL *runtime=(CAlphaQCMOpenCL *)OpenCL;
    if(!runtime.ValidateTradingLocalMemory((int)m_fConfig[AG_CFG_TRADE_HIDDEN]))
@@ -301,7 +380,9 @@ bool CNeuronAlphaQCMOCL::AfterBuild(const bool created)
                                 (int)m_fConfig[AG_CFG_SEARCH_HIDDEN],(int)m_qcmConfig[AQCM_CFG_POINTS-AG_CFG_SIZE],
                                 m_qcmConfig[AQCM_CFG_EPSILON-AG_CFG_SIZE],m_qcmConfig[AQCM_CFG_BONUS-AG_CFG_SIZE],
                                 (int)m_qcmConfig[AQCM_CFG_FREQUENCIES-AG_CFG_SIZE]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(created)
         {
@@ -309,14 +390,20 @@ bool CNeuronAlphaQCMOCL::AfterBuild(const bool created)
          CNeuronAlphaQCMEncoderOCL *z=(CNeuronAlphaQCMEncoderOCL *)m_zOnline.Layer(1);
          if(!q||!z||!m_replay.Initialize()||!q.InitializeWeights(m_uSeed,0)||!z.InitializeWeights(m_uSeed,1)||
             !m_qTarget.WeightsUpdate(GetPointer(m_qOnline),1.0f)||!m_zTarget.WeightsUpdate(GetPointer(m_zOnline),1.0f))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       else
          if(!m_replay.Restore())
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
       if(!m_qTarget.TrainMode(false)||!m_zTarget.TrainMode(false)||
          !m_qOnline.TrainMode(true)||!m_zOnline.TrainMode(true))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    m_qReady=true;
@@ -324,15 +411,21 @@ bool CNeuronAlphaQCMOCL::AfterBuild(const bool created)
    return(true);
   }
 
+//+------------------------------------------------------------------+
+//| Broken - Record a failed AlphaQCM operation                      |
+//+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::Broken(const int status,const bool recoverable)
   {
    m_iStatus=status;
    m_recoverable=recoverable&&!m_updateInProgress&&m_bConfigured;
    m_bCorrupted=true;
 
-   ReturnFalseEx(StringFormat("AlphaQCM status=%d, V=%I64u, U=%I64u",status,SearchV(),SearchU()));
+   ReturnFalseEx(StringFormat("AlphaQCM status=%d, V=%I64u, U=%I64u",status,SearchV(),SearchU()))
   }
 
+//+------------------------------------------------------------------+
+//| ReplayFailure - Map replay errors to AlphaQCM status             |
+//+------------------------------------------------------------------+
 int CNeuronAlphaQCMOCL::ReplayFailure(void) const
   {
    switch(m_replay.LastStatus())
@@ -349,16 +442,24 @@ int CNeuronAlphaQCMOCL::ReplayFailure(void) const
    return(AG_TECHNICAL);
   }
 
+//+------------------------------------------------------------------+
+//| SafeToSave - Check for a stable checkpoint boundary              |
+//+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::SafeToSave(void) const
   {
    return(m_loadMode==AQCM_TRAIN&&m_qReady&&CNeuronAlphaGenOCL::SafeToSave()&&
           !m_updateInProgress&&m_iPendingTrade<0&&m_replay.Consistent());
   }
 
+//+------------------------------------------------------------------+
+//| CausalIdentity - Bind the symbol, timeframe and server           |
+//+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::CausalIdentity(const string symbol,const ENUM_TIMEFRAMES timeframe)
   {
    if(symbol==""||timeframe==PERIOD_CURRENT)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    string server=AccountInfoString(ACCOUNT_SERVER);
    if(m_historySymbol!=symbol||m_historyTimeframe!=timeframe||m_historyServer!=server)
@@ -373,8 +474,9 @@ bool CNeuronAlphaQCMOCL::CausalIdentity(const string symbol,const ENUM_TIMEFRAME
   }
 
 //+------------------------------------------------------------------+
-//| Keep inherited PPO calls on the trading-only branch.              |
+//| feedForward - Drive the search and trading forward paths         |
 //+------------------------------------------------------------------+
+//--- Keep inherited PPO calls on the trading-only branch.
 bool CNeuronAlphaQCMOCL::feedForward(CNeuronBaseOCL *source,CBufferFloat *context)
   {
    if(context)
@@ -383,11 +485,16 @@ bool CNeuronAlphaQCMOCL::feedForward(CNeuronBaseOCL *source,CBufferFloat *contex
    return(feedForward(source));
   }
 
+//+------------------------------------------------------------------+
+//| feedForward - Drive the search and trading forward paths         |
+//+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::feedForward(CNeuronBaseOCL *source)
   {
    if(!m_qReady||!source||!m_cService||m_cService.Total()<AG_CTX_SIZE||
       source.Neurons()!=(uint)(5*m_fConfig[AG_CFG_W]+AG_ACCOUNT)||m_bFrame||m_bCorrupted)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_iPhase=(int)m_cService.At(AG_CTX_PHASE);
    int flags=(int)m_cService.At(AG_CTX_FLAGS);
@@ -397,7 +504,9 @@ bool CNeuronAlphaQCMOCL::feedForward(CNeuronBaseOCL *source)
 
    m_iStatus=AG_OK;
    if(!ZeroOutput())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    switch(m_iPhase)
      {
@@ -425,19 +534,22 @@ bool CNeuronAlphaQCMOCL::feedForward(CNeuronBaseOCL *source)
          return(true);
      }
 
-   ReturnFalse;
+   ReturnFalse
   }
 
 //+------------------------------------------------------------------+
-//| Observe the same working context used by donor Act and feedback.  |
+//| ObservePool - Observe pool                                       |
 //+------------------------------------------------------------------+
+//--- Observe the same working context used by donor Act and feedback.
 bool CNeuronAlphaQCMOCL::ObservePool(CNeuronBaseOCL *source,const int flags,const ulong boundary)
   {
    m_bNextReady=false;
    CBufferFloat *market=source.getOutput();
 
    if(!Slice(market,(int)m_fConfig[AG_CFG_W]*5,GetPointer(m_cAccount),0,AG_ACCOUNT)||!PoolControl())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    bool first=((flags&AG_FLAG_RESET_WORK)!=0&&(flags&AG_FLAG_WARMUP)!=0);
    if(m_cPool.Control().At(AG_POOL_ACTIVE_READY)!=1&&!(first&&ActiveCount()>0))
@@ -452,7 +564,9 @@ bool CNeuronAlphaQCMOCL::ObservePool(CNeuronBaseOCL *source,const int flags,cons
      {
       if(first&&(!m_cPool.ResetContext()||!m_cWorkAnchor.BufferInit(m_cWorkAnchor.Total(),0)||
                  !m_cWorkAnchor.BufferWrite()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       if(!(first?m_cPool.QCMRewarmActive(market):m_cPool.QCMWarmup(market,false)))
          return(Broken(m_cPool.QCMStatus()));
      }
@@ -463,13 +577,17 @@ bool CNeuronAlphaQCMOCL::ObservePool(CNeuronBaseOCL *source,const int flags,cons
             !m_cTrading.Encode(GetPointer(m_cEvicted),1,GetPointer(m_cWorkAnchor))||
             !m_cTrading.CommitAnchor()||
             !Slice(m_cTrading.Anchor(),0,GetPointer(m_cWorkAnchor),0,m_cWorkAnchor.Total())))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
          if(!m_cPool.QCMObserve(market))
             return(Broken(m_cPool.QCMStatus()));
         }
 
    if(!PoolControl())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(m_cPool.Control().At(AG_POOL_SIGNAL_READY)!=1)
      {
       m_bWorkReady=false;
@@ -479,7 +597,9 @@ bool CNeuronAlphaQCMOCL::ObservePool(CNeuronBaseOCL *source,const int flags,cons
 
    if(!Metadata(warmup)||!m_cTrading.Encode(m_cPool.Context(),(int)m_fConfig[AG_CFG_CONTEXT],
                                            GetPointer(m_cWorkAnchor)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bWorkReady=true;
    m_uObserved=boundary;
@@ -487,7 +607,9 @@ bool CNeuronAlphaQCMOCL::ObservePool(CNeuronBaseOCL *source,const int flags,cons
    if(m_iPendingTrade>=0&&(flags&AG_FLAG_VALUE)!=0)
      {
       if(!m_cTrading.Heads(GetPointer(m_cAccount),1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       m_bNextReady=true;
      }
 
@@ -495,12 +617,15 @@ bool CNeuronAlphaQCMOCL::ObservePool(CNeuronBaseOCL *source,const int flags,cons
   }
 
 //+------------------------------------------------------------------+
-//| Warm the pinned pool before making a new revision active.          |
+//| PublishPool - Publish pool                                       |
 //+------------------------------------------------------------------+
+//--- Warm the pinned pool before making a new revision active.
 bool CNeuronAlphaQCMOCL::PublishPool(CNeuronBaseOCL *source,const int flags,const ulong boundary)
   {
    if(m_iPendingTrade>=0||HasTraining()||!m_bPublicationPermit)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bool finish=((flags&AG_FLAG_END)!=0);
    if(!finish)
      {
@@ -597,7 +722,7 @@ bool CNeuronAlphaQCMOCL::TradingAction(CNeuronBaseOCL *source,const ulong bounda
      {
       if(m_iStatus==AG_OK)
          return(Broken(AQCM_OPENCL_ERROR));
-      ReturnFalse;
+      ReturnFalse
      }
 
    if(!Slice(m_cTrading.Action(),0,Output,0,AG_ACTIONS))
@@ -612,7 +737,9 @@ bool CNeuronAlphaQCMOCL::TradingAction(CNeuronBaseOCL *source,const ulong bounda
       int hidden=(int)m_fConfig[AG_CFG_TRADE_HIDDEN];
 
       if(row>=(int)m_fConfig[AG_CFG_TRADE_ROLLOUT])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       int version_offset=10+((int)m_fConfig[AG_CFG_POOL]+1)*(13+(int)m_fConfig[AG_CFG_MAX_TOKENS])+5;
 
@@ -641,8 +768,9 @@ bool CNeuronAlphaQCMOCL::TradingAction(CNeuronBaseOCL *source,const ulong bounda
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Generate and commit one bounded transaction per driver step.       |
+//| Search - Check search                                            |
 //+------------------------------------------------------------------+
+//--- Generate and commit one bounded transaction per driver step.
 bool CNeuronAlphaQCMOCL::Search(CBufferFloat *market,const ulong boundary,const bool defer_publication)
   {
    if(m_iPendingTrade>=0||HasTraining()||m_bPoolWarmup)
@@ -653,12 +781,16 @@ bool CNeuronAlphaQCMOCL::Search(CBufferFloat *market,const ulong boundary,const 
    if(m_boundedLearner&&HasSearchDebt())
      {
       if(!DrainSearchStep())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       m_iStatus=AG_WORKING;
       return(true);
      }
    if(!m_boundedLearner&&!Learn())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!m_bSearchBudgetPending)
      {
@@ -767,7 +899,9 @@ bool CNeuronAlphaQCMOCL::Search(CBufferFloat *market,const ulong boundary,const 
      }
 
    if(!m_boundedLearner&&!Learn())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(m_boundedLearner||m_iTrials<m_iBudget||HasSearchDebt())
      {
       m_iStatus=AG_WORKING;
@@ -780,12 +914,14 @@ bool CNeuronAlphaQCMOCL::Search(CBufferFloat *market,const ulong boundary,const 
   }
 
 //+------------------------------------------------------------------+
-//| ContinueBootstrap - Finish work on the pinned market window.      |
+//| ContinueBootstrap - Finish work on the pinned market window.     |
 //+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::ContinueBootstrap(void)
   {
    if(!BootstrapPending()||m_bCorrupted)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(Search(GetPointer(m_cSearchMarket),m_uBoundary,true));
   }
 
@@ -825,10 +961,15 @@ bool CNeuronAlphaQCMOCL::PreparePublication(CBufferFloat *market,const ulong bou
    return(true);
   }
 
+//+------------------------------------------------------------------+
+//| FinishSearch - End search and optionally drain learning          |
+//+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::FinishSearch(const bool drain)
   {
    if(!m_qReady||m_bCorrupted||m_updateInProgress)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_bSearchBudgetPending=false;
    m_bootstrap=false;
 
@@ -838,14 +979,17 @@ bool CNeuronAlphaQCMOCL::FinishSearch(const bool drain)
   }
 
 //+------------------------------------------------------------------+
-//| Drain confirmed transition credit without changing logical B.     |
+//| Learn - Check learn                                              |
 //+------------------------------------------------------------------+
+//--- Drain confirmed transition credit without changing logical B.
 bool CNeuronAlphaQCMOCL::Learn(void)
   {
    while(HasSearchDebt())
      {
       if(!DrainSearchStep())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    return(true);
   }
@@ -868,7 +1012,9 @@ bool CNeuronAlphaQCMOCL::DrainSearchStep(void)
   {
    if(!m_qReady||m_bCorrupted||m_updateInProgress||IsStopped()||
       m_qcmConfig[AQCM_CFG_CREDIT-AG_CFG_SIZE]<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(!HasSearchDebt()||LearnBatch(m_batch));
   }
 
@@ -887,7 +1033,9 @@ bool CNeuronAlphaQCMOCL::CanRecover(void) const
 bool CNeuronAlphaQCMOCL::ResumeRecovery(void)
   {
    if(!CanRecover()||!m_replay.ReleaseBatch())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_bSearchBudgetPending=false;
    m_bootstrap=false;
    m_bCorrupted=false;
@@ -943,55 +1091,73 @@ bool CNeuronAlphaQCMOCL::LearnBatch(AQCReplayBatch &batch)
   }
 
 //+------------------------------------------------------------------+
-//| Frame one internal graph's persistent encoder/head payload.       |
+//| NetworkSave - Save network                                       |
 //+------------------------------------------------------------------+
+//--- Frame one internal graph's persistent encoder/head payload.
 bool CNeuronAlphaQCMOCL::NetworkSave(CNet *net,const int handle)
   {
    CNeuronBaseOCL *layer=net.Layer(1);
    ulong marker=FileTell(handle);
    if(!layer||layer.Type()!=defNeuronAlphaQCMEncoderOCL||
       FileWriteLong(handle,0)!=sizeof(long)||!layer.Save(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong end=FileTell(handle);
    if(end<=marker+sizeof(long)||!FileSeek(handle,(long)marker,SEEK_SET)||
       FileWriteLong(handle,(long)(end-marker-sizeof(long)))!=sizeof(long)||
       !FileSeek(handle,(long)end,SEEK_SET))
-      ReturnFalse;
-
-   return(true);
-  }
-
-bool CNeuronAlphaQCMOCL::NetworkLoad(CNet *net,const int handle,const bool restore,const bool iqn)
-  {
-   if(FileSize(handle)-FileTell(handle)<sizeof(long))
-      ReturnFalse;
-
-   long size=FileReadLong(handle);
-   ulong start=FileTell(handle);
-   if(size<INT_VALUE||(ulong)size>FileSize(handle)-start)
-      ReturnFalse;
-   if(!AlphaQCMSkipNetwork(handle,iqn,(int)m_fConfig[AG_CFG_MAX_TOKENS],AG_VOCABULARY,
-                          (int)m_fConfig[AG_CFG_EMBEDDING],(int)m_fConfig[AG_CFG_SEARCH_HIDDEN],
-                          (int)m_qcmConfig[AQCM_CFG_FREQUENCIES-AG_CFG_SIZE])||
-      FileTell(handle)!=start+(ulong)size)
-      ReturnFalse;
-
-   if(restore&&(!FileSeek(handle,(long)(start+INT_VALUE),SEEK_SET)||
-      !BuildNetwork(net,iqn,false)||!net.Layer(1).Load(handle)||FileTell(handle)!=start+(ulong)size))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| Save the donor components and the framed training state.          |
+//| NetworkLoad - Read a framed internal network                     |
+//+------------------------------------------------------------------+
+bool CNeuronAlphaQCMOCL::NetworkLoad(CNet *net,const int handle,const bool restore,const bool iqn)
+  {
+   if(FileSize(handle)-FileTell(handle)<sizeof(long))
+     {
+      ReturnFalse
+     }
+
+   long size=FileReadLong(handle);
+   ulong start=FileTell(handle);
+   if(size<INT_VALUE||(ulong)size>FileSize(handle)-start)
+     {
+      ReturnFalse
+     }
+   if(!AlphaQCMSkipNetwork(handle,iqn,(int)m_fConfig[AG_CFG_MAX_TOKENS],AG_VOCABULARY,
+                          (int)m_fConfig[AG_CFG_EMBEDDING],(int)m_fConfig[AG_CFG_SEARCH_HIDDEN],
+                          (int)m_qcmConfig[AQCM_CFG_FREQUENCIES-AG_CFG_SIZE])||
+      FileTell(handle)!=start+(ulong)size)
+     {
+      ReturnFalse
+     }
+
+   if(restore&&(!FileSeek(handle,(long)(start+INT_VALUE),SEEK_SET)||
+      !BuildNetwork(net,iqn,false)||!net.Layer(1).Load(handle)||FileTell(handle)!=start+(ulong)size))
+     {
+      ReturnFalse
+     }
+
+   return(true);
+  }
+
+//+------------------------------------------------------------------+
+//| Save - the donor components and the framed training state        |
 //+------------------------------------------------------------------+
 bool CNeuronAlphaQCMOCL::Save(const int handle)
   {
    if(!SafeToSave()||!Output.BufferRead()||!PrevOutput.BufferRead()||!Gradient.BufferRead()||
       !CNeuronBaseOCL::Save(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileWriteUInt(handle,AQCM_FILE_VERSION)
    dFileWriteUInt(handle,AQCM_CFG_SIZE)
@@ -1018,37 +1184,50 @@ bool CNeuronAlphaQCMOCL::Save(const int handle)
                   m_activeGeneration,m_preparedWindow,m_observationWatermark,m_lastEvent,m_lastDecision};
    for(int i=0;i<ArraySize(state);i++)
       if(FileWriteLong(handle,(long)state[i])!=sizeof(long))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    string identity[]={m_historySymbol,m_historyServer};
    for(int i=0;i<ArraySize(identity);i++)
      {
       int length=StringLen(identity[i]);
       if(length>256)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       dFileWriteUInt(handle,length)
       for(int j=0;j<length;j++)
          if(FileWriteInteger(handle,StringGetCharacter(identity[i],j),SHORT_VALUE)!=SHORT_VALUE)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
      }
    if(!m_cPool.Save(handle)||!m_cTrading.Save(handle)||!NetworkSave(GetPointer(m_qOnline),handle)||
       !NetworkSave(GetPointer(m_qTarget),handle)||!NetworkSave(GetPointer(m_zOnline),handle)||
       !NetworkSave(GetPointer(m_zTarget),handle)||!m_replay.Save(handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
 
 //+------------------------------------------------------------------+
-//| Restore owners in TRAIN and validate bounded sections otherwise.  |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
+//--- Restore owners in TRAIN and validate bounded sections otherwise.
 bool CNeuronAlphaQCMOCL::Load(const int handle)
   {
    if(!OpenCL||!CNeuronBaseOCL::Load(handle)||Neurons()!=AG_ACTIONS||Optimization()!=ADAM)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    // The native weightless branch returns before registering the layer.
    if(OpenCL.IsCollectingSelectiveKernels()&&!OpenCL.RegisterSelectiveLayer(Type(),ADAM))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint version=0,length=0;
    dFileReadUInt(handle,version)
@@ -1056,29 +1235,39 @@ bool CNeuronAlphaQCMOCL::Load(const int handle)
    if(version!=AQCM_FILE_VERSION||length!=AQCM_CFG_SIZE||ArraySize(AlphaQCMExpectedConfig)!=AQCM_CFG_SIZE||
       ArrayResize(m_fConfig,AG_CFG_SIZE)!=AG_CFG_SIZE||
       ArrayResize(m_qcmConfig,AQCM_CFG_SIZE-AG_CFG_SIZE)!=AQCM_CFG_SIZE-AG_CFG_SIZE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0;i<AG_CFG_SIZE;i++)
      {
       dFileReadUFloat(handle,m_fConfig[i])
       if(!MathIsValidNumber(m_fConfig[i])||m_fConfig[i]!=AlphaQCMExpectedConfig[i])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    for(int i=0;i<AQCM_CFG_SIZE-AG_CFG_SIZE;i++)
      {
       dFileReadUFloat(handle,m_qcmConfig[i])
       if(!MathIsValidNumber(m_qcmConfig[i])||m_qcmConfig[i]!=AlphaQCMExpectedConfig[i+AG_CFG_SIZE])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    uint vocabulary[]=AG_VOCABULARY_ORDER;
    uint token=0;
    dFileReadUInt(handle,length)
    if(length!=AG_VOCABULARY)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0;i<AG_VOCABULARY;i++)
      {
       dFileReadUInt(handle,token)
       if(token!=vocabulary[i])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    uint warm=0,tf=0,aggregate=0;
@@ -1088,7 +1277,9 @@ bool CNeuronAlphaQCMOCL::Load(const int handle)
    dFileReadUInt(handle,aggregate)
    dFileReadUFloat(handle,m_preparedIC)
    if(warm>1||aggregate>1||!MathIsValidNumber(m_preparedIC)||m_iFinanceRandom==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_bWarmBudget=(warm==1);
    m_preparedUsable=(aggregate==1);
    m_historyTimeframe=(ENUM_TIMEFRAMES)tf;
@@ -1096,7 +1287,9 @@ bool CNeuronAlphaQCMOCL::Load(const int handle)
    for(int i=0;i<ArraySize(state);i++)
      {
       if(FileSize(handle)-FileTell(handle)<sizeof(long))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       state[i]=(ulong)FileReadLong(handle);
      }
    m_uSeed=state[0];
@@ -1115,7 +1308,9 @@ bool CNeuronAlphaQCMOCL::Load(const int handle)
      {
       dFileReadUInt(handle,length)
       if(length>256||(ulong)length*SHORT_VALUE>FileSize(handle)-FileTell(handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
       for(uint j=0;j<length;j++)
          identity[i]+=ShortToString((ushort)FileReadInteger(handle,SHORT_VALUE));
      }
@@ -1129,7 +1324,9 @@ bool CNeuronAlphaQCMOCL::Load(const int handle)
       !NetworkLoad(GetPointer(m_zOnline),handle,restore,true)||!NetworkLoad(GetPointer(m_zTarget),handle,restore,true)||
       !m_replay.Load(handle,(int)m_qcmConfig[AQCM_CFG_REPLAY-AG_CFG_SIZE],
                      (int)m_fConfig[AG_CFG_MAX_TOKENS],AG_VOCABULARY,m_candidate,restore))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong warmup=(ulong)m_qcmConfig[AQCM_CFG_WARMUP-AG_CFG_SIZE];
    ulong credit=(ulong)m_qcmConfig[AQCM_CFG_CREDIT-AG_CFG_SIZE];
@@ -1137,7 +1334,9 @@ bool CNeuronAlphaQCMOCL::Load(const int handle)
    ulong verified=m_replay.Verified();
    if(credit==0||period==0||m_syncs!=m_updates/period||
       m_updates>(verified>warmup?(verified-warmup)/credit:0)||!m_cPool.QCMValidLoadedActive())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_bPublicationPermit=m_cPool.Control().At(AG_POOL_ACTIVE_READY)!=1;
    m_bConfigured=true;

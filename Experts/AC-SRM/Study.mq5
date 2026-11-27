@@ -75,8 +75,9 @@ double CriticQ1Error=0;
 double CriticQ2Error=0;
 bool   Stage03StopRequestedLogged=false;
 //+------------------------------------------------------------------+
-//| Logs one user-requested Stage 03 stop without misclassifying it. |
+//| LogStage03StopRequested - Log stage 03 stop requested            |
 //+------------------------------------------------------------------+
+//--- Logs one user-requested Stage 03 stop without misclassifying it.
 void LogStage03StopRequested(const string phase)
   {
    if(Stage03StopRequestedLogged)
@@ -86,8 +87,9 @@ void LogStage03StopRequested(const string phase)
    Stage03StopRequestedLogged=true;
   }
 //+------------------------------------------------------------------+
-//| Creates the AC-SRM Actor and distribution-Critic architectures.  |
+//| CreateActorCriticDescriptions - Create actor critic descriptions |
 //+------------------------------------------------------------------+
+//--- Creates the AC-SRM Actor and distribution-Critic architectures.
 //--- actor : Base(13)+Cross(3)+Conv(GELU 48->16)+Conv(SIGMOID 16->6).  Critic: Base(19)+Cross(5)+Conv(GELU 80->16)+Base(32,None)+          ACSRM head{count=1,window_out=32,None} (factory-fixed).
 bool CreateActorCriticDescriptions(CArrayObj *&actor_descr,CArrayObj *&critic_descr)
   {
@@ -95,8 +97,8 @@ bool CreateActorCriticDescriptions(CArrayObj *&actor_descr,CArrayObj *&critic_de
    critic_descr=new CArrayObj();
    if(!actor_descr||!critic_descr)
      {
-      DeleteObj(actor_descr);
-      DeleteObjAndFalse(critic_descr);
+      DeleteObj(actor_descr)
+      DeleteObjAndFalse(critic_descr)
      }
    actor_descr.FreeMode(true);
    critic_descr.FreeMode(true);
@@ -107,8 +109,8 @@ bool CreateActorCriticDescriptions(CArrayObj *&actor_descr,CArrayObj *&critic_de
       !SkillAddConv(actor_descr,1,(3 * EmbeddingSize),EmbeddingSize,1,GELU)||
       !SkillAddConv(actor_descr,1,EmbeddingSize,NActions / 2,2,SIGMOID))
      {
-      DeleteObj(actor_descr);
-      DeleteObjAndFalse(critic_descr);
+      DeleteObj(actor_descr)
+      DeleteObjAndFalse(critic_descr)
      }
 
 //--- critic: Base(19) feeds the Cross(5) trunk; the last plain Base(32,None)
@@ -118,14 +120,14 @@ bool CreateActorCriticDescriptions(CArrayObj *&actor_descr,CArrayObj *&critic_de
       !SkillAddConv(critic_descr,1,(5 * EmbeddingSize),EmbeddingSize,1,GELU)||
       !SkillAddBase(critic_descr,32))
      {
-      DeleteObj(actor_descr);
-      DeleteObjAndFalse(critic_descr);
+      DeleteObj(actor_descr)
+      DeleteObjAndFalse(critic_descr)
      }
    CLayerDescription *head=new CLayerDescription();
    if(!head)
      {
-      DeleteObj(actor_descr);
-      DeleteObjAndFalse(critic_descr);
+      DeleteObj(actor_descr)
+      DeleteObjAndFalse(critic_descr)
      }
    head.type=defNeuronACSRM;
    head.count=1;
@@ -135,16 +137,17 @@ bool CreateActorCriticDescriptions(CArrayObj *&actor_descr,CArrayObj *&critic_de
    head.batch=BatchSize;
    if(!critic_descr.Add(head))
      {
-      DeleteObjAndFalse(head);
-      DeleteObj(actor_descr);
-      DeleteObjAndFalse(critic_descr);
+      DeleteObjAndFalse(head)
+      DeleteObj(actor_descr)
+      DeleteObjAndFalse(critic_descr)
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Validates the AC-SRM policy shapes (no D2 banks, ACSRM heads).   |
+//| ValidatePolicyShapeACSRM - Validate policy shape ACSRM           |
 //+------------------------------------------------------------------+
+//--- Validates the AC-SRM policy shapes (no D2 banks, ACSRM heads).
 bool ValidatePolicyShapeACSRM(CNet &actor,CNet &q1,CNet &q2)
   {
    CNeuronBaseOCL *a0=actor.Layer(0);
@@ -153,7 +156,9 @@ bool ValidatePolicyShapeACSRM(CNet &actor,CNet &q1,CNet &q2)
    if(!a0||!a1||!a3||a0.getOutput().Total()!=(int)AccountDescr||
       a1.Type()!=defNeuronScenarioCrossAttention||
       a3.getOutput().Total()!=(int)NActions)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int i=0; i<2; i++)
      {
       CNet           *critic=(i==0 ? GetPointer(q1) : GetPointer(q2));
@@ -165,22 +170,25 @@ bool ValidatePolicyShapeACSRM(CNet &actor,CNet &q1,CNet &q2)
          c3.getOutput().Total()!=32||
          c4.Type()!=defNeuronACSRM||
          c4.getOutput().Total()!=1)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Creates fresh AC-SRM Actor + Q1 + Q2 on the Market context.      |
+//| CreatePolicySet - Create policy set                              |
 //+------------------------------------------------------------------+
+//--- Creates fresh AC-SRM Actor + Q1 + Q2 on the Market context.
 bool CreatePolicySet(void)
   {
    CArrayObj *actor_descr=NULL,*critic_descr=NULL;
    if(!CreateActorCriticDescriptions(actor_descr,critic_descr))
      {
-      DeleteObj(actor_descr);
-      DeleteObj(critic_descr);
-      ReturnFalse;
+      DeleteObj(actor_descr)
+      DeleteObj(critic_descr)
+      ReturnFalse
      }
    bool result=Actor.Create(actor_descr);
    if(result)
@@ -193,14 +201,15 @@ bool CreatePolicySet(void)
       result=Q2.Create(critic_descr);
    if(result)
       result=Q2.SetOpenCLChecked(SkillMarket.GetOpenCL());
-   DeleteObj(actor_descr);
-   DeleteObj(critic_descr);
+   DeleteObj(actor_descr)
+   DeleteObj(critic_descr)
 
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Loads or creates ACSRMActor.nnw / ACSRMQ1.nnw / ACSRMQ2.nnw.     |
+//| LoadOrCreatePolicies - Load or create policies                   |
 //+------------------------------------------------------------------+
+//--- Loads or creates ACSRMActor.nnw / ACSRMQ1.nnw / ACSRMQ2.nnw.
 bool LoadOrCreatePolicies(void)
   {
    if(!SkillACRecoverTransaction(Skill_ACTOR_FILE,Skill_Q1_FILE,Skill_Q2_FILE,
@@ -212,7 +221,7 @@ bool LoadOrCreatePolicies(void)
                                    Skill_AC_TRANSACTION_FILE))
      {
       Print("Skill policy recovery=FAIL; incomplete checkpoint requires repair");
-      ReturnFalse;
+      ReturnFalse
      }
    const bool manifest_exists=FileIsExist(Skill_AC_MANIFEST_FILE,FILE_COMMON);
    bool       loaded=false;
@@ -228,11 +237,15 @@ bool LoadOrCreatePolicies(void)
    if(!loaded)
      {
       if(!CreatePolicySet())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    if(!SkillBindPolicyOpenCLChecked(Actor,Q1,Q2)||
       !ValidatePolicyShapeACSRM(Actor,Q1,Q2))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    Actor.TrainMode(true);
    Q1.TrainMode(true);
    Q2.TrainMode(true);
@@ -256,7 +269,9 @@ bool PrepareHistory(int &first_position,int &last_position)
    int bars=CopyRates(Symb.Name(),TimeFrame,0,start,Rates);
    if(bars<=0||!RSI.BufferResize(bars)||!CCI.BufferResize(bars)||
       !ATR.BufferResize(bars)||!MACD.BufferResize(bars))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    int  wait=-1;
    bool calculated=false;
    do
@@ -268,13 +283,17 @@ bool PrepareHistory(int &first_position,int &last_position)
      }
    while(!calculated&&wait<100);
    if(!calculated)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    RSI.Refresh();
    CCI.Refresh();
    ATR.Refresh();
    MACD.Refresh();
    if(!ArraySetAsSeries(Rates,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- the deal outcome must be resolvable INSIDE the training window: the
 //--- full horizon is reserved past the End boundary so every label
@@ -288,19 +307,24 @@ bool PrepareHistory(int &first_position,int &last_position)
    return(last_position>first_position);
   }
 //+------------------------------------------------------------------+
-//| Applies the distribution target (realized return) to one critic. |
+//| UpdateCriticDistribution - Update critic distribution            |
 //+------------------------------------------------------------------+
+//--- Applies the distribution target (realized return) to one critic.
 bool UpdateCriticDistribution(CNet &critic,const double reward,const bool is_q1)
   {
    CNeuronBaseOCL *base=critic.Layer(3);
    CNeuronBaseOCL *head=critic.Layer(4);
    if(!base||!head||head.Type()!=defNeuronACSRM||!MathIsValidNumber(reward)||
       base.getOutput().Total()!=32)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronACSRM *acsrm=(CNeuronACSRM*)head;
    if(!acsrm.calcDistributionTargetGradients(base,float(reward),
                                              InpProbWeight,InpValueWeight))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- real ACSRM critic error: RMSE of the FQF centroids from the realized
 //--- outcome.  backPropGradient never updates getRecentAverageError(), so
@@ -317,7 +341,10 @@ bool UpdateCriticDistribution(CNet &critic,const double reward,const bool is_q1)
          {
           const double z=double(quantiles[i]);
           if(!MathIsValidNumber((float)z))
-            { valid=false; break; }
+            {
+             valid=false;
+             break;
+            }
           sum_sq += (z-reward) * (z-reward);
          }
        if(valid)
@@ -335,8 +362,9 @@ bool UpdateCriticDistribution(CNet &critic,const double reward,const bool is_q1)
    return(critic.backPropGradient(GetPointer(SkillMarket),-1,-1,true));
   }
 //+------------------------------------------------------------------+
-//| Actor policy update through the frozen critic's SRM.             |
+//| SelectPolicyCritic - Select policy critic                        |
 //+------------------------------------------------------------------+
+//--- Actor policy update through the frozen critic's SRM.
 int SelectPolicyCritic(const int event_index)
   {
 //--- exactly ONE Critic is the gradient source per policy-update event.
@@ -353,28 +381,38 @@ int SelectPolicyCritic(const int event_index)
      }
   }
 //+------------------------------------------------------------------+
-//| Returns the scalar SRM value of one Critic head distribution.    |
+//| CriticSRMValue - Return the critic SRM value                     |
 //+------------------------------------------------------------------+
+//--- Returns the scalar SRM value of one Critic head distribution.
 bool CriticSRMValue(CNet &critic,float &value)
   {
    CNeuronBaseOCL *head=critic.Layer(4);
    if(!head||head.Type()!=defNeuronACSRM)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronACSRM *acsrm=(CNeuronACSRM*)head;
    if(!SRMValue.BufferInit(1,0)||!SRMValue.BufferCreate(SkillMarket.GetOpenCL())||
       !SRMValue.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!acsrm.SRMForward(GetPointer(SRMValue),1,InpRiskType,InpRiskParameter,InpMeanWeight))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SRMValue.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    value=float(SRMValue[0]);
 
    return(MathIsValidNumber(value));
   }
 //+------------------------------------------------------------------+
-//| Reports whether the last SRM refusal was a distribution-contract |
+//| CriticLastSRMInvalid - Check critic last SRM invalid             |
 //+------------------------------------------------------------------+
+//--- Reports whether the last SRM refusal was a distribution-contract
 //--- rejection rather than an execution failure.
 bool CriticLastSRMInvalid(CNet &critic)
   {
@@ -385,8 +423,9 @@ bool CriticLastSRMInvalid(CNet &critic)
    return(((CNeuronACSRM*)head).LastSRMInvalid());
   }
 //+------------------------------------------------------------------+
-//| Actor policy update through the frozen critic's SRM              |
+//| PolicyOutputGradientACSRM - Check policy output gradient ACSRM   |
 //+------------------------------------------------------------------+
+//--- Actor policy update through the frozen critic's SRM
 //--- (PolicyOutputGradientACSRM).
 bool PolicyOutputGradientACSRM(CNet &actor,CNet &critic,const float upstream=1.0f)
   {
@@ -396,22 +435,34 @@ bool PolicyOutputGradientACSRM(CNet &actor,CNet &critic,const float upstream=1.0
    if(!critic_head||critic_head.Type()!=defNeuronACSRM||!critic_base||!actor_output||
       critic_base.getGradient().Total()!=(int)(AccountDescr+NActions)||
       actor_output.getGradient().Total()!=(int)NActions)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    CNeuronACSRM *acsrm=(CNeuronACSRM*)critic_head;
    if(!SRMValue.BufferInit(1,0)||!SRMValue.BufferCreate(SkillMarket.GetOpenCL())||
       !SRMValue.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!acsrm.SRMForward(GetPointer(SRMValue),1,InpRiskType,InpRiskParameter,InpMeanWeight))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!SRMGrad.BufferInit(1,upstream)||!SRMGrad.BufferCreate(SkillMarket.GetOpenCL())||
       !SRMGrad.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!acsrm.SRMGradient(GetPointer(SRMGrad),1,InpRiskType,InpRiskParameter,InpMeanWeight))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- freeze critic weights while propagating the policy gradient.
    if(!critic.SetWeightsUpdate(false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    bool result=critic.backPropGradient(GetPointer(SkillMarket),-1,-1,true);
    if(!critic.SetWeightsUpdate(true))
       result=false;
@@ -427,8 +478,9 @@ bool PolicyOutputGradientACSRM(CNet &actor,CNet &critic,const float upstream=1.0
    return(result);
   }
 //+------------------------------------------------------------------+
-//| Accumulates one supervised signal (teacher/random) into the      |
+//| AddActorSupervisedGradient - Add actor supervised gradient       |
 //+------------------------------------------------------------------+
+//--- Accumulates one supervised signal (teacher/random) into the
 //--- actor output-layer gradient: (t - a) .* a .* (1 - a).
 bool AddActorSupervisedGradient(CNet &actor,CBufferFloat *target)
   {
@@ -437,7 +489,9 @@ bool AddActorSupervisedGradient(CNet &actor,CBufferFloat *target)
       actor_output.getOutput().Total()!=(int)NActions||
       actor_output.getGradient().Total()!=(int)NActions||target.GetIndex()<0||
       actor_output.getOutput().GetIndex()<0||actor_output.getGradient().GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    if(!ActorDerivOneMinus.BufferInit(NActions,0)||
       !ActorDerivOneMinus.BufferCreate(SkillMarket.GetOpenCL())||
       !ActorDerivOneMinus.BufferWrite()||
@@ -445,7 +499,9 @@ bool AddActorSupervisedGradient(CNet &actor,CBufferFloat *target)
       !ActorGradScratch.BufferCreate(SkillMarket.GetOpenCL())||
       !ActorGradScratch.BufferWrite()||
       !SkillDevice.Bind(SkillMarket.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- diff = t - a; scaled = diff * a * (1 - a); accumulate on device.
 //--- this reproduces the library's calcOutputGradients for a SIGMOID
@@ -455,7 +511,9 @@ bool AddActorSupervisedGradient(CNet &actor,CBufferFloat *target)
                                         GetPointer(ActorDerivOneMinus),SIGMOID)||
       !SkillDevice.Add(actor_output.getGradient(),GetPointer(ActorGradScratch),
                        actor_output.getGradient(),NActions))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -467,13 +525,19 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
    terminal=false;
    const bool trace_td=(iteration<24||iteration % 10000==0||iteration>=Iterations-1);
    if(!SkillForwardForecast(position,GetPointer(State),GetPointer(TimeState)))
-     { Print("TrainTransition stage=current_forecast"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=current_forecast");
+      ReturnFalse
+     }
    double reward=0;
    if(!Actor.feedForward(GetPointer(Account),1,false,GetPointer(SkillMarket),-1)||
       !ReadAction(Actor,GetPointer(CurrentAction))||
       !AdvanceAccount(GetPointer(Account),GetPointer(CurrentAction),position,MinBalance,
                       GetPointer(NextAccount),reward,terminal))
-     { Print("TrainTransition stage=account_transition"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=account_transition");
+      ReturnFalse
+     }
    const double buy_lot=MathMax(0.0,double(CurrentAction[0]-CurrentAction[3]));
    const double sell_lot=MathMax(0.0,double(CurrentAction[3]-CurrentAction[0]));
    if(trace_td)
@@ -492,10 +556,16 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
    CNeuronBaseOCL *actor_layer=Actor.Layer(3);
    if(!context_layer||!actor_layer||
       !BuildCriticInput(context_layer.getOutput(),actor_layer.getOutput(),GetPointer(CriticInput)))
-     { Print("TrainTransition stage=critic_input"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=critic_input");
+      ReturnFalse
+     }
    if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(SkillMarket),-1)||
       !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(SkillMarket),-1))
-     { Print("TrainTransition stage=critic_forward"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=critic_forward");
+      ReturnFalse
+     }
 
 //--- offline target: the COMPLETED result of the specific deal fixed at this
 //--- bar over the configured horizon (TP first / SL first / HORIZON outcome),
@@ -508,7 +578,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
                                         MathMax(0.0,double(Account[0]) * EtalonBalance),
                                         (uint)position,InpDealHorizon,deal_tag);
    if(!MathIsValidNumber(deal_y))
-     { Print("TrainTransition stage=deal_label"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=deal_label");
+      ReturnFalse
+     }
    if(trace_td)
       PrintFormat("ACSRM offline iteration=%d outcome=%.8f tag=%d advance_reward=%.8f horizon=%d",
                   iteration,deal_y,deal_tag,reward,InpDealHorizon);
@@ -531,7 +604,7 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
             return(false);
            }
          Print("TrainTransition stage=critic_distribution_backward");
-         ReturnFalse;
+         ReturnFalse
         }
       CriticTransitions++;
       if(owner_critic==GetPointer(Q1))
@@ -569,7 +642,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
 //--- only overwrites the gradient on the policy event.
    if(actor_layer.getGradient().Total()!=(int)NActions||
       !actor_layer.getGradient().Fill(0))
-     { Print("TrainTransition stage=actor_gradient_reset"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=actor_gradient_reset");
+      ReturnFalse
+     }
 
 //--- policy gate: a RESOLVABLE deal label (tag != 0).  Requiring broker
 //--- executability here would give the cold-start Actor no gradient while
@@ -585,7 +661,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
       //--- activations with post-update weights.
          if(!Q1.feedForward(GetPointer(CriticInput),1,false,GetPointer(SkillMarket),-1)||
             !Q2.feedForward(GetPointer(CriticInput),1,false,GetPointer(SkillMarket),-1))
-           { Print("TrainTransition stage=policy_critic_forward"); ReturnFalse; }
+           {
+            Print("TrainTransition stage=policy_critic_forward");
+            ReturnFalse
+           }
          const int pick=SelectPolicyCritic(int(PolicyEvents++));
          CNet      *policy_critic=(pick==0 ? GetPointer(Q1) : GetPointer(Q2));
          float     policy_srm=0.0f;
@@ -599,7 +678,7 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
                   PrintFormat("ACSRM policy skipped iteration=%d reason=invalid_srm_distribution",iteration);
               }
             else
-              { Print("TrainTransition stage=policy_critic_srm"); ReturnFalse; }
+              { Print("TrainTransition stage=policy_critic_srm"); ReturnFalse }
            }
          else
            {
@@ -614,7 +693,7 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
                      PrintFormat("ACSRM policy skipped iteration=%d reason=invalid_srm_gradient",iteration);
                  }
                else
-                 { Print("TrainTransition stage=policy_backward"); ReturnFalse; }
+                 { Print("TrainTransition stage=policy_backward"); ReturnFalse }
               }
             else
               {
@@ -636,7 +715,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
    int    teacher_tag=0;
    if(!BuildTeacherAction(position,GetPointer(Account),GetPointer(TeacherAction),
                           teacher_reward,InpDealHorizon,teacher_tag))
-     { Print("TrainTransition stage=teacher_action"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=teacher_action");
+      ReturnFalse
+     }
    if(trace_td)
       PrintFormat("ACSRM teacher iteration=%d reward=%.8f tag=%d",iteration,teacher_reward,teacher_tag);
    if(teacher_reward>0.0&&teacher_tag!=0)
@@ -650,7 +732,7 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
             return(false);
            }
          Print("TrainTransition stage=teacher_actor_backward");
-         ReturnFalse;
+         ReturnFalse
         }
       TeacherTransitions++;
       actor_update_needed=true;
@@ -672,7 +754,7 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
             return(false);
            }
          Print("TrainTransition stage=teacher_critic_backward");
-         ReturnFalse;
+         ReturnFalse
         }
       TeacherCriticTransitions++;
       if(teacher_critic==GetPointer(Q1))
@@ -684,7 +766,10 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
    int    random_tag=0;
    if(!BuildRandomAction(position,GetPointer(Account),GetPointer(RandomAction),
                          random_reward,InpDealHorizon,random_tag))
-     { Print("TrainTransition stage=random_action"); ReturnFalse; }
+     {
+      Print("TrainTransition stage=random_action");
+      ReturnFalse
+     }
    if(trace_td)
       PrintFormat("ACSRM random iteration=%d reward=%.8f tag=%d",iteration,random_reward,random_tag);
    if(random_reward>0.0&&random_tag!=0)
@@ -698,7 +783,7 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
             return(false);
            }
          Print("TrainTransition stage=random_actor_backward");
-         ReturnFalse;
+         ReturnFalse
         }
       actor_update_needed=true;
      }
@@ -719,7 +804,7 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
             return(false);
            }
          Print("TrainTransition stage=random_critic_backward");
-         ReturnFalse;
+         ReturnFalse
         }
       RandomCriticTransitions++;
       if(random_critic==GetPointer(Q1))
@@ -741,7 +826,7 @@ bool TrainTransition(const int position,const int iteration,bool &terminal)
          return(false);
         }
       Print("TrainTransition stage=actor_combined_backward");
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -754,7 +839,10 @@ void TrainACSRMActorCritic(void)
    Stage03StopRequestedLogged=false;
    int first=0,last=0;
    if(!PrepareHistory(first,last))
-     { PrintFormat("%s -> %d history unavailable",__FUNCTION__,__LINE__); return; }
+     {
+      PrintFormat("%s -> %d history unavailable",__FUNCTION__,__LINE__);
+      return;
+     }
    uint shown=GetTickCount();
    int  completed_iterations=0;
    int  failed_iteration=-1;

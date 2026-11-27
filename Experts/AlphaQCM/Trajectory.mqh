@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                                   Trajectory.mqh |
 //|                                                         AlphaQCM |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef ALPHAQCM_TRAJECTORY_MQH
 #define ALPHAQCM_TRAJECTORY_MQH

@@ -11,15 +11,18 @@
 #include "NetGenetic.mqh"
 //---
 //+------------------------------------------------------------------+
-//| CNetEvolution                                                    |
+//| CNetEvolution - Evolve a population of neural networks           |
 //+------------------------------------------------------------------+
 class CNetEvolution : protected CNetGenetic
   {
-protected:
-   virtual bool      GetWeights(uint layer) override;
-
 public:
+//+------------------------------------------------------------------+
+//| CNetEvolution - Use the default member initialization            |
+//+------------------------------------------------------------------+
                      CNetEvolution() {};
+//+------------------------------------------------------------------+
+//| ~CNetEvolution - Use automatic member cleanup                    |
+//+------------------------------------------------------------------+
                     ~CNetEvolution() {};
    //---
    virtual bool              Create(CArrayObj *Description,uint population_size) override;
@@ -32,35 +35,38 @@ public:
    //---
    virtual bool              GetLayerOutput(uint layer,CBufferFloat *&result) override;
    virtual void              getResults(CBufferFloat *&resultVals);
+protected:
+   virtual bool      GetWeights(uint layer) override;
   };
 //+------------------------------------------------------------------+
-//| Create                                                           |
+//| Create - Check create                                            |
 //+------------------------------------------------------------------+
 bool CNetEvolution::Create(CArrayObj *Description,uint population_size)
   {
    if(!CNetGenetic::Create(Description,population_size))
       return(false);
 
-   float average,maximum;
+   float average;
+   float maximum;
 
    return(NextGeneration(0,average,maximum));
   }
 //+------------------------------------------------------------------+
-//| SetPopulationSize                                                |
+//| SetPopulationSize - Set population size                          |
 //+------------------------------------------------------------------+
 bool CNetEvolution::SetPopulationSize(uint size)
   {
    return(CNetGenetic::SetPopulationSize(size));
   }
 //+------------------------------------------------------------------+
-//| feedForward                                                      |
+//| feedForward - Compute the layer output                           |
 //+------------------------------------------------------------------+
 bool CNetEvolution::feedForward(CArrayFloat *inputVals,int window=1,bool tem=true)
   {
    return(CNetGenetic::feedForward(inputVals,window,tem));
   }
 //+------------------------------------------------------------------+
-//| Rewards                                                          |
+//| Rewards - Check rewards                                          |
 //+------------------------------------------------------------------+
 bool CNetEvolution::Rewards(CArrayFloat *rewards)
   {
@@ -73,7 +79,7 @@ bool CNetEvolution::Rewards(CArrayFloat *rewards)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| NextGeneration                                                   |
+//| NextGeneration - Check next generation                           |
 //+------------------------------------------------------------------+
 bool CNetEvolution::NextGeneration(float mutation,float &average,float &maximum)
   {
@@ -191,7 +197,7 @@ bool CNetEvolution::NextGeneration(float mutation,float &average,float &maximum)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| GetWeights                                                       |
+//| GetWeights - Get weights                                         |
 //+------------------------------------------------------------------+
 bool CNetEvolution::GetWeights(uint layer)
   {
@@ -237,7 +243,7 @@ bool CNetEvolution::GetWeights(uint layer)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CNetEvolution::Load(string file_name,uint population_size,bool common=true)
   {
@@ -245,28 +251,29 @@ bool CNetEvolution::Load(string file_name,uint population_size,bool common=true)
       return(false);
 
    v_Rewards.Fill(0);
-   float average,maximum;
+   float average;
+   float maximum;
    if(!NextGeneration(0,average,maximum))
       return(false);
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| GetLayerOutput                                                   |
+//| GetLayerOutput - Get layer output                                |
 //+------------------------------------------------------------------+
 bool CNetEvolution::GetLayerOutput(uint layer,CBufferFloat *&result)
   {
    return(CNet::GetLayerOutput(layer,result));
   }
 //+------------------------------------------------------------------+
-//| getResults                                                       |
+//| getResults - Get results                                         |
 //+------------------------------------------------------------------+
 void CNetEvolution::getResults(CBufferFloat *&resultVals)
   {
    CNetGenetic::getResults(resultVals);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CNetEvolution::Save(string file_name,bool common=true)
   {

@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                                 AlphaQCM_Pool.cl |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #define AQ_POOL_NUMERIC_ERROR (-1)
 
@@ -208,7 +209,7 @@ __kernel void AQCMPoolEvaluatePrepared(__global const float *market,__global con
   }
 
 //+------------------------------------------------------------------+
-//| AQEvictBefore - Order exact ties by candidate and formula ID      |
+//| AQEvictBefore - Order exact ties by candidate and formula ID     |
 //+------------------------------------------------------------------+
 inline bool AQEvictBefore(const int first,const int second,const int candidate,const int stride,
                           __global const float *weights,__global const float *bank)
@@ -335,7 +336,12 @@ __kernel void AQCMPoolOrdered(__global const float *market,__global const float 
            }
          if(AGPoolReduce(duplicate,reduce,1)>0)
            {
-            if(lane==0){control[0]=AG_OK;control[1]=fit[0];control[2]=1;}
+            if(lane==0)
+              {
+               control[0]=AG_OK;
+               control[1]=fit[0];
+               control[2]=1;
+              }
             return;
            }
          __global float *record=scratch+10+count*stride;
@@ -343,7 +349,11 @@ __kernel void AQCMPoolOrdered(__global const float *market,__global const float 
           status=AQNormalize(x,x+w,n,cfg,z+count*n,record+5+t,lanes,true,reduce);
          if(status==AG_OK)
            {
-            if(lane==0){record[0]=length;AGPoolCopyValues(scratch+1,record+1,4);}
+            if(lane==0)
+              {
+               record[0]=length;
+               AGPoolCopyValues(scratch+1,record+1,4);
+              }
             for(int k=lane;k<t;k+=lanes)record[5+k]=k<(int)length?candidate[1+k*token_stride]:AG_PAD;
             p++;
             barrier(CLK_GLOBAL_MEM_FENCE);
@@ -370,7 +380,12 @@ __kernel void AQCMPoolOrdered(__global const float *market,__global const float 
       if(remove==p-1)
         {
          AGPoolCopyGroup(banks,scratch,size);
-         if(lane==0){control[0]=AG_OK;control[1]=fit[0];control[2]=1;}
+         if(lane==0)
+           {
+            control[0]=AG_OK;
+            control[1]=fit[0];
+            control[2]=1;
+           }
          return;
         }
       p--;
@@ -388,7 +403,11 @@ __kernel void AQCMPoolOrdered(__global const float *market,__global const float 
       if(lane==0)
         {
          control[0]=status;
-         if(mode==1&&status==AG_INVALID){control[1]=cfg[AG_CFG_INVALID_TOKEN_REWARD];control[2]=1;}
+         if(mode==1&&status==AG_INVALID)
+           {
+            control[1]=cfg[AG_CFG_INVALID_TOKEN_REWARD];
+            control[2]=1;
+           }
         }
       return;
      }
@@ -398,14 +417,22 @@ __kernel void AQCMPoolOrdered(__global const float *market,__global const float 
       AQCompactRows(z+remove*n,n,p-remove);
      }
    for(int j=lane;j<p;j+=lanes)scratch[10+j*stride+12+t]=weights[j];
-   if(lane==0){scratch[0]=p;scratch[9]=1;}
+   if(lane==0)
+     {
+      scratch[0]=p;
+      scratch[9]=1;
+     }
    barrier(CLK_GLOBAL_MEM_FENCE);
    AGPoolCopyGroup(scratch,banks,size);
    if(lane==0)
      {
       fit[0]=p>0?metric[1]:0;fit[1]=p>0?metric[2]:0;fit[2]=(mode==1);
       control[0]=AG_OK;control[6]=p;
-      if(mode==1){control[1]=fit[0];control[2]=1;}
+      if(mode==1)
+        {
+         control[1]=fit[0];
+         control[2]=1;
+        }
      }
    barrier(CLK_GLOBAL_MEM_FENCE);
    if(mode==2)
@@ -430,7 +457,11 @@ __kernel void AQCMPoolScore(__global const float *cfg,__global const float *bank
    int count=(int)bank[0],t=(int)cfg[AG_CFG_MAX_TOKENS];
    if(!count||bank[9]!=1)
      {
-      if(lane==0){scores[row]=0;scores[span+row]=AG_SKIP;}
+      if(lane==0)
+        {
+         scores[row]=0;
+         scores[span+row]=AG_SKIP;
+        }
       return;
      }
    float sum=0,bad=count;

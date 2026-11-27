@@ -1,5 +1,10 @@
 //+------------------------------------------------------------------+
-//| AGPoolEvaluate - AlphaGen_Pool.cl                                |
+//|                                                 AlphaGen_Pool.cl |
+//|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/25939 |
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//| AGPoolEvaluate - Evaluate one formula across the market          |
 //+------------------------------------------------------------------+
 inline void AGPoolEvaluate(__global const float*market,
                            __global const float *tokens,const int length,
@@ -440,15 +445,27 @@ inline void AGPoolRidge(__global const float*z,__global const float*target,
 //| then records [length,id limbs(4),tokens[max],                    |
 //| affine statistics[7],weight].                                    |
 //+------------------------------------------------------------------+
-inline int AGPoolStride(__global const float*cfg){return(13+(int)cfg[AG_CFG_MAX_TOKENS]);}
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| AGPoolStride - Return the formula record width                   |
 //+------------------------------------------------------------------+
-inline int AGPoolBankSize(__global const float*cfg){return(10+((int)cfg[AG_CFG_POOL]+1)*AGPoolStride(cfg));}
+inline int AGPoolStride(__global const float*cfg)
+  {
+   return(13+(int)cfg[AG_CFG_MAX_TOKENS]);
+  }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| AGPoolBankSize - Return the size of a pool bank                  |
 //+------------------------------------------------------------------+
-inline int AGPoolRingSize(__global const float*cfg){return(11+(int)cfg[AG_CFG_NORM_WINDOW]+(int)cfg[AG_CFG_CONTEXT]);}
+inline int AGPoolBankSize(__global const float*cfg)
+  {
+   return(10+((int)cfg[AG_CFG_POOL]+1)*AGPoolStride(cfg));
+  }
+//+------------------------------------------------------------------+
+//| AGPoolRingSize - Return the size of a factor ring                |
+//+------------------------------------------------------------------+
+inline int AGPoolRingSize(__global const float*cfg)
+  {
+   return(11+(int)cfg[AG_CFG_NORM_WINDOW]+(int)cfg[AG_CFG_CONTEXT]);
+  }
 //+------------------------------------------------------------------+
 //| AGPoolIncrement - Implement AGPoolIncrement                      |
 //+------------------------------------------------------------------+
@@ -470,18 +487,30 @@ inline int AGPoolIncrement(__global float*id)
 //+------------------------------------------------------------------+
 //| AGPoolIDGreater - Implement AGPoolIDGreater                      |
 //+------------------------------------------------------------------+
-inline int AGPoolIDGreater(__global const float*a,__global const float*b)
-  {for(int i=3;i>=0;i--){if(a[i]!=b[i])return(a[i]>b[i]);}return(0);}
+inline int AGPoolIDGreater(__global const float *a,__global const float *b)
+  {
+   for(int i=3; i>=0; i--)
+     {
+      if(a[i]!=b[i])
+         return(a[i]>b[i]);
+     }
+   return(0);
+  }
 //+------------------------------------------------------------------+
 //| AGPoolCopyValues - Implement AGPoolCopyValues                    |
 //+------------------------------------------------------------------+
-inline void AGPoolCopyValues(__global const float*a,__global float*b,int n)
-  {for(int i=0;i<n;i++)b[i]=a[i];}
+inline void AGPoolCopyValues(__global const float *a,__global float *b,int n)
+  {
+   for(int i=0; i<n; i++)
+      b[i]=a[i];
+  }
 //+------------------------------------------------------------------+
 //| AGPoolAffine - Implement AGPoolAffine                            |
 //+------------------------------------------------------------------+
-inline float AGPoolAffine(float x,__global const float*s)
-  {return((x/s[0]-s[1])/s[2]-s[3])/s[4];}
+inline float AGPoolAffine(float x,__global const float *s)
+  {
+   return((x / s[0]-s[1]) / s[2]-s[3]) / s[4];
+  }
 
 //--- scratch layout: stack W*T, validity max(W*T,3*(T+1)), result W,
 //--- status W, target W, target-valid W, standardized-target N, target-stat 7,
@@ -618,9 +647,11 @@ inline int AGPoolFitCached(__global const float*market,__global const float*cfg,
 //+------------------------------------------------------------------+
 //| AGPoolFit - Implement AGPoolFit                                  |
 //+------------------------------------------------------------------+
-inline int AGPoolFit(__global const float*market,__global const float*cfg,
-                     __global float *bank,__global float*work)
-  {return(AGPoolFitCached(market,cfg,bank,work,work,0,work));}
+inline int AGPoolFit(__global const float *market,__global const float *cfg,
+                     __global float *bank,__global float *work)
+  {
+   return(AGPoolFitCached(market,cfg,bank,work,work,0,work));
+  }
 //+------------------------------------------------------------------+
 //| AGPoolCandidateCached - Implement AGPoolCandidateCached          |
 //+------------------------------------------------------------------+
@@ -1639,8 +1670,13 @@ __kernel void AGPoolTransaction(__global const float*market,__global const float
 
       if(lane==0)
         {
-         control[6]=prepared[0];control[7]=banks[size];control[0]=AG_SKIP;
-         control[2]=0.0f;control[3]=0.0f;control[4]=0.0f;pinned[9]=0.0f;
+         control[6]=prepared[0];
+         control[7]=banks[size];
+         control[0]=AG_SKIP;
+         control[2]=0.0f;
+         control[3]=0.0f;
+         control[4]=0.0f;
+         pinned[9]=0.0f;
         }
       barrier(CLK_GLOBAL_MEM_FENCE);
 
@@ -1654,14 +1690,17 @@ __kernel void AGPoolTransaction(__global const float*market,__global const float
         {
          AGPoolCopyGroup(prepared,scratch,size);
 
-         if(lane==0)control[0]=refresh==AG_INVALID?AG_TECHNICAL:refresh;
+         if(lane==0)
+            control[0]=refresh==AG_INVALID?AG_TECHNICAL:refresh;
          return;
         }
       AGPoolCopyGroup(scratch,pinned,size);
       AGPoolCopyGroup(scratch,prepared,size);
 
-      for(int i=lane;i<rs;i+=get_local_size(0))rings[rs+i]=0.0f;
-      if(lane==0)control[0]=AG_OK;
+      for(int i=lane;i<rs;i+=get_local_size(0))
+         rings[rs+i]=0.0f;
+      if(lane==0)
+         control[0]=AG_OK;
       return;
      }
    __global float *prepared=banks;
@@ -1753,7 +1792,7 @@ __kernel void AGPoolTransaction(__global const float*market,__global const float
 //| AGPoolSignal - Implement AGPoolSignal                            |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
-//| AGPoolEvaluateHistory - One formula per group, bars per lane       |
+//| AGPoolEvaluateHistory - One formula per group, bars per lane     |
 //+------------------------------------------------------------------+
 __kernel void AGPoolEvaluateHistory(__global const float*market,__global const float*cfg,
                                     __global const float*banks,__global float*evaluated,
@@ -1783,6 +1822,9 @@ __kernel void AGPoolEvaluateHistory(__global const float*market,__global const f
      }
   }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 __kernel void AGPoolSignal(__global const float*market,__global const float*cfg,
                            __global float *banks,__global float*work,
                            __global float *rings,__global float*control,
@@ -1808,15 +1850,17 @@ __kernel void AGPoolSignal(__global const float*market,__global const float*cfg,
    __global float *ring=rings+(mode==2?rs:0);
    if(lane==0)
      {
-      control[6]=banks[0];control[7]=banks[size];
-      control[0]=AG_SKIP;control[4]=0.0f;
+      control[6]=banks[0];
+      control[7]=banks[size];
+      control[0]=AG_SKIP;
+      control[4]=0.0f;
      }
    barrier(CLK_GLOBAL_MEM_FENCE);
 
    if(bank[0]<1.0f||bank[9]!=1.0f)
       return;
 
-   //--- validate all formula rows before publishing any ring changes.
+//--- validate all formula rows before publishing any ring changes.
    for(int j=0;j<(int)bank[0];j++)
      {
       __global const float*row_status=evaluated+(size_t)j*w*2+w;
@@ -1837,7 +1881,7 @@ __kernel void AGPoolSignal(__global const float*market,__global const float*cfg,
         }
      }
 
-   //--- rows remain chronological; all lanes cooperate within each row.
+//--- rows remain chronological; all lanes cooperate within each row.
    for(int row=start;row<w;row++)
      {
       if(lane==0)
@@ -1961,6 +2005,10 @@ __kernel void AGPoolSignal(__global const float*market,__global const float*cfg,
 //+------------------------------------------------------------------+
 //| AGPoolCopy - Implement AGPoolCopy                                |
 //+------------------------------------------------------------------+
-__kernel void AGPoolCopy(__global const float*source,__global float*destination,const int count)
-  {int i=get_global_id(0);if(i<count)destination[i]=source[i];}
+__kernel void AGPoolCopy(__global const float *source,__global float *destination,const int count)
+  {
+   int i=get_global_id(0);
+   if(i<count)
+      destination[i]=source[i];
+  }
 //+------------------------------------------------------------------+

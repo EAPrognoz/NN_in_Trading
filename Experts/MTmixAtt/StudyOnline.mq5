@@ -139,9 +139,9 @@ int OnInit()
       for(uint i=0; i<cCritic.Size(); i++)
          if(!cCritic[i].Create(critic))
            {
-            DeleteObj(encoder);
-            DeleteObj(actor);
-            DeleteObj(critic);
+            DeleteObj(encoder)
+            DeleteObj(actor)
+            DeleteObj(critic)
 
             return(INIT_FAILED);
            }
@@ -150,17 +150,17 @@ int OnInit()
          cCritic[i].SetOpenCL(cCritic[0].GetOpenCL());
          if(!cCritic[i].WeightsUpdate(GetPointer(cCritic[0]),1))
            {
-            DeleteObj(encoder);
-            DeleteObj(actor);
-            DeleteObj(critic);
+            DeleteObj(encoder)
+            DeleteObj(actor)
+            DeleteObj(critic)
 
             return(INIT_FAILED);
            }
         }
      }
-   DeleteObj(encoder);
-   DeleteObj(actor);
-   DeleteObj(critic);
+   DeleteObj(encoder)
+   DeleteObj(actor)
+   DeleteObj(critic)
 //---
    for(int i=0; i<2; i++)
      {

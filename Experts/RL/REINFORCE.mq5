@@ -89,7 +89,8 @@ int OnInit()
    if(!MACD.Create(Symb.Name(),TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice))
       return(INIT_FAILED);
 //---
-   float temp1,temp2;
+   float temp1;
+   float temp2;
    if(!StudyNet.Load(FileName+".nnw",dError,temp1,temp2,dtStudied,false))
       return(INIT_FAILED);
 //---
@@ -140,7 +141,7 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train                                                            |
+//| Train - Train the neural networks                                |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -175,7 +176,7 @@ void Train(void)
    for(int iter=0; (iter<Iterations&&!IsStopped()); iter ++)
      {
       int error_code;
-      int shift=(int)(fmin(fabs(Math::MathRandomNormal(0,1,error_code)),1) * (total)+SessionSize);
+      int shift=(int)(fmin(fabs(MathRandomNormal(0,1,error_code)),1) * (total)+SessionSize);
       States.Clear();
       for(int batch=0; batch<SessionSize; batch++)
         {
@@ -214,7 +215,7 @@ void Train(void)
            }
          if(State.Total()<(int)HistoryBars * 12)
             continue;
-         if(!StudyNet.feedForward(GetPointer(State),12,true))
+         if(!StudyNet.feedForward(GetPointer(State),12,true,(CBufferFloat*)NULL))
            {
             ExpertRemove();
             return;
@@ -269,7 +270,7 @@ void Train(void)
       for(int batch=0; batch<SessionSize; batch++)
         {
          State=States.At(batch);
-         if(!StudyNet.feedForward(State))
+         if(!StudyNet.feedForward(State,1,true,(CBufferFloat*)NULL))
            {
             ExpertRemove();
             return;
@@ -279,7 +280,7 @@ void Train(void)
             ExpertRemove();
             return;
            }
-         if(!StudyNet.backProp(TempData))
+         if(!StudyNet.backProp(TempData,(CBufferFloat*)NULL))
            {
             ExpertRemove();
             return;
@@ -305,7 +306,7 @@ int GetAction(CBufferFloat* probability)
    prob=prob.CumSum();
    prob=prob / prob.Max();
    int   err_code;
-   float random=(float)Math::MathRandomNormal(0.5,0.5,err_code);
+   float random=(float)MathRandomNormal(0.5,0.5,err_code);
    if(random>=1)
       return((int)prob.Size()-1);
 

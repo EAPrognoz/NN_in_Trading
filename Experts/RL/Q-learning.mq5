@@ -91,7 +91,8 @@ int OnInit()
    if(!MACD.Create(Symb.Name(),TimeFrame,FastPeriod,SlowPeriod,SignalPeriod,MACDPrice))
       return(INIT_FAILED);
 //---
-   float temp1,temp2;
+   float temp1;
+   float temp2;
    if(!StudyNet.Load(FileName+".nnw",dError,temp1,temp2,dtStudied,false)||
       !TargetNet.Load(FileName+".nnw",dError,temp1,temp2,dtStudied,false))
       return(INIT_FAILED);
@@ -138,7 +139,7 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train                                                            |
+//| Train - Train the neural networks                                |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -267,7 +268,8 @@ void Train(void)
       if(!StudyNet.Save(FileName+".nnw",StudyNet.getRecentAverageError(),0,0,Rates[i].time,false))
          return;
 
-      float temp1,temp2;
+      float temp1;
+      float temp2;
       if(!TargetNet.Load(FileName+".nnw",dError,temp1,temp2,dtStudied,false))
          return;
 

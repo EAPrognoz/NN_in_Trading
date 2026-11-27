@@ -63,8 +63,9 @@ void OnTimer()
      }
   }
 //+------------------------------------------------------------------+
-//| Record the user stop request between atomic operations.          |
+//| OnChartEvent - Handle the chart event                            |
 //+------------------------------------------------------------------+
+//--- Record the user stop request between atomic operations.
 void OnChartEvent(const int id,const long &lparam,const double &dparam,const string &sparam)
   {
    if(id==CHARTEVENT_OBJECT_CLICK&&sparam==StopButton)

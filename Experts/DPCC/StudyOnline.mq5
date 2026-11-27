@@ -114,8 +114,9 @@ ulong                         EXTLatencySamples=0;
 ulong                         EXTDecisionLatencyUs=0;
 ulong                         EXTDecisionLatencyMaxUs=0;
 //+------------------------------------------------------------------+
-//| Stop before another model transaction or execution request       |
+//| DPCCOnlineStop - Stop online                                     |
 //+------------------------------------------------------------------+
+//--- Stop before another model transaction or execution request
 void DPCCOnlineStop(const string phase,const string reason)
   {
    EXTStopped=true;
@@ -125,8 +126,9 @@ void DPCCOnlineStop(const string phase,const string reason)
       TesterStop();
   }
 //+------------------------------------------------------------------+
-//| Configure the direct AC-SRM online-learning inputs               |
+//| DPCCOnlineConfigureLearning - Configure online learning          |
 //+------------------------------------------------------------------+
+//--- Configure the direct AC-SRM online-learning inputs
 bool DPCCOnlineConfigureLearning(string &reason)
   {
    const SDPCCConfig financial=EXTRestored.runtime.financial;
@@ -158,8 +160,9 @@ bool DPCCOnlineConfigureLearning(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Allocate reused input and sampling buffers on the Market context |
+//| DPCCOnlinePrepareBuffers - Prepare online buffers                |
 //+------------------------------------------------------------------+
+//--- Allocate reused input and sampling buffers on the Market context
 bool DPCCOnlinePrepareBuffers(string &reason)
   {
    CNet                            *market=EXTMarket.ReadyMarketNetwork();
@@ -202,8 +205,9 @@ bool DPCCOnlinePrepareBuffers(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Save or restore only the frozen Market's three policy streams    |
+//| DPCCOnlineMarketState - Check online market state                |
 //+------------------------------------------------------------------+
+//--- Save or restore only the frozen Market's three policy streams
 bool DPCCOnlineMarketState(SLayerReadState &state,const bool capture,const ulong decision,
                            const ulong generation,string &reason)
   {
@@ -257,8 +261,9 @@ bool DPCCOnlineMarketState(SLayerReadState &state,const bool capture,const ulong
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Keep Market and targets frozen while enabling the online roles   |
+//| DPCCOnlineLearningPermissions - Check learning permissions       |
 //+------------------------------------------------------------------+
+//--- Keep Market and targets frozen while enabling the online roles
 bool DPCCOnlineLearningPermissions(string &reason)
   {
    CNet      *market=EXTMarket.ReadyMarketNetwork();
@@ -288,8 +293,9 @@ bool DPCCOnlineLearningPermissions(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Restore the same Market and native Action6 bundle used by Study  |
+//| OnInit - Initialize the program                                  |
 //+------------------------------------------------------------------+
+//--- Restore the same Market and native Action6 bundle used by Study
 int OnInit(void)
   {
    for(int i=0; i<4; i++)
@@ -384,8 +390,9 @@ int OnInit(void)
    return(INIT_SUCCEEDED);
   }
 //+------------------------------------------------------------------+
-//| Encode the next closed bar and build one pre-action account mark |
+//| DPCCOnlineObserve - Observe online                               |
 //+------------------------------------------------------------------+
+//--- Encode the next closed bar and build one pre-action account mark
 bool DPCCOnlineObserve(const long decision_open,CBufferFloat *&context,float &account[],
                        string &reason)
   {
@@ -438,8 +445,9 @@ bool DPCCOnlineObserve(const long decision_open,CBufferFloat *&context,float &ac
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Bind either Actor to this causal observation and its own input   |
+//| DPCCOnlineActorForward - Check online actor forward              |
 //+------------------------------------------------------------------+
+//--- Bind either Actor to this causal observation and its own input
 bool DPCCOnlineActorForward(CNet &network,CBufferFloat &account_buffer,CBufferFloat *context,
                             const long decision_open,const float &account[],
                             float &action[],SDPCCDecisionMeta &meta,bool &has_plan,string &reason)
@@ -490,8 +498,9 @@ bool DPCCOnlineActorForward(CNet &network,CBufferFloat &account_buffer,CBufferFl
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Release Market generation without consuming the Actor unroll     |
+//| DPCCOnlineReleaseMarket - Release online market                  |
 //+------------------------------------------------------------------+
+//--- Release Market generation without consuming the Actor unroll
 bool DPCCOnlineReleaseMarket(string &reason)
   {
    if(EXTPendingMarketGeneration==0)
@@ -508,8 +517,9 @@ bool DPCCOnlineReleaseMarket(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Close one retained Actor frame after update, skip, or shutdown   |
+//| DPCCOnlineCancelActor - Check online cancel actor                |
 //+------------------------------------------------------------------+
+//--- Close one retained Actor frame after update, skip, or shutdown
 bool DPCCOnlineCancelActor(CNet *network,string &reason)
   {
    CNeuronDPCCOCL *actor=CheckPointer(network)==POINTER_INVALID ? NULL :
@@ -524,8 +534,9 @@ bool DPCCOnlineCancelActor(CNet *network,string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Sample head 4 using the donor's open-interval random variate     |
+//| DPCCOnlineSample - Sample online                                 |
 //+------------------------------------------------------------------+
+//--- Sample head 4 using the donor's open-interval random variate
 bool DPCCOnlineSample(CNet &critic,float &value,string &reason)
   {
    CNeuronACSRM *head=dynamic_cast<CNeuronACSRM*>(critic.Layer(4));
@@ -549,8 +560,9 @@ bool DPCCOnlineSample(CNet &critic,float &value,string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Bootstrap the next causal state with the frozen target models    |
+//| DPCCOnlineBootstrap - Check online bootstrap                     |
 //+------------------------------------------------------------------+
+//--- Bootstrap the next causal state with the frozen target models
 bool DPCCOnlineBootstrap(CBufferFloat *context,const long decision_open,
                          const float &account[],float &z1,float &z2,string &reason)
   {
@@ -598,8 +610,9 @@ bool DPCCOnlineBootstrap(CBufferFloat *context,const long decision_open,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Refresh Actor and one crossed Critic on the donor target cadence |
+//| DPCCOnlineRefreshTargets - Check online refresh targets          |
 //+------------------------------------------------------------------+
+//--- Refresh Actor and one crossed Critic on the donor target cadence
 bool DPCCOnlineRefreshTargets(string &reason)
   {
    if(EXTTransitions==0||EXTTransitions % EXTUpdateTargets!=0)
@@ -629,8 +642,9 @@ bool DPCCOnlineRefreshTargets(string &reason)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Complete exactly one pending transition before a new action      |
+//| DPCCOnlineUpdatePending - Update online pending                  |
 //+------------------------------------------------------------------+
+//--- Complete exactly one pending transition before a new action
 bool DPCCOnlineUpdatePending(CBufferFloat *context,const long decision_open,
                              const float &next_account[],const double next_equity,
                              string &reason)
@@ -709,8 +723,9 @@ bool DPCCOnlineUpdatePending(CBufferFloat *context,const long decision_open,
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Execute one causal operation and retain its Actor training frame |
+//| OnTick - Process the latest market tick                          |
 //+------------------------------------------------------------------+
+//--- Execute one causal operation and retain its Actor training frame
 void OnTick(void)
   {
    if(!EXTReady||EXTStopped||IsStopped())
@@ -814,8 +829,9 @@ void OnTick(void)
      }
   }
 //+------------------------------------------------------------------+
-//| Mark a normal completed Tester history pass for final export     |
+//| OnTester - Return the tester result                              |
 //+------------------------------------------------------------------+
+//--- Mark a normal completed Tester history pass for final export
 double OnTester(void)
   {
    if(EXTReady&&!EXTStopped&&!EXTFailed&&!EXTMutationFailed&&EXTTransitions>0)
@@ -824,8 +840,9 @@ double OnTester(void)
    return(0.0);
   }
 //+------------------------------------------------------------------+
-//| Release frames, save the last complete models once, then destroy |
+//| OnDeinit - Release program resources                             |
 //+------------------------------------------------------------------+
+//--- Release frames, save the last complete models once, then destroy
 void OnDeinit(const int reason)
   {
    bool       cleanup_ok=true;

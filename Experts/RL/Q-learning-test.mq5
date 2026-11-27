@@ -97,7 +97,8 @@ int OnInit()
       !ATR.BufferResize(HistoryBars+1)||!MACD.BufferResize(HistoryBars+1))
       return(INIT_FAILED);
 //---
-   float temp1,temp2;
+   float temp1;
+   float temp2;
    if(!StudyNet.Load(FileName+".nnw",dError,temp1,temp2,dtStudied,true))
       return(INIT_FAILED);
 //---
@@ -164,7 +165,7 @@ void OnTick()
    if(State1.Total()<(int)(HistoryBars * 12))
       return;
 
-   if(!StudyNet.feedForward(GetPointer(State1),12,true))
+   if(!StudyNet.feedForward(GetPointer(State1),12,true,(CBufferFloat*)NULL))
       return;
 
    StudyNet.getResults(TempData);
@@ -172,7 +173,7 @@ void OnTick()
      return;
 
    lastBar=Rates[0].time;
-   int   action=TempData.Maximum(0,Actions);
+   int   action=((CArrayFloat*)TempData).Maximum(0,Actions);
    float reward=TempData[action];
    delete TempData;
 //---

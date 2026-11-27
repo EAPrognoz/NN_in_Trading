@@ -14,7 +14,7 @@
 //---
 #define defFQF             0x7792   ///<Neuron Net \details Identified class #CFQF
 //+------------------------------------------------------------------+
-//| CFQF                                                             |
+//| CFQF - Approximate a value distribution with learned fractions   |
 //+------------------------------------------------------------------+
 class CFQF : protected CNet
   {
@@ -27,11 +27,14 @@ protected:
 public:
    /** Constructor */
                      CFQF(void);
+//+------------------------------------------------------------------+
+//| CFQF - Initialize the object state                               |
+//+------------------------------------------------------------------+
                      CFQF(CArrayObj *Description)  { Create(Description); }
    bool              Create(CArrayObj *Description);
    /** Destructor */~CFQF(void);
 //+------------------------------------------------------------------+
-//| feedForward                                                      |
+//| feedForward - Compute the layer output                           |
 //+------------------------------------------------------------------+
    bool              feedForward(CArrayFloat *inputVals,int window=1,bool tem=false,CBufferFloat *SecondInput=NULL) ///< Feed Forward method.@param[in] prevLayer Pointer to previos layer. @param[in] window Window of input data. @param[in] tem Use Time Embedding.
      {
@@ -39,7 +42,7 @@ public:
      }
    bool              backProp(CBufferFloat *targetVals,float discount=0.9f,CArrayFloat *nextState=NULL,int window=1,bool tem=true,CBufferFloat *SecondInput=NULL,CBufferFloat *SecondGradient=NULL);               ///< Back propagation method. @param[in] targetVals Target values
 //+------------------------------------------------------------------+
-//| backPropGradient                                                 |
+//| backPropGradient - Backpropagate the layer gradients             |
 //+------------------------------------------------------------------+
    bool              backPropGradient(CBufferFloat *SecondInput=NULL,CBufferFloat *SecondGradient=NULL,int LastLayer=-1)
      {
@@ -50,14 +53,14 @@ public:
    int               getAction(void);                ///< Method to get results of feed forward process.@param[out] resultVals Array of result values
    int               getSample(void);
 //+------------------------------------------------------------------+
-//| getRecentAverageError                                            |
+//| getRecentAverageError - Read the recent average error            |
 //+------------------------------------------------------------------+
    float             getRecentAverageError()
      {
       return(recentAverageError);
      } ///< Method to check quality of study. @return Average error
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
    bool              Save(string file_name,datetime time,bool common=true)
      {
@@ -70,21 +73,21 @@ public:
    virtual bool      Load(const int file_handle);
    //---
 //+------------------------------------------------------------------+
-//| Type                                                             |
+//| Type - Return the object type identifier                         |
 //+------------------------------------------------------------------+
    virtual int       Type(void)   const
      {
       return(defFQF);
      }///< Identificator of class.@return Type of class
 //+------------------------------------------------------------------+
-//| TrainMode                                                        |
+//| TrainMode - Set the training mode                                |
 //+------------------------------------------------------------------+
    virtual bool      TrainMode(bool flag)
      {
       return(CNet::TrainMode(flag));
      } ///< Set Training Mode Flag
 //+------------------------------------------------------------------+
-//| GetLayerOutput                                                   |
+//| GetLayerOutput - Read the layer output                           |
 //+------------------------------------------------------------------+
    virtual bool      GetLayerOutput(uint layer,CBufferFloat *&result) ///< Retutn Output data of layer. @param[in] layer Number of layer @param[out] return Buffer with data
      {
@@ -92,7 +95,7 @@ public:
      }
    //---
 //+------------------------------------------------------------------+
-//| SetUpdateTarget                                                  |
+//| SetUpdateTarget - Set update target                              |
 //+------------------------------------------------------------------+
    virtual void      SetUpdateTarget(uint batch)
      {
@@ -100,7 +103,7 @@ public:
      }
    virtual bool      UpdateTarget(string file_name);
 //+------------------------------------------------------------------+
-//| WeightsUpdate                                                    |
+//| WeightsUpdate - Copy weights from the source layer               |
 //+------------------------------------------------------------------+
    virtual bool      WeightsUpdate(CFQF *net,float tau)
      {
@@ -109,7 +112,7 @@ public:
 //---
    virtual void      SetOpenCL(COpenCLMy *obj);
 //+------------------------------------------------------------------+
-//| GetOpenCL                                                        |
+//| GetOpenCL - Return the OpenCL context                            |
 //+------------------------------------------------------------------+
    virtual COpenCLMy*        GetOpenCL(void)
      {
@@ -117,21 +120,21 @@ public:
      }
 //--- soft Actor-Critic
 //+------------------------------------------------------------------+
-//| GetLogProbs                                                      |
+//| GetLogProbs - Read the log probs                                 |
 //+------------------------------------------------------------------+
    virtual bool      GetLogProbs(vector<float>&log_probs)
      {
       return(CNet::GetLogProbs(log_probs));
      }
 //+------------------------------------------------------------------+
-//| AlphasGradient                                                   |
+//| AlphasGradient - Return the alphas gradient                      |
 //+------------------------------------------------------------------+
    virtual bool      AlphasGradient(CNet *PolicyNet)
      {
       return(CNet::AlphasGradient(PolicyNet));
      }
 //+------------------------------------------------------------------+
-//| CalcLogProbs                                                     |
+//| CalcLogProbs - Calculate log probs                               |
 //+------------------------------------------------------------------+
    virtual bool      CalcLogProbs(CBufferFloat *buffer)
      {
@@ -139,7 +142,7 @@ public:
      }
    //---
 //+------------------------------------------------------------------+
-//| Clear                                                            |
+//| Clear - Reset stored data                                        |
 //+------------------------------------------------------------------+
    virtual bool      Clear(void)
      {
@@ -147,7 +150,7 @@ public:
      }
   };
 //+------------------------------------------------------------------+
-//| CFQF                                                             |
+//| CFQF - Approximate a value distribution with learned fractions   |
 //+------------------------------------------------------------------+
 CFQF::CFQF(void)  :  iUpdateTarget(1000)
   {
@@ -156,13 +159,13 @@ CFQF::CFQF(void)  :  iUpdateTarget(1000)
    cTargetNet.SetOpenCL(opencl);
   }
 //+------------------------------------------------------------------+
-//| ~CFQF                                                            |
+//| ~CFQF - Release owned resources                                  |
 //+------------------------------------------------------------------+
 CFQF::~CFQF()
   {
   }
 //+------------------------------------------------------------------+
-//| Create                                                           |
+//| Create - Check create                                            |
 //+------------------------------------------------------------------+
 bool CFQF::Create(CArrayObj *Description)
   {
@@ -174,7 +177,7 @@ bool CFQF::Create(CArrayObj *Description)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| backProp                                                         |
+//| backProp - Check back prop                                       |
 //+------------------------------------------------------------------+
 bool CFQF::backProp(CBufferFloat *targetVals,float discount=0.9f,CArrayFloat *nextState=NULL,int window=1,bool tem=true,CBufferFloat *SecondInput=NULL,CBufferFloat *SecondGradient=NULL)
   {
@@ -217,21 +220,21 @@ bool CFQF::backProp(CBufferFloat *targetVals,float discount=0.9f,CArrayFloat *ne
    return(CNet::backProp(targetVals,SecondInput,SecondGradient));
   }
 //+------------------------------------------------------------------+
-//| getResults                                                       |
+//| getResults - Get results                                         |
 //+------------------------------------------------------------------+
 void CFQF::getResults(CBufferFloat *&resultVals)
   {
    CNet::getResults(resultVals);
   }
 //+------------------------------------------------------------------+
-//| getResults                                                       |
+//| getResults - Get results                                         |
 //+------------------------------------------------------------------+
 void CFQF::getResults(vector<float>&resultVals)
   {
    CNet::getResults(resultVals);
   }
 //+------------------------------------------------------------------+
-//| getAction                                                        |
+//| getAction - Get action                                           |
 //+------------------------------------------------------------------+
 int CFQF::getAction(void)
   {
@@ -241,7 +244,7 @@ int CFQF::getAction(void)
    return((int)temp.ArgMax());
   }
 //+------------------------------------------------------------------+
-//| getSample                                                        |
+//| getSample - Get sample                                           |
 //+------------------------------------------------------------------+
 int CFQF::getSample(void)
   {
@@ -275,14 +278,16 @@ int CFQF::getSample(void)
    return(-1);
   }
 //+------------------------------------------------------------------+
-//| UpdateTarget                                                     |
+//| UpdateTarget - Update target                                     |
 //+------------------------------------------------------------------+
 bool CFQF::UpdateTarget(string file_name)
   {
    if(!Save(file_name,0,false))
       return(false);
 
-   float error,undefine,forecast;
+   float error;
+   float undefine;
+   float forecast;
    datetime time;
    if(!cTargetNet.Load(file_name,error,undefine,forecast,time,false))
       return(false);
@@ -295,19 +300,20 @@ bool CFQF::UpdateTarget(string file_name)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Save                                                             |
+//| Save - Check save                                                |
 //+------------------------------------------------------------------+
 bool CFQF::Save(const int file_handle)
   {
    if(!CNet::Save(file_handle))
-      return(false);
-   if(FileWriteInteger(file_handle,(int)iUpdateTarget)<INT_VALUE)
-      return(false);
+     {
+      ReturnFalseEx("CNet::Save failed")
+     }
+   dFileWriteUInt(file_handle,iUpdateTarget)
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CFQF::Load(const int file_handle)
   {
@@ -328,11 +334,12 @@ bool CFQF::Load(const int file_handle)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Load                                                             |
+//| Load - Check load                                                |
 //+------------------------------------------------------------------+
 bool CFQF::Load(string file_name,datetime &time,bool common=true)
   {
-   float undefine,forecast;
+   float undefine;
+   float forecast;
    if(!CNet::Load(file_name,recentAverageError,undefine,forecast,time,common)||
       !cTargetNet.Load(file_name,recentAverageError,undefine,forecast,time,common))
       return(false);
@@ -344,7 +351,7 @@ bool CFQF::Load(string file_name,datetime &time,bool common=true)
    return(true);
   }
 //+------------------------------------------------------------------+
-//| SetOpenCL                                                        |
+//| SetOpenCL - Set open CL                                          |
 //+------------------------------------------------------------------+
 void CFQF::SetOpenCL(COpenCLMy *obj)
   {

@@ -539,7 +539,9 @@ bool CreateBuffers(const int start_bar,CBufferFloat* state,CBufferFloat *time,CB
 
    if(time.GetIndex()>=0)
       if(!time.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 //---
    return(true);
   }
@@ -628,7 +630,7 @@ const vector<float>SampleAccount(CBufferFloat *state,datetime time)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-//| | Creates and manages object lifecycle for CheckAction.          |
+//| CheckAction - Simulate the account response to an action         |
 //+------------------------------------------------------------------+
 double CheckAction(CBufferFloat *action,double equity,uint start_position)
   {

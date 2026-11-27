@@ -122,7 +122,9 @@ bool CNeuronRAGMemory::Configure(CLayerDescription&description)
       description.count!=description.window_out+2||
       description.layers>RAG_TOPK_MAX||description.units[0]>RAG_FLOAT_INDEX_LIMIT||
       description.units[0]>=(uint)INT_MAX||description.heads[0]>=(uint)INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iScenarioEmbedding=description.window;
    iActionDimension=description.window_out;
@@ -168,11 +170,15 @@ bool CNeuronRAGMemory::NormalizeActionDescriptor(const float&source[],const doub
       !MathIsValidNumber(pointCost)||!MathIsValidNumber(point)||
       !MathIsValidNumber(volatility)||!MathIsValidNumber(volatilityRange)||
       !MathIsValidNumber(maximumTakeProfit)||!MathIsValidNumber(maximumStopLoss))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint element=0;element<iActionDimension;element++)
       if(!MathIsValidNumber(source[element]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    const double scale=MathMax(volatility*volatilityRange,point);
    const double buySL=MathMax(double(source[2]),0.0)*maximumStopLoss*point;
@@ -235,7 +241,9 @@ bool CNeuronRAGMemory::InitializeAction(SRAGActionCentroid&action,const uint sce
    ClearTerminal(action.mean_terminal);
 
    if(ArrayResize(action.centroid,(int)iActionDimension)!=(int)iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayInitialize(action.centroid,0.0f);
 
@@ -251,16 +259,22 @@ bool CNeuronRAGMemory::InitializeScenario(SRAGScenarioCentroid&scenario,const ui
    scenario.hit_count=0;
 
    if(ArrayResize(scenario.centroid,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayInitialize(scenario.centroid,0.0f);
 
    if(ArrayResize(scenario.actions,(int)iActionCapacity)!=(int)iActionCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint action=0;action<iActionCapacity;action++)
       if(!InitializeAction(scenario.actions[action],scenarioId))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -272,7 +286,9 @@ bool CNeuronRAGMemory::CopyAction(const SRAGActionCentroid&source,
   {
    if(!ValidAction(source.centroid)||
       ArrayResize(destination.centroid,(int)iActionDimension)!=(int)iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    destination.used=source.used;
    destination.scenarioId=source.scenarioId;
@@ -293,7 +309,9 @@ bool CNeuronRAGMemory::CopyScenario(const SRAGScenarioCentroid&source,
       ArraySize(source.actions)!=(int)iActionCapacity||
       ArrayResize(destination.centroid,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding||
       ArrayResize(destination.actions,(int)iActionCapacity)!=(int)iActionCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    destination.used=source.used;
    destination.scenarioId=source.scenarioId;
@@ -302,7 +320,9 @@ bool CNeuronRAGMemory::CopyScenario(const SRAGScenarioCentroid&source,
 
    for(uint action=0;action<iActionCapacity;action++)
       if(!CopyAction(source.actions[action],destination.actions[action]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -318,7 +338,9 @@ bool CNeuronRAGMemory::CopyScenarioFlexible(const SRAGScenarioCentroid&source,
       actionTotal<(int)iActionCapacity||
       ArrayResize(destination.centroid,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding||
       ArrayResize(destination.actions,actionTotal)!=actionTotal)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    destination.used=source.used;
    destination.scenarioId=source.scenarioId;
@@ -327,7 +349,9 @@ bool CNeuronRAGMemory::CopyScenarioFlexible(const SRAGScenarioCentroid&source,
 
    for(int action=0;action<actionTotal;action++)
       if(!CopyAction(source.actions[action],destination.actions[action]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -340,7 +364,9 @@ bool CNeuronRAGMemory::AppendActionCandidate(const uint scenarioId,
   {
    if(scenarioId>=iScenarioCapacity||!scenario.used||!incoming.used||
       ArraySize(incoming.centroid)!=(int)iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int current=ArraySize(scenario.actions);
 
@@ -348,7 +374,9 @@ bool CNeuronRAGMemory::AppendActionCandidate(const uint scenarioId,
       if(!scenario.actions[action].used)
         {
          if(!CopyAction(incoming,scenario.actions[action]))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          scenario.actions[action].scenarioId=scenarioId;
 
@@ -358,7 +386,9 @@ bool CNeuronRAGMemory::AppendActionCandidate(const uint scenarioId,
    if(current<0||current>=RAG_MAX_CANDIDATES||ArrayResize(scenario.actions,current+1)!=current+1||
       !InitializeAction(scenario.actions[current],scenarioId)||
       !CopyAction(incoming,scenario.actions[current]))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    scenario.actions[current].scenarioId=scenarioId;
 
@@ -372,11 +402,15 @@ bool CNeuronRAGMemory::CompactActionCandidates(SRAGScenarioCentroid&scenario)con
    SRAGActionCentroid compacted[];
 
    if(ArrayResize(compacted,(int)iActionCapacity)!=(int)iActionCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint action=0;action<iActionCapacity;action++)
       if(!InitializeAction(compacted[action],scenario.scenarioId))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    uint destination=0;
 
@@ -385,7 +419,9 @@ bool CNeuronRAGMemory::CompactActionCandidates(SRAGScenarioCentroid&scenario)con
         {
          if(destination>=iActionCapacity||
             !CopyAction(scenario.actions[action],compacted[destination]))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          compacted[destination].scenarioId=scenario.scenarioId;
          destination++;
@@ -402,20 +438,26 @@ bool CNeuronRAGMemory::NormalizeL2(const float&source[],float&destination[])cons
    const int total=ArraySize(source);
 
    if(total<=0||ArrayResize(destination,total)!=total)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    double squareSum=0.0;
 
    for(int i=0;i<total;i++)
      {
       if(!MathIsValidNumber(source[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       squareSum+=(double)source[i]*source[i];
      }
 
    if(!MathIsValidNumber(squareSum)||squareSum<=DBL_EPSILON)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const double length=MathSqrt(squareSum);
 
@@ -453,11 +495,15 @@ float CNeuronRAGMemory::SquaredDistance(const float&left[],const float&right[])c
 bool CNeuronRAGMemory::ValidAction(const float&action[])const
   {
    if(ArraySize(action)!=(int)iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint element=0;element<iActionDimension;element++)
       if(!MathIsValidNumber(action[element])||action[element]<0.0f||action[element]>1.0f)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -549,7 +595,9 @@ bool CNeuronRAGMemory::MergeActionCandidates(const uint scenarioId,
       !ValidTerminal(destination.mean_terminal)||!ValidTerminal(source.mean_terminal)||
       !MathIsValidNumber(destination.mean_reward)||!MathIsValidNumber(source.mean_reward)||
       destination.hit_count>ulong(-1)-source.hit_count)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong  destinationHits=destination.hit_count;
    const ulong  sourceHits=source.hit_count;
@@ -575,14 +623,18 @@ bool CNeuronRAGMemory::PairCountSafe(const uint candidateCount,int&pairCount)con
    pairCount=0;
 
    if(candidateCount<2||candidateCount>RAG_MAX_CANDIDATES)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong pairs=((candidateCount&1)==0?
                         (ulong)(candidateCount/2)*(ulong)(candidateCount-1):
                         (ulong)candidateCount*(ulong)((candidateCount-1)/2));
 
    if(pairs>(ulong)INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    pairCount=(int)pairs;
 
@@ -609,20 +661,28 @@ bool CNeuronRAGMemory::FindNearestPairsGPU(const float&candidateCentroids[],
       batchCount>UINT_MAX/64||batchCount>(uint)INT_MAX/4||
       !PairCountSafe(candidateCount,pairCount)||pairCount<=0||
       (ulong)candidateCount*(ulong)batchCount>ULONG_MAX/(ulong)dimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong rows=(ulong)candidateCount*(ulong)batchCount;
    const ulong values=rows*(ulong)dimension;
 
    if(values>(ulong)INT_MAX||rows>(ulong)INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(ArraySize(candidateCentroids)!=(int)values||ArraySize(candidateUsed)!=(int)rows)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(ArrayResize(destinations,(int)batchCount)!=(int)batchCount||
       ArrayResize(sources,(int)batchCount)!=(int)batchCount)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayInitialize(destinations,-1);
    ArrayInitialize(sources,-1);
@@ -635,7 +695,9 @@ bool CNeuronRAGMemory::FindNearestPairsGPU(const float&candidateCentroids[],
       !cNearestUsed.BufferInit((uint)rows,0.0f)||
       !cNearestUsed.AssignArray(candidateUsed)||!cNearestUsed.BufferCreate(OpenCL)||
       !cNearestResult.BufferInit(batchCount*4,0.0f)||!cNearestResult.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint offset[]={0};
    uint global[]={batchCount*RAG_TOPK_LOCAL_WIDTH};
@@ -653,20 +715,26 @@ bool CNeuronRAGMemory::FindNearestPairsGPU(const float&candidateCentroids[],
 
    if(ArrayResize(valuesOut,(int)(batchCount*4))!=(int)(batchCount*4)||
       cNearestResult.GetData(valuesOut)!=(int)(batchCount*4))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint batch=0;batch<batchCount;batch++)
      {
       const uint rowOffset=batch*4;
 
       if(valuesOut[rowOffset+3]<0.5f||!MathIsValidNumber(valuesOut[rowOffset]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       const int left=(int)(valuesOut[rowOffset+1]+0.5f);
       const int right=(int)(valuesOut[rowOffset+2]+0.5f);
 
       if(left<0||right<=left||right>=(int)candidateCount)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       destinations[batch]=left;
       sources[batch]=right;
@@ -690,7 +758,9 @@ bool CNeuronRAGMemory::FindNearestPairGPU(const float&candidateCentroids[],
    if(!FindNearestPairsGPU(candidateCentroids,candidateUsed,candidateCount,dimension,
                            batchCount,destinations,sources)||ArraySize(destinations)<1||
       ArraySize(sources)<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    destination=destinations[0];
    source=sources[0];
@@ -715,7 +785,9 @@ bool CNeuronRAGMemory::FindNearestActionPair(const uint scenarioId,
 
       if(candidates<2||ArrayResize(flat,candidates*(int)iActionDimension)!=candidates*(int)iActionDimension||
          ArrayResize(used,candidates)!=candidates)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(int action=0;action<candidates;action++)
         {
@@ -760,7 +832,9 @@ bool CNeuronRAGMemory::FindNearestActionPair(const uint scenarioId,
 bool CNeuronRAGMemory::ConsolidateActionCandidates(SRAGScenarioCentroid&candidateSnapshot[])
   {
    if(ArraySize(candidateSnapshot)!=(int)iScenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    while(true)
      {
@@ -775,7 +849,9 @@ bool CNeuronRAGMemory::ConsolidateActionCandidates(SRAGScenarioCentroid&candidat
          const int candidates=ArraySize(candidateSnapshot[scenario].actions);
 
          if(candidates<0||candidates>65536)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          for(int action=0;action<candidates;action++)
             if(candidateSnapshot[scenario].actions[action].used)
@@ -786,7 +862,9 @@ bool CNeuronRAGMemory::ConsolidateActionCandidates(SRAGScenarioCentroid&candidat
             const int active=ArraySize(activeScenarios);
 
             if(ArrayResize(activeScenarios,active+1)!=active+1)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             activeScenarios[active]=(int)scenario;
 
@@ -813,7 +891,9 @@ bool CNeuronRAGMemory::ConsolidateActionCandidates(SRAGScenarioCentroid&candidat
                                       candidateSnapshot[scenario].actions[destination],
                                       candidateSnapshot[scenario].actions[source])||
                !InitializeAction(candidateSnapshot[scenario].actions[source],(uint)scenario))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
          continue;
         }
@@ -822,14 +902,18 @@ bool CNeuronRAGMemory::ConsolidateActionCandidates(SRAGScenarioCentroid&candidat
       if(maxCandidates<2||rows>(ulong)INT_MAX||
          rows>ULONG_MAX/(ulong)iActionDimension||
          rows*(ulong)iActionDimension>(ulong)INT_MAX)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       const int values=(int)(rows*(ulong)iActionDimension);
       float     flat[];
       float     used[];
 
       if(ArrayResize(flat,values)!=values||ArrayResize(used,(int)rows)!=(int)rows)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       ArrayInitialize(flat,0.0f);
       ArrayInitialize(used,0.0f);
@@ -854,7 +938,9 @@ bool CNeuronRAGMemory::ConsolidateActionCandidates(SRAGScenarioCentroid&candidat
       if(!FindNearestPairsGPU(flat,used,(uint)maxCandidates,iActionDimension,batchCount,
                               destinations,sources)||
          ArraySize(destinations)!=(int)batchCount||ArraySize(sources)!=(int)batchCount)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(uint batch=0;batch<batchCount;batch++)
         {
@@ -870,14 +956,18 @@ bool CNeuronRAGMemory::ConsolidateActionCandidates(SRAGScenarioCentroid&candidat
                                    candidateSnapshot[scenario].actions[destination],
                                    candidateSnapshot[scenario].actions[source])||
             !InitializeAction(candidateSnapshot[scenario].actions[source],(uint)scenario))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
       if(!CompactActionCandidates(candidateSnapshot[scenario])||
          !RebindScenarioActions(candidateSnapshot[scenario],scenario))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -891,20 +981,26 @@ bool CNeuronRAGMemory::MergeScenarioCandidates(SRAGScenarioCentroid&destination,
       ArraySize(destination.centroid)!=(int)iScenarioEmbedding||
       ArraySize(source.centroid)!=(int)iScenarioEmbedding||
       destination.hit_count>ulong(-1)-source.hit_count)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong destinationHits=destination.hit_count;
    const ulong sourceHits=source.hit_count;
    float       previousCentroid[];
 
    if(ArrayResize(previousCentroid,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayCopy(previousCentroid,destination.centroid);
    float weighted[];
 
    if(ArrayResize(weighted,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint element=0;element<iScenarioEmbedding;element++)
       weighted[element]=(float)(destination.centroid[element]*destinationHits+
@@ -919,7 +1015,9 @@ bool CNeuronRAGMemory::MergeScenarioCandidates(SRAGScenarioCentroid&destination,
    for(int action=0;action<ArraySize(source.actions);action++)
       if(source.actions[action].used&&
          !AppendActionCandidate(destination.scenarioId,destination,source.actions[action]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(RebindScenarioActions(destination,destination.scenarioId));
   }
@@ -940,7 +1038,9 @@ bool CNeuronRAGMemory::FindNearestScenarioPair(const SRAGScenarioCentroid&scenar
 
       if(candidates<2||ArrayResize(flat,candidates*(int)iScenarioEmbedding)!=candidates*(int)iScenarioEmbedding||
          ArrayResize(used,candidates)!=candidates)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(int scenario=0;scenario<candidates;scenario++)
         {
@@ -991,15 +1091,21 @@ bool CNeuronRAGMemory::StageScenarioCandidates(const uint sourceScenarioId,
    if(ArraySize(scenarioEmbedding)!=(int)iScenarioEmbedding||
       !ValidAction(action)||!ValidTerminal(terminal)||
       ArrayResize(scenarioCandidates,iScenarioCapacity+1)!=(int)(iScenarioCapacity+1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
       if(!CopyScenario(scenarios[scenario],scenarioCandidates[scenario]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!InitializeScenario(scenarioCandidates[iScenarioCapacity],sourceScenarioId)||
       !NormalizeL2(scenarioEmbedding,scenarioCandidates[iScenarioCapacity].centroid))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    scenarioCandidates[iScenarioCapacity].used=true;
    scenarioCandidates[iScenarioCapacity].hit_count=1;
@@ -1027,7 +1133,9 @@ bool CNeuronRAGMemory::AddCompletedScenario(const uint sourceScenarioId,
       !ApplyCompletedRecordToSnapshot(candidateSnapshot,candidateCount,sourceScenarioId,
                                       scenarioEmbedding,action,terminal)||
       !ConsolidateActionCandidates(candidateSnapshot))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArraySwap(scenarios,candidateSnapshot);
    iScenarioCount=candidateCount;
@@ -1047,12 +1155,16 @@ bool CNeuronRAGMemory::ApplyCompletedRecordToSnapshot(SRAGScenarioCentroid&candi
    if(ArraySize(candidateSnapshot)!=(int)iScenarioCapacity||candidateCount>iScenarioCapacity||
       ArraySize(scenarioEmbedding)!=(int)iScenarioEmbedding||
       !ValidAction(action)||!ValidTerminal(terminal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float normalized[];
 
    if(!NormalizeL2(scenarioEmbedding,normalized))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int freeScenario=-1;
 
@@ -1068,7 +1180,9 @@ bool CNeuronRAGMemory::ApplyCompletedRecordToSnapshot(SRAGScenarioCentroid&candi
       SRAGScenarioCentroid incoming;
 
       if(!InitializeScenario(incoming,sourceScenarioId))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       incoming.used=true;
       incoming.hit_count=1;
@@ -1082,7 +1196,9 @@ bool CNeuronRAGMemory::ApplyCompletedRecordToSnapshot(SRAGScenarioCentroid&candi
       RebindScenarioActions(incoming,(uint)freeScenario);
 
       if(!CopyScenario(incoming,candidateSnapshot[freeScenario]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       candidateCount++;
 
@@ -1091,14 +1207,20 @@ bool CNeuronRAGMemory::ApplyCompletedRecordToSnapshot(SRAGScenarioCentroid&candi
    SRAGScenarioCentroid scenarioCandidates[];
 
    if(ArrayResize(scenarioCandidates,(int)(iScenarioCapacity+1))!=(int)(iScenarioCapacity+1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
       if(!CopyScenarioFlexible(candidateSnapshot[scenario],scenarioCandidates[scenario]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!InitializeScenario(scenarioCandidates[iScenarioCapacity],sourceScenarioId))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    scenarioCandidates[iScenarioCapacity].used=true;
    scenarioCandidates[iScenarioCapacity].hit_count=1;
@@ -1114,19 +1236,25 @@ bool CNeuronRAGMemory::ApplyCompletedRecordToSnapshot(SRAGScenarioCentroid&candi
 
    if(!FindNearestScenarioPair(scenarioCandidates,destination,source)||
       !MergeScenarioCandidates(scenarioCandidates[destination],scenarioCandidates[source]))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    RebindScenarioActions(scenarioCandidates[destination],(uint)destination);
 
    if(!CopyScenarioFlexible(scenarioCandidates[destination],candidateSnapshot[destination]))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(source==(int)iScenarioCapacity)
       return(true);
    RebindScenarioActions(scenarioCandidates[iScenarioCapacity],(uint)source);
 
    if(!CopyScenarioFlexible(scenarioCandidates[iScenarioCapacity],candidateSnapshot[source]))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -1143,7 +1271,9 @@ bool CNeuronRAGMemory::ValidateSnapshot(const SRAGScenarioCentroid&snapshot[],
    if(scenarioEmbedding==0||actionDimension==0||scenarioCapacity==0||actionCapacity==0||
       scenarioCapacity>(uint)INT_MAX||actionCapacity>(uint)INT_MAX||
       ArraySize(snapshot)!=(int)scenarioCapacity||scenarioCount>scenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint usedScenarios=0;
 
@@ -1152,14 +1282,18 @@ bool CNeuronRAGMemory::ValidateSnapshot(const SRAGScenarioCentroid&snapshot[],
       if(snapshot[scenario].scenarioId!=scenario||
          ArraySize(snapshot[scenario].centroid)!=(int)scenarioEmbedding||
          ArraySize(snapshot[scenario].actions)!=(int)actionCapacity)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       double norm=0.0;
 
       for(uint element=0;element<scenarioEmbedding;element++)
         {
          if(!MathIsValidNumber(snapshot[scenario].centroid[element]))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          norm+=(double)snapshot[scenario].centroid[element]*snapshot[scenario].centroid[element];
         }
@@ -1167,13 +1301,17 @@ bool CNeuronRAGMemory::ValidateSnapshot(const SRAGScenarioCentroid&snapshot[],
       if(snapshot[scenario].used)
         {
          if(snapshot[scenario].hit_count==0||norm<RAG_NORM_MIN||norm>RAG_NORM_MAX)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          usedScenarios++;
         }
       else
          if(snapshot[scenario].hit_count!=0||norm>DBL_EPSILON)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
       for(uint action=0;action<actionCapacity;action++)
         {
@@ -1181,21 +1319,29 @@ bool CNeuronRAGMemory::ValidateSnapshot(const SRAGScenarioCentroid&snapshot[],
             ArraySize(snapshot[scenario].actions[action].centroid)!=(int)actionDimension||
             !MathIsValidNumber(snapshot[scenario].actions[action].mean_reward)||
             !ValidTerminal(snapshot[scenario].actions[action].mean_terminal))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          for(uint element=0;element<actionDimension;element++)
             if(!MathIsValidNumber(snapshot[scenario].actions[action].centroid[element])||
                snapshot[scenario].actions[action].centroid[element]<0.0f||
                snapshot[scenario].actions[action].centroid[element]>1.0f)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
          if(snapshot[scenario].actions[action].used&&
             (!snapshot[scenario].used||snapshot[scenario].actions[action].hit_count==0))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!snapshot[scenario].actions[action].used&&
             snapshot[scenario].actions[action].hit_count!=0)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
 
@@ -1210,11 +1356,15 @@ bool CNeuronRAGMemory::CommitSnapshot(const SRAGScenarioCentroid&snapshot[],
    SRAGScenarioCentroid committed[];
 
    if(ArrayResize(committed,(int)iScenarioCapacity)!=(int)iScenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
       if(!CopyScenario(snapshot[scenario],committed[scenario]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    ArraySwap(scenarios,committed);
    iScenarioCount=scenarioCount;
@@ -1231,7 +1381,9 @@ bool CNeuronRAGMemory::CopyCompletedRecord(const SRAGCompletedRecord&source,
       !ValidAction(source.action)||!ValidTerminal(source.terminal)||
       ArrayResize(destination.scenarioEmbedding,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding||
       ArrayResize(destination.action,(int)iActionDimension)!=(int)iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayCopy(destination.scenarioEmbedding,source.scenarioEmbedding);
    ArrayCopy(destination.action,source.action);
@@ -1247,11 +1399,15 @@ bool CNeuronRAGMemory::CopyPendingEvent(const SRAGPendingEvent&source,
   {
    if(!ValidAction(source.action)||
       ArrayResize(destination.action,(int)iActionDimension)!=(int)iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint element=0;element<iActionDimension;element++)
       if(!MathIsValidNumber(source.action[element]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    ArrayCopy(destination.action,source.action);
    destination.confirmed=source.confirmed;
@@ -1272,18 +1428,24 @@ bool CNeuronRAGMemory::CopyPendingFact(const SRAGPendingFact&source,
       ArraySize(source.scenarioEmbedding)!=(int)iScenarioEmbedding||
       ArrayResize(destination.scenarioEmbedding,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding||
       ArrayResize(destination.events,eventCount)!=eventCount)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint element=0;element<iScenarioEmbedding;element++)
       if(!MathIsValidNumber(source.scenarioEmbedding[element]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    ArrayCopy(destination.scenarioEmbedding,source.scenarioEmbedding);
    destination.id=source.id;
 
    for(int event=0;event<eventCount;event++)
       if(!CopyPendingEvent(source.events[event],destination.events[event]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -1310,7 +1472,9 @@ bool CNeuronRAGMemory::BuildRemainingPendingFacts(const int excluded,
    const int total=ArraySize(pending_facts);
 
    if(excluded<0||excluded>=total||ArrayResize(remaining,total-1)!=total-1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int destination=0;
 
@@ -1320,7 +1484,9 @@ bool CNeuronRAGMemory::BuildRemainingPendingFacts(const int excluded,
          continue;
 
       if(!CopyPendingFact(pending_facts[source],remaining[destination]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       destination++;
      }
@@ -1335,11 +1501,15 @@ bool CNeuronRAGMemory::CopySnapshot(const SRAGScenarioCentroid&source[],
   {
    if(ArraySize(source)!=(int)iScenarioCapacity||
       ArrayResize(destination,(int)iScenarioCapacity)!=(int)iScenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
       if(!CopyScenario(source[scenario],destination[scenario]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -1416,13 +1586,17 @@ bool CNeuronRAGMemory::BuildInferenceSet(const SRAGScenarioCentroid&snapshot[],
    result=NULL;
 
    if(OpenCL==NULL||ArraySize(snapshot)!=(int)iScenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong centroidTotal=(ulong)iScenarioCapacity*iScenarioEmbedding;
    const ulong actionSlots=(ulong)iScenarioCapacity*iActionCapacity;
 
    if(actionSlots>ULONG_MAX/iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong actionTotal=actionSlots*iActionDimension;
    const uint  partialCount=(iScenarioCapacity+RAG_TOPK_LOCAL_WIDTH-1)/RAG_TOPK_LOCAL_WIDTH;
@@ -1431,14 +1605,18 @@ bool CNeuronRAGMemory::BuildInferenceSet(const SRAGScenarioCentroid&snapshot[],
    const ulong topActions=(ulong)iTopK*iActionCapacity;
 
    if(topActions>ULONG_MAX/iTokenWidth)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong tokenTotal=topActions*iTokenWidth;
 
    if(centroidTotal>(ulong)INT_MAX||actionSlots>(ulong)INT_MAX||
       actionTotal>(ulong)INT_MAX||partialTotal>(ulong)INT_MAX||
       topTotal>(ulong)INT_MAX||tokenTotal>(ulong)INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float flatCentroids[];
    float flatUsed[];
@@ -1453,7 +1631,9 @@ bool CNeuronRAGMemory::BuildInferenceSet(const SRAGScenarioCentroid&snapshot[],
       ArrayResize(flatActionUsed,(int)actionSlots)!=(int)actionSlots||
       ArrayResize(flatActionMeanReward,(int)actionSlots)!=(int)actionSlots||
       ArrayResize(flatActionHitCount,(int)actionSlots)!=(int)actionSlots)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayInitialize(flatCentroids,0.0f);
    ArrayInitialize(flatUsed,0.0f);
@@ -1487,7 +1667,9 @@ bool CNeuronRAGMemory::BuildInferenceSet(const SRAGScenarioCentroid&snapshot[],
    CRAGInferenceSet *candidate=new CRAGInferenceSet();
 
    if(candidate==NULL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    candidate.opencl=OpenCL;
    candidate.fingerprint=fingerprint;
@@ -1525,7 +1707,7 @@ bool CNeuronRAGMemory::BuildInferenceSet(const SRAGScenarioCentroid&snapshot[],
       !candidate.tokens.BufferInit((uint)tokenTotal,0.0f)||!candidate.tokens.BufferCreate(OpenCL))
      {
       delete candidate;
-      ReturnFalse;
+      ReturnFalse
      }
    result=candidate;
 
@@ -1538,26 +1720,38 @@ bool CNeuronRAGMemory::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                             CLayerDescription &description)
   {
    if(!Configure(description))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(iTopK>UINT_MAX/iActionCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint tokenCount=iTopK*iActionCapacity;
 
    if(tokenCount==0||iTokenWidth>UINT_MAX/tokenCount)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,tokenCount*iTokenWidth,
                             description.optimization,description.batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(ArrayResize(scenarios,(int)iScenarioCapacity)!=(int)iScenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
       if(!InitializeScenario(scenarios[scenario],scenario))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    iScenarioCount=0;
 
@@ -1569,7 +1763,9 @@ bool CNeuronRAGMemory::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronRAGMemory::SetOnlineMemorySize(const uint value)
   {
    if(value>=(uint)INT_MAX||(value>0&&value<(uint)ArraySize(pending_records)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iOnlineMemorySize=value;
 
@@ -1583,16 +1779,22 @@ bool CNeuronRAGMemory::BindNullInference(void)
    SRAGScenarioCentroid empty[];
 
    if(ArrayResize(empty,(int)iScenarioCapacity)!=(int)iScenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
       if(!InitializeScenario(empty[scenario],scenario))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    CRAGInferenceSet *candidate=NULL;
 
    if(!BuildInferenceSet(empty,0,candidate))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CRAGInferenceSet *previous=m_inference;
    m_inference=candidate;
@@ -1611,25 +1813,39 @@ bool CNeuronRAGMemory::ReadScenarioEmbedding(CBufferFloat*source,
    replaced=0;
 
    if(source==NULL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(OpenCL==NULL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(source.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(source.GetIndex()==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(source.Total()!=(int)iScenarioEmbedding)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(ArrayResize(destination,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(source.GetData(destination)!=(int)iScenarioEmbedding)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    double squareSum=0.0;
 
@@ -1644,10 +1860,14 @@ bool CNeuronRAGMemory::ReadScenarioEmbedding(CBufferFloat*source,
      }
 
    if(!MathIsValidNumber(squareSum))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(squareSum<=DBL_EPSILON)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -1664,7 +1884,9 @@ bool CNeuronRAGMemory::AddCompletedRecord(const float&scenarioEmbedding[],
    if(limit==0||total>=(int)limit||ArraySize(scenarioEmbedding)!=(int)iScenarioEmbedding||
       !ValidAction(action)||!ValidTerminal(terminal)||
       ArrayResize(pending_records,total+1)!=total+1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SRAGCompletedRecord source;
 
@@ -1672,7 +1894,7 @@ bool CNeuronRAGMemory::AddCompletedRecord(const float&scenarioEmbedding[],
       ArrayResize(source.action,(int)iActionDimension)!=(int)iActionDimension)
      {
       ArrayResize(pending_records,total);
-      ReturnFalse;
+      ReturnFalse
      }
    ArrayCopy(source.scenarioEmbedding,scenarioEmbedding);
    ArrayCopy(source.action,action);
@@ -1681,7 +1903,7 @@ bool CNeuronRAGMemory::AddCompletedRecord(const float&scenarioEmbedding[],
    if(!CopyCompletedRecord(source,pending_records[total]))
      {
       ArrayResize(pending_records,total);
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -1740,12 +1962,16 @@ bool CNeuronRAGMemory::ConfirmPendingExecution(const ulong pendingId,
    const int fact=FindPendingFact(pendingId);
 
    if(fact<0||deal==0||position==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int event=ArraySize(pending_facts[fact].events)-1;
 
    if(event<0||pending_facts[fact].events[event].confirmed)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    pending_facts[fact].events[event].deal=deal;
    pending_facts[fact].events[event].position=position;
@@ -1761,28 +1987,38 @@ bool CNeuronRAGMemory::CorrectPending(const ulong pendingId,const float&action[]
    const int fact=FindPendingFact(pendingId);
 
    if(fact<0||!ValidAction(action))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int eventCount=ArraySize(pending_facts[fact].events);
 
    if(eventCount<=0||eventCount>=INT_MAX||
       !pending_facts[fact].events[eventCount-1].confirmed)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SRAGPendingFact candidateFacts[];
    const int       total=ArraySize(pending_facts);
 
    if(ArrayResize(candidateFacts,total)!=total)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int source=0;source<total;source++)
       if(!CopyPendingFact(pending_facts[source],candidateFacts[source]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(ArrayResize(candidateFacts[fact].events,eventCount+1)!=eventCount+1||
       ArrayResize(candidateFacts[fact].events[eventCount].action,
                   (int)iActionDimension)!=(int)iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayCopy(candidateFacts[fact].events[eventCount].action,action);
    candidateFacts[fact].events[eventCount].confirmed=false;
@@ -1800,7 +2036,9 @@ bool CNeuronRAGMemory::ConfirmPendingCorrection(const ulong pendingId,const ulon
    const int fact=FindPendingFact(pendingId);
 
    if(fact<0||position==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int eventCount=ArraySize(pending_facts[fact].events);
    const int event=eventCount-1;
@@ -1810,7 +2048,9 @@ bool CNeuronRAGMemory::ConfirmPendingCorrection(const ulong pendingId,const ulon
    if(eventCount<2||event<0||pending_facts[fact].events[event].confirmed||
       !pending_facts[fact].events[0].confirmed||
       pending_facts[fact].events[0].position!=position)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    pending_facts[fact].events[event].deal=0;
    pending_facts[fact].events[event].position=position;
@@ -1828,14 +2068,18 @@ bool CNeuronRAGMemory::ConfirmPendingCorrection(const ulong pendingId,
    const int fact=FindPendingFact(pendingId);
 
    if(fact<0||deal==0||position==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int eventCount=ArraySize(pending_facts[fact].events);
    const int event=eventCount-1;
 
    if(eventCount<2||event<0||pending_facts[fact].events[event].confirmed||
       !pending_facts[fact].events[0].confirmed)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    pending_facts[fact].events[event].deal=deal;
    pending_facts[fact].events[event].position=position;
@@ -1851,25 +2095,35 @@ bool CNeuronRAGMemory::CancelPendingCorrection(const ulong pendingId)
    const int fact=FindPendingFact(pendingId);
 
    if(fact<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int eventCount=ArraySize(pending_facts[fact].events);
 
    if(eventCount<2||pending_facts[fact].events[eventCount-1].confirmed)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SRAGPendingFact candidateFacts[];
    const int       total=ArraySize(pending_facts);
 
    if(ArrayResize(candidateFacts,total)!=total)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int source=0;source<total;source++)
       if(!CopyPendingFact(pending_facts[source],candidateFacts[source]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(ArrayResize(candidateFacts[fact].events,eventCount-1)!=eventCount-1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArraySwap(pending_facts,candidateFacts);
 
@@ -1884,7 +2138,9 @@ bool CNeuronRAGMemory::ClosePending(const ulong pendingId,
    const int fact=FindPendingFact(pendingId);
 
    if(fact<0||!ValidTerminal(terminal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int confirmedCount=0;
 
@@ -1895,22 +2151,30 @@ bool CNeuronRAGMemory::ClosePending(const ulong pendingId,
 
    if(confirmedCount<=0||current<0||
       (ulong)current+(ulong)confirmedCount>(ulong)INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SRAGPendingFact remainingFacts[];
 
    if(!BuildRemainingPendingFacts(fact,remainingFacts))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SRAGCompletedRecord candidateRecords[];
    const int           candidateCount=current+confirmedCount;
 
    if(ArrayResize(candidateRecords,candidateCount)!=candidateCount)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int record=0;record<current;record++)
       if(!CopyCompletedRecord(pending_records[record],candidateRecords[record]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    int destination=current;
 
@@ -1922,14 +2186,18 @@ bool CNeuronRAGMemory::ClosePending(const ulong pendingId,
 
       if(ArrayResize(source.scenarioEmbedding,(int)iScenarioEmbedding)!=(int)iScenarioEmbedding||
          ArrayResize(source.action,(int)iActionDimension)!=(int)iActionDimension)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       ArrayCopy(source.scenarioEmbedding,pending_facts[fact].scenarioEmbedding);
       ArrayCopy(source.action,pending_facts[fact].events[event].action);
       source.terminal=terminal;
 
       if(!CopyCompletedRecord(source,candidateRecords[destination]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       destination++;
      }
@@ -1946,16 +2214,22 @@ bool CNeuronRAGMemory::CancelPending(const ulong pendingId)
    const int fact=FindPendingFact(pendingId);
 
    if(fact<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int event=0;event<ArraySize(pending_facts[fact].events);event++)
       if(pending_facts[fact].events[event].confirmed)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    SRAGPendingFact remainingFacts[];
 
    if(!BuildRemainingPendingFacts(fact,remainingFacts))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArraySwap(pending_facts,remainingFacts);
 
@@ -1977,7 +2251,9 @@ bool CNeuronRAGMemory::Publish(const bool episodeClosed)
    uint                 candidateCount=iScenarioCount;
 
    if(!CopySnapshot(scenarios,candidateSnapshot))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint record=0;record<pending;record++)
       if(!ApplyCompletedRecordToSnapshot(candidateSnapshot,candidateCount,
@@ -1985,16 +2261,22 @@ bool CNeuronRAGMemory::Publish(const bool episodeClosed)
                                          pending_records[record].scenarioEmbedding,
                                          pending_records[record].action,
                                          pending_records[record].terminal))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!ConsolidateActionCandidates(candidateSnapshot))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong      fingerprint=SnapshotFingerprint(candidateSnapshot,candidateCount);
    CRAGInferenceSet *candidate=NULL;
 
    if(!BuildInferenceSet(candidateSnapshot,fingerprint,candidate))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArraySwap(scenarios,candidateSnapshot);
    iScenarioCount=candidateCount;
@@ -2021,13 +2303,17 @@ bool CNeuronRAGMemory::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronRAGMemory::Clear(void)
   {
    if(!CNeuronBaseOCL::Clear())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(m_inference==NULL||m_inference.tokens==NULL)
       return(true);
 
    if(!m_inference.tokens.BufferInit(iTopK*iActionCapacity*iTokenWidth,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(m_inference.tokens.BufferCreate(OpenCL));
   }
@@ -2097,7 +2383,9 @@ bool CNeuronRAGMemory::WriteFloat(const int file_handle,const float value)const
 bool CNeuronRAGMemory::ReadUInt(const int file_handle,uint&value)const
   {
    if(!HasBytes(file_handle,sizeof(int))||FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    value=(uint)FileReadInteger(file_handle,INT_VALUE);
 
@@ -2109,7 +2397,9 @@ bool CNeuronRAGMemory::ReadUInt(const int file_handle,uint&value)const
 bool CNeuronRAGMemory::ReadULong(const int file_handle,ulong&value)const
   {
    if(!HasBytes(file_handle,sizeof(long))||FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    value=(ulong)FileReadLong(file_handle);
 
@@ -2121,7 +2411,9 @@ bool CNeuronRAGMemory::ReadULong(const int file_handle,ulong&value)const
 bool CNeuronRAGMemory::ReadFloat(const int file_handle,float&value)const
   {
    if(!HasBytes(file_handle,sizeof(float))||FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    value=FileReadFloat(file_handle);
 
@@ -2140,23 +2432,31 @@ bool CNeuronRAGMemory::SnapshotPayloadBytes(const uint scenarioEmbedding,
 
    if(scenarioEmbedding>(maximum-16)/sizeof(float)||
       actionDimension>(maximum-44)/sizeof(float))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong actionBytes=44+(ulong)actionDimension*sizeof(float);
 
    if(actionCapacity>maximum/actionBytes)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong allActions=(ulong)actionCapacity*actionBytes;
    const ulong scenarioPrefix=16+(ulong)scenarioEmbedding*sizeof(float);
 
    if(allActions>maximum-scenarioPrefix)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong scenarioBytes=scenarioPrefix+allActions;
 
    if(scenarioCapacity>maximum/scenarioBytes)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    bytes=(ulong)scenarioCapacity*scenarioBytes;
 
@@ -2182,18 +2482,24 @@ bool CNeuronRAGMemory::WritePublishedSnapshot(const int file_handle,const ulong 
       !WriteUInt(file_handle,iOnlineMemorySize)||
       !WriteUInt(file_handle,iScenarioCount)||!WriteULong(file_handle,fingerprint)||
       !WriteULong(file_handle,payloadBytes))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
      {
       if(!WriteUInt(file_handle,(scenarios[scenario].used?1:0))||
          !WriteUInt(file_handle,scenarios[scenario].scenarioId)||
          !WriteULong(file_handle,scenarios[scenario].hit_count))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(uint element=0;element<iScenarioEmbedding;element++)
          if(!WriteFloat(file_handle,scenarios[scenario].centroid[element]))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
       for(uint action=0;action<iActionCapacity;action++)
         {
@@ -2207,11 +2513,15 @@ bool CNeuronRAGMemory::WritePublishedSnapshot(const int file_handle,const ulong 
             !WriteFloat(file_handle,scenarios[scenario].actions[action].mean_terminal.riskUsage)||
             !WriteFloat(file_handle,scenarios[scenario].actions[action].mean_terminal.duration)||
             !WriteFloat(file_handle,scenarios[scenario].actions[action].mean_terminal.reward))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          for(uint element=0;element<iActionDimension;element++)
             if(!WriteFloat(file_handle,scenarios[scenario].actions[action].centroid[element]))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
         }
      }
 
@@ -2240,14 +2550,18 @@ bool CNeuronRAGMemory::ReadPublishedSnapshot(const int file_handle,
       actionCapacity!=iActionCapacity||topK!=iTopK||onlineMemorySize!=iOnlineMemorySize||
       topK>RAG_TOPK_MAX||scenarioCapacity>RAG_FLOAT_INDEX_LIMIT||
       scenarioCount>scenarioCapacity||fingerprint==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong expected=0;
 
    if(!SnapshotPayloadBytes(embedding,actionDimension,scenarioCapacity,actionCapacity,expected)||
       expected!=payloadBytes||!HasBytes(file_handle,payloadBytes)||
       ArrayResize(snapshot,(int)scenarioCapacity)!=(int)scenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong snapshotEnd=(ulong)FileTell(file_handle)+payloadBytes;
 
@@ -2260,13 +2574,17 @@ bool CNeuronRAGMemory::ReadPublishedSnapshot(const int file_handle,
          !ReadULong(file_handle,snapshot[scenario].hit_count)||
          ArrayResize(snapshot[scenario].centroid,(int)embedding)!=(int)embedding||
          ArrayResize(snapshot[scenario].actions,(int)actionCapacity)!=(int)actionCapacity)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       snapshot[scenario].used=(used==1);
 
       for(uint element=0;element<embedding;element++)
          if(!ReadFloat(file_handle,snapshot[scenario].centroid[element]))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
       for(uint action=0;action<actionCapacity;action++)
         {
@@ -2283,13 +2601,17 @@ bool CNeuronRAGMemory::ReadPublishedSnapshot(const int file_handle,
             !ReadFloat(file_handle,snapshot[scenario].actions[action].mean_terminal.duration)||
             !ReadFloat(file_handle,snapshot[scenario].actions[action].mean_terminal.reward)||
             ArrayResize(snapshot[scenario].actions[action].centroid,(int)actionDimension)!=(int)actionDimension)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          snapshot[scenario].actions[action].used=(actionUsed==1);
 
          for(uint element=0;element<actionDimension;element++)
             if(!ReadFloat(file_handle,snapshot[scenario].actions[action].centroid[element]))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
         }
      }
 
@@ -2305,13 +2627,17 @@ bool CNeuronRAGMemory::ReadPublishedSnapshot(const int file_handle,
 bool CNeuronRAGMemory::SavePublishedSnapshot(const string path)const
   {
    if(StringLen(path)==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong fingerprint=SnapshotFingerprint(scenarios,iScenarioCount);
    const int   file_handle=FileOpen(path,FILE_WRITE|FILE_BIN|FILE_COMMON);
 
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const bool result=WritePublishedSnapshot(file_handle,fingerprint);
 
@@ -2327,12 +2653,16 @@ bool CNeuronRAGMemory::SavePublishedSnapshot(const string path)const
 bool CNeuronRAGMemory::LoadPublishedSnapshot(const string path)
   {
    if(StringLen(path)==0||OpenCL==NULL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int file_handle=FileOpen(path,FILE_READ|FILE_BIN|FILE_COMMON|FILE_SHARE_READ);
 
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SRAGScenarioCentroid loaded[];
    uint                 scenarioCount=0;
@@ -2342,17 +2672,21 @@ bool CNeuronRAGMemory::LoadPublishedSnapshot(const string path)
    FileClose(file_handle);
 
    if(!read||!exactEnd)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CRAGInferenceSet *candidate=NULL;
 
    if(!BuildInferenceSet(loaded,fingerprint,candidate))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CommitSnapshot(loaded,scenarioCount))
      {
       delete candidate;
-      ReturnFalse;
+      ReturnFalse
      }
    CRAGInferenceSet *previous=m_inference;
    m_inference=candidate;
@@ -2379,7 +2713,9 @@ bool CNeuronRAGMemory::Save(const int file_handle)
    if(!ValidateSnapshot(scenarios,iScenarioCount,iScenarioEmbedding,iActionDimension,
                         iScenarioCapacity,iActionCapacity)||
       !CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong payloadBytes=0;
 
@@ -2395,18 +2731,24 @@ bool CNeuronRAGMemory::Save(const int file_handle)
       !WriteUInt(file_handle,iOnlineMemorySize)||
       !WriteUInt(file_handle,iScenarioCount)||
       !WriteULong(file_handle,payloadBytes))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<iScenarioCapacity;scenario++)
      {
       if(!WriteUInt(file_handle,(scenarios[scenario].used?1:0))||
          !WriteUInt(file_handle,scenarios[scenario].scenarioId)||
          !WriteULong(file_handle,scenarios[scenario].hit_count))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(uint element=0;element<iScenarioEmbedding;element++)
          if(!WriteFloat(file_handle,scenarios[scenario].centroid[element]))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
       for(uint action=0;action<iActionCapacity;action++)
         {
@@ -2420,11 +2762,15 @@ bool CNeuronRAGMemory::Save(const int file_handle)
             !WriteFloat(file_handle,scenarios[scenario].actions[action].mean_terminal.riskUsage)||
             !WriteFloat(file_handle,scenarios[scenario].actions[action].mean_terminal.duration)||
             !WriteFloat(file_handle,scenarios[scenario].actions[action].mean_terminal.reward))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          for(uint element=0;element<iActionDimension;element++)
             if(!WriteFloat(file_handle,scenarios[scenario].actions[action].centroid[element]))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
         }
      }
 
@@ -2436,7 +2782,9 @@ bool CNeuronRAGMemory::Save(const int file_handle)
 bool CNeuronRAGMemory::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint  formatVersion=0;
    uint  scenarioEmbedding=0;
@@ -2459,20 +2807,26 @@ bool CNeuronRAGMemory::Load(const int file_handle)
       topK>RAG_TOPK_MAX||scenarioCapacity>RAG_FLOAT_INDEX_LIMIT||
       scenarioCapacity>=(uint)INT_MAX||actionCapacity>=(uint)INT_MAX||
       scenarioCount>scenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong expectedPayload=0;
 
    if(!SnapshotPayloadBytes(scenarioEmbedding,actionDimension,scenarioCapacity,
                             actionCapacity,expectedPayload)||payloadBytes!=expectedPayload||
       !HasBytes(file_handle,payloadBytes))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong          snapshotEnd=(ulong)FileTell(file_handle)+payloadBytes;
    SRAGScenarioCentroid loaded[];
 
    if(ArrayResize(loaded,(int)scenarioCapacity)!=(int)scenarioCapacity)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint scenario=0;scenario<scenarioCapacity;scenario++)
      {
@@ -2483,13 +2837,17 @@ bool CNeuronRAGMemory::Load(const int file_handle)
          !ReadULong(file_handle,loaded[scenario].hit_count)||
          ArrayResize(loaded[scenario].centroid,(int)scenarioEmbedding)!=(int)scenarioEmbedding||
          ArrayResize(loaded[scenario].actions,(int)actionCapacity)!=(int)actionCapacity)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       loaded[scenario].used=(used==1);
 
       for(uint element=0;element<scenarioEmbedding;element++)
          if(!ReadFloat(file_handle,loaded[scenario].centroid[element]))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
       for(uint action=0;action<actionCapacity;action++)
         {
@@ -2506,20 +2864,26 @@ bool CNeuronRAGMemory::Load(const int file_handle)
             !ReadFloat(file_handle,loaded[scenario].actions[action].mean_terminal.duration)||
             !ReadFloat(file_handle,loaded[scenario].actions[action].mean_terminal.reward)||
             ArrayResize(loaded[scenario].actions[action].centroid,(int)actionDimension)!=(int)actionDimension)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          loaded[scenario].actions[action].used=(actionUsed==1);
 
          for(uint element=0;element<actionDimension;element++)
             if(!ReadFloat(file_handle,loaded[scenario].actions[action].centroid[element]))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
         }
      }
 
    if((ulong)FileTell(file_handle)!=snapshotEnd||
       !ValidateSnapshot(loaded,scenarioCount,scenarioEmbedding,actionDimension,
                         scenarioCapacity,actionCapacity))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint oldFormatVersion=iFormatVersion;
    const uint oldScenarioEmbedding=iScenarioEmbedding;
@@ -2549,7 +2913,7 @@ bool CNeuronRAGMemory::Load(const int file_handle)
    iActionCapacity=oldActionCapacity;
    iTopK=oldTopK;
    iOnlineMemorySize=oldOnlineMemorySize;
-   ReturnFalse;
+   ReturnFalse
   }
 
 //--- generic device gateway.  Callers provide buffers sized from their own
@@ -2576,32 +2940,42 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
       scenarioCount>INT_MAX||embeddingDimension>INT_MAX||actionCount>INT_MAX||
       tokenWidth>INT_MAX||topK>INT_MAX||topK>RAG_TOPK_MAX||
       scenarioCount>RAG_FLOAT_INDEX_LIMIT)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint blockSize=RAG_TOPK_LOCAL_WIDTH;
 
 //--- the staged ping-pong compaction keeps every intermediate buffer bounded
 //--- by the initial partial image.  TopK must therefore reduce a full block.
    if(topK>RAG_TOPK_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint partialCount=(scenarioCount+blockSize-1)/blockSize;
 
    if((ulong)scenarioCount>ULONG_MAX/(ulong)embeddingDimension||
       (ulong)scenarioCount>ULONG_MAX/(ulong)actionCount)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong centroidFloats=(ulong)scenarioCount*(ulong)embeddingDimension;
    const ulong actionSlots=(ulong)scenarioCount*(ulong)actionCount;
 
    if(actionSlots>ULONG_MAX/(ulong)actionDimension||(ulong)topK>ULONG_MAX/(ulong)actionCount)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong actionFloats=actionSlots*(ulong)actionDimension;
    const ulong topActions=(ulong)topK*(ulong)actionCount;
 
    if(topActions>ULONG_MAX/(ulong)tokenWidth)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong tokenFloats=topActions*(ulong)tokenWidth;
    const int   embeddingTotal=embedding.Total();
@@ -2621,7 +2995,9 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
    if(embeddingTotal<0||centroidsTotal<0||usedTotal<0||scoresTotal<0||partialTotal<0||mergeTotal<0||
       topTotal<0||actionsTotal<0||actionUsedTotal<0||actionMeanRewardTotal<0||
       actionHitCountTotal<0||absoluteRelevanceTotal<0||tokensTotal<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(centroidFloats>UINT_MAX||actionSlots>UINT_MAX||actionFloats>UINT_MAX||tokenFloats>UINT_MAX||
       partialCount>UINT_MAX/topK||partialCount*topK>UINT_MAX/2||(ulong)embeddingTotal<embeddingDimension||
@@ -2631,7 +3007,9 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
       (ulong)actionUsedTotal<actionSlots||(ulong)actionMeanRewardTotal<actionSlots||
       (ulong)actionHitCountTotal<actionSlots||absoluteRelevanceTotal<1||
       (ulong)tokensTotal<tokenFloats)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint offset[]={0};
    uint scoreGlobal[]={scenarioCount};
@@ -2646,7 +3024,9 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
       !opencl.SetArgument(def_k_RAGScore,def_k_rags_scenario_count,scenarioCount)||
       !opencl.SetArgument(def_k_RAGScore,def_k_rags_embedding_dimension,embeddingDimension)||
       !opencl.Execute(def_k_RAGScore,1,offset,scoreGlobal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!opencl.SetArgumentBuffer(def_k_RAGPartial,def_k_ragp_scores,scores.GetIndex())||
       !opencl.SetArgumentBuffer(def_k_RAGPartial,def_k_ragp_partial,partial.GetIndex())||
@@ -2654,7 +3034,9 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
       !opencl.SetArgument(def_k_RAGPartial,def_k_ragp_block_size,blockSize)||
       !opencl.SetArgument(def_k_RAGPartial,def_k_ragp_top_k,topK)||
       !opencl.Execute(def_k_RAGPartial,1,offset,partialGlobal,partialLocal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint         mergeCount=partialCount*topK;
    CBufferFloat *source=partial;
@@ -2664,7 +3046,9 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
       const uint mergeBlocks=(mergeCount+blockSize-1)/blockSize;
 
       if(mergeBlocks>UINT_MAX/topK)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       const uint nextCount=mergeBlocks*topK;
       uint       mergeGlobal[]={mergeBlocks*blockSize};
@@ -2676,7 +3060,9 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
          !opencl.SetArgument(def_k_RAGMerge,def_k_ragm_block_size,blockSize)||
          !opencl.SetArgument(def_k_RAGMerge,def_k_ragm_top_k,topK)||
          !opencl.Execute(def_k_RAGMerge,1,offset,mergeGlobal,mergeLocal))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       mergeCount=nextCount;
       CBufferFloat *swap=source;
@@ -2692,7 +3078,9 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
       !opencl.SetArgument(def_k_RAGMerge,def_k_ragm_block_size,blockSize)||
       !opencl.SetArgument(def_k_RAGMerge,def_k_ragm_top_k,topK)||
       !opencl.Execute(def_k_RAGMerge,1,offset,mergeGlobal,mergeLocal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!opencl.SetArgumentBuffer(def_k_RAGGather,def_k_ragg_top,top.GetIndex())||
       !opencl.SetArgumentBuffer(def_k_RAGGather,def_k_ragg_actions,actions.GetIndex())||
@@ -2707,7 +3095,9 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
       !opencl.SetArgumentBuffer(def_k_RAGGather,def_k_ragg_action_hit_count,actionHitCount.GetIndex())||
       !opencl.SetArgumentBuffer(def_k_RAGGather,def_k_ragg_absolute_relevance,absoluteRelevance.GetIndex())||
       !opencl.Execute(def_k_RAGGather,1,offset,gatherGlobal))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -2717,12 +3107,16 @@ bool DispatchRAGPipeline(COpenCLMy*opencl,CBufferFloat*embedding,
 bool CNeuronRAGMemory::Retrieve(CNet*scenarioModel,const uint layer)
   {
    if(!scenarioModel)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *scenarioEmbedding=NULL;
 
    if(!scenarioModel.GetLayerOutputDevice(layer,scenarioEmbedding))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(Retrieve(scenarioEmbedding));
   }
@@ -2738,7 +3132,9 @@ bool CNeuronRAGMemory::Retrieve(CBufferFloat*scenarioEmbedding)
       m_inference.actionUsed==NULL||m_inference.actionMeanReward==NULL||
       m_inference.actionHitCount==NULL||m_inference.absoluteRelevance==NULL||
       m_inference.tokens==NULL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(DispatchRAGPipeline(OpenCL,scenarioEmbedding,m_inference.centroids,m_inference.used,
                               m_inference.scores,m_inference.partial,m_inference.merge,m_inference.top,
@@ -2754,7 +3150,9 @@ bool CNeuronRAGMemory::ScenarioCentroid(const uint scenarioId,float&destination[
   {
    if(scenarioId>=iScenarioCapacity||!scenarios[scenarioId].used||
       ArraySize(destination)<(int)iScenarioEmbedding)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayCopy(destination,scenarios[scenarioId].centroid);
 
@@ -2769,7 +3167,9 @@ bool CNeuronRAGMemory::ActionCentroid(const uint scenarioId,const uint actionId,
    if(scenarioId>=iScenarioCapacity||actionId>=iActionCapacity||
       !scenarios[scenarioId].actions[actionId].used||
       ArraySize(destination)<(int)iActionDimension)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ArrayCopy(destination,scenarios[scenarioId].actions[actionId].centroid);
 

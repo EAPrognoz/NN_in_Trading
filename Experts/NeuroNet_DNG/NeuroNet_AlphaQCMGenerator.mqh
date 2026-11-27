@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                   NeuroNet_AlphaQCMGenerator.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef NEURONET_ALPHAQCM_GENERATOR_MQH
 #define NEURONET_ALPHAQCM_GENERATOR_MQH
@@ -34,8 +35,17 @@ private:
    bool m_unknown;
 
 public:
+//+------------------------------------------------------------------+
+//| CAlphaQCMGenerator - Initialize the object state                 |
+//+------------------------------------------------------------------+
    CAlphaQCMGenerator():OpenCL(NULL),m_capacity(0),m_status(AG_TECHNICAL),m_unknown(false) {}
+//+------------------------------------------------------------------+
+//| Results - Return the results                                     |
+//+------------------------------------------------------------------+
    CBufferFloat      *Results(void) { return(GetPointer(m_packed)); }
+//+------------------------------------------------------------------+
+//| Status - Return the status                                       |
+//+------------------------------------------------------------------+
    int               Status(void) const { return(m_status); }
    bool Configure(COpenCLMy *context,const int candidates,const int length,const int embed,
                   const int hidden,const int points,const float epsilon,const float bonus,const int frequencies=0);
@@ -55,7 +65,9 @@ bool CAlphaQCMGenerator::Allocate(CBufferFloat &buffer,const long elements)
   {
    if(elements<=0||elements>INT_MAX||!OpenCL.CanAllocate((ulong)elements,sizeof(float))||
       !buffer.BufferInit((uint)elements,0.0f)||!buffer.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    return(true);
   }
 
@@ -70,11 +82,11 @@ bool CAlphaQCMGenerator::Complete(const int kernel)
      {
       if(!IsStopped())
          return(true);
-      ReturnFalse;
+      ReturnFalse
      }
    m_unknown=true;
    m_status=AQCM_UPDATE_INCONSISTENT;
-   ReturnFalseEx("OpenCL dispatch completion unknown; generator is closed");
+   ReturnFalseEx("OpenCL dispatch completion unknown; generator is closed")
   }
 
 //+------------------------------------------------------------------+
@@ -103,7 +115,9 @@ bool CAlphaQCMGenerator::Configure(COpenCLMy *context,const int candidates,const
    m_status=AG_TECHNICAL;
    if(!context||m_capacity!=0||m_unknown||candidates<1||length<2||embed<1||hidden<1||
       points<4||frequencies<0||epsilon<0||epsilon>1||bonus<0||!MathIsValidNumber(epsilon)||!MathIsValidNumber(bonus))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OpenCL=(CAlphaQCMOpenCL *)context;
    m_lanes=OpenCL.GroupSize(def_k_AQCMGenerate,64,2);
@@ -115,11 +129,15 @@ bool CAlphaQCMGenerator::Configure(COpenCLMy *context,const int candidates,const
    m_status=AQCM_RESOURCE_UNSUPPORTED;
    if(m_lanes<2||m_gridLanes<2||grid>INT_MAX/2||basis>INT_MAX||packed_stride>INT_MAX||
       (long)hidden*m_gridLanes>UINT_MAX||packed_stride*candidates>INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const long work_stride=(long)15*hidden+embed+1+2*AG_VOCABULARY+
                           2*grid+3*((long)length+1)*AG_VOCABULARY;
    if(work_stride>INT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    // In addition to the two shared grids and coefficient row, keep every
    // packed episode until commit, and reuse one candidate chunk of scratch.
    PrintFormat("AlphaQCM generation workspace: FP32 packed=%I64d flags=%d basis=%I64d phi=%I64d projection=%d "
@@ -129,7 +147,9 @@ bool CAlphaQCMGenerator::Configure(COpenCLMy *context,const int candidates,const
 
    if(!Allocate(m_packed,packed_stride*candidates)||!Allocate(m_flags,candidates)||
       !Allocate(m_basis,basis)||!Allocate(m_phi,grid))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_chunk=candidates;
    while(m_chunk>0)
      {
@@ -138,11 +158,15 @@ bool CAlphaQCMGenerator::Configure(COpenCLMy *context,const int candidates,const
       m_chunk/=2;
      }
    if(m_chunk==0)
-      ReturnFalseEx("Minimum generation candidate scratch could not be allocated");
+     {
+      ReturnFalseEx("Minimum generation candidate scratch could not be allocated")
+     }
 
    m_status=AQCM_NUMERIC_ERROR;
    if(!AlphaQCMProjection(m_projection,OpenCL,points,m_status))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_status=AG_TECHNICAL;
    m_embed=embed;
@@ -161,7 +185,9 @@ bool CAlphaQCMGenerator::Configure(COpenCLMy *context,const int candidates,const
    uint global[]={(uint)m_frequencies,(uint)points};
    kernelExecute(kernel,offset,global)
    if(!Complete(kernel))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_capacity=candidates;
    m_status=AG_OK;
    PrintFormat("AlphaQCM generation launch: candidate_chunk=%d token_chunk=%d group=%u grid_group=%u "
@@ -177,11 +203,15 @@ bool CAlphaQCMGenerator::Generate(const int config_buffer,const SAQCInferenceVie
                                   const ulong seed,const ulong first_candidate,const int count,const bool warmup)
   {
    if(m_unknown)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    m_status=AG_TECHNICAL;
    if(!OpenCL||m_capacity<1||count<1||count>m_capacity||config_buffer<0||
       (ulong)(count-1)>ULONG_MAX-first_candidate)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(q.context!=OpenCL||iqn.context!=OpenCL||q.iqn||!iqn.iqn||
       CheckPointer(q.owner)==POINTER_INVALID||CheckPointer(iqn.owner)==POINTER_INVALID||
@@ -191,10 +221,14 @@ bool CAlphaQCMGenerator::Generate(const int config_buffer,const SAQCInferenceVie
       q.matrices[2].width!=2*m_hidden+1||iqn.matrices[2].width!=2*m_hidden+1||
       iqn.matrices[3].width!=m_frequencies+1||
       !q.owner.ValidateInferenceView(q)||!iqn.owner.ValidateInferenceView(iqn))
-      ReturnFalseEx("AlphaQCM generator received an incompatible or stale inference view");
+     {
+      ReturnFalseEx("AlphaQCM generator received an incompatible or stale inference view")
+     }
 
    if(!warmup&&!Grid(iqn.matrices[3].buffer))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int kernel=def_k_AQCMGenerate,uniform=(warmup?1:0);
    setBuffer(kernel,0,config_buffer)
@@ -234,12 +268,16 @@ bool CAlphaQCMGenerator::Generate(const int config_buffer,const SAQCInferenceVie
          setArgument(kernel,27,end)
          kernelExecuteLoc(kernel,offset,global,local)
          if(!Complete(kernel))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
 
    if(!m_flags.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    for(int c=0;c<count;c++)
      {
       int report=(int)m_flags.At(c);
@@ -247,7 +285,7 @@ bool CAlphaQCMGenerator::Generate(const int config_buffer,const SAQCInferenceVie
          continue;
       m_status=(report%4==2?AQCM_NUMERIC_ERROR:AG_TECHNICAL);
       ReturnFalseEx(StringFormat("candidate=%I64u token_position=%d reason=%s",first_candidate+(ulong)c,
-                                 report/4,report%4==2?"nonfinite legal score":"invalid grammar, token or draw"));
+                                 report/4,report%4==2?"nonfinite legal score":"invalid grammar, token or draw"))
      }
    m_status=AG_OK;
    return(true);

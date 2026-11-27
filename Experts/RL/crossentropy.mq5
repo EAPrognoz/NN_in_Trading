@@ -134,7 +134,7 @@ void OnChartEvent(const int id,
       Train();
   }
 //+------------------------------------------------------------------+
-//| Train                                                            |
+//| Train - Train the neural networks                                |
 //+------------------------------------------------------------------+
 void Train(void)
   {
@@ -256,9 +256,9 @@ void Train(void)
    for(ulong state=0; state<env.Size(); state++)
      {
       ulong shift=state * Clusters;
-      env[state]=(double)(Data.Maximum((int)shift,Clusters)-shift);
+      env[state]=(double)(((CArrayFloat*)Data).Maximum((int)shift,Clusters)-shift);
       shift=state * Actions;
-      target[state]=(double)(Fractals.Maximum((int)shift,Actions)-shift);
+      target[state]=(double)(((CArrayFloat*)Fractals).Maximum((int)shift,Actions)-shift);
      }
 //---
    for(int iter=0; iter<200; iter++)

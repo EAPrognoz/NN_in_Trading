@@ -16,7 +16,7 @@
 //+------------------------------------------------------------------+
 #define defUnsupervisedPCA    0x7902
 //+------------------------------------------------------------------+
-//| CPCA                                                             |
+//| CPCA - Transform data to principal components                    |
 //+------------------------------------------------------------------+
 class CPCA : public CObject
   {
@@ -25,11 +25,6 @@ private:
    matrixf m_Ureduce;
    vectorf v_Means;
    vectorf v_STDs;
-   //---
-   CBufferFloat     *FromMatrix(matrixf &data);
-   CBufferFloat     *FromVector(vectorf &data);
-   matrixf            FromBuffer(CBufferFloat *data,ulong vector_size);
-   vectorf            FromBuffer(CBufferFloat *data);
 public:
                      CPCA();
                     ~CPCA();
@@ -42,21 +37,21 @@ public:
    matrixf            ReduceM(matrixf &data);
    //---
 //+------------------------------------------------------------------+
-//| Studied                                                          |
+//| Studied - Check studied                                          |
 //+------------------------------------------------------------------+
    bool              Studied(void)
      {
       return(b_Studied);
      }
 //+------------------------------------------------------------------+
-//| VectorSize                                                       |
+//| VectorSize - Return the vector size                              |
 //+------------------------------------------------------------------+
    ulong             VectorSize(void)
      {
       return(m_Ureduce.Cols());
      }
 //+------------------------------------------------------------------+
-//| Inputs                                                           |
+//| Inputs - Return the inputs                                       |
 //+------------------------------------------------------------------+
    ulong             Inputs(void)
      {
@@ -67,12 +62,18 @@ public:
    virtual bool      Load(const int file_handle);
    //---
 //+------------------------------------------------------------------+
-//| Type                                                             |
+//| Type - Return the object type identifier                         |
 //+------------------------------------------------------------------+
    virtual int       Type(void)
      {
       return(defUnsupervisedPCA);
      }
+private:
+   //---
+   CBufferFloat     *FromMatrix(matrixf &data);
+   CBufferFloat     *FromVector(vectorf &data);
+   matrixf            FromBuffer(CBufferFloat *data,ulong vector_size);
+   vectorf            FromBuffer(CBufferFloat *data);
   };
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -84,7 +85,7 @@ CPCA::CPCA()   :  b_Studied(false)
    m_Ureduce.Init(0,0);
   }
 //+------------------------------------------------------------------+
-//| ~CPCA                                                            |
+//| ~CPCA - Release owned resources                                  |
 //+------------------------------------------------------------------+
 CPCA::~CPCA()
   {
@@ -329,10 +330,11 @@ bool CPCA::Study(CBufferFloat *data,int vector_size)
 bool CPCA::Save(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
-   if(FileWriteInteger(file_handle,(int)b_Studied)<INT_VALUE)
-      return(false);
+   dFileWriteUInt(file_handle,b_Studied)
    if(!b_Studied)
       return(true);
 //---
@@ -388,7 +390,9 @@ bool CPCA::Save(const int file_handle)
 bool CPCA::Load(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      return(false);
+     {
+      ReturnFalseEx("Invalid file handle")
+     }
 //---
    b_Studied=(bool)FileReadInteger(file_handle);
    if(!b_Studied)

@@ -21,20 +21,30 @@
 bool CConnection::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteDouble(file_handle,weight)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteDouble(file_handle,deltaWeight)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteDouble(file_handle,mt)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteDouble(file_handle,vt)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -45,7 +55,9 @@ bool CConnection::Save(int file_handle)
 bool CConnection::Load(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    weight=(float)FileReadDouble(file_handle);
@@ -62,7 +74,9 @@ bool CConnection::Load(int file_handle)
 bool CArrayCon::CreateElement(int index)
   {
    if(index<0||index>=m_data_max)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    xor128;
@@ -70,7 +84,9 @@ bool CArrayCon::CreateElement(int index)
    m_data[index]=new CConnection(weigh/100);
 
    if(!CheckPointer(m_data[index])!=POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -99,7 +115,7 @@ CNeuronBase::CNeuronBase(void):
 //+------------------------------------------------------------------+
 CNeuronBase::~CNeuronBase(void)
   {
-   DeleteObj(Connections);
+   DeleteObj(Connections)
   }
 //+------------------------------------------------------------------+
 //| Init - Initializes the CNeuronBase layer and allocates its GPU...|
@@ -111,7 +127,9 @@ bool CNeuronBase::Init(uint numOutputs,uint myIndex,ENUM_OPTIMIZATION optimizati
       Connections=new CArrayCon();
 
       if(CheckPointer(Connections)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -119,7 +137,9 @@ bool CNeuronBase::Init(uint numOutputs,uint myIndex,ENUM_OPTIMIZATION optimizati
       for(uint c=0;c<numOutputs;c++)
         {
          if(!Connections.CreateElement(c))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          Connections.IncreaseTotal();
         }
@@ -136,7 +156,9 @@ bool CNeuronBase::Init(uint numOutputs,uint myIndex,ENUM_OPTIMIZATION optimizati
 bool CNeuron::updateInputWeights(CLayer*&prevLayer)
   {
    if(CheckPointer(prevLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    float lt=(float)(lr*MathSqrt(1.0-MathPow((double)b2,(double)t))/(1.0-MathPow((double)b1,(double)t)));
@@ -213,7 +235,9 @@ bool CNeuron::calcOutputGradients(float targetVal)
 bool CNeuron::feedForward(CLayer*prevLayer)
   {
    if(CheckPointer(prevLayer)==POINTER_INVALID||prevLayer.Type()!=defLayer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    prevVal=outputVal;
@@ -261,7 +285,7 @@ bool COpenCLMy::Initialize(const string program,const bool show_log=true)
       int error=GetLastError();
       Shutdown();
       PrintFormat("OpenCL context FAILED error=%d elapsed_ms=%I64u",error,GetTickCount64()-started);
-      ReturnFalse;
+      ReturnFalse
      }
 #ifdef NN_OPENCL_EXPECTED_DRIVER
    string expected_driver_actual;
@@ -272,7 +296,7 @@ bool COpenCLMy::Initialize(const string program,const bool show_log=true)
       PrintFormat("OpenCL runtime mismatch requested=%d actual=%s expected=%s",
                   requested_device,expected_driver_actual,NN_OPENCL_EXPECTED_DRIVER);
       Shutdown();
-      ReturnFalse;
+      ReturnFalse
      }
 #endif
    if(show_log)
@@ -299,7 +323,7 @@ bool COpenCLMy::Initialize(const string program,const bool show_log=true)
       if(show_log&&StringLen(build_error_log)>0)
          Print(build_error_log);
       Shutdown();
-      ReturnFalse;
+      ReturnFalse
      }
 
    if(show_log)
@@ -312,7 +336,7 @@ bool COpenCLMy::Initialize(const string program,const bool show_log=true)
       int error=GetLastError();
       Shutdown();
       PrintFormat("OpenCL device limits FAILED field=work_item_sizes error=%d",error);
-      ReturnFalse;
+      ReturnFalse
      }
    size=0;
    ResetLastError();
@@ -322,7 +346,7 @@ bool COpenCLMy::Initialize(const string program,const bool show_log=true)
       int error=GetLastError();
       Shutdown();
       PrintFormat("OpenCL device limits FAILED field=work_group_size error=%d",error);
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -351,7 +375,9 @@ ulong COpenCLMy::GetBufferSize(const int buffer_index)const
 bool CLayer::CreateElement(int index)
   {
    if(index>=m_data_max)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    bool                          result=false;
@@ -671,7 +697,9 @@ bool CLayer::CreateElement(int index)
       temp=new CNeuron();
 
       if(CheckPointer(temp)==POINTER_INVALID||!temp.Init(iOutputs,index,SGD))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       result=true;
      }
@@ -715,7 +743,7 @@ bool CLayer::CreateElement(int index)
                temp=temp_p;
                result=true;
               }
-            DeleteObj(temp_p);
+            DeleteObj(temp_p)
             break;
          case defNeuronConv:
             temp_p=new CNeuronConv();
@@ -728,7 +756,7 @@ bool CLayer::CreateElement(int index)
                temp=temp_p;
                result=true;
               }
-            DeleteObj(temp_p);
+            DeleteObj(temp_p)
             break;
          case defNeuronLSTM:
             temp_p=new CNeuronLSTM();
@@ -741,12 +769,14 @@ bool CLayer::CreateElement(int index)
                temp=temp_p;
                result=true;
               }
-            DeleteObj(temp_p);
+            DeleteObj(temp_p)
             break;
          case defNeuronBaseOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_ocl=new CNeuronBaseOCL();
 
@@ -759,12 +789,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(temp_ocl);
+            DeleteObj(temp_ocl)
             break;
          case defNeuronBaseSAMOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             sam_base=new CNeuronBaseSAMOCL();
 
@@ -777,12 +809,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sam_base);
+            DeleteObj(sam_base)
             break;
          case defNeuronProofOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_proof_ocl=new CNeuronProofOCL();
 
@@ -798,12 +832,16 @@ bool CLayer::CreateElement(int index)
          case defNeuronDPCCActorOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_con_ocl=new CNeuronDPCCActorOCL();
 
             if(CheckPointer(temp_con_ocl)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(temp_con_ocl.Init(iOutputs,index,OpenCL,1,1,1,1,ADAM,1))
               {
@@ -816,7 +854,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronConvOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_con_ocl=new CNeuronConvOCL();
 
@@ -833,7 +873,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronConvSAMOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             sam_conv=new CNeuronConvSAMOCL();
 
@@ -850,7 +892,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronAttentionOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_at_ocl=new CNeuronAttentionOCL();
 
@@ -867,7 +911,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronMHAttentionOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_at_ocl=new CNeuronMHAttentionOCL();
 
@@ -884,7 +930,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronMLMHAttentionOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_mlat_ocl=new CNeuronMLMHAttentionOCL();
 
@@ -901,7 +949,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronMLMHSparseAttentionOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_mlat_ocl=new CNeuronMLMHSparseAttention();
 
@@ -918,7 +968,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronDropoutOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_drop_ocl=new CNeuronDropoutOCL();
 
@@ -936,7 +988,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronBatchNormWithNoise:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_batch_ocl=(type==defNeuronBatchNormWithNoise?new CNeuronBatchNormWithNoise():new CNeuronBatchNormOCL());
 
@@ -953,7 +1007,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronVAEOCL:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             vae=new CVAE();
 
@@ -970,7 +1026,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronBayesianLinearOCL:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             bayesian_linear=new CNeuronBayesianLinearOCL();
 
@@ -982,7 +1040,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronOMPBOCL:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             ompb=new CNeuronOMPBOCL();
 
@@ -997,7 +1057,9 @@ bool CLayer::CreateElement(int index)
             CNeuronAlphaQCMOCL *alphaqcm=new CNeuronAlphaQCMOCL();
 
             if(!alphaqcm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
             alphaqcm.AttachOpenCL(OpenCL);
             m_data[index]=alphaqcm;
 
@@ -1010,7 +1072,9 @@ bool CLayer::CreateElement(int index)
             CNeuronAlphaQCMEncoderOCL *alphaqcm=new CNeuronAlphaQCMEncoderOCL();
 
             if(!alphaqcm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
             alphaqcm.AttachOpenCL(OpenCL);
             m_data[index]=alphaqcm;
 
@@ -1022,7 +1086,10 @@ bool CLayer::CreateElement(int index)
             CNeuronAlphaGenOCL *alphagen=new CNeuronAlphaGenOCL();
 
             if(!alphagen||!alphagen.Init(0,index,OpenCL,AG_ACTIONS,ADAM,1))
-              {DeleteObj(alphagen);ReturnFalse;}
+              {
+               DeleteObj(alphagen)
+               ReturnFalse
+              }
             m_data[index]=alphagen;
 
             return(true);
@@ -1030,7 +1097,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronLSTMOCL:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             lstm=new CNeuronLSTMOCL();
 
@@ -1047,7 +1116,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronSoftMaxOCL:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             softmax=new CNeuronSoftMaxOCL();
 
@@ -1064,7 +1135,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronFQF:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             fqf=new CNeuronFQF();
 
@@ -1081,7 +1154,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronMultiModels:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             multi_model=new CNeuronMultiModel();
 
@@ -1098,7 +1173,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronConcatenate:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             concat=new CNeuronConcatenate();
 
@@ -1115,12 +1192,16 @@ bool CLayer::CreateElement(int index)
          case defNeuronSoftActorCritic:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             fqf=new CNeuronSoftActorCritic();
 
             if(!fqf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fqf.Init(iOutputs,index,OpenCL,1,32,32,ADAM,1))
               {
@@ -1132,12 +1213,16 @@ bool CLayer::CreateElement(int index)
          case defNeuronACSRM:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             fqf=new CNeuronACSRM();
 
             if(!fqf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fqf.Init(iOutputs,index,OpenCL,1,32,32,ADAM,1))
               {
@@ -1149,17 +1234,21 @@ bool CLayer::CreateElement(int index)
          case defNeuronEmbeddingOCL:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             emb=new CNeuronEmbeddingOCL();
 
             if(!emb)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(!emb.Init(iOutputs,index,OpenCL,1,1,windows))
               {
-               DeleteObj(emb);
-               ReturnFalse;
+               DeleteObj(emb)
+               ReturnFalse
               }
             m_data[index]=emb;
 
@@ -1168,17 +1257,21 @@ bool CLayer::CreateElement(int index)
          case defNeuronPEOCL:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             pe=new CNeuronPositionEncoder();
 
             if(!pe)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(!pe.Init(iOutputs,index,OpenCL,1,1,ADAM,1))
               {
-               DeleteObj(pe);
-               ReturnFalse;
+               DeleteObj(pe)
+               ReturnFalse
               }
             m_data[index]=pe;
 
@@ -1187,17 +1280,21 @@ bool CLayer::CreateElement(int index)
          case defNeuronTransposeOCL:
 
             if(!OpenCL)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             tr=new CNeuronTransposeOCL();
 
             if(!tr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(!tr.Init(iOutputs,index,OpenCL,1,1,ADAM,1))
               {
-               DeleteObj(tr);
-               ReturnFalse;
+               DeleteObj(tr)
+               ReturnFalse
               }
             m_data[index]=tr;
 
@@ -1206,7 +1303,9 @@ bool CLayer::CreateElement(int index)
          case defNeuronMH2AttentionOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_mh2at_ocl=new CNeuronMH2AttentionOCL();
 
@@ -1219,12 +1318,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(temp_mh2at_ocl);
+            DeleteObj(temp_mh2at_ocl)
             break;
          case defNeuronCGConvOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             cgc=new CNeuronCGConvOCL();
 
@@ -1237,12 +1338,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cgc);
+            DeleteObj(cgc)
             break;
          case defNeuronMFTOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_mlat_ocl=new CNeuronMFTOCL();
 
@@ -1255,12 +1358,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(temp_mlat_ocl);
+            DeleteObj(temp_mlat_ocl)
             break;
          case defNeuronXCiTOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             temp_mlat_ocl=new CNeuronXCiTOCL();
 
@@ -1273,12 +1378,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(temp_mlat_ocl);
+            DeleteObj(temp_mlat_ocl)
             break;
          case defNeuronDOTOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             dot=new CNeuronDOTOCL();
 
@@ -1291,12 +1398,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(dot);
+            DeleteObj(dot)
             break;
          case defNeuronFAQOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             faq=new CNeuronFAQOCL();
 
@@ -1309,12 +1418,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(faq);
+            DeleteObj(faq)
             break;
          case defNeuronCrossAttenOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             cross=new CNeuronCrossAttention();
 
@@ -1327,12 +1438,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cross);
+            DeleteObj(cross)
             break;
          case defNeuronGTE:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             gte=new CNeuronGTE();
 
@@ -1345,12 +1458,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(gte);
+            DeleteObj(gte)
             break;
          case defNeuronCCMROCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             ccmr=new CNeuronCCMROCL();
 
@@ -1363,12 +1478,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ccmr);
+            DeleteObj(ccmr)
             break;
          case defNeuronNODEOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             node=new CNeuronNODEOCL();
 
@@ -1381,12 +1498,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(node);
+            DeleteObj(node)
             break;
          case defNeuronConformerOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             conf=new CNeuronConformer();
 
@@ -1399,12 +1518,14 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(conf);
+            DeleteObj(conf)
             break;
          case defNeuronRevInDenormOCL:
 
             if(CheckPointer(OpenCL)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             revin=new CNeuronRevINDenormOCL();
 
@@ -1417,13 +1538,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(revin);
+            DeleteObj(revin)
             break;
          case defNeuronClientOCL:
             client=new CNeuronClientOCL();
 
             if(!client)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(client.Init(iOutputs,index,OpenCL,1,1,1,1,1,windows,ADAM,1))
               {
@@ -1431,13 +1554,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(client);
+            DeleteObj(client)
             break;
          case defNeuronLearnabledPE:
             lpe=new CNeuronLearnabledPE();
 
             if(!lpe)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(lpe.Init(iOutputs,index,OpenCL,1,ADAM,1))
               {
@@ -1445,13 +1570,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(lpe);
+            DeleteObj(lpe)
             break;
          case defNeuronUShapeAttention:
             usa=new CNeuronUShapeAttention();
 
             if(!usa)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(usa.Init(iOutputs,index,OpenCL,1,1,1,1,1,0,ADAM,1))
               {
@@ -1459,13 +1586,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(usa);
+            DeleteObj(usa)
             break;
          case defNeuronPatchingOCL:
             patch=new CNeuronPatching();
 
             if(!patch)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(patch.Init(iOutputs,index,OpenCL,1,1,1,1,1,ADAM,1))
               {
@@ -1473,7 +1602,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(patch);
+            DeleteObj(patch)
             break;
 
          //---
@@ -1481,7 +1610,9 @@ bool CLayer::CreateElement(int index)
             tide=new CNeuronTiDEOCL();
 
             if(!tide)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tide.Init(iOutputs,0,OpenCL,1,1,1,1,windows,ADAM,1))
               {
@@ -1489,7 +1620,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tide);
+            DeleteObj(tide)
             break;
 
          //---
@@ -1497,7 +1628,9 @@ bool CLayer::CreateElement(int index)
             fedw=new CNeuronFEDW();
 
             if(!fedw)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fedw.Init(iOutputs,0,OpenCL,1,1,1,ADAM,1))
               {
@@ -1505,7 +1638,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fedw);
+            DeleteObj(fedw)
             break;
 
          //---
@@ -1513,7 +1646,9 @@ bool CLayer::CreateElement(int index)
             fits=new CNeuronFITSOCL();
 
             if(!fits)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fits.Init(iOutputs,0,OpenCL,1,1,1,0.1f,ADAM,1))
               {
@@ -1521,7 +1656,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fits);
+            DeleteObj(fits)
             break;
 
          //---
@@ -1529,7 +1664,9 @@ bool CLayer::CreateElement(int index)
             fredf=new CNeuronFreDFOCL();
 
             if(!fredf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fredf.Init(iOutputs,0,OpenCL,1,1,0.8f,false,ADAM,1))
               {
@@ -1537,7 +1674,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fredf);
+            DeleteObj(fredf)
             break;
 
          //---
@@ -1545,7 +1682,9 @@ bool CLayer::CreateElement(int index)
             compl_att=new CNeuronComplexMLMHAttention();
 
             if(!compl_att)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(compl_att.Init(iOutputs,0,OpenCL,1,1,1,1,1,ADAM,1))
               {
@@ -1553,7 +1692,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(compl_att);
+            DeleteObj(compl_att)
             break;
 
          //---
@@ -1561,7 +1700,9 @@ bool CLayer::CreateElement(int index)
             atf=new CNeuronATFNetOCL();
 
             if(!atf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(atf.Init(iOutputs,0,OpenCL,1,1,1,1,1,windows,ADAM,1))
               {
@@ -1569,7 +1710,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(atf);
+            DeleteObj(atf)
             break;
 
          //---
@@ -1577,7 +1718,9 @@ bool CLayer::CreateElement(int index)
             s3=new CNeuronS3();
 
             if(!s3)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(s3.Init(iOutputs,0,OpenCL,1,1,ADAM,1))
               {
@@ -1585,7 +1728,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(s3);
+            DeleteObj(s3)
             break;
 
          //---
@@ -1593,7 +1736,9 @@ bool CLayer::CreateElement(int index)
             mlkv=new CNeuronMLMHAttentionMLKV();
 
             if(!mlkv)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mlkv.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -1601,7 +1746,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mlkv);
+            DeleteObj(mlkv)
             break;
 
          //---
@@ -1617,7 +1762,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mv);
+            DeleteObj(mv)
             break;
 
          //---
@@ -1625,7 +1770,9 @@ bool CLayer::CreateElement(int index)
             mlkv=new CNeuronMLMHSceneConditionAttention();
 
             if(!mlkv)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mlkv.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -1633,7 +1780,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mlkv);
+            DeleteObj(mlkv)
             break;
 
          //---
@@ -1641,7 +1788,9 @@ bool CLayer::CreateElement(int index)
             crmlkv=new CNeuronMLCrossAttentionMLKV();
 
             if(!crmlkv)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(crmlkv.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -1649,7 +1798,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(crmlkv);
+            DeleteObj(crmlkv)
             break;
 
          //---
@@ -1657,7 +1806,9 @@ bool CLayer::CreateElement(int index)
             mvc=new CNeuronMVCrossAttentionMLKV();
 
             if(!mvc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mvc.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -1665,7 +1816,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mvc);
+            DeleteObj(mvc)
             break;
 
          //---
@@ -1673,7 +1824,9 @@ bool CLayer::CreateElement(int index)
             cscm=new CNeuronCSCMOCL();
 
             if(!cscm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cscm.Init(iOutputs,0,OpenCL,windows,1,1,false,ADAM,1))
               {
@@ -1681,7 +1834,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cscm);
+            DeleteObj(cscm)
             break;
 
          //---
@@ -1689,7 +1842,9 @@ bool CLayer::CreateElement(int index)
             spyr=new CNeuronSPyrAttentionOCL();
 
             if(!spyr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spyr.Init(iOutputs,0,OpenCL,1,1,1,1,1,2,ADAM,1))
               {
@@ -1697,7 +1852,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spyr);
+            DeleteObj(spyr)
             break;
 
          //---
@@ -1705,7 +1860,9 @@ bool CLayer::CreateElement(int index)
             plr=new CNeuronPLROCL();
 
             if(!plr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(plr.Init(iOutputs,0,OpenCL,1,1,false,ADAM,1))
               {
@@ -1713,7 +1870,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(plr);
+            DeleteObj(plr)
             break;
 
          //---
@@ -1721,7 +1878,9 @@ bool CLayer::CreateElement(int index)
             tpm=new CNeuronTPM();
 
             if(!tpm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tpm.Init(iOutputs,0,OpenCL,1,1,1,false,ADAM,1))
               {
@@ -1729,13 +1888,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tpm);
+            DeleteObj(tpm)
             break;
          case defNeuronTPMEncoder:
             tpme=new CNeuronTPMEncoder();
 
             if(!tpme)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tpme.Init(iOutputs,0,OpenCL,1,1,1,false,ADAM,1))
               {
@@ -1743,13 +1904,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tpme);
+            DeleteObj(tpme)
             break;
          case defNeuronSTNNEncoder:
             stnne=new CNeuronSTNNEncoder();
 
             if(!stnne)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(stnne.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -1757,13 +1920,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(stnne);
+            DeleteObj(stnne)
             break;
          case defNeuronSTNNDecoder:
             stnnd=new CNeuronSTNNDecoder();
 
             if(!stnnd)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(stnnd.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -1771,13 +1936,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(stnnd);
+            DeleteObj(stnnd)
             break;
          case defNeuronSparseTSF:
             sptsf=new CNeuronSparseTSF();
 
             if(!sptsf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sptsf.Init(iOutputs,0,OpenCL,1,1,1,1,ADAM,1))
               {
@@ -1785,13 +1952,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sptsf);
+            DeleteObj(sptsf)
             break;
          case defNeuronTEMPOOCL:
             tempo=new CNeuronTEMPOOCL();
 
             if(!tempo)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tempo.Init(iOutputs,0,OpenCL,1,1,1,1,1,ADAM,1))
               {
@@ -1799,13 +1968,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tempo);
+            DeleteObj(tempo)
             break;
          case defNeuronInjectTST:
             inject=new CNeuronInjectTST();
 
             if(!inject)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(inject.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -1813,13 +1984,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(inject);
+            DeleteObj(inject)
             break;
          case defNeuronMambaOCL:
             mamba=new CNeuronMambaOCL();
 
             if(!mamba)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mamba.Init(iOutputs,0,OpenCL,1,1,1,ADAM,1))
               {
@@ -1827,13 +2000,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mamba);
+            DeleteObj(mamba)
             break;
          case defNeuronTrajLLMOCL:
             traj=new CNeuronTrajLLMOCL();
 
             if(!traj)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(traj.Init(iOutputs,0,OpenCL,1,1,1,1,1,ADAM,1))
               {
@@ -1841,7 +2016,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(traj);
+            DeleteObj(traj)
             break;
 
          //---
@@ -1849,7 +2024,9 @@ bool CLayer::CreateElement(int index)
             utraj=new CNeuronUniTraj();
 
             if(!utraj)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(utraj.Init(iOutputs,0,OpenCL,1,1,1,1,1,0,ADAM,1))
               {
@@ -1857,7 +2034,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(utraj);
+            DeleteObj(utraj)
             break;
 
          //---
@@ -1865,7 +2042,9 @@ bool CLayer::CreateElement(int index)
             hivt=new CNeuronHiVTOCL();
 
             if(!hivt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(hivt.Init(iOutputs,0,OpenCL,1,1,1,10,1,1,ADAM,1))
               {
@@ -1873,7 +2052,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(hivt);
+            DeleteObj(hivt)
             break;
 
          //---
@@ -1881,7 +2060,9 @@ bool CLayer::CreateElement(int index)
             pn=new CNeuronPointNetOCL();
 
             if(!pn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pn.Init(iOutputs,0,OpenCL,1,1,1,false,ADAM,1))
               {
@@ -1889,7 +2070,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pn);
+            DeleteObj(pn)
             break;
 
          //---
@@ -1897,7 +2078,9 @@ bool CLayer::CreateElement(int index)
             pn=new CNeuronPointNet2OCL();
 
             if(!pn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pn.Init(iOutputs,0,OpenCL,1,1,1,false,ADAM,1))
               {
@@ -1905,7 +2088,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pn);
+            DeleteObj(pn)
             break;
 
          //---
@@ -1913,7 +2096,9 @@ bool CLayer::CreateElement(int index)
             pn=new CNeuronPointFormer();
 
             if(!pn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pn.Init(iOutputs,0,OpenCL,1,1,1,false,ADAM,1))
               {
@@ -1921,13 +2106,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pn);
+            DeleteObj(pn)
             break;
          case defNeuronHyperDet:
             pn=new CNeuronHyperDet();
 
             if(!pn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pn.Init(iOutputs,0,OpenCL,1,1,1,false,ADAM,1))
               {
@@ -1935,13 +2122,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pn);
+            DeleteObj(pn)
             break;
          case defNeuronSceneSpecific:
             ss=new CNeuronSceneSpecific();
 
             if(!ss)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ss.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -1949,13 +2138,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ss);
+            DeleteObj(ss)
             break;
          case defNeuronSEFormer:
             sef=new CNeuronSEFormer();
 
             if(!sef)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sef.Init(iOutputs,0,OpenCL,1,1,1,false,1,1,ADAM,1))
               {
@@ -1963,13 +2154,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sef);
+            DeleteObj(sef)
             break;
          case defNeuronSPFormer:
             spf=new CNeuronSPFormer();
 
             if(!spf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spf.Init(iOutputs,0,OpenCL,1,1,1,1,1,20,1,1,1,ADAM,2))
               {
@@ -1977,13 +2170,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spf);
+            DeleteObj(spf)
             break;
          case defNeuronMAFT:
             maft=new CNeuronMAFT();
 
             if(!maft)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(maft.Init(iOutputs,0,OpenCL,1,1,1,1,1,20,1,1,1,ADAM,2))
               {
@@ -1991,13 +2186,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(maft);
+            DeleteObj(maft)
             break;
          case defNeuronGRES:
             gres=new CNeuronGRES();
 
             if(!gres)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(gres.Init(iOutputs,0,OpenCL,1,1,1,1,1,20,1,5,1,1,ADAM,2))
               {
@@ -2005,13 +2202,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(gres);
+            DeleteObj(gres)
             break;
          case defResidualConv:
             res=new CResidualConv();
 
             if(!res)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(res.Init(iOutputs,0,OpenCL,1,1,1,ADAM,2))
               {
@@ -2019,13 +2218,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(res);
+            DeleteObj(res)
             break;
          case defNeuronRefMask:
             refm=new CNeuronRefMask();
 
             if(!refm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(refm.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,1,ADAM,2))
               {
@@ -2033,13 +2234,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(refm);
+            DeleteObj(refm)
             break;
          case defNeuronOCM:
             ocm=new CNeuronOCM();
 
             if(!ocm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ocm.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,ADAM,2))
               {
@@ -2047,13 +2250,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ocm);
+            DeleteObj(ocm)
             break;
          case defNeuronRelativeSelfAttention:
             rat=new CNeuronRelativeSelfAttention();
 
             if(!rat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(rat.Init(iOutputs,0,OpenCL,1,1,1,1,ADAM,2))
               {
@@ -2061,13 +2266,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(rat);
+            DeleteObj(rat)
             break;
          case defNeuronRelativeCrossAttention:
             rcat=new CNeuronRelativeCrossAttention();
 
             if(!rcat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(rcat.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,ADAM,2))
               {
@@ -2075,13 +2282,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(rcat);
+            DeleteObj(rcat)
             break;
          case defNeuronRMAT:
             rmat=new CNeuronRMAT();
 
             if(!rmat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(rmat.Init(iOutputs,0,OpenCL,1,1,1,1,1,ADAM,2))
               {
@@ -2089,13 +2298,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(rmat);
+            DeleteObj(rmat)
             break;
          case defNeuronMHAttentionPooling:
             atpool=new CNeuronMHAttentionPooling();
 
             if(!atpool)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(atpool.Init(iOutputs,0,OpenCL,1,1,1,ADAM,2))
               {
@@ -2103,13 +2314,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(atpool);
+            DeleteObj(atpool)
             break;
          case defNeuronMotifs:
             motif=new CNeuronMotifs();
 
             if(!motif)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(motif.Init(iOutputs,0,OpenCL,1,1,1,1,ADAM,2))
               {
@@ -2117,13 +2330,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(motif);
+            DeleteObj(motif)
             break;
          case defNeuronMultiScaleAttention:
             msat=new CNeuronMultiScaleAttention();
 
             if(!msat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(msat.Init(iOutputs,0,OpenCL,1,1,1,1,ADAM,2))
               {
@@ -2131,13 +2346,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(msat);
+            DeleteObj(msat)
             break;
          case defNeuronMolformer:
             molf=new CNeuronMolformer();
 
             if(!molf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(molf.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,1,ADAM,2))
               {
@@ -2145,13 +2362,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(molf);
+            DeleteObj(molf)
             break;
          case defNeuronAMCT:
             amct=new CNeuronAMCT();
 
             if(!amct)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(amct.Init(iOutputs,0,OpenCL,1,1,1,5,1,1,ADAM,2))
               {
@@ -2159,13 +2378,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(amct);
+            DeleteObj(amct)
             break;
          case defNeuronNAFS:
             nafs=new CNeuronNAFS();
 
             if(!nafs)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(nafs.Init(iOutputs,0,OpenCL,1,1,1,ADAM,2))
               {
@@ -2173,13 +2394,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(nafs);
+            DeleteObj(nafs)
             break;
          case defNeuronDiffusion:
             usa=new CNeuronDiffusion();
 
             if(!usa)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(usa.Init(iOutputs,index,OpenCL,1,1,1,1,1,0,ADAM,1))
               {
@@ -2187,13 +2410,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(usa);
+            DeleteObj(usa)
             break;
          case defNeuronHyperProjection:
             lorenz=new CNeuronHyperProjection();
 
             if(!lorenz)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(lorenz.Init(iOutputs,index,OpenCL,1,1,ADAM,1))
               {
@@ -2201,13 +2426,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(lorenz);
+            DeleteObj(lorenz)
             break;
          case defNeuronHyperboloids:
             logmap=new CNeuronHyperboloids();
 
             if(!logmap)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(logmap.Init(iOutputs,index,OpenCL,1,1,1,ADAM,1))
               {
@@ -2215,13 +2442,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(logmap);
+            DeleteObj(logmap)
             break;
          case defNeuronHypDiff:
             hypdif=new CNeuronHypDiff();
 
             if(!hypdif)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(hypdif.Init(iOutputs,index,OpenCL,1,1,1,1,1,1,ADAM,1))
               {
@@ -2229,13 +2458,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(hypdif);
+            DeleteObj(hypdif)
             break;
          case defNeuronPSBlock:
             ps_block=new CNeuronPSBlock();
 
             if(!ps_block)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ps_block.Init(iOutputs,index,OpenCL,1,1,1,1,0.0f,ADAM,1))
               {
@@ -2243,13 +2474,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ps_block);
+            DeleteObj(ps_block)
             break;
          case defNeuronPSformer:
             psformer=new CNeuronPSformer();
 
             if(!psformer)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(psformer.Init(iOutputs,index,OpenCL,1,1,1,0,ADAM,1))
               {
@@ -2257,13 +2490,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(psformer);
+            DeleteObj(psformer)
             break;
          case defNeuronMASA:
             masa=new CNeuronMASA();
 
             if(!masa)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(masa.Init(iOutputs,index,OpenCL,1,1,1,1,1,1,1,0,1,3,1,1,-1,NULL,ADAM,1))
               {
@@ -2271,13 +2506,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(masa);
+            DeleteObj(masa)
             break;
          case defNeuronMarketObserver:
             mo=new CNeuronMarketObserver();
 
             if(!mo)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mo.Init(iOutputs,index,OpenCL,1,1,1,1,1,1,ADAM,1))
               {
@@ -2285,13 +2522,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mo);
+            DeleteObj(mo)
             break;
          case defNeuronRLAgent:
             rl_ag=new CNeuronRLAgent();
 
             if(!rl_ag)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(rl_ag.Init(iOutputs,index,OpenCL,1,1,1,0,1,3,ADAM,1))
               {
@@ -2299,13 +2538,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(rl_ag);
+            DeleteObj(rl_ag)
             break;
          case defNeuronControlAgent:
             contr_ag=new CNeuronControlAgent();
 
             if(!contr_ag)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(contr_ag.Init(iOutputs,index,OpenCL,1,1,1,1,1,1,1,ADAM,1))
               {
@@ -2313,13 +2554,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(contr_ag);
+            DeleteObj(contr_ag)
             break;
          case defNeuronMASAAT:
             masaat=new CNeuronMASAAT();
 
             if(!masaat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(masaat.Init(iOutputs,index,OpenCL,1,1,1,3,1,vec,1,ADAM,1))
               {
@@ -2327,13 +2570,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(masaat);
+            DeleteObj(masaat)
             break;
          case defNeuronMHConvOCL:
             mhconv=new CNeuronMHConvOCL();
 
             if(!mhconv)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mhconv.Init(iOutputs,index,OpenCL,1,1,1,3,1,1,ADAM,1))
               {
@@ -2341,13 +2586,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mhconv);
+            DeleteObj(mhconv)
             break;
          case defNeuronMHFeedForward:
             mhff=new CNeuronMHFeedForward();
 
             if(!mhff)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mhff.Init(iOutputs,index,OpenCL,1,1,1,3,1,ADAM,1))
               {
@@ -2355,13 +2602,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mhff);
+            DeleteObj(mhff)
             break;
          case defNeuronDMHAttention:
             dmhat=new CNeuronDMHAttention();
 
             if(!dmhat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(dmhat.Init(iOutputs,index,OpenCL,1,1,1,3,1,ADAM,1))
               {
@@ -2369,13 +2618,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(dmhat);
+            DeleteObj(dmhat)
             break;
          case defNeuronCrossDMHAttention:
             crdmhat=new CNeuronCrossDMHAttention();
 
             if(!crdmhat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(crdmhat.Init(iOutputs,index,OpenCL,1,1,1,3,1,1,1,ADAM,1))
               {
@@ -2383,13 +2634,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(crdmhat);
+            DeleteObj(crdmhat)
             break;
          case defNeuronMultitaskStockformer:
             mtstockf=new CNeuronMultitaskStockformer();
 
             if(!mtstockf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mtstockf.Init(iOutputs,index,OpenCL,1,1,5,3,1,1,1,ADAM,1))
               {
@@ -2397,13 +2650,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mtstockf);
+            DeleteObj(mtstockf)
             break;
          case defNeuronFinMem:
             fin_mem=new CNeuronFinMem();
 
             if(!fin_mem)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fin_mem.Init(iOutputs,index,OpenCL,5,5,5,3,5,5,ADAM,1))
               {
@@ -2411,13 +2666,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fin_mem);
+            DeleteObj(fin_mem)
             break;
          case defNeuronFinAgent:
             fin_agent=new CNeuronFinAgent();
 
             if(!fin_agent)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fin_agent.Init(iOutputs,index,OpenCL,5,5,10,3,5,5,2,ADAM,1))
               {
@@ -2425,13 +2682,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fin_agent);
+            DeleteObj(fin_agent)
             break;
          case defNeuronFinConManager:
             fin_con=new CNeuronFinConManager();
 
             if(!fin_con)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fin_con.Init(iOutputs,index,OpenCL,5,5,10,3,5,5,6,ADAM,1))
               {
@@ -2439,13 +2698,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fin_con);
+            DeleteObj(fin_con)
             break;
          case defNeuronMacroHFT:
             mhft=new CNeuronMacroHFT();
 
             if(!mhft)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mhft.Init(iOutputs,index,OpenCL,5,5,10,3,1,5,6,ADAM,1))
               {
@@ -2453,13 +2714,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mhft);
+            DeleteObj(mhft)
             break;
          case defNeuronMacroHFTHyperAgent:
             mhft_hyp=new CNeuronMacroHFTHyperAgent();
 
             if(!mhft_hyp)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mhft_hyp.Init(iOutputs,index,OpenCL,5,5,10,3,1,6,6,ADAM,1))
               {
@@ -2467,13 +2730,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mhft_hyp);
+            DeleteObj(mhft_hyp)
             break;
          case defNeuronMacroHFTvsRiskManager:
             mhft_risk=new CNeuronMacroHFTvsRiskManager();
 
             if(!mhft_risk)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mhft_risk.Init(iOutputs,index,OpenCL,5,5,10,3,6,6,6,ADAM,1))
               {
@@ -2481,13 +2746,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mhft_risk);
+            DeleteObj(mhft_risk)
             break;
          case defNeuronMultiScaleRelativeSelfAttention:
             rat=new CNeuronMultiScaleRelativeSelfAttention();
 
             if(!rat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(rat.Init(iOutputs,0,OpenCL,1,1,1,1,ADAM,2))
               {
@@ -2495,13 +2762,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(rat);
+            DeleteObj(rat)
             break;
          case defNeuronMultiScaleRelativeCrossAttention:
             rcat=new CNeuronMultiScaleRelativeCrossAttention();
 
             if(!rcat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(rcat.Init(iOutputs,0,OpenCL,1,1,1,1,1,1,ADAM,2))
               {
@@ -2509,13 +2778,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(rcat);
+            DeleteObj(rcat)
             break;
          case defNeuronHidformer:
             hidf=new CNeuronHidformer();
 
             if(!hidf)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(hidf.Init(iOutputs,index,OpenCL,5,5,10,3,1,5,6,ADAM,1))
               {
@@ -2523,13 +2794,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(hidf);
+            DeleteObj(hidf)
             break;
          case defNeuronResNeXtBlock:
             resnext=new CNeuronResNeXtBlock();
 
             if(!resnext)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(resnext.Init(iOutputs,index,OpenCL,5,5,3,2,10,4,32,ADAM,1))
               {
@@ -2537,13 +2810,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(resnext);
+            DeleteObj(resnext)
             break;
          case defNeuronChimera:
             chimera=new CNeuronChimera();
 
             if(!chimera)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(chimera.Init(iOutputs,index,OpenCL,5,5,3,3,ADAM,1))
               {
@@ -2551,13 +2826,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(chimera);
+            DeleteObj(chimera)
             break;
          case defNeuronMoT:
             mot=new CNeuronMoT();
 
             if(!mot)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mot.Init(iOutputs,index,OpenCL,5,5,ADAM,1))
               {
@@ -2565,13 +2842,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mot);
+            DeleteObj(mot)
             break;
          case defNeuronHypridDecoder:
             hypridDecod=new CNeuronHypridDecoder();
 
             if(!hypridDecod)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(hypridDecod.Init(iOutputs,index,OpenCL,5,5,3,3,1,5,6,ADAM,1))
               {
@@ -2579,13 +2858,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(hypridDecod);
+            DeleteObj(hypridDecod)
             break;
          case defNeuronAttraos:
             attraos=new CNeuronAttraos();
 
             if(!attraos)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(attraos.Init(iOutputs,index,OpenCL,5,5,10,ADAM,1))
               {
@@ -2593,13 +2874,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(attraos);
+            DeleteObj(attraos)
             break;
          case defNeuronDUET:
             duet=new CNeuronDUET();
 
             if(!duet)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(duet.Init(iOutputs,index,OpenCL,5,5,10,2,10,4,2,ADAM,1))
               {
@@ -2607,13 +2890,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(duet);
+            DeleteObj(duet)
             break;
          case defNeuronTransposeRCDOCL:
             trrcd=new CNeuronTransposeRCDOCL();
 
             if(!trrcd)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(trrcd.Init(iOutputs,index,OpenCL,5,5,10,ADAM,1))
               {
@@ -2621,13 +2906,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(trrcd);
+            DeleteObj(trrcd)
             break;
          case defNeuronTransposeVRCOCL:
             tvrc=new CNeuronTransposeVRCOCL();
 
             if(!tvrc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tvrc.Init(iOutputs,index,OpenCL,5,5,10,ADAM,1))
               {
@@ -2635,13 +2922,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tvrc);
+            DeleteObj(tvrc)
             break;
          case defNeuronMultiWindowsConvOCL:
             mwconv=new CNeuronMultiWindowsConvOCL();
 
             if(!mwconv)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mwconv.Init(iOutputs,index,OpenCL,windows,5,5,1,ADAM,1))
               {
@@ -2649,13 +2938,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mwconv);
+            DeleteObj(mwconv)
             break;
          case defNeuronAdaBN:
             adabn=new CNeuronAdaBN();
 
             if(!adabn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(adabn.Init(iOutputs,index,OpenCL,5,5,10,windows,2,1,ADAM,1))
               {
@@ -2663,14 +2954,16 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(adabn);
+            DeleteObj(adabn)
             break;
          case defNeuronCATCH:
             catch
                   =new CNeuronCATCH();
 
             if(!catch)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(catch.Init(iOutputs,index,OpenCL,8,5,4,1,2,1,ADAM,1))
               {
@@ -2678,13 +2971,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(catch);
+            DeleteObj(catch)
             break;
          case defNeuronSkillsEncoder:
             skills=new CNeuronSkillsEncoder();
 
             if(!skills)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(skills.Init(iOutputs,index,OpenCL,8,5,4,4,1,2,2,ADAM,1))
               {
@@ -2692,13 +2987,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(skills);
+            DeleteObj(skills)
             break;
          case defNeuronHiSSDLowLevelControler:
             hissd=new CNeuronHiSSDLowLevelControler();
 
             if(!hissd)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(hissd.Init(iOutputs,index,OpenCL,8,5,4,4,1,2,1,1,2,ADAM,1))
               {
@@ -2706,13 +3003,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(hissd);
+            DeleteObj(hissd)
             break;
          case defNeuronLinerAttention:
             lineatt=new CNeuronLinerAttention();
 
             if(!lineatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(lineatt.Init(iOutputs,index,OpenCL,3,3,4,1,ADAM,1))
               {
@@ -2720,13 +3019,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(lineatt);
+            DeleteObj(lineatt)
             break;
          case defNeuronCGLSTMOCL:
             cglstm=new CNeuronCGLSTMOCL();
 
             if(!cglstm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cglstm.Init(iOutputs,index,OpenCL,8,3,1,ADAM,1))
               {
@@ -2734,13 +3035,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cglstm);
+            DeleteObj(cglstm)
             break;
          case defNeuronMHProbAttention:
             probatt=new CNeuronMHProbAttention();
 
             if(!probatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(probatt.Init(iOutputs,index,OpenCL,3,3,1,1,ADAM,1))
               {
@@ -2748,13 +3051,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(probatt);
+            DeleteObj(probatt)
             break;
          case defNeuronTSPositionEncoder:
             tspe=new CNeuronTSPositionEncoder();
 
             if(!tspe)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tspe.Init(iOutputs,index,OpenCL,3,3,windows,1,ADAM,1))
               {
@@ -2762,13 +3067,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tspe);
+            DeleteObj(tspe)
             break;
          case defMamba4CastEmbeding:
             m4cemb=new CMamba4CastEmbeding();
 
             if(!m4cemb)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(m4cemb.Init(iOutputs,index,OpenCL,3,9,3,windows,ADAM,1))
               {
@@ -2776,13 +3083,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(m4cemb);
+            DeleteObj(m4cemb)
             break;
          case defNeuronMultiWindowsConvWPadOCL:
             mwconvpad=new CNeuronMultiWindowsConvWPadOCL();
 
             if(!mwconvpad)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mwconvpad.Init(iOutputs,index,OpenCL,windows,1,5,1,1,ADAM,1))
               {
@@ -2790,13 +3099,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mwconvpad);
+            DeleteObj(mwconvpad)
             break;
          case defNeuronConcatDiff:
             condiff=new CNeuronConcatDiff();
 
             if(!condiff)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(condiff.Init(iOutputs,index,OpenCL,12,1,2,ADAM,1))
               {
@@ -2804,13 +3115,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(condiff);
+            DeleteObj(condiff)
             break;
          case defNeuronMantisPatching:
             mantpatch=new CNeuronMantisPatching();
 
             if(!mantpatch)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mantpatch.Init(iOutputs,index,OpenCL,12,3,2,5,5,ADAM,1))
               {
@@ -2818,13 +3131,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mantpatch);
+            DeleteObj(mantpatch)
             break;
          case defNeuronMantisAttentionUnit:
             mantatt=new CNeuronMantisAttentionUnit();
 
             if(!mantatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mantatt.Init(iOutputs,index,OpenCL,12,3,2,5,5,1,5,ADAM,1))
               {
@@ -2832,13 +3147,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mantatt);
+            DeleteObj(mantatt)
             break;
          case defNeuronTimeFoundPatching:
             tf_patch=new CNeuronTimeFoundPatching();
 
             if(!tf_patch)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tf_patch.Init(iOutputs,index,OpenCL,12,3,2,5,5,ADAM,1))
               {
@@ -2846,13 +3163,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tf_patch);
+            DeleteObj(tf_patch)
             break;
          case defNeuronTimeFoundTransformerUnit:
             tf_tu=new CNeuronTimeFoundTransformerUnit();
 
             if(!tf_tu)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tf_tu.Init(iOutputs,index,OpenCL,3,3,2,2,5,1,1,1,ADAM,1))
               {
@@ -2860,13 +3179,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tf_tu);
+            DeleteObj(tf_tu)
             break;
          case defNeuronSwiGLUOCL:
             swiglu=new CNeuronSwiGLUOCL();
 
             if(!swiglu)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(swiglu.Init(iOutputs,index,OpenCL,3,3,2,2,1,ADAM,1))
               {
@@ -2874,13 +3195,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(swiglu);
+            DeleteObj(swiglu)
             break;
          case defNeuronTimeMoESparseExperts:
             timemoesp=new CNeuronTimeMoESparseExperts();
 
             if(!timemoesp)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(timemoesp.Init(iOutputs,index,OpenCL,3,3,2,2,5,2,ADAM,1))
               {
@@ -2888,13 +3211,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(timemoesp);
+            DeleteObj(timemoesp)
             break;
          case defNeuronTimeMoEAttention:
             timemoeatt=new CNeuronTimeMoEAttention();
 
             if(!timemoeatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(timemoeatt.Init(iOutputs,index,OpenCL,3,3,2,3,5,1,1,5,2,2,ADAM,1))
               {
@@ -2902,13 +3227,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(timemoeatt);
+            DeleteObj(timemoeatt)
             break;
          case defNeuronAdaptConv:
             ac=new CNeuronAdaptConv();
 
             if(!ac)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ac.Init(iOutputs,index,OpenCL,3,3,2,3,ADAM,1))
               {
@@ -2916,13 +3243,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ac);
+            DeleteObj(ac)
             break;
          case defNeuronRoPE:
             rope=new CNeuronRoPE();
 
             if(!rope)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(rope.Init(iOutputs,index,OpenCL,3,4,1,ADAM,1))
               {
@@ -2930,13 +3259,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(rope);
+            DeleteObj(rope)
             break;
          case defNeuronK2VAEEncoder:
             k2vae=new CNeuronK2VAEEncoder();
 
             if(!k2vae)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(k2vae.Init(iOutputs,index,OpenCL,3,3,5,1,1,2,3,3,2,ADAM,1))
               {
@@ -2944,13 +3275,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(k2vae);
+            DeleteObj(k2vae)
             break;
          case defNeuronInterpolationAttention:
             ia=new CNeuronInterpolationAttention();
 
             if(!ia)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ia.Init(iOutputs,index,OpenCL,3,3,ADAM,1))
               {
@@ -2958,13 +3291,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ia);
+            DeleteObj(ia)
             break;
          case defNeuronGinARCell:
             ginar_cell=new CNeuronGinARCell();
 
             if(!ginar_cell)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ginar_cell.Init(iOutputs,index,OpenCL,3,3,ADAM,1))
               {
@@ -2972,13 +3307,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ginar_cell);
+            DeleteObj(ginar_cell)
             break;
          case defNeuronGinAR:
             ginar=new CNeuronGinAR();
 
             if(!ginar)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ginar.Init(iOutputs,index,OpenCL,3,3,ADAM,1))
               {
@@ -2986,13 +3323,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ginar);
+            DeleteObj(ginar)
             break;
          case defNeuronPeriodNorm:
             per_norm=new CNeuronPeriodNorm();
 
             if(!per_norm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(per_norm.Init(iOutputs,index,OpenCL,3,3,1,ADAM,1))
               {
@@ -3000,13 +3339,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(per_norm);
+            DeleteObj(per_norm)
             break;
          case defNeuronAdaptSpatialNorm:
             adapt_norm=new CNeuronAdaptSpatialNorm();
 
             if(!adapt_norm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(adapt_norm.Init(iOutputs,index,OpenCL,3,1,ADAM,1))
               {
@@ -3014,13 +3355,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(adapt_norm);
+            DeleteObj(adapt_norm)
             break;
          case defNeuronSCNNEncoder:
             scnn_enc=new CNeuronSCNNEncoder();
 
             if(!scnn_enc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(scnn_enc.Init(iOutputs,index,OpenCL,3,1,1,1,1,ADAM,1))
               {
@@ -3028,13 +3371,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(scnn_enc);
+            DeleteObj(scnn_enc)
             break;
          case defNeuronSCNN:
             scnn=new CNeuronSCNN();
 
             if(!scnn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(scnn.Init(iOutputs,index,OpenCL,3,1,1,1,1,1,ADAM,1))
               {
@@ -3042,13 +3387,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(scnn);
+            DeleteObj(scnn)
             break;
          case defNeuronAttentNorm:
             atn=new CNeuronAttentNorm();
 
             if(!atn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(atn.Init(iOutputs,index,OpenCL,3,3,1,ADAM,1))
               {
@@ -3056,13 +3403,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(atn);
+            DeleteObj(atn)
             break;
          case defNeuronSAttentNorm:
             satn=new CNeuronSAttentNorm();
 
             if(!satn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(satn.Init(iOutputs,index,OpenCL,3,3,ADAM,1))
               {
@@ -3070,13 +3419,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(satn);
+            DeleteObj(satn)
             break;
          case defNeuronPolynomialRegression:
             pol_regr=new CNeuronPolynomialRegression();
 
             if(!pol_regr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pol_regr.Init(iOutputs,index,OpenCL,3,3,3,ADAM,1))
               {
@@ -3084,13 +3435,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pol_regr);
+            DeleteObj(pol_regr)
             break;
          case defNeuronSSCNNEncoder:
             sscnn_enc=new CNeuronSSCNNEncoder();
 
             if(!sscnn_enc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sscnn_enc.Init(iOutputs,index,OpenCL,3,1,1,1,1,ADAM,1))
               {
@@ -3098,13 +3451,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sscnn_enc);
+            DeleteObj(sscnn_enc)
             break;
          case defNeuronSSCNN:
             sscnn=new CNeuronSSCNN();
 
             if(!sscnn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sscnn.Init(iOutputs,index,OpenCL,3,1,1,1,1,1,ADAM,1))
               {
@@ -3112,13 +3467,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sscnn);
+            DeleteObj(sscnn)
             break;
          case defCircleParams:
             circl_param=new CCircleParams();
 
             if(!circl_param)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(circl_param.Init(iOutputs,index,OpenCL,3,1,ADAM,1))
               {
@@ -3126,13 +3483,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(circl_param);
+            DeleteObj(circl_param)
             break;
          case defNeuronTQMHA:
             tqmha=new CNeuronTQMHA();
 
             if(!tqmha)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tqmha.Init(iOutputs,index,OpenCL,3,1,1,5,3,1,ADAM,1))
               {
@@ -3140,13 +3499,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tqmha);
+            DeleteObj(tqmha)
             break;
          case defNeuronHimNetGCRU:
             gcru=new CNeuronHimNetGCRU();
 
             if(!gcru)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(gcru.Init(iOutputs,index,OpenCL,3,1,1,2,1,ADAM,1))
               {
@@ -3154,13 +3515,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(gcru);
+            DeleteObj(gcru)
             break;
          case defNeuronHimNetEncoder:
             hn_enc=new CNeuronHimNetEncoder();
 
             if(!hn_enc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(hn_enc.Init(iOutputs,index,OpenCL,3,1,1,2,1,2,1,1,1,1,ADAM,1))
               {
@@ -3168,13 +3531,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(hn_enc);
+            DeleteObj(hn_enc)
             break;
          case defNeuronHimNetDecoder:
             hn_dec=new CNeuronHimNetDecoder();
 
             if(!hn_dec)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(hn_dec.Init(iOutputs,index,OpenCL,3,1,1,2,1,2,ADAM,1))
               {
@@ -3182,13 +3547,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(hn_dec);
+            DeleteObj(hn_dec)
             break;
          case defNeuronSNSMHAttention:
             snsatt=new CNeuronSNSMHAttention();
 
             if(!snsatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(snsatt.Init(iOutputs,index,OpenCL,3,3,1,2,0.5f,ADAM,1))
               {
@@ -3196,13 +3563,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(snsatt);
+            DeleteObj(snsatt)
             break;
          case defNeuronFastGConv:
             fgcru=new CNeuronFastGConv();
 
             if(!fgcru)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fgcru.Init(iOutputs,index,OpenCL,3,3,2,ADAM,1))
               {
@@ -3210,13 +3579,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fgcru);
+            DeleteObj(fgcru)
             break;
          case defNeuronSAGDFN:
             sagdfn=new CNeuronSAGDFN();
 
             if(!sagdfn)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sagdfn.Init(iOutputs,index,OpenCL,3,2,1,1,1,1,0.5f,1,3,1,ADAM,1))
               {
@@ -3224,13 +3595,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sagdfn);
+            DeleteObj(sagdfn)
             break;
          case defNeuronSpatialEmbedding:
             semb=new CNeuronSpatialEmbedding();
 
             if(!semb)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(semb.Init(iOutputs,index,OpenCL,3,2,2,ADAM,1))
               {
@@ -3238,13 +3611,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(semb);
+            DeleteObj(semb)
             break;
          case defNeuronTempEmbedding:
             temb=new CNeuronTempEmbedding();
 
             if(!temb)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(temb.Init(iOutputs,index,OpenCL,3,2,1,1,1,1,1,1,ADAM,1))
               {
@@ -3252,13 +3627,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(temb);
+            DeleteObj(temb)
             break;
          case defNeuronGlobalLocalAttention:
             glatt=new CNeuronGlobalLocalAttention();
 
             if(!glatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(glatt.Init(iOutputs,index,OpenCL,3,2,1,1,1,0.5f,ADAM,1))
               {
@@ -3266,13 +3643,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(glatt);
+            DeleteObj(glatt)
             break;
          case defNeuronExtralonger:
             exlon=new CNeuronExtralonger();
 
             if(!exlon)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(exlon.Init(iOutputs,index,OpenCL,3,1,2,1,2,1,1,1,1,1,1,1,1,0.5f,ADAM,1))
               {
@@ -3280,13 +3659,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(exlon);
+            DeleteObj(exlon)
             break;
          case defNeuronExtralongerGraph:
             exlongr=new CNeuronExtralongerGraph();
 
             if(!exlongr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(exlongr.Init(iOutputs,index,OpenCL,3,1,2,1,2,1,1,1,1,2,2,1,0.5f,ADAM,1))
               {
@@ -3294,13 +3675,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(exlongr);
+            DeleteObj(exlongr)
             break;
          case defNeuronGraphAttention:
             gratt=new CNeuronGraphAttention();
 
             if(!gratt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(gratt.Init(iOutputs,index,OpenCL,3,1,2,2,0.5f,ADAM,1))
               {
@@ -3308,13 +3691,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(gratt);
+            DeleteObj(gratt)
             break;
          case defNeuronSparseGraphAttention:
             sgratt=new CNeuronSparseGraphAttention();
 
             if(!sgratt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sgratt.Init(iOutputs,index,OpenCL,3,1,2,0.5f,2,1,ADAM,1))
               {
@@ -3322,13 +3707,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sgratt);
+            DeleteObj(sgratt)
             break;
          case defNeuronGlobLocGraphAtt:
             glgratt=new CNeuronGlobLocGraphAtt();
 
             if(!glgratt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(glgratt.Init(iOutputs,index,OpenCL,3,1,2,0.5f,2,1,ADAM,1))
               {
@@ -3336,13 +3723,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(glgratt);
+            DeleteObj(glgratt)
             break;
          case defNeuronSpikeConv:
             spike=new CNeuronSpikeConv();
 
             if(!spike)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spike.Init(iOutputs,index,OpenCL,3,1,2,1,1,ADAM,1))
               {
@@ -3350,13 +3739,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spike);
+            DeleteObj(spike)
             break;
          case defNeuronGateLineAttention:
             glineatt=new CNeuronGateLineAttention();
 
             if(!glineatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(glineatt.Init(iOutputs,index,OpenCL,3,1,2,1,ADAM,1))
               {
@@ -3364,13 +3755,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(glineatt);
+            DeleteObj(glineatt)
             break;
          case defNeuronSpikeSparseAttention:
             spikeatt=new CNeuronSpikeSparseAttention();
 
             if(!spikeatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spikeatt.Init(iOutputs,index,OpenCL,3,1,2,0.5f,1,1,ADAM,1))
               {
@@ -3378,13 +3771,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spikeatt);
+            DeleteObj(spikeatt)
             break;
          case defNeuronMoEConv:
             moecon=new CNeuronMoEConv();
 
             if(!moecon)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(moecon.Init(iOutputs,index,OpenCL,3,1,2,2,0.5f,1,ADAM,1))
               {
@@ -3392,13 +3787,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(moecon);
+            DeleteObj(moecon)
             break;
          case defNeuronSpikingBrain:
             spikebrain=new CNeuronSpikingBrain();
 
             if(!spikebrain)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spikebrain.Init(iOutputs,index,OpenCL,3,1,2,0.5f,1,1,ADAM,1))
               {
@@ -3406,13 +3803,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spikebrain);
+            DeleteObj(spikebrain)
             break;
          case defNeuronSparseSoftMax:
             sparsoftmax=new CNeuronSparseSoftMax();
 
             if(!sparsoftmax)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sparsoftmax.Init(iOutputs,index,OpenCL,3,2,1,ADAM,1))
               {
@@ -3420,13 +3819,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sparsoftmax);
+            DeleteObj(sparsoftmax)
             break;
          case defNeuronSpikeActivation:
             spikeact=new CNeuronSpikeActivation();
 
             if(!spikeact)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spikeact.Init(iOutputs,index,OpenCL,3,ADAM,1))
               {
@@ -3434,13 +3835,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spikeact);
+            DeleteObj(spikeact)
             break;
          case defNeuronSpikeResNeXtBlock:
             spikeresblock=new CNeuronSpikeResNeXtBlock();
 
             if(!spikeresblock)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spikeresblock.Init(iOutputs,index,OpenCL,3,3,3,3,2,3,ADAM,1))
               {
@@ -3448,13 +3851,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spikeresblock);
+            DeleteObj(spikeresblock)
             break;
          case defNeuronSpikeResNeXtBottleneck:
             spikeresbottleneck=new CNeuronSpikeResNeXtBottleneck();
 
             if(!spikeresbottleneck)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spikeresbottleneck.Init(iOutputs,index,OpenCL,3,3,3,3,2,3,ADAM,1))
               {
@@ -3462,13 +3867,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spikeresbottleneck);
+            DeleteObj(spikeresbottleneck)
             break;
          case defNeuronSpikeResNeXtResidual:
             spikeresresid=new CNeuronSpikeResNeXtResidual();
 
             if(!spikeresresid)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(spikeresresid.Init(iOutputs,index,OpenCL,3,3,3,3,ADAM,1))
               {
@@ -3476,13 +3883,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(spikeresresid);
+            DeleteObj(spikeresresid)
             break;
          case defNeuronSSAM:
             ssam=new CNeuronSSAM();
 
             if(!ssam)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ssam.Init(iOutputs,index,OpenCL,3,3,3,3,true,ADAM,1))
               {
@@ -3490,13 +3899,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ssam);
+            DeleteObj(ssam)
             break;
          case defNeuronSSAMResNeXtBlock:
             ssamblock=new CNeuronSSAMResNeXtBlock();
 
             if(!ssamblock)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ssamblock.Init(iOutputs,index,OpenCL,3,3,3,3,3,3,1,3,ADAM,1))
               {
@@ -3504,13 +3915,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ssamblock);
+            DeleteObj(ssamblock)
             break;
          case defNeuronSTFS:
             stfs=new CNeuronSTFS();
 
             if(!stfs)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(stfs.Init(iOutputs,index,OpenCL,3,3,3,3,ADAM,1))
               {
@@ -3518,13 +3931,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(stfs);
+            DeleteObj(stfs)
             break;
          case defNeuronSpikeConvGRU:
             sp_conv_gru=new CNeuronSpikeConvGRU();
 
             if(!sp_conv_gru)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_conv_gru.Init(iOutputs,index,OpenCL,3,3,3,ADAM,1))
               {
@@ -3532,13 +3947,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_conv_gru);
+            DeleteObj(sp_conv_gru)
             break;
          case defNeuronAddToStack:
             stack=new CNeuronAddToStack();
 
             if(!stack)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(stack.Init(iOutputs,index,OpenCL,3,3,3,ADAM,1))
               {
@@ -3546,13 +3963,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(stack);
+            DeleteObj(stack)
             break;
          case defNeuronStackCorrelation:
             st_correl=new CNeuronStackCorrelation();
 
             if(!st_correl)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(st_correl.Init(iOutputs,index,OpenCL,3,3,3,ADAM,1))
               {
@@ -3560,13 +3979,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(st_correl);
+            DeleteObj(st_correl)
             break;
          case defNeuronSTEFlowNetEncoder:
             ste_encod=new CNeuronSTEFlowNetEncoder();
 
             if(!ste_encod)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ste_encod.Init(iOutputs,index,OpenCL,windows,windows,3,3,1,3,3,ADAM,1))
               {
@@ -3574,13 +3995,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ste_encod);
+            DeleteObj(ste_encod)
             break;
          case defNeuronSTEFlowNet:
             ste=new CNeuronSTEFlowNet();
 
             if(!ste)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ste.Init(iOutputs,index,OpenCL,windows,windows,3,3,1,3,3,ADAM,1))
               {
@@ -3588,13 +4011,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ste);
+            DeleteObj(ste)
             break;
          case defNeuronSTEFlowNetDecoder:
             ste_decod=new CNeuronSTEFlowNetDecoder();
 
             if(!ste_decod)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ste_decod.Init(iOutputs,index,OpenCL,windows,windows,3,3,1,3,NULL,ADAM,1))
               {
@@ -3602,13 +4027,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ste_decod);
+            DeleteObj(ste_decod)
             break;
          case defNeuronSTEFlowNetResidualBlock:
             ste_resid=new CNeuronSTEFlowNetResidualBlock();
 
             if(!ste_resid)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ste_resid.Init(iOutputs,index,OpenCL,3,3,3,1,ADAM,1))
               {
@@ -3616,13 +4043,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ste_resid);
+            DeleteObj(ste_resid)
             break;
          case defNeuronMultiScaleStackCorrelation:
             mul_correl=new CNeuronMultiScaleStackCorrelation();
 
             if(!mul_correl)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mul_correl.Init(iOutputs,index,OpenCL,3,3,3,2,ADAM,1))
               {
@@ -3630,13 +4059,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mul_correl);
+            DeleteObj(mul_correl)
             break;
          case defNeuronSpikeConvGRU2D:
             sp_conv_gru2D=new CNeuronSpikeConvGRU2D();
 
             if(!sp_conv_gru2D)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_conv_gru2D.Init(iOutputs,index,OpenCL,3,3,3,ADAM,1))
               {
@@ -3644,13 +4075,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_conv_gru2D);
+            DeleteObj(sp_conv_gru2D)
             break;
          case defNeuronRAFT:
             raft=new CNeuronRAFT();
 
             if(!raft)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(raft.Init(iOutputs,index,OpenCL,windows,windows,3,3,3,2,ADAM,1))
               {
@@ -3658,13 +4091,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(raft);
+            DeleteObj(raft)
             break;
          case defNeuronMultScalStackCorrelBySegments:
             segm_corr=new CNeuronMultScalStackCorrelBySegments();
 
             if(!segm_corr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(segm_corr.Init(iOutputs,index,OpenCL,2,2,3,3,2,ADAM,1))
               {
@@ -3672,13 +4107,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(segm_corr);
+            DeleteObj(segm_corr)
             break;
          case defNeuronTMAMFE:
             mfe=new CNeuronTMAMFE();
 
             if(!mfe)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mfe.Init(iOutputs,index,OpenCL,2,mfe_windows,3,ADAM,1))
               {
@@ -3686,13 +4123,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mfe);
+            DeleteObj(mfe)
             break;
          case defNeuronTMAMPA:
             mpa=new CNeuronTMAMPA();
 
             if(!mpa)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mpa.Init(iOutputs,index,OpenCL,2,2,3,3,2,ADAM,1))
               {
@@ -3700,13 +4139,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mpa);
+            DeleteObj(mpa)
             break;
          case defNeuronTMA:
             tma=new CNeuronTMA();
 
             if(!tma)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tma.Init(iOutputs,index,OpenCL,windows,windows,3,3,3,2,1,2,1,ADAM,1))
               {
@@ -3714,13 +4155,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tma);
+            DeleteObj(tma)
             break;
          case defNeuronSpikeSTConvGRU:
             st_convgru=new CNeuronSpikeSTConvGRU();
 
             if(!st_convgru)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(st_convgru.Init(iOutputs,index,OpenCL,3,mfe_windows,3,ADAM,1))
               {
@@ -3728,13 +4171,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(st_convgru);
+            DeleteObj(st_convgru)
             break;
          case defNeuronFERENet:
             fere=new CNeuronFERENet();
 
             if(!fere)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fere.Init(iOutputs,index,OpenCL,3,windows,ADAM,1))
               {
@@ -3742,13 +4187,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fere);
+            DeleteObj(fere)
             break;
          case defNeuronFGDModule:
             fgd=new CNeuronFGDModule();
 
             if(!fgd)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fgd.Init(iOutputs,index,OpenCL,3,3,3,3,ADAM,1))
               {
@@ -3756,13 +4203,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fgd);
+            DeleteObj(fgd)
             break;
          case defNeuronEVMGRFlowNet:
             evmgr=new CNeuronEVMGRFlowNet();
 
             if(!evmgr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(evmgr.Init(iOutputs,index,OpenCL,3,windows,ADAM,1))
               {
@@ -3770,13 +4219,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(evmgr);
+            DeleteObj(evmgr)
             break;
          case defNeuronSpikeConvBlock:
             spike_block=new CNeuronSpikeConvBlock();
 
             if(!spike_block)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
       //--- serialized SpikeConvBlock restores all nested holders in Load().
       //--- a default Init() creates incompatible temporary shapes first.
@@ -3789,7 +4240,9 @@ bool CLayer::CreateElement(int index)
             msres=new CNeuronMSRes();
 
             if(!msres)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(msres.Init(iOutputs,index,OpenCL,3,1,1,ADAM,1))
               {
@@ -3797,13 +4250,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(msres);
+            DeleteObj(msres)
             break;
          case defNeuronSpikeQKAttention:
             qkatt=new CNeuronSpikeQKAttention();
 
             if(!qkatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(qkatt.Init(iOutputs,index,OpenCL,3,1,1,2,ADAM,1))
               {
@@ -3811,13 +4266,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(qkatt);
+            DeleteObj(qkatt)
             break;
          case defNeuronSDSA:
             sdsa=new CNeuronSDSA();
 
             if(!sdsa)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sdsa.Init(iOutputs,index,OpenCL,3,1,1,2,ADAM,1))
               {
@@ -3825,13 +4282,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sdsa);
+            DeleteObj(sdsa)
             break;
          case defNeuronSDformerUBlock:
             sdublock=new CNeuronSDformerUBlock();
 
             if(!sdublock)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sdublock.Init(iOutputs,index,OpenCL,3,windows,mfe_windows,mfe_windows,2,ADAM,1))
               {
@@ -3839,13 +4298,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sdublock);
+            DeleteObj(sdublock)
             break;
          case defNeuronSDformerFlow:
             sdflow=new CNeuronSDformerFlow();
 
             if(!sdflow)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sdflow.Init(iOutputs,index,OpenCL,3,sdflow_win,mfe_windows,sdflow_layers,2,ADAM,1))
               {
@@ -3853,13 +4314,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sdflow);
+            DeleteObj(sdflow)
             break;
          case defNeuronSpikePatchStak:
             sp_patch_stak=new CNeuronSpikePatchStak();
 
             if(!sp_patch_stak)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_patch_stak.Init(iOutputs,index,OpenCL,3,2,2,1,ADAM,1))
               {
@@ -3867,13 +4330,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_patch_stak);
+            DeleteObj(sp_patch_stak)
             break;
          case defNeuronSpike2DSSMOCL:
             sp_ssm=new CNeuronSpike2DSSMOCL();
 
             if(!sp_ssm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_ssm.Init(iOutputs,index,OpenCL,3,3,2,2,ADAM,1))
               {
@@ -3881,13 +4346,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_ssm);
+            DeleteObj(sp_ssm)
             break;
          case defNeuronSpikeMamba2D:
             sp_mamba=new CNeuronSpikeMamba2D();
 
             if(!sp_mamba)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_mamba.Init(iOutputs,index,OpenCL,3,3,2,ADAM,1))
               {
@@ -3895,13 +4362,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_mamba);
+            DeleteObj(sp_mamba)
             break;
          case defNeuronSpikeSTSSM:
             sp_stssm=new CNeuronSpikeSTSSM();
 
             if(!sp_stssm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_stssm.Init(iOutputs,index,OpenCL,3,2,2,2,2,ADAM,1))
               {
@@ -3909,13 +4378,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_stssm);
+            DeleteObj(sp_stssm)
             break;
          case defNeuronESTMEncoder:
             sp_estm=new CNeuronESTMEncoder();
 
             if(!sp_estm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_estm.Init(iOutputs,index,OpenCL,mfe_windows,windows,2,2,windows,ADAM,1))
               {
@@ -3923,13 +4394,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_estm);
+            DeleteObj(sp_estm)
             break;
          case defNeuronCreateFlow:
             cr_flow=new CNeuronCreateFlow();
 
             if(!cr_flow)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cr_flow.Init(iOutputs,index,OpenCL,5,2,2,1,ADAM,1))
               {
@@ -3937,13 +4410,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cr_flow);
+            DeleteObj(cr_flow)
             break;
          case defNeuronBiDirectCorrelation:
             bi_corr=new CNeuronBiDirectCorrelation();
 
             if(!bi_corr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(bi_corr.Init(iOutputs,index,OpenCL,2,5,1,2,ADAM,1))
               {
@@ -3951,13 +4426,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(bi_corr);
+            DeleteObj(bi_corr)
             break;
          case defNeuronSATMA:
             satma=new CNeuronSATMA();
 
             if(!satma)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(satma.Init(iOutputs,index,OpenCL,2,5,1,2,1,ADAM,1))
               {
@@ -3965,13 +4442,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(satma);
+            DeleteObj(satma)
             break;
          case defNeuronBAT:
             bat=new CNeuronBAT();
 
             if(!bat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(bat.Init(iOutputs,index,OpenCL,2,2,5,1,ADAM,1))
               {
@@ -3979,13 +4458,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(bat);
+            DeleteObj(bat)
             break;
          case defNeuronBATvADM:
             bat=new CNeuronBATvADM();
 
             if(!bat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(bat.Init(iOutputs,index,OpenCL,2,2,5,1,ADAM,1))
               {
@@ -3993,13 +4474,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(bat);
+            DeleteObj(bat)
             break;
          case defNeuronSpikeSCM:
             scm=new CNeuronSpikeSCM;
 
             if(!scm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(scm.Init(iOutputs,index,OpenCL,3,3,2,1,ADAM,1))
               {
@@ -4007,13 +4490,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(scm);
+            DeleteObj(scm)
             break;
          case defNeuronSpikeFAM:
             fam=new CNeuronSpikeFAM;
 
             if(!fam)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fam.Init(iOutputs,index,OpenCL,3,2,1,ADAM,1))
               {
@@ -4021,13 +4506,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fam);
+            DeleteObj(fam)
             break;
          case defNeuronSpikeMDC:
             mdc=new CNeuronSpikeMDC;
 
             if(!mdc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mdc.Init(iOutputs,index,OpenCL,3,3,2,1,ADAM,1))
               {
@@ -4035,13 +4522,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mdc);
+            DeleteObj(mdc)
             break;
          case defNeuronMDS:
             mds=new CNeuronMDS;
 
             if(!mds)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mds.Init(iOutputs,index,OpenCL,3,2,1,ADAM,1))
               {
@@ -4049,13 +4538,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mds);
+            DeleteObj(mds)
             break;
          case defNeuronSpikeADM:
             adm=new CNeuronSpikeADM;
 
             if(!adm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(adm.Init(iOutputs,index,OpenCL,3,2,1,ADAM,1))
               {
@@ -4063,13 +4554,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(adm);
+            DeleteObj(adm)
             break;
          case defNeuronCDCSelfCorrector:
             selfcorrect=new CNeuronCDCSelfCorrector;
 
             if(!selfcorrect)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(selfcorrect.Init(iOutputs,index,OpenCL,3,windows,3,2,1,ADAM,1))
               {
@@ -4077,13 +4570,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(selfcorrect);
+            DeleteObj(selfcorrect)
             break;
          case defNeuronSpikeCDC:
             cdc=new CNeuronSpikeCDC;
 
             if(!cdc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cdc.Init(iOutputs,index,OpenCL,3,windows,2,1,1,ADAM,1))
               {
@@ -4091,13 +4586,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cdc);
+            DeleteObj(cdc)
             break;
          case defNeuronSpikeEEMFLow:
             eemflow=new CNeuronSpikeEEMFLow;
 
             if(!eemflow)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(eemflow.Init(iOutputs,index,OpenCL,3,2,5,1,1,ADAM,1))
               {
@@ -4105,13 +4602,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(eemflow);
+            DeleteObj(eemflow)
             break;
          case defNeuronSpikeDepthWiseConv:
             dw_conv=new CNeuronSpikeDepthWiseConv;
 
             if(!dw_conv)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(dw_conv.Init(iOutputs,index,OpenCL,3,2,3,1,5,1,ADAM,1))
               {
@@ -4119,13 +4618,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(dw_conv);
+            DeleteObj(dw_conv)
             break;
          case defNeuronMultiScaleExcitation:
             excit=new CNeuronMultiScaleExcitation;
 
             if(!excit)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(excit.Init(iOutputs,index,OpenCL,3,2,2,1,ADAM,1))
               {
@@ -4133,13 +4634,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(excit);
+            DeleteObj(excit)
             break;
          case defNeuronMultiScaleDifference:
             ms_diff=new CNeuronMultiScaleDifference;
 
             if(!ms_diff)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ms_diff.Init(iOutputs,index,OpenCL,3,2,5,windows,ADAM,1))
               {
@@ -4147,13 +4650,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ms_diff);
+            DeleteObj(ms_diff)
             break;
          case defNeuronCorrelationEncoder:
             corr_enc=new CNeuronCorrelationEncoder;
 
             if(!corr_enc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(corr_enc.Init(iOutputs,index,OpenCL,3,2,5,2,ADAM,1))
               {
@@ -4161,13 +4666,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(corr_enc);
+            DeleteObj(corr_enc)
             break;
          case defNeuronEDCFlow:
             edcflow=new CNeuronEDCFlow;
 
             if(!edcflow)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(edcflow.Init(iOutputs,index,OpenCL,3,5,5,2,5,windows,2,ADAM,1))
               {
@@ -4175,13 +4682,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(edcflow);
+            DeleteObj(edcflow)
             break;
          case defNeuronCreateICEFlow:
             ice=new CNeuronCreateICEFlow;
 
             if(!ice)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ice.Init(iOutputs,index,OpenCL,3,5,5,1,ADAM,1))
               {
@@ -4189,13 +4698,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ice);
+            DeleteObj(ice)
             break;
          case defNeuronSpikeMFE:
             sp_mfe=new CNeuronSpikeMFE;
 
             if(!sp_mfe)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_mfe.Init(iOutputs,index,OpenCL,3,mfe_windows,5,ADAM,1))
               {
@@ -4203,13 +4714,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_mfe);
+            DeleteObj(sp_mfe)
             break;
          case defNeuronSpikeMHCrossAttention:
             sp_crosatt=new CNeuronSpikeMHCrossAttention;
 
             if(!sp_crosatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sp_crosatt.Init(iOutputs,index,OpenCL,3,5,5,2,5,2,ADAM,1))
               {
@@ -4217,13 +4730,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sp_crosatt);
+            DeleteObj(sp_crosatt)
             break;
          case defNeuronSpikeMixFusion:
             mix_fusion=new CNeuronSpikeMixFusion;
 
             if(!mix_fusion)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mix_fusion.Init(iOutputs,index,OpenCL,3,5,5,2,ADAM,1))
               {
@@ -4231,13 +4746,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mix_fusion);
+            DeleteObj(mix_fusion)
             break;
          case defNeuronSTFlow:
             stflow=new CNeuronSTFlow;
 
             if(!stflow)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(stflow.Init(iOutputs,index,OpenCL,3,5,5,2,5,2,ADAM,1))
               {
@@ -4245,13 +4762,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(stflow);
+            DeleteObj(stflow)
             break;
          case defNeuronPSSE:
             pse=new CNeuronPSSE;
 
             if(!pse)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pse.Init(iOutputs,index,OpenCL,3,5,5,2,ADAM,1))
               {
@@ -4259,13 +4778,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pse);
+            DeleteObj(pse)
             break;
          case defNeuronSpikeDepthWiseResidual:
             dwr=new CNeuronSpikeDepthWiseResidual;
 
             if(!dwr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(dwr.Init(iOutputs,index,OpenCL,3,5,5,2,5,2,ADAM,1))
               {
@@ -4273,13 +4794,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(dwr);
+            DeleteObj(dwr)
             break;
          case defNeuronSpikeSuperKernelBlock:
             sk_block=new CNeuronSpikeSuperKernelBlock;
 
             if(!sk_block)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sk_block.Init(iOutputs,index,OpenCL,3,5,mfe_windows,mfe_windows,5,2,ADAM,1))
               {
@@ -4287,13 +4810,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sk_block);
+            DeleteObj(sk_block)
             break;
          case defNeuronSpikeGMA:
             gma=new CNeuronSpikeGMA;
 
             if(!gma)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(gma.Init(iOutputs,index,OpenCL,3,5,2,ADAM,1))
               {
@@ -4301,13 +4826,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(gma);
+            DeleteObj(gma)
             break;
          case defNeuronETROF:
             etrof=new CNeuronETROF;
 
             if(!etrof)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(etrof.Init(iOutputs,index,OpenCL,3,5,5,ADAM,1))
               {
@@ -4315,13 +4842,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(etrof);
+            DeleteObj(etrof)
             break;
          case defNeuronPSSEFlow:
             pseflow=new CNeuronPSSEFlow;
 
             if(!pseflow)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pseflow.Init(iOutputs,index,OpenCL,3,5,5,ADAM,1))
               {
@@ -4329,13 +4858,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pseflow);
+            DeleteObj(pseflow)
             break;
          case defNeuronSpikeUSR:
             usr=new CNeuronSpikeUSR;
 
             if(!usr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(usr.Init(iOutputs,index,OpenCL,3,5,5,1,ADAM,1))
               {
@@ -4343,13 +4874,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(usr);
+            DeleteObj(usr)
             break;
          case defNeuronInitialFlow:
             init_flow=new CNeuronInitialFlow;
 
             if(!init_flow)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(init_flow.Init(iOutputs,index,OpenCL,3,5,5,2,5,ADAM,1))
               {
@@ -4357,13 +4890,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(init_flow);
+            DeleteObj(init_flow)
             break;
          case defNeuronSpikeSMR:
             smr=new CNeuronSpikeSMR;
 
             if(!smr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(smr.Init(iOutputs,index,OpenCL,3,5,5,5,ADAM,1))
               {
@@ -4371,13 +4906,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(smr);
+            DeleteObj(smr)
             break;
          case defNeuronEVAFlow:
             eva=new CNeuronEVAFlow;
 
             if(!eva)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(eva.Init(iOutputs,index,OpenCL,3,5,5,3,2,ADAM,1))
               {
@@ -4385,13 +4922,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(eva);
+            DeleteObj(eva)
             break;
          case defNeuronResFlowHTR:
             htr=new CNeuronResFlowHTR;
 
             if(!htr)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(htr.Init(iOutputs,index,OpenCL,3,5,5,3,2,ADAM,1))
               {
@@ -4399,13 +4938,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(htr);
+            DeleteObj(htr)
             break;
          case defNeuronResFlow:
             resflow=new CNeuronResFlow;
 
             if(!resflow)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(resflow.Init(iOutputs,index,OpenCL,3,5,5,3,2,2,ADAM,1))
               {
@@ -4413,13 +4954,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(resflow);
+            DeleteObj(resflow)
             break;
          case defNeuronConfGateTailAwareMoE:
             tailaware=new CNeuronConfGateTailAwareMoE;
 
             if(!tailaware)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(tailaware.Init(iOutputs,index,OpenCL,3,5,5,3,ADAM,1))
               {
@@ -4427,13 +4970,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(tailaware);
+            DeleteObj(tailaware)
             break;
          case defNeuronResFlowLattice:
             lattice=new CNeuronResFlowLattice;
 
             if(!lattice)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(lattice.Init(iOutputs,index,OpenCL,3,5,5,3,2,2,ADAM,1))
               {
@@ -4441,13 +4986,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(lattice);
+            DeleteObj(lattice)
             break;
          case defFieldAwareParams:
             fapar=new CFieldAwareParams;
 
             if(!fapar)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fapar.Init(iOutputs,index,OpenCL,4,5,2,3,1,ADAM,1))
               {
@@ -4455,13 +5002,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fapar);
+            DeleteObj(fapar)
             break;
          case defNeuronFieldAwareConv:
             faconv=new CNeuronFieldAwareConv;
 
             if(!faconv)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(faconv.Init(iOutputs,index,OpenCL,3,5,5,3,2,1,ADAM,1))
               {
@@ -4469,13 +5018,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(faconv);
+            DeleteObj(faconv)
             break;
          case defNeuronMHFAT:
             fat=new CNeuronMHFAT;
 
             if(!fat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(fat.Init(iOutputs,index,OpenCL,3,5,2,3,2,2,1,ADAM,1))
               {
@@ -4483,13 +5034,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(fat);
+            DeleteObj(fat)
             break;
          case defNeuronMHCrossFAT:
             cross_fat=new CNeuronMHCrossFAT;
 
             if(!cross_fat)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cross_fat.Init(iOutputs,index,OpenCL,3,5,2,3,2,2,2,2,1,ADAM,1))
               {
@@ -4497,13 +5050,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cross_fat);
+            DeleteObj(cross_fat)
             break;
          case defNeuronFieldPatternEmbedding:
             faemb=new CNeuronFieldPatternEmbedding;
 
             if(!faemb)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(faemb.Init(iOutputs,index,OpenCL,3,5,5,3,2,ADAM,1))
               {
@@ -4511,13 +5066,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(faemb);
+            DeleteObj(faemb)
             break;
          case defNeuronAutoToken:
             autotoken=new CNeuronAutoToken;
 
             if(!autotoken)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(autotoken.Init(iOutputs,index,OpenCL,3,5,5,3,2,1,ADAM,1))
               {
@@ -4525,13 +5082,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(autotoken);
+            DeleteObj(autotoken)
             break;
          case defNeuronMultiMixAttention:
             mixattention=new CNeuronMultiMixAttention;
 
             if(!mixattention)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mixattention.Init(iOutputs,index,OpenCL,4,5,2,3,2,1,ADAM,1))
               {
@@ -4539,13 +5098,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mixattention);
+            DeleteObj(mixattention)
             break;
          case defNeuronSparseMoEConv:
             sparsemoe=new CNeuronSparseMoEConv;
 
             if(!sparsemoe)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(sparsemoe.Init(iOutputs,index,OpenCL,3,5,5,2,1,ADAM,1))
               {
@@ -4553,13 +5114,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(sparsemoe);
+            DeleteObj(sparsemoe)
             break;
          case defNeuronMTmixAttBlock:
             mixattenblock=new CNeuronMTmixAttBlock;
 
             if(!mixattenblock)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mixattenblock.Init(iOutputs,index,OpenCL,4,5,2,3,2,1,ADAM,1))
               {
@@ -4567,13 +5130,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mixattenblock);
+            DeleteObj(mixattenblock)
             break;
          case defCrossMHFlashAttention:
             flash_att=new CCrossMHFlashAttention;
 
             if(!flash_att)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(flash_att.Init(iOutputs,index,OpenCL,4,2,false,3,2,ADAM,1))
               {
@@ -4581,13 +5146,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(flash_att);
+            DeleteObj(flash_att)
             break;
          case defNeuronMixFeedForward:
             mixff=new CNeuronMixFeedForward;
 
             if(!mixff)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mixff.Init(iOutputs,index,OpenCL,4,5,2,2,1,ADAM,1))
               {
@@ -4595,13 +5162,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mixff);
+            DeleteObj(mixff)
             break;
          case defNeuronOneTrans:
             onetrans=new CNeuronOneTrans;
 
             if(!onetrans)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(onetrans.Init(iOutputs,index,OpenCL,windows,1,2,2,2,1,2,2,1,ADAM,1))
               {
@@ -4609,13 +5178,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(onetrans);
+            DeleteObj(onetrans)
             break;
          case defNeuronSTCA:
             stca=new CNeuronSTCA;
 
             if(!stca)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(stca.Init(iOutputs,index,OpenCL,windows,1,2,2,2,10,2,2,3,2,ADAM,1))
               {
@@ -4623,13 +5194,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(stca);
+            DeleteObj(stca)
             break;
          case defNeuronMHTHCrossAttention:
             thcatt=new CNeuronMHTHCrossAttention;
 
             if(!thcatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(thcatt.Init(iOutputs,index,OpenCL,6,1,2,2,2,1,3,2,ADAM,1))
               {
@@ -4637,13 +5210,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(thcatt);
+            DeleteObj(thcatt)
             break;
          case defNeuronWeightGenerator:
             wgen=new CNeuronWeightGenerator;
 
             if(!wgen)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(wgen.Init(iOutputs,index,OpenCL,3,2,2,ADAM,1))
               {
@@ -4651,13 +5226,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(wgen);
+            DeleteObj(wgen)
             break;
          case defNeuronPCGR:
             pcrg=new CNeuronPCGR;
 
             if(!pcrg)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pcrg.Init(iOutputs,index,OpenCL,2,2,2,2,2,10,2,ADAM,1))
               {
@@ -4665,13 +5242,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pcrg);
+            DeleteObj(pcrg)
             break;
          case defNeuronADS:
             ads=new CNeuronADS;
 
             if(!ads)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ads.Init(iOutputs,index,OpenCL,windows,1,2,2,2,10,2,2,3,2,ADAM,1))
               {
@@ -4679,13 +5258,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ads);
+            DeleteObj(ads)
             break;
          case defNeuronPerTokenFFN:
             pertoken=new CNeuronPerTokenFFN;
 
             if(!pertoken)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(pertoken.Init(iOutputs,index,OpenCL,5,1,2,2,1,ADAM,1))
               {
@@ -4693,13 +5274,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(pertoken);
+            DeleteObj(pertoken)
             break;
          case defNeuronScenariosToken:
             scentoken=new CNeuronScenariosToken;
 
             if(!scentoken)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(scentoken.Init(iOutputs,index,OpenCL,5,4,5,2,3,2,1,ADAM,1))
               {
@@ -4707,13 +5290,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(scentoken);
+            DeleteObj(scentoken)
             break;
          case defNeuronUnifiedTokenizer:
             uniftokens=new CNeuronUnifiedTokenizer;
 
             if(!uniftokens)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(uniftokens.Init(iOutputs,index,OpenCL,windows,3,2,2,1,ADAM,1))
               {
@@ -4721,13 +5306,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(uniftokens);
+            DeleteObj(uniftokens)
             break;
          case defNeuronDomainAwareAttention:
             domainatt=new CNeuronDomainAwareAttention;
 
             if(!domainatt)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(domainatt.Init(iOutputs,index,OpenCL,8,1,2,8,2,10,2,1,ADAM,1))
               {
@@ -4735,13 +5322,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(domainatt);
+            DeleteObj(domainatt)
             break;
          case defNeuronFeatureSelfIteration:
             featureinter=new CNeuronFeatureSelfIteration;
 
             if(!featureinter)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(featureinter.Init(iOutputs,index,OpenCL,8,1,2,5,2,3,2,ADAM,1))
               {
@@ -4749,13 +5338,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(featureinter);
+            DeleteObj(featureinter)
             break;
          case defNeuronDomainFused:
             domainfused=new CNeuronDomainFused;
 
             if(!domainfused)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(domainfused.Init(iOutputs,index,OpenCL,8,1,2,2,3,2,ADAM,1))
               {
@@ -4763,13 +5354,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(domainfused);
+            DeleteObj(domainfused)
             break;
          case defNeuronMDL:
             mdl=new CNeuronMDL;
 
             if(!mdl)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(mdl.Init(iOutputs,index,OpenCL,windows,1,2,2,10,2,2,3,2,ADAM,1))
               {
@@ -4777,13 +5370,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(mdl);
+            DeleteObj(mdl)
             break;
          case defNeuronUniMixerTokenizer:
             umtoken=new CNeuronUniMixerTokenizer;
 
             if(!umtoken)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(umtoken.Init(iOutputs,index,OpenCL,windows,1,2,2,3,2,ADAM,1))
               {
@@ -4791,13 +5386,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(umtoken);
+            DeleteObj(umtoken)
             break;
          case defNeuronPerTokenSwiGLU:
             ptswiglu=new CNeuronPerTokenSwiGLU;
 
             if(!ptswiglu)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(ptswiglu.Init(iOutputs,index,OpenCL,2,2,5,3,2,ADAM,1))
               {
@@ -4805,13 +5402,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(ptswiglu);
+            DeleteObj(ptswiglu)
             break;
          case defNeuronUniMixer:
             unimix=new CNeuronUniMixer;
 
             if(!unimix)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(unimix.Init(iOutputs,index,OpenCL,2,2,2,2,3,2,ADAM,1))
               {
@@ -4819,13 +5418,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(unimix);
+            DeleteObj(unimix)
             break;
          case defNeuronSiameseNorm:
             siamnorm=new CNeuronSiameseNorm;
 
             if(!siamnorm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(siamnorm.Init(iOutputs,index,OpenCL,2,4,2,2,3,2,ADAM,1))
               {
@@ -4833,13 +5434,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(siamnorm);
+            DeleteObj(siamnorm)
             break;
          case defNeuronUniMixerBlock:
             umblock=new CNeuronUniMixerBlock;
 
             if(!umblock)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(umblock.Init(iOutputs,index,OpenCL,windows,2,2,3,10,2,2,3,2,ADAM,1))
               {
@@ -4847,13 +5450,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(umblock);
+            DeleteObj(umblock)
             break;
          case defNeuronINFNetScenarios:
             infnscen=new CNeuronINFNetScenarios;
 
             if(!infnscen)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(infnscen.Init(iOutputs,index,OpenCL,3,windows,2,2,3,2,ADAM,1))
               {
@@ -4861,13 +5466,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(infnscen);
+            DeleteObj(infnscen)
             break;
          case defNeuronINFNetHUBSequence:
             hub=new CNeuronINFNetHUBSequence;
 
             if(!hub)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(hub.Init(iOutputs,index,OpenCL,2,2,3,2,ADAM,1))
               {
@@ -4875,13 +5482,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(hub);
+            DeleteObj(hub)
             break;
          case defNeuronINFNetBlock:
             infnblock=new CNeuronINFNetBlock;
 
             if(!infnblock)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(infnblock.Init(iOutputs,index,OpenCL,windows,2,2,10,2,2,3,2,ADAM,1))
               {
@@ -4889,13 +5498,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(infnblock);
+            DeleteObj(infnblock)
             break;
          case defNeuronSequenceTokenizer:
             seq_tok=new CNeuronSequenceTokenizer;
 
             if(!seq_tok)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(seq_tok.Init(iOutputs,index,OpenCL,2,2,2,ADAM,1))
               {
@@ -4903,13 +5514,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(seq_tok);
+            DeleteObj(seq_tok)
             break;
          case defNeuronDifferenceTokenizer:
             diff_tok=new CNeuronDifferenceTokenizer;
 
             if(!diff_tok)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(diff_tok.Init(iOutputs,index,OpenCL,5,2,ADAM,1))
               {
@@ -4917,13 +5530,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(diff_tok);
+            DeleteObj(diff_tok)
             break;
          case defNeuronDictionaryCrossAtt:
             dict_cross=new CNeuronDictionaryCrossAtt;
 
             if(!dict_cross)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(dict_cross.Init(iOutputs,index,OpenCL,2,2,2,10,ADAM,1))
               {
@@ -4931,13 +5546,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(dict_cross);
+            DeleteObj(dict_cross)
             break;
          case defNeuronUncAD_MSD:
             uncad_msd=new CNeuronUncAD_MSD;
 
             if(!uncad_msd)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(uncad_msd.Init(iOutputs,index,OpenCL,2,20,2,2,1.0f,ADAM,1))
               {
@@ -4945,13 +5562,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(uncad_msd);
+            DeleteObj(uncad_msd)
             break;
          case defNeuronUncAD_MUE:
             uncad_mue=new CNeuronUncAD_MUE;
 
             if(!uncad_mue)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(uncad_mue.Init(iOutputs,index,OpenCL,2,2,2,20,2,1.0f,ADAM,1))
               {
@@ -4959,13 +5578,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(uncad_mue);
+            DeleteObj(uncad_mue)
             break;
          case defNeuronUncAD_UGP:
             uncad_ugp=new CNeuronUncAD_UGP;
 
             if(!uncad_ugp)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(uncad_ugp.Init(iOutputs,index,OpenCL,2,2,2,2,2,2,2,1,ADAM,1))
               {
@@ -4973,13 +5594,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(uncad_ugp);
+            DeleteObj(uncad_ugp)
             break;
          case defNeuronUncAD_UGPL:
             uncad_ugpl=new CNeuronUncAD_UGPL;
 
             if(!uncad_ugpl)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(uncad_ugpl.Init(iOutputs,index,OpenCL,2,2,2,2,2,2,2,ADAM,1))
               {
@@ -4987,13 +5610,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(uncad_ugpl);
+            DeleteObj(uncad_ugpl)
             break;
          case defNeuronUncAD:
             uncad=new CNeuronUncAD;
 
             if(!uncad)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(uncad.Init(iOutputs,index,OpenCL,windows,2,2,20,2,2,3,2,8,ADAM,1))
               {
@@ -5001,13 +5626,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(uncad);
+            DeleteObj(uncad)
             break;
          case defNeuronMomAD:
             momad=new CNeuronMomAD;
 
             if(!momad)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(momad.Init(iOutputs,index,OpenCL,windows,2,2,20,2,2,3,2,8,ADAM,1))
               {
@@ -5015,13 +5642,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(momad);
+            DeleteObj(momad)
             break;
          case defNeuronCogDriverData:
             cogdriver_data=new CNeuronCogDriverData;
 
             if(!cogdriver_data)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cogdriver_data.Init(iOutputs,index,OpenCL,2,2,20,2,2,1.0f,ADAM,1))
               {
@@ -5029,13 +5658,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cogdriver_data);
+            DeleteObj(cogdriver_data)
             break;
          case defNeuronCogDriverRankTCM:
             cogdriver_rank=new CNeuronCogDriverRankTCM;
 
             if(!cogdriver_rank)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cogdriver_rank.Init(iOutputs,index,OpenCL,8,8,2,4,2,ADAM,1))
               {
@@ -5043,13 +5674,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cogdriver_rank);
+            DeleteObj(cogdriver_rank)
             break;
          case defNeuronCogDriverForecastHead:
             cogdriver_forecast=new CNeuronCogDriverForecastHead;
 
             if(!cogdriver_forecast)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cogdriver_forecast.Init(iOutputs,index,OpenCL,8,4,2,2,2,ADAM,1))
               {
@@ -5057,13 +5690,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cogdriver_forecast);
+            DeleteObj(cogdriver_forecast)
             break;
          case defNeuronCogDriverForecastToken:
             cogdriver_token=new CNeuronCogDriverForecastToken;
 
             if(!cogdriver_token)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(cogdriver_token.Init(iOutputs,index,OpenCL,8,4,ADAM,1))
               {
@@ -5071,13 +5706,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(cogdriver_token);
+            DeleteObj(cogdriver_token)
             break;
          case defNeuronPlanProjectionTraceOCL:
             plan_projection_trace=new CNeuronPlanProjectionTraceOCL;
 
             if(!plan_projection_trace)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             plan_projection_trace.AttachOpenCL(OpenCL);
             m_data[index]=plan_projection_trace;
@@ -5087,7 +5724,9 @@ bool CLayer::CreateElement(int index)
             plan_projection=new CNeuronPlanProjectionOCL;
 
             if(!plan_projection)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             plan_projection.AttachOpenCL(OpenCL);
             m_data[index]=plan_projection;
@@ -5097,7 +5736,9 @@ bool CLayer::CreateElement(int index)
             dpcc=new CNeuronDPCCOCL;
 
             if(!dpcc)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             dpcc.AttachOpenCL(OpenCL);
             m_data[index]=dpcc;
@@ -5107,7 +5748,9 @@ bool CLayer::CreateElement(int index)
             plan_denoiser=new CNeuronPlanDenoiserOCL;
 
             if(!plan_denoiser)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             plan_denoiser.AttachOpenCL(OpenCL);
             m_data[index]=plan_denoiser;
@@ -5117,7 +5760,9 @@ bool CLayer::CreateElement(int index)
             scenario_decoder=new CNeuronScenarioDecoderOCL;
 
             if(!scenario_decoder)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             scenario_decoder.AttachOpenCL(OpenCL);
             m_data[index]=scenario_decoder;
@@ -5127,7 +5772,9 @@ bool CLayer::CreateElement(int index)
             scenario_rollout=new CNeuronScenarioRolloutOCL;
 
             if(!scenario_rollout)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             scenario_rollout.AttachOpenCL(OpenCL);
             m_data[index]=scenario_rollout;
@@ -5137,7 +5784,9 @@ bool CLayer::CreateElement(int index)
             scenario_forecast_price=new CNeuronScenarioForecastPriceOCL;
 
             if(!scenario_forecast_price)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             scenario_forecast_price.AttachOpenCL(OpenCL);
             m_data[index]=scenario_forecast_price;
@@ -5151,7 +5800,9 @@ bool CLayer::CreateElement(int index)
             scenario_forecast=new CNeuronScenarioForecast;
 
             if(!scenario_forecast)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             scenario_forecast.AttachOpenCL(OpenCL);
             m_data[index]=scenario_forecast;
@@ -5162,7 +5813,9 @@ bool CLayer::CreateElement(int index)
             scenario_cross_price=new CNeuronScenarioCrossAttentionPriceOCL;
 
             if(!scenario_cross_price)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             scenario_cross_price.AttachOpenCL(OpenCL);
             m_data[index]=scenario_cross_price;
@@ -5173,7 +5826,9 @@ bool CLayer::CreateElement(int index)
             scenario_cross=new CNeuronScenarioCrossAttention;
 
             if(!scenario_cross)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
       //--- load reconstructs the serialized MSRes and scenario holders.
       //--- initializing defaults here creates shared temporary buffers;
@@ -5187,7 +5842,9 @@ bool CLayer::CreateElement(int index)
             rag_memory=new CNeuronRAGMemory;
 
             if(!rag_memory)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             rag_memory.AttachOpenCL(OpenCL);
             m_data[index]=rag_memory;
@@ -5198,7 +5855,9 @@ bool CLayer::CreateElement(int index)
             d2_skill=new CD2Skill;
 
             if(!d2_skill)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             d2_skill.AttachOpenCL(OpenCL);
             m_data[index]=d2_skill;
@@ -5209,7 +5868,9 @@ bool CLayer::CreateElement(int index)
             regen_backbone=new CNeuronReGENTADBackbone;
 
             if(!regen_backbone)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(regen_backbone.Init(iOutputs,index,OpenCL,windows,2,2,10,2,2,3,2,ADAM,1))
               {
@@ -5217,13 +5878,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(regen_backbone);
+            DeleteObj(regen_backbone)
             break;
          case defNeuronReGENTADHead:
             regen_head=new CNeuronReGENTADHead;
 
             if(!regen_head)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(regen_head.Init(iOutputs,index,OpenCL,3,2,2,2,NULL,ADAM,1))
               {
@@ -5231,13 +5894,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(regen_head);
+            DeleteObj(regen_head)
             break;
          case defNeuronReGENTAD:
             regentad=new CNeuronReGENTAD;
 
             if(!regentad)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(regentad.Init(iOutputs,index,OpenCL,windows,2,2,10,2,2,3,2,ADAM,1))
               {
@@ -5245,13 +5910,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(regentad);
+            DeleteObj(regentad)
             break;
          case defNeuronGDformerBackbone:
             gdformer_backbone=new CNeuronGDformerBackbone;
 
             if(!gdformer_backbone)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(gdformer_backbone.Init(iOutputs,index,OpenCL,windows,2,2,10,2,2,3,2,ADAM,1))
               {
@@ -5259,13 +5926,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(gdformer_backbone);
+            DeleteObj(gdformer_backbone)
             break;
          case defNeuronGDformer:
             gdformer=new CNeuronGDformer;
 
             if(!gdformer)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(gdformer.Init(iOutputs,index,OpenCL,windows,2,2,10,2,2,3,2,ADAM,1))
               {
@@ -5273,13 +5942,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(gdformer);
+            DeleteObj(gdformer)
             break;
          case defNeuronMomADTTM:
             momad_ttm=new CNeuronMomADTTM;
 
             if(!momad_ttm)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(momad_ttm.Init(iOutputs,index,OpenCL,2,2,2,1,ADAM,1))
               {
@@ -5287,13 +5958,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(momad_ttm);
+            DeleteObj(momad_ttm)
             break;
          case defNeuronMomADMPI:
             momad_mpi=new CNeuronMomADMPI;
 
             if(!momad_mpi)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(momad_mpi.Init(iOutputs,index,OpenCL,2,2,2,2,2,1,1,1,ADAM,1))
               {
@@ -5301,13 +5974,15 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(momad_mpi);
+            DeleteObj(momad_mpi)
             break;
          case defNeuronVLADriverRAGMPI:
             vladriver_rag_mpi=new CNeuronVLADriverRAGMPI;
 
             if(!vladriver_rag_mpi)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(vladriver_rag_mpi.Init(iOutputs,index,OpenCL,2,2,2,2,2,1,1,1,1,2,ADAM,1))
               {
@@ -5315,7 +5990,7 @@ bool CLayer::CreateElement(int index)
 
                return(true);
               }
-            DeleteObj(vladriver_rag_mpi);
+            DeleteObj(vladriver_rag_mpi)
             break;
          default:
             result=false;
@@ -5326,7 +6001,9 @@ bool CLayer::CreateElement(int index)
    if(result)
       m_data[index]=temp;
    else
-      DeleteObj(temp);
+     {
+      DeleteObj(temp)
+     }
 
 //---
    return(result);
@@ -5337,22 +6014,30 @@ bool CLayer::CreateElement(int index)
 bool CArrayLayer::CreateElement(uint neurons,uint outputs)
   {
    if(neurons<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CLayer *layer=new CLayer(outputs);
 
    if(!CheckPointer(layer)!=POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!layer.Reserve(neurons+1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<=neurons;i++)
      {
       if(!layer.CreateElement(i))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       layer.IncreaseTotal();
      }
@@ -5452,7 +6137,9 @@ bool CNeuronConv::feedForward(CLayer*prevLayer)
          con=Connections.At(j);
 
          if(CheckPointer(temp)==POINTER_INVALID||CheckPointer(con)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          float val=temp.getOutputVal();
          sum+=val*con.weight;
@@ -5460,7 +6147,9 @@ bool CNeuronConv::feedForward(CLayer*prevLayer)
       temp=OutputLayer.At(i/iStep);
 
       if(CheckPointer(temp)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       temp.setOutputVal(activationFunction(sum));
      }
@@ -5540,7 +6229,9 @@ bool CNeuronBase::calcHiddenGradients(CObject*&TargetObject)
 bool CNeuronConv::calcHiddenGradients(CLayer*&nextLayer)
   {
    if(CheckPointer(nextLayer)==POINTER_INVALID||CheckPointer(OutputLayer)==POINTER_INVALID||OutputLayer.Total()<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    gradient=0;
@@ -5552,7 +6243,9 @@ bool CNeuronConv::calcHiddenGradients(CLayer*&nextLayer)
       temp=OutputLayer.At(i);
 
       if(CheckPointer(temp)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       temp.setGradient(temp.sumDOW(nextLayer)*activationFunctionDerivative(temp.getOutputVal()));
      }
@@ -5575,7 +6268,9 @@ float CNeuronConv::activationFunctionDerivative(float x)
 bool CNeuronConv::updateInputWeights(CLayer*&prevLayer)
   {
    if(CheckPointer(prevLayer)==POINTER_INVALID||CheckPointer(OutputLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CConnection *con;
@@ -5631,18 +6326,24 @@ bool CNeuronProof::Init(uint numOutputs,
    iStep=step;
 
    if(!CNeuronBase::Init(window,myIndex,optimization_type))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OutputLayer=new CLayer(numOutputs);
 
    if(CheckPointer(OutputLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(OutputLayer.Reserve(units_count))
       for(int i=0;i<units_count;i++)
         {
          if(!OutputLayer.CreateElement(i))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          OutputLayer.IncreaseTotal();
         }
@@ -5662,7 +6363,7 @@ bool CNeuronProof::Init(uint numOutputs,
 //+------------------------------------------------------------------+
 CNeuronProof::~CNeuronProof(void)
   {
-   DeleteObj(OutputLayer);
+   DeleteObj(OutputLayer)
   }
 //+------------------------------------------------------------------+
 //| feedForward - Runs the CNeuronProof feed-forward pass and...     |
@@ -5670,7 +6371,9 @@ CNeuronProof::~CNeuronProof(void)
 bool CNeuronProof::feedForward(CLayer*prevLayer)
   {
    if(CheckPointer(prevLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int     total=prevLayer.Total()-iWindow+1;
@@ -5691,7 +6394,9 @@ bool CNeuronProof::feedForward(CLayer*prevLayer)
       temp=OutputLayer.At(i/iStep);
 
       if(CheckPointer(temp)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       temp.setOutputVal(sum/iWindow);
      }
@@ -5705,7 +6410,9 @@ bool CNeuronProof::feedForward(CLayer*prevLayer)
 bool CNeuronProof::calcHiddenGradients(CLayer*&nextLayer)
   {
    if(CheckPointer(nextLayer)==POINTER_INVALID||CheckPointer(OutputLayer)==POINTER_INVALID||OutputLayer.Total()<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    gradient=0;
@@ -5717,7 +6424,9 @@ bool CNeuronProof::calcHiddenGradients(CLayer*&nextLayer)
       temp=OutputLayer.At(i);
 
       if(CheckPointer(temp)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       temp.setGradient(temp.sumDOW(nextLayer));
      }
@@ -5731,7 +6440,9 @@ bool CNeuronProof::calcHiddenGradients(CLayer*&nextLayer)
 bool CNeuronProof::calcInputGradients(CLayer*prevLayer)
   {
    if(CheckPointer(prevLayer)==POINTER_INVALID||CheckPointer(OutputLayer)==POINTER_INVALID||CheckPointer(prevLayer.At(0))==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(prevLayer.At(0).Type()!=defNeuron)
@@ -5739,12 +6450,16 @@ bool CNeuronProof::calcInputGradients(CLayer*prevLayer)
       CNeuronProof *temp=prevLayer.At(m_myIndex);
 
       if(CheckPointer(temp)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       prevLayer=temp.getOutputLayer();
 
       if(CheckPointer(prevLayer)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -5783,7 +6498,9 @@ bool CNeuronProof::calcInputGradients(CLayer*prevLayer)
 bool CNeuronProof::calcInputGradients(CNeuronBase*prevNeuron,uint index)
   {
    if(CheckPointer(prevNeuron)==POINTER_INVALID||CheckPointer(OutputLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(prevNeuron.Type()!=defNeuron)
@@ -5819,7 +6536,9 @@ bool CNeuronProof::calcInputGradients(CNeuronBase*prevNeuron,uint index)
 bool CNeuronConv::calcInputGradients(CLayer*prevLayer)
   {
    if(CheckPointer(prevLayer)==POINTER_INVALID||CheckPointer(OutputLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(prevLayer.At(0).Type()!=defNeuron)
@@ -5827,12 +6546,16 @@ bool CNeuronConv::calcInputGradients(CLayer*prevLayer)
       CNeuronProof *temp=prevLayer.At(m_myIndex);
 
       if(CheckPointer(temp)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       prevLayer=temp.getOutputLayer();
 
       if(CheckPointer(prevLayer)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -5874,7 +6597,9 @@ bool CNeuronConv::calcInputGradients(CLayer*prevLayer)
 bool CNeuronConv::calcInputGradients(CNeuronBase*prevNeuron,uint index)
   {
    if(CheckPointer(prevNeuron)==POINTER_INVALID||CheckPointer(OutputLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(prevNeuron.Type()!=defNeuron)
@@ -5913,10 +6638,14 @@ bool CNeuronConv::calcInputGradients(CNeuronBase*prevNeuron,uint index)
 bool CNeuronBase::Save(int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,Type())<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    dFileWriteUInt(file_handle,activation)
@@ -5926,7 +6655,9 @@ bool CNeuronBase::Save(int file_handle)
 
 //---
    if(FileWriteInteger(file_handle,t,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(Connections.Save(file_handle));
@@ -5952,7 +6683,9 @@ CLayerDescription::CLayerDescription(void):type(defNeuron),
 bool CLayerDescription::Copy(CLayerDescription*source)
   {
    if(!source)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    type=source.type;
@@ -5986,7 +6719,9 @@ float CNet::recentAverageSmoothingFactor=10000.0;
 bool CNet::PrepareOpenCLRuntime(void)
   {
    if(!IsOpenCLTransferReady()||m_inference_load_active)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(opencl)!=POINTER_INVALID)
       return(opencl.GetContext()!=INVALID_HANDLE&&opencl.GetProgram()!=INVALID_HANDLE);
@@ -6000,7 +6735,7 @@ bool CNet::PrepareOpenCLRuntime(void)
         }
       opencl=NULL;
       bOwnOpenCL=false;
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -6018,13 +6753,17 @@ bool CNet::UseOpenCLRuntime(COpenCLMy*runtime)
        )||
       !IsOpenCLTransferReady()||m_inference_load_active||
       (CheckPointer(layers)!=POINTER_INVALID&&layers.Total()>0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(opencl==runtime)
       return(true);
 
    if(CheckPointer(opencl)!=POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    opencl=runtime;
    bOwnOpenCL=false;
@@ -6037,7 +6776,9 @@ bool CNet::UseOpenCLRuntime(COpenCLMy*runtime)
 bool CNet::Create(CArrayObj*Description)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    recentAverageError=0;
    backPropCount=0;
@@ -6049,14 +6790,18 @@ bool CNet::Create(CArrayObj*Description)
    int total=Description.Total();
 
    if(total<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!layers)
       layers=new CArrayLayer();
 
    if(!layers)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    layers.FreeMode(true);
    layers.Clear();
@@ -6078,7 +6823,7 @@ bool CNet::Create(CArrayObj*Description)
      {
       if(!opencl&&!OpenCLInit())
         {
-         DeleteObj(opencl);
+         DeleteObj(opencl)
          bOwnOpenCL=false;
         }
      }
@@ -6086,7 +6831,7 @@ bool CNet::Create(CArrayObj*Description)
      {
       if(bOwnOpenCL)
         {
-         DeleteObj(opencl);
+         DeleteObj(opencl)
          bOwnOpenCL=false;
         }
       else
@@ -6104,7 +6849,9 @@ bool CNet::Create(CArrayObj*Description)
          next=Description.At(i+1);
 
          if(!next)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       else
          next=NULL;
@@ -6421,9 +7168,17 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!habi||!habi.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch)||
                   !HabiConfigure(habi,desc))
-                 {if(habi)delete habi;DeleteObj(temp);return(false);}
+                 {
+                  if(habi)delete habi;
+                  DeleteObj(temp)
+                  return(false);
+                 }
 
-               if(!temp.Add(habi)){delete habi;DeleteObj(temp);return(false);}
+               if(!temp.Add(habi))
+                 {
+                  DeleteObj(habi)
+                  DeleteObjAndFalse(temp)
+                 }
                break;
               }
 
@@ -6434,23 +7189,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_ocl)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_ocl.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(neuron_ocl);
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(neuron_ocl)
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_ocl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(neuron_ocl))
                  {
-                  DeleteObj(neuron_ocl);
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(neuron_ocl)
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_ocl=NULL;
                break;
@@ -6464,7 +7219,7 @@ bool CNet::Create(CArrayObj*Description)
                  {
                   DeleteObj(alphaqcm)
                   DeleteObj(temp)
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
               }
@@ -6479,7 +7234,7 @@ bool CNet::Create(CArrayObj*Description)
                  {
                   DeleteObj(alphaqcm)
                   DeleteObj(temp)
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
               }
@@ -6489,10 +7244,18 @@ bool CNet::Create(CArrayObj*Description)
                CNeuronAlphaGenOCL *alphagen=new CNeuronAlphaGenOCL();
 
                if(!alphagen||!alphagen.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch))
-                 {DeleteObj(alphagen);DeleteObj(temp);ReturnFalse;}
+                 {
+                  DeleteObj(alphagen)
+                  DeleteObj(temp)
+                  ReturnFalse
+                 }
 
                if(!temp.Add(alphagen))
-                 {DeleteObj(alphagen);DeleteObj(temp);ReturnFalse;}
+                 {
+                  DeleteObj(alphagen)
+                  DeleteObj(temp)
+                  ReturnFalse
+                 }
                break;
               }
             case defNeuronBaseSAMOCL:
@@ -6500,23 +7263,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(sam_base)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sam_base.Init(outputs,0,opencl,desc.count,desc.probability,desc.optimization,desc.batch))
                  {
                   delete sam_base;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                sam_base.SetActivationFunction(desc.activation);
 
                if(!temp.Add(sam_base))
                  {
                   delete sam_base;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                sam_base=NULL;
                break;
@@ -6527,23 +7290,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_conv_ocl)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_conv_ocl.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
                   delete neuron_conv_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_conv_ocl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(neuron_conv_ocl))
                  {
                   delete neuron_conv_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_conv_ocl=NULL;
                break;
@@ -6554,23 +7317,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_conv_ocl)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_conv_ocl.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
                   delete neuron_conv_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_conv_ocl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(neuron_conv_ocl))
                  {
                   delete neuron_conv_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_conv_ocl=NULL;
                break;
@@ -6581,23 +7344,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(sam_conv)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sam_conv.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,desc.count,1,desc.probability,desc.optimization,desc.batch))
                  {
                   delete sam_conv;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                sam_conv.SetActivationFunction(desc.activation);
 
                if(!temp.Add(sam_conv))
                  {
                   delete sam_conv;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                sam_conv=NULL;
                break;
@@ -6608,23 +7371,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!neuron_proof_ocl)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_proof_ocl.Init(outputs,0,opencl,desc.window,desc.step,desc.count,desc.optimization,desc.batch))
                  {
                   delete neuron_proof_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_proof_ocl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(neuron_proof_ocl))
                  {
                   delete neuron_proof_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_proof_ocl=NULL;
                break;
@@ -6635,23 +7398,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_attention_ocl)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_attention_ocl.Init(outputs,0,opencl,desc.window,desc.count,desc.optimization,desc.batch))
                  {
                   delete neuron_attention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_attention_ocl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(neuron_attention_ocl))
                  {
                   delete neuron_attention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_attention_ocl=NULL;
                break;
@@ -6662,23 +7425,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_attention_ocl)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_attention_ocl.Init(outputs,0,opencl,desc.window,desc.count,desc.optimization,desc.batch))
                  {
                   delete neuron_attention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_attention_ocl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(neuron_attention_ocl))
                  {
                   delete neuron_attention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_attention_ocl=NULL;
                break;
@@ -6689,23 +7452,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_mlattention_ocl)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_mlattention_ocl.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
                   delete neuron_mlattention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_mlattention_ocl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(neuron_mlattention_ocl))
                  {
                   delete neuron_mlattention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_mlattention_ocl=NULL;
                break;
@@ -6716,15 +7479,15 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_sparseattention)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_sparseattention.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
                   delete neuron_sparseattention;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_sparseattention.SetActivationFunction(desc.activation);
                neuron_sparseattention.Sparse(desc.probability);
@@ -6732,8 +7495,8 @@ bool CNet::Create(CArrayObj*Description)
                if(!temp.Add(neuron_sparseattention))
                  {
                   delete neuron_mlattention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_sparseattention=NULL;
                break;
@@ -6744,23 +7507,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_mlattention_ocl)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_mlattention_ocl.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
                   delete neuron_mlattention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_mlattention_ocl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(neuron_mlattention_ocl))
                  {
                   delete neuron_mlattention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_mlattention_ocl=NULL;
                break;
@@ -6769,23 +7532,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(neuron_mh2attention_ocl)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!neuron_mh2attention_ocl.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.optimization,desc.batch))
                  {
                   delete neuron_mh2attention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_mh2attention_ocl.SetActivationFunction(None);
 
                if(!temp.Add(neuron_mh2attention_ocl))
                  {
                   delete neuron_mh2attention_ocl;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neuron_mh2attention_ocl=NULL;
                break;
@@ -6796,22 +7559,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(xcit)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!xcit.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
                   delete xcit;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!temp.Add(xcit))
                  {
                   delete xcit;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                xcit=NULL;
                break;
@@ -6822,22 +7585,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(dropout)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!dropout.Init(outputs,0,opencl,desc.count,desc.probability,desc.optimization,desc.batch))
                  {
                   delete dropout;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!temp.Add(dropout))
                  {
                   delete dropout;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                dropout=NULL;
                break;
@@ -6849,23 +7612,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(CheckPointer(batch)==POINTER_INVALID)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!batch.Init(outputs,0,opencl,desc.count,desc.batch,desc.optimization))
                  {
                   delete batch;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                batch.SetActivationFunction(desc.activation);
 
                if(!temp.Add(batch))
                  {
                   delete batch;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                batch=NULL;
                break;
@@ -6876,38 +7639,42 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!vae)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!vae.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch))
                  {
                   delete vae;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!temp.Add(vae))
                  {
                   delete vae;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                vae=NULL;
                break;
             case defNeuronBayesianLinearOCL:
 
                if(desc.variables==0||desc.window==0||desc.count==0)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                bayesian_linear=new CNeuronBayesianLinearOCL();
 
                if(!bayesian_linear||!bayesian_linear.Init(outputs,0,opencl,desc.variables,desc.window,desc.count,MathMax(desc.layers,1),desc.optimization,desc.batch))
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!temp.Add(bayesian_linear))
                  {
                   delete bayesian_linear;
-                  DeleteObjAndFalse(temp);
+                  DeleteObjAndFalse(temp)
                  }
                bayesian_linear=NULL;
                break;
@@ -6915,17 +7682,21 @@ bool CNet::Create(CArrayObj*Description)
 
                if(desc.window==0||desc.count==0||desc.layers==0||ArraySize(desc.units)<2||
                   desc.units[0]==0||desc.units[1]==0)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                ompb=new CNeuronOMPBOCL();
 
                if(!ompb||!ompb.Init(outputs,0,opencl,desc.window,desc.count,desc.layers,
                                     desc.units[0],desc.units[1],desc.optimization,desc.batch))
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!temp.Add(ompb))
                  {
                   delete ompb;
-                  DeleteObjAndFalse(temp);
+                  DeleteObjAndFalse(temp)
                  }
                ompb=NULL;
                break;
@@ -6934,31 +7705,31 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!lstm)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                desc.layers=MathMax(desc.layers,1);
 
                if(!lstm.Init(outputs,0,opencl,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
                   delete lstm;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!!prev)
                   if(!lstm.SetInputs(prev.count/desc.layers))
                     {
                      delete lstm;
-                     DeleteObj(temp);
-                     ReturnFalse;
+                     DeleteObj(temp)
+                     ReturnFalse
                     }
 
                if(!temp.Add(lstm))
                  {
                   delete lstm;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                lstm=NULL;
                break;
@@ -6969,23 +7740,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!softmax)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!softmax.Init(outputs,0,opencl,desc.count*desc.step,desc.optimization,desc.batch))
                  {
                   delete softmax;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                softmax.SetHeads(desc.step);
 
                if(!temp.Add(softmax))
                  {
                   delete softmax;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                softmax=NULL;
                break;
@@ -6996,22 +7767,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fqf)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fqf.Init(outputs,0,opencl,desc.count,desc.window_out,prev.count*(prev.type==defNeuronConv?prev.window_out:1),desc.optimization,desc.batch))
                  {
                   delete fqf;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!temp.Add(fqf.AsObject()))
                  {
                   delete fqf;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                fqf=NULL;
                break;
@@ -7020,23 +7791,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!multi_model)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!multi_model.Init(desc.window,0,opencl,desc.count,ADAM,desc.step))
                  {
                   delete multi_model;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                multi_model.SetActivationFunction(desc.activation);
 
                if(!temp.Add(multi_model))
                  {
                   delete multi_model;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                multi_model=NULL;
                break;
@@ -7045,23 +7816,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!concat)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!concat.Init(outputs,0,opencl,desc.count,desc.window,desc.step,ADAM,desc.batch))
                  {
                   delete concat;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                concat.SetActivationFunction(desc.activation);
 
                if(!temp.Add(concat))
                  {
                   delete concat;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                concat=NULL;
                break;
@@ -7072,23 +7843,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fqf)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fqf.Init(outputs,0,opencl,desc.count,desc.window_out,prev.count*(prev.type==defNeuronConv?prev.window_out:1),desc.optimization,desc.batch))
                  {
                   delete fqf;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                fqf.SetActivationFunction(desc.activation);
 
                if(!temp.Add(fqf.AsObject()))
                  {
                   delete fqf;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                fqf=NULL;
                break;
@@ -7097,23 +7868,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fqf)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fqf.Init(outputs,0,opencl,desc.count,desc.window_out,prev.count*(prev.type==defNeuronConv?prev.window_out:1),desc.optimization,desc.batch))
                  {
                   delete fqf;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                fqf.SetActivationFunction(desc.activation);
 
                if(!temp.Add(fqf.AsObject()))
                  {
                   delete fqf;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                fqf=NULL;
                break;
@@ -7124,22 +7895,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!emb)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!emb.Init(outputs,0,opencl,desc.count,desc.window_out,desc.windows))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete emb;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(emb))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete emb;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7149,22 +7920,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!pe)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!pe.Init(outputs,0,opencl,desc.count,desc.window,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pe;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(pe))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pe;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7174,22 +7945,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!tr)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!tr.Init(outputs,0,opencl,desc.count,desc.window,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tr))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronCGConvOCL:
@@ -7197,22 +7968,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!cgc)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!cgc.Init(outputs,0,opencl,desc.window,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete cgc;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(cgc))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete cgc;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7222,23 +7993,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!dot)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                neurons=prev.count*MathMax((prev.type==defNeuronConv?prev.window_out:prev.window),1)/desc.count;
 
                if(!dot.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,neurons,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete dot;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(dot))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete dot;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7248,22 +8019,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!faq)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!faq.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.units[0],desc.units[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete faq;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(faq))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete faq;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7273,22 +8044,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!cross)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!cross.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.step,desc.units[0],desc.windows[1],desc.units[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete cross;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(cross))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete cross;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7298,22 +8069,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!gte)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!gte.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete gte;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(gte))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete gte;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronCCMROCL:
@@ -7321,22 +8092,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ccmr)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ccmr.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ccmr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(ccmr))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ccmr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronNODEOCL:
@@ -7344,22 +8115,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!node)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!node.Init(outputs,0,opencl,desc.window,desc.step,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete node;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(node))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete node;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronConformerOCL:
@@ -7367,58 +8138,58 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!conf)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!conf.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.layers,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete conf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(conf))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete conf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronRevInDenormOCL:
 
                if(int(desc.layers)>=layers.Total())
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!(((CLayer*)layers.At(desc.layers)).At(0).Type()==defNeuronBatchNormOCL||
                     ((CLayer*)layers.At(desc.layers)).At(0).Type()==defNeuronBatchNormWithNoise))
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
                revin=new CNeuronRevINDenormOCL();
 
                if(!revin)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!revin.Init(outputs,0,opencl,desc.count,desc.layers,((CLayer*)layers.At(desc.layers)).At(0)))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(revin);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(revin)
+                  ReturnFalse
                  }
 
                if(!temp.Add(revin))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(revin);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(revin)
+                  ReturnFalse
                  }
                break;
             case defNeuronClientOCL:
@@ -7426,22 +8197,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!client)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!client.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.layers,desc.count,desc.windows,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete client;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(client))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete client;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronLearnabledPE:
@@ -7449,22 +8220,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!lpe)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!lpe.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete lpe;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(lpe))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete lpe;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronUShapeAttention:
@@ -7472,22 +8243,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!usa)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!usa.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.layers,desc.batch,desc.optimization,1))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete usa;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(usa))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete usa;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7497,23 +8268,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!patch)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!patch.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete patch;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                patch.SetActivationFunction(desc.activation);
 
                if(!temp.Add(patch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete patch;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7523,22 +8294,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!tide)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!tide.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.windows,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tide;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tide))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tide;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7548,22 +8319,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fedw)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fedw.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fedw;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(fedw))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fedw;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7573,22 +8344,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fits)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fits.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.probability,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fits;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(fits))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fits;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7598,22 +8369,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fredf)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fredf.Init(outputs,0,opencl,desc.window,desc.count,desc.probability,bool(desc.step),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fredf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(fredf))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fredf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7623,22 +8394,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!comp_att)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!comp_att.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete comp_att;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(comp_att))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete comp_att;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7648,22 +8419,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!atf)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!atf.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.layers,desc.windows,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete atf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(atf))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete atf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7673,22 +8444,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!s3)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!s3.Init(outputs,0,opencl,desc.window,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete s3;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(s3))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete s3;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronMLMHAttentionMLKV:
@@ -7696,22 +8467,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mlkv)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mlkv.Init(outputs,0,opencl,desc.window,desc.window_out,desc.heads[0],desc.heads[1],desc.count,desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mlkv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mlkv))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mlkv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronMLMHSceneConditionAttention:
@@ -7719,22 +8490,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mlkv)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mlkv.Init(outputs,0,opencl,desc.window,desc.window_out,desc.heads[0],desc.heads[1],desc.count,desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mlkv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mlkv))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mlkv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7744,22 +8515,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!crmlkv)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!crmlkv.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.heads[0],desc.windows[1],desc.heads[1],desc.units[0],desc.units[1],desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete crmlkv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(crmlkv))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete crmlkv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7768,20 +8539,22 @@ bool CNet::Create(CArrayObj*Description)
                cscm=new CNeuronCSCMOCL();
 
                if(!cscm)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!cscm.Init(outputs,0,opencl,desc.windows,desc.window,desc.count,(bool)desc.step,desc.optimization,desc.batch))
                  {
                   delete cscm;
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!temp.Add(cscm))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete cscm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7790,20 +8563,22 @@ bool CNet::Create(CArrayObj*Description)
                spyr=new CNeuronSPyrAttentionOCL();
 
                if(!spyr)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!spyr.Init(outputs,0,opencl,desc.window,desc.window_out,desc.heads[0],desc.heads[1],desc.count,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete spyr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(spyr))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete spyr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7812,20 +8587,22 @@ bool CNet::Create(CArrayObj*Description)
                plr=new CNeuronPLROCL();
 
                if(!plr)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!plr.Init(outputs,0,opencl,desc.window,desc.count,(bool)desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete plr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(plr))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete plr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7834,20 +8611,22 @@ bool CNet::Create(CArrayObj*Description)
                tpm=new CNeuronTPM();
 
                if(!tpm)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!tpm.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,(bool)desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tpm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tpm))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tpm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7856,20 +8635,22 @@ bool CNet::Create(CArrayObj*Description)
                tpme=new CNeuronTPMEncoder();
 
                if(!tpme)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!tpme.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,(bool)desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tpme;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tpme))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tpme;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7878,20 +8659,22 @@ bool CNet::Create(CArrayObj*Description)
                stnne=new CNeuronSTNNEncoder();
 
                if(!stnne)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!stnne.Init(outputs,0,opencl,desc.window,desc.window_out,desc.heads[0],desc.heads[1],desc.count,desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete stnne;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(stnne))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete stnne;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -7900,120 +8683,132 @@ bool CNet::Create(CArrayObj*Description)
                stnnd=new CNeuronSTNNDecoder();
 
                if(!stnnd)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!stnnd.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.heads[0],desc.windows[1],desc.heads[1],desc.units[0],desc.units[1],desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete stnnd;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(stnnd))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete stnnd;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronSparseTSF:
                sptsf=new CNeuronSparseTSF();
 
                if(!sptsf)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!sptsf.Init(outputs,0,opencl,desc.count,desc.window,desc.step,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete sptsf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(sptsf))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete sptsf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronTEMPOOCL:
                tempo=new CNeuronTEMPOOCL();
 
                if(!tempo)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!tempo.Init(outputs,0,opencl,desc.count,desc.window,desc.step,desc.window_out,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tempo;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tempo))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tempo;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronInjectTST:
                inject=new CNeuronInjectTST();
 
                if(!inject)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!inject.Init(outputs,0,opencl,desc.window,desc.window_out,desc.heads[0],desc.heads[1],desc.count,desc.layers,desc.step,desc.heads[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete inject;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(inject))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete inject;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronMambaOCL:
                mamba=new CNeuronMambaOCL();
 
                if(!mamba)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!mamba.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mamba;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mamba))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mamba;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronTrajLLMOCL:
                traj=new CNeuronTrajLLMOCL();
 
                if(!traj)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!traj.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete traj;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(traj))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete traj;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8022,20 +8817,22 @@ bool CNet::Create(CArrayObj*Description)
                utraj=new CNeuronUniTraj();
 
                if(!utraj)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!utraj.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.layers,desc.probability,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete utraj;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(utraj))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete utraj;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8044,20 +8841,22 @@ bool CNet::Create(CArrayObj*Description)
                hivt=new CNeuronHiVTOCL();
 
                if(!hivt)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!hivt.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.step,desc.count,desc.windows[1],desc.windows[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hivt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(hivt))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hivt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8066,20 +8865,22 @@ bool CNet::Create(CArrayObj*Description)
                pn=new CNeuronPointNetOCL();
 
                if(!pn)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!pn.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,(bool)desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(pn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8088,20 +8889,22 @@ bool CNet::Create(CArrayObj*Description)
                pn=new CNeuronPointNet2OCL();
 
                if(!pn)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!pn.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,(bool)desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(pn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8110,80 +8913,88 @@ bool CNet::Create(CArrayObj*Description)
                pn=new CNeuronPointFormer();
 
                if(!pn)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!pn.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,(bool)desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(pn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronHyperDet:
                pn=new CNeuronHyperDet();
 
                if(!pn)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!pn.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,(bool)desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(pn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronSceneSpecific:
                ss=new CNeuronSceneSpecific();
 
                if(!ss)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!ss.Init(outputs,0,opencl,desc.window,desc.window_out,desc.heads[0],desc.heads[1],desc.units[0],desc.units[1],desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ss;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(ss))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ss;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronSEFormer:
                sef=new CNeuronSEFormer();
 
                if(!sef)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!sef.Init(outputs,0,opencl,desc.windows[0],desc.units[0],desc.window_out,(bool)desc.step,desc.units[1],desc.windows[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete sef;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(sef))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete sef;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8192,20 +9003,22 @@ bool CNet::Create(CArrayObj*Description)
                spf=new CNeuronSPFormer();
 
                if(!spf)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!spf.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.units[0],desc.heads[0],desc.windows[1],desc.units[1],desc.heads[1],desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete spf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(spf))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete spf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8214,20 +9027,22 @@ bool CNet::Create(CArrayObj*Description)
                maft=new CNeuronMAFT();
 
                if(!maft)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!maft.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.units[0],desc.heads[0],desc.windows[1],desc.units[1],desc.heads[1],desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete maft;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(maft))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete maft;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8236,20 +9051,22 @@ bool CNet::Create(CArrayObj*Description)
                gres=new CNeuronGRES();
 
                if(!gres)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!gres.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.units[0],desc.heads[0],desc.windows[1],desc.units[1],desc.heads[1],desc.windows[2],desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete gres;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(gres))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete gres;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8258,20 +9075,22 @@ bool CNet::Create(CArrayObj*Description)
                refm=new CNeuronRefMask();
 
                if(!refm)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!refm.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.units[0],desc.step,desc.windows[1],desc.units[1],desc.units[2],desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete refm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(refm))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete refm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8280,20 +9099,22 @@ bool CNet::Create(CArrayObj*Description)
                rat=new CNeuronRelativeSelfAttention();
 
                if(!rat)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!rat.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(rat))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8302,20 +9123,22 @@ bool CNet::Create(CArrayObj*Description)
                rmat=new CNeuronRMAT();
 
                if(!rmat)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!rmat.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rmat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(rmat))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rmat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8324,20 +9147,22 @@ bool CNet::Create(CArrayObj*Description)
                atpool=new CNeuronMHAttentionPooling();
 
                if(!atpool)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!atpool.Init(outputs,0,opencl,desc.window,desc.count,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete atpool;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(atpool))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete atpool;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8346,20 +9171,22 @@ bool CNet::Create(CArrayObj*Description)
                motif=new CNeuronMotifs();
 
                if(!motif)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!motif.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete motif;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(motif))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete motif;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8368,20 +9195,22 @@ bool CNet::Create(CArrayObj*Description)
                msat=new CNeuronMultiScaleAttention();
 
                if(!msat)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!msat.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete msat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(msat))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete msat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8390,20 +9219,22 @@ bool CNet::Create(CArrayObj*Description)
                molf=new CNeuronMolformer();
 
                if(!molf)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!molf.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.heads[0],desc.layers,desc.windows[1],desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete molf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(molf))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete molf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8412,20 +9243,22 @@ bool CNet::Create(CArrayObj*Description)
                amct=new CNeuronAMCT();
 
                if(!amct)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!amct.Init(outputs,0,opencl,desc.window,desc.window_out,desc.units[1],desc.units[0],desc.step,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete amct;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(amct))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete amct;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8434,20 +9267,22 @@ bool CNet::Create(CArrayObj*Description)
                nafs=new CNeuronNAFS();
 
                if(!nafs)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!nafs.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete nafs;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(nafs))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete nafs;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8457,22 +9292,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!usa)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!usa.Init(outputs,0,opencl,desc.window,desc.window_out,desc.heads[0],desc.count,desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete usa;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(usa))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete usa;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
             //---
@@ -8481,22 +9316,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!lorentz)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!lorentz.Init(outputs,0,opencl,desc.window,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete lorentz;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(lorentz))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete lorentz;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
             //---
@@ -8505,22 +9340,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!logmap)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!logmap.Init(outputs,0,opencl,desc.window,desc.count,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete logmap;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(logmap))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete logmap;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
             //---
@@ -8529,22 +9364,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!hypdiff)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!hypdiff.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.heads[0],desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hypdiff;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(hypdiff))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hypdiff;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8554,22 +9389,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ps_block)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ps_block.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.probability,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ps_block;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(ps_block))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ps_block;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8579,22 +9414,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!psformer)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!psformer.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,desc.probability,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete psformer;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(psformer))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete psformer;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8604,8 +9439,8 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!masa)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!masa.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.heads[0],desc.units[0],
@@ -8614,16 +9449,16 @@ bool CNet::Create(CArrayObj*Description)
                              (desc.step>=0?((CLayer*)layers.At(desc.step)).At(0):NULL),
                              desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete masa;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(masa))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete masa;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                masa.SetActivationFunction(desc.activation);
                break;
@@ -8634,22 +9469,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mo)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mo.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.layers,desc.windows[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mo;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mo))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mo;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                mo.SetActivationFunction(desc.activation);
                break;
@@ -8660,22 +9495,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!rl_agent)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!rl_agent.Init(outputs,0,opencl,desc.windows[0],desc.count,desc.window_out,desc.probability,desc.layers,desc.windows[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rl_agent;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(rl_agent))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rl_agent;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8685,22 +9520,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!contr_ag)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!contr_ag.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.units[0],desc.step,desc.windows[1],desc.units[1],desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete contr_ag;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(contr_ag))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete contr_ag;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8710,22 +9545,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!masaat)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!masaat.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.step,desc.count,desc.layers,desc.radius,desc.windows[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete masaat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(masaat))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete masaat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8735,22 +9570,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mhconv)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mhconv.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,desc.count,desc.heads[0],desc.heads[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhconv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mhconv))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhconv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8760,22 +9595,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mhff)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mhff.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.heads[0],desc.heads[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhff;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mhff))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhff;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8785,22 +9620,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!dmhat)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!dmhat.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete dmhat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(dmhat))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete dmhat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8810,22 +9645,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!crdmhat)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!crdmhat.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.units[0],desc.windows[1],desc.units[1],desc.step,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete crdmhat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(crdmhat))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete crdmhat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8835,22 +9670,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mtstockf)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mtstockf.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.layers,desc.windows[2],desc.windows[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mtstockf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mtstockf))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mtstockf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8860,22 +9695,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fin_mem)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fin_mem.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.windows[1],desc.windows[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fin_mem;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(fin_mem))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fin_mem;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8885,22 +9720,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fin_agent)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fin_agent.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.windows[1],desc.windows[2],desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fin_agent;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(fin_agent))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fin_agent;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8910,22 +9745,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fin_con)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fin_con.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.windows[1],desc.windows[2],desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fin_con;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(fin_con))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete fin_con;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -8935,22 +9770,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mhft)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mhft.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.layers,desc.windows[1],desc.windows[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhft;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mhft))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhft;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronMacroHFTHyperAgent:
@@ -8958,22 +9793,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mhft_hyp)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mhft_hyp.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.layers,desc.windows[1],desc.windows[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhft_hyp;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mhft_hyp))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhft_hyp;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronMacroHFTvsRiskManager:
@@ -8981,42 +9816,44 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mhft_risk)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mhft_risk.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.windows[1],desc.windows[2],desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhft_risk;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mhft_risk))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mhft_risk;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronMultiScaleRelativeSelfAttention:
                rat=new CNeuronMultiScaleRelativeSelfAttention();
 
                if(!rat)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!rat.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(rat))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rat;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9026,22 +9863,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!hidf)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!hidf.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,desc.layers,desc.windows[1],desc.windows[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hidf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(hidf))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hidf;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9051,22 +9888,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!resnext)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!resnext.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.window,desc.step,desc.units[0],desc.units[1],desc.units[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete resnext;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(resnext))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete resnext;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9076,22 +9913,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!chimera)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!chimera.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.units[0],desc.units[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete chimera;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(chimera))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete chimera;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9100,20 +9937,22 @@ bool CNet::Create(CArrayObj*Description)
                mot=new CNeuronMoT();
 
                if(!mot)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                if(!mot.Init(outputs,0,opencl,desc.window,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mot;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mot))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mot;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9123,23 +9962,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!hypridDecod)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!hypridDecod.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.count,desc.step,
                                     desc.layers,desc.windows[1],desc.windows[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hypridDecod;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(hypridDecod))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hypridDecod;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9149,22 +9988,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!attraos)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!attraos.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete attraos;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(attraos))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete attraos;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9174,22 +10013,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!duet)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!duet.Init(outputs,0,opencl,desc.window,desc.window_out,desc.units[0],desc.step,desc.units[1],desc.units[2],desc.units[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete duet;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(duet))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete duet;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9199,22 +10038,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mwconv)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mwconv.Init(outputs,0,opencl,desc.windows,desc.window_out,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mwconv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mwconv))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mwconv;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9224,22 +10063,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!adabn)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!adabn.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.windows,desc.step,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete adabn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(adabn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete adabn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9249,22 +10088,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!trcd)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!trcd.Init(outputs,0,opencl,desc.count,desc.window,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete trcd;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(trcd))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete trcd;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9274,22 +10113,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!tvrc)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!tvrc.Init(outputs,0,opencl,desc.step,desc.count,desc.window,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tvrc;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tvrc))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tvrc;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9300,22 +10139,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!catch)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!catch.Init(outputs,0,opencl,desc.count,desc.windows[0],desc.windows[1],desc.step,desc.windows[2],desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete catch;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(catch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete catch;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9325,22 +10164,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!skills)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!skills.Init(outputs,0,opencl,desc.count,desc.windows[0],desc.windows[1],desc.window,desc.step,desc.window_out,desc.windows[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete skills;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(skills))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete skills;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9350,23 +10189,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!hissd)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!hissd.Init(outputs,0,opencl,desc.count,desc.windows[0],desc.windows[1],desc.windows[2],desc.windows[3],desc.window,desc.step,desc.window_out,desc.windows[4],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hissd;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                hissd.SetActivationFunction(desc.activation);
 
                if(!temp.Add(hissd))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete hissd;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9376,23 +10215,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!lineatt)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!lineatt.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete lineatt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                lineatt.SetActivationFunction(None);
 
                if(!temp.Add(lineatt))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete lineatt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9402,23 +10241,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!cglstm)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!cglstm.Init(outputs,0,opencl,desc.count,desc.window,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete cglstm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                cglstm.SetActivationFunction(None);
 
                if(!temp.Add(cglstm))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete cglstm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9428,22 +10267,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!probatt)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!probatt.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete probatt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(probatt))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete probatt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9453,22 +10292,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!tspe)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!tspe.Init(outputs,0,opencl,desc.window,desc.count,desc.windows,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tspe;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tspe))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tspe;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9478,22 +10317,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!m4cemb)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!m4cemb.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.windows,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete m4cemb;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(m4cemb))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete m4cemb;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronMultiWindowsConvWPadOCL:
@@ -9501,22 +10340,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mwconvpad)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mwconvpad.Init(outputs,0,opencl,desc.windows,desc.step,desc.window_out,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mwconvpad;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mwconvpad))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mwconvpad;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronConcatDiff:
@@ -9524,22 +10363,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!condiff)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!condiff.Init(outputs,0,opencl,desc.count,desc.step,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete condiff;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(condiff))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete condiff;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronMantisPatching:
@@ -9547,22 +10386,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mantpatch)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mantpatch.Init(outputs,0,opencl,desc.count,desc.step,desc.layers,desc.window,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mantpatch;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mantpatch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mantpatch;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9572,22 +10411,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mantatt)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mantatt.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.window_out,desc.step,desc.count,desc.layers,desc.window,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mantatt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mantatt))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete mantatt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9597,22 +10436,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!tf_patch)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!tf_patch.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,desc.window_out,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tf_patch;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tf_patch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tf_patch;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9622,22 +10461,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!tf_tu)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!tf_tu.Init(outputs,0,opencl,desc.window,desc.window_out,desc.heads[0],desc.heads[1],desc.count,desc.layers,desc.step,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tf_tu;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(tf_tu))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete tf_tu;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9647,22 +10486,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!swiglu)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!swiglu.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete swiglu;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(swiglu))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete swiglu;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9672,22 +10511,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!timemoesp)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!timemoesp.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.variables,desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete timemoesp;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(timemoesp))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete timemoesp;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9697,24 +10536,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!timemoeatt)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!timemoeatt.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.units[0],
                                    desc.windows[1],desc.units[1],desc.step,desc.layers,desc.units[2],
                                    desc.windows[2],desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete timemoeatt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(timemoeatt))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete timemoeatt;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
 
@@ -9724,23 +10563,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ac)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ac.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,
                            desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ac;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(ac))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ac;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronRoPE:
@@ -9748,22 +10587,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!rope)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!rope.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rope;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(rope))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete rope;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronK2VAEEncoder:
@@ -9771,22 +10610,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!k2vae)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!k2vae.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.units[0],desc.step,desc.layers,desc.units[1],desc.units[2],desc.windows[2],desc.units[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete k2vae;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(k2vae))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete k2vae;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronInterpolationAttention:
@@ -9794,22 +10633,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ia)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ia.Init(outputs,0,opencl,desc.count,desc.window,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ia;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(ia))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ia;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronGinARCell:
@@ -9817,22 +10656,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ginar_cell)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ginar_cell.Init(outputs,0,opencl,desc.count,desc.window,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ginar_cell;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(ginar_cell))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ginar_cell;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronGinAR:
@@ -9840,22 +10679,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ginar)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ginar.Init(outputs,0,opencl,desc.count,desc.window,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ginar;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(ginar))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete ginar;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronPeriodNorm:
@@ -9863,22 +10702,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!per_norm)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!per_norm.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete per_norm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(per_norm))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete per_norm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronAdaptSpatialNorm:
@@ -9886,22 +10725,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!adapt_norm)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!adapt_norm.Init(outputs,0,opencl,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete adapt_norm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(adapt_norm))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete adapt_norm;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronSCNNEncoder:
@@ -9909,22 +10748,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!scnn_enc)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!scnn_enc.Init(outputs,0,opencl,desc.windows[0],desc.variables,desc.windows[1],desc.windows[2],desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete scnn_enc;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(scnn_enc))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete scnn_enc;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronSCNN:
@@ -9932,22 +10771,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!scnn)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!scnn.Init(outputs,0,opencl,desc.windows[0],desc.variables,desc.windows[1],desc.windows[2],desc.windows[3],desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete scnn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(scnn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete scnn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronAttentNorm:
@@ -9955,22 +10794,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!atn)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!atn.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete atn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(atn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete atn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronSAttentNorm:
@@ -9978,22 +10817,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!satn)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!satn.Init(outputs,0,opencl,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete satn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(satn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete satn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronPolynomialRegression:
@@ -10001,22 +10840,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!pol_regr)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!pol_regr.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pol_regr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(pol_regr))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete pol_regr;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronSSCNNEncoder:
@@ -10024,22 +10863,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sscnn_enc)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sscnn_enc.Init(outputs,0,opencl,desc.windows[0],desc.variables,desc.windows[1],desc.windows[2],desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete sscnn_enc;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(sscnn_enc))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete sscnn_enc;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronSSCNN:
@@ -10047,22 +10886,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sscnn)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sscnn.Init(outputs,0,opencl,desc.windows[0],desc.variables,desc.windows[1],desc.windows[2],desc.windows[3],desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete sscnn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(sscnn))
                  {
-                  DeleteObj(temp);
+                  DeleteObj(temp)
                   delete sscnn;
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronTQMHA:
@@ -10070,24 +10909,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!tqmha)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!tqmha.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.step,
                               desc.count,desc.windows[2],desc.windows[3],
                               desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(tqmha);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(tqmha)
+                  ReturnFalse
                  }
 
                if(!temp.Add(tqmha))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(tqmha);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(tqmha)
+                  ReturnFalse
                  }
                break;
             case defNeuronHimNetEncoder:
@@ -10095,24 +10934,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!hn_enc)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!hn_enc.Init(outputs,0,opencl,desc.count,desc.windows[0],desc.windows[1],desc.step,
                                desc.layers,desc.windows[2],desc.windows[3],desc.windows[4],
                                desc.windows[5],desc.windows[6],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(hn_enc);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(hn_enc)
+                  ReturnFalse
                  }
 
                if(!temp.Add(hn_enc))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(hn_enc);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(hn_enc)
+                  ReturnFalse
                  }
                break;
             case defNeuronHimNetDecoder:
@@ -10120,23 +10959,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!hn_dec)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!hn_dec.Init(outputs,0,opencl,desc.count,desc.windows[0],desc.windows[1],desc.step,
                                desc.layers,desc.windows[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(hn_dec);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(hn_dec)
+                  ReturnFalse
                  }
 
                if(!temp.Add(hn_dec))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(hn_dec);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(hn_dec)
+                  ReturnFalse
                  }
                break;
             case defNeuronSAGDFN:
@@ -10144,24 +10983,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sagdfn)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sagdfn.Init(outputs,0,opencl,desc.count,desc.window,desc.windows[0],
                                desc.units[0],desc.windows[1],desc.step,desc.probability,
                                desc.units[1],desc.windows[2],desc.units[2],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sagdfn);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sagdfn)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sagdfn))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sagdfn);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sagdfn)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpatialEmbedding:
@@ -10169,23 +11008,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!semb)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!semb.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,
                              desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(semb);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(semb)
+                  ReturnFalse
                  }
 
                if(!temp.Add(semb))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(semb);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(semb)
+                  ReturnFalse
                  }
                break;
             case defNeuronTempEmbedding:
@@ -10193,24 +11032,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!temb)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!temb.Init(outputs,0,opencl,desc.count,desc.window,desc.windows[0],
                              desc.units[0],desc.windows[1],desc.windows[2],desc.units[1],
                              desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(temb);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(temb)
+                  ReturnFalse
                  }
 
                if(!temp.Add(temb))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(temb);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(temb)
+                  ReturnFalse
                  }
                break;
             case defNeuronGlobalLocalAttention:
@@ -10218,24 +11057,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!glatt)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!glatt.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,
                               desc.step,desc.variables,desc.probability,
                               desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(glatt);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(glatt)
+                  ReturnFalse
                  }
 
                if(!temp.Add(glatt))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(glatt);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(glatt)
+                  ReturnFalse
                  }
                break;
             case defNeuronExtralonger:
@@ -10243,8 +11082,8 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!exlon)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!exlon.Init(outputs,0,opencl,desc.units[0],desc.units[1],desc.window,
@@ -10253,16 +11092,16 @@ bool CNet::Create(CArrayObj*Description)
                               desc.windows[3],desc.units[4],desc.probability,
                               desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(exlon);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(exlon)
+                  ReturnFalse
                  }
 
                if(!temp.Add(exlon))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(exlon);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(exlon)
+                  ReturnFalse
                  }
                break;
             case defNeuronExtralongerGraph:
@@ -10270,8 +11109,8 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!exlongr)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!exlongr.Init(outputs,0,opencl,desc.units[0],desc.units[1],desc.window,
@@ -10279,16 +11118,16 @@ bool CNet::Create(CArrayObj*Description)
                                 desc.units[3],desc.windows[2],desc.layers,desc.step,
                                 desc.units[4],desc.probability,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(exlongr);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(exlongr)
+                  ReturnFalse
                  }
 
                if(!temp.Add(exlongr))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(exlongr);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(exlongr)
+                  ReturnFalse
                  }
                break;
 
@@ -10298,23 +11137,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!spike)
                  {
-                  DeleteObj(temb);
-                  ReturnFalse;
+                  DeleteObj(temb)
+                  ReturnFalse
                  }
 
                if(!spike.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,
                               desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spike);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spike)
+                  ReturnFalse
                  }
 
                if(!temp.Add(spike))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spike);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spike)
+                  ReturnFalse
                  }
                break;
 
@@ -10324,23 +11163,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!glineatt)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!glineatt.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,
                                  desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(glineatt);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(glineatt)
+                  ReturnFalse
                  }
 
                if(!temp.Add(glineatt))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(glineatt);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(glineatt)
+                  ReturnFalse
                  }
                break;
 
@@ -10350,23 +11189,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!spikeatt)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!spikeatt.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,
                                  desc.probability,desc.window_out,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeatt);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeatt)
+                  ReturnFalse
                  }
 
                if(!temp.Add(spikeatt))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeatt);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeatt)
+                  ReturnFalse
                  }
                break;
 
@@ -10376,23 +11215,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!moecon)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!moecon.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,
                                desc.variables,desc.probability,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(moecon);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(moecon)
+                  ReturnFalse
                  }
 
                if(!temp.Add(moecon))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(moecon);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(moecon)
+                  ReturnFalse
                  }
                break;
 
@@ -10402,23 +11241,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!spikebrain)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!spikebrain.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,
                                    desc.probability,desc.window_out,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikebrain);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikebrain)
+                  ReturnFalse
                  }
 
                if(!temp.Add(spikebrain))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikebrain);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikebrain)
+                  ReturnFalse
                  }
                break;
             case defNeuronSparseSoftMax:
@@ -10426,23 +11265,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sparsoftmax)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sparsoftmax.Init(outputs,0,opencl,desc.count,desc.window,
                                     desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sparsoftmax);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sparsoftmax)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sparsoftmax))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sparsoftmax);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sparsoftmax)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeActivation:
@@ -10450,22 +11289,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!spikeact)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!spikeact.Init(outputs,0,opencl,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeact);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeact)
+                  ReturnFalse
                  }
 
                if(!temp.Add(spikeact))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeact);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeact)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeResNeXtBlock:
@@ -10473,24 +11312,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!spikeresblock)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!spikeresblock.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],
                                       desc.units[0],desc.units[1],desc.windows[2],desc.units[2],
                                       desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeresblock);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeresblock)
+                  ReturnFalse
                  }
 
                if(!temp.Add(spikeresblock))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeresblock);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeresblock)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeResNeXtBottleneck:
@@ -10498,24 +11337,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!spikeresbottleneck)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!spikeresbottleneck.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],
                                            desc.units[0],desc.units[1],desc.windows[2],desc.units[2],
                                            desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeresbottleneck);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeresbottleneck)
+                  ReturnFalse
                  }
 
                if(!temp.Add(spikeresbottleneck))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeresbottleneck);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeresbottleneck)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeResNeXtResidual:
@@ -10523,23 +11362,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!spikeresresid)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!spikeresresid.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],
                                       desc.units[0],desc.units[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeresresid);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeresresid)
+                  ReturnFalse
                  }
 
                if(!temp.Add(spikeresresid))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spikeresresid);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spikeresresid)
+                  ReturnFalse
                  }
                break;
             case defNeuronSSAM:
@@ -10547,23 +11386,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ssam)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ssam.Init(outputs,0,opencl,desc.count,desc.window,desc.step,desc.window_out,
                              (bool)desc.probability,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ssam);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ssam)
+                  ReturnFalse
                  }
 
                if(!temp.Add(ssam))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ssam);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ssam)
+                  ReturnFalse
                  }
                break;
             case defNeuronSSAMResNeXtBlock:
@@ -10571,24 +11410,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ssamblock)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ssamblock.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],
                                   desc.units[0],desc.units[1],desc.windows[2],desc.units[2],
                                   desc.step,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ssamblock);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ssamblock)
+                  ReturnFalse
                  }
 
                if(!temp.Add(ssamblock))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ssamblock);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ssamblock)
+                  ReturnFalse
                  }
                break;
             case defNeuronSTFS:
@@ -10596,24 +11435,24 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!stfs)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!stfs.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.units[0],
                              desc.units[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(stfs);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(stfs)
+                  ReturnFalse
                  }
                stfs.SetActivationFunction(desc.activation);
 
                if(!temp.Add(stfs))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(stfs);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(stfs)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeConvGRU:
@@ -10621,22 +11460,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sp_conv_gru)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sp_conv_gru.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_conv_gru);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_conv_gru)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sp_conv_gru))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_conv_gru);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_conv_gru)
+                  ReturnFalse
                  }
                break;
             case defNeuronAddToStack:
@@ -10644,22 +11483,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!stack)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!stack.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(stack);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(stack)
+                  ReturnFalse
                  }
 
                if(!temp.Add(stack))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(stack);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(stack)
+                  ReturnFalse
                  }
                break;
             case defNeuronStackCorrelation:
@@ -10667,23 +11506,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!st_correl)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!st_correl.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(st_correl);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(st_correl)
+                  ReturnFalse
                  }
                st_correl.SetActivationFunction(desc.activation);
 
                if(!temp.Add(st_correl))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(st_correl);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(st_correl)
+                  ReturnFalse
                  }
                break;
             case defNeuronSTEFlowNetEncoder:
@@ -10691,23 +11530,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ste_encod)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ste_encod.Init(outputs,0,opencl,desc.windows,desc.units,desc.window,desc.variables,
                                   desc.step,desc.window_out,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ste_encod);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ste_encod)
+                  ReturnFalse
                  }
 
                if(!temp.Add(ste_encod))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ste_encod);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ste_encod)
+                  ReturnFalse
                  }
                break;
             case defNeuronSTEFlowNet:
@@ -10715,23 +11554,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ste)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ste.Init(outputs,0,opencl,desc.windows,desc.units,desc.window,desc.variables,
                             desc.step,desc.window_out,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ste);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ste)
+                  ReturnFalse
                  }
 
                if(!temp.Add(ste))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ste);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ste)
+                  ReturnFalse
                  }
                break;
             case defNeuronSTEFlowNetDecoder:
@@ -10739,23 +11578,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ste_decod)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ste_decod.Init(outputs,0,opencl,desc.windows,desc.units,desc.window,desc.variables,
                                   desc.step,desc.window_out,((CLayer*)layers.At(desc.layers))[0],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ste_decod);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ste_decod)
+                  ReturnFalse
                  }
 
                if(!temp.Add(ste_decod))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ste_decod);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ste_decod)
+                  ReturnFalse
                  }
                break;
             case defNeuronSTEFlowNetResidualBlock:
@@ -10763,22 +11602,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ste_resid)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ste_resid.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ste_resid);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ste_resid)
+                  ReturnFalse
                  }
 
                if(!temp.Add(ste_resid))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ste_resid);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ste_resid)
+                  ReturnFalse
                  }
                break;
             case defNeuronMultiScaleStackCorrelation:
@@ -10786,22 +11625,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mul_correl)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mul_correl.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(mul_correl);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(mul_correl)
+                  ReturnFalse
                  }
 
                if(!temp.Add(mul_correl))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(mul_correl);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(mul_correl)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeConvGRU2D:
@@ -10809,22 +11648,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sp_conv_gru2D)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sp_conv_gru2D.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_conv_gru2D);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_conv_gru2D)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sp_conv_gru2D))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_conv_gru2D);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_conv_gru2D)
+                  ReturnFalse
                  }
                break;
             case defNeuronRAFT:
@@ -10832,22 +11671,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!raft)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!raft.Init(outputs,0,opencl,desc.units,desc.windows,desc.window,desc.step,desc.count,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(raft);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(raft)
+                  ReturnFalse
                  }
 
                if(!temp.Add(raft))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(raft);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(raft)
+                  ReturnFalse
                  }
                break;
             case defNeuronMultScalStackCorrelBySegments:
@@ -10855,22 +11694,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!segm_corr)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!segm_corr.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,desc.variables,desc.layers,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(segm_corr);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(segm_corr)
+                  ReturnFalse
                  }
 
                if(!temp.Add(segm_corr))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(segm_corr);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(segm_corr)
+                  ReturnFalse
                  }
                break;
             case defNeuronTMAMFE:
@@ -10878,22 +11717,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!mfe)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!mfe.Init(outputs,0,opencl,desc.count,desc.windows,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(mfe);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(mfe)
+                  ReturnFalse
                  }
 
                if(!temp.Add(mfe))
                  {
                   DeleteObj(temp)
                   DeleteObj(mfe)
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronTMAMPA:
@@ -10902,21 +11741,21 @@ bool CNet::Create(CArrayObj*Description)
                if(!mpa)
                  {
                   DeleteObj(temp)
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!mpa.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.variables,desc.step,desc.optimization,desc.batch))
                  {
                   DeleteObj(temp)
                   DeleteObj(mpa)
-                  ReturnFalse;
+                  ReturnFalse
                  }
 
                if(!temp.Add(mpa))
                  {
                   DeleteObj(temp)
                   DeleteObj(mpa)
-                  ReturnFalse;
+                  ReturnFalse
                  }
                break;
             case defNeuronTMA:
@@ -10924,22 +11763,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!tma)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!tma.Init(outputs,0,opencl,desc.units,desc.windows,desc.window,desc.count,desc.heads[0],desc.heads[1],desc.layers,desc.window_out,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(tma);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(tma)
+                  ReturnFalse
                  }
 
                if(!temp.Add(tma))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(tma);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(tma)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeSTConvGRU:
@@ -10947,22 +11786,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!st_convgru)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!st_convgru.Init(outputs,0,opencl,desc.count,desc.windows,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(st_convgru);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(st_convgru)
+                  ReturnFalse
                  }
 
                if(!temp.Add(st_convgru))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(st_convgru);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(st_convgru)
+                  ReturnFalse
                  }
                break;
             case defNeuronFERENet:
@@ -10970,22 +11809,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fere)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fere.Init(outputs,0,opencl,desc.count,desc.windows,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(fere);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(fere)
+                  ReturnFalse
                  }
 
                if(!temp.Add(fere))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(fere);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(fere)
+                  ReturnFalse
                  }
                break;
             case defNeuronFGDModule:
@@ -10993,22 +11832,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!fgd)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!fgd.Init(outputs,0,opencl,desc.count,desc.window,desc.step,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(fgd);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(fgd)
+                  ReturnFalse
                  }
 
                if(!temp.Add(fgd))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(fgd);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(fgd)
+                  ReturnFalse
                  }
                break;
             case defNeuronEVMGRFlowNet:
@@ -11016,22 +11855,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!evmgr)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!evmgr.Init(outputs,0,opencl,desc.count,desc.windows,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(evmgr);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(evmgr)
+                  ReturnFalse
                  }
 
                if(!temp.Add(evmgr))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(evmgr);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(evmgr)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeConvBlock:
@@ -11039,22 +11878,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!spike_block)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!spike_block.Init(outputs,0,opencl,desc.window,desc.step,desc.window_out,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spike_block);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spike_block)
+                  ReturnFalse
                  }
 
                if(!temp.Add(spike_block))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(spike_block);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(spike_block)
+                  ReturnFalse
                  }
                break;
             case defNeuronMSRes:
@@ -11062,22 +11901,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!msres)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!msres.Init(outputs,0,opencl,desc.count,desc.window,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(msres);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(msres)
+                  ReturnFalse
                  }
 
                if(!temp.Add(msres))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(msres);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(msres)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeQKAttention:
@@ -11085,22 +11924,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!qkatt)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!qkatt.Init(outputs,0,opencl,desc.count,desc.window,desc.step,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(qkatt);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(qkatt)
+                  ReturnFalse
                  }
 
                if(!temp.Add(qkatt))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(qkatt);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(qkatt)
+                  ReturnFalse
                  }
                break;
             case defNeuronSDSA:
@@ -11108,22 +11947,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sdsa)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sdsa.Init(outputs,0,opencl,desc.count,desc.window,desc.step,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sdsa);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sdsa)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sdsa))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sdsa);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sdsa)
+                  ReturnFalse
                  }
                break;
             case defNeuronSDformerUBlock:
@@ -11131,22 +11970,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sdublock)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sdublock.Init(outputs,0,opencl,desc.count,desc.windows,desc.heads,desc.units,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sdublock);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sdublock)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sdublock))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sdublock);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sdublock)
+                  ReturnFalse
                  }
                break;
             case defNeuronSDformerFlow:
@@ -11154,44 +11993,44 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sdflow)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sdflow.Init(outputs,0,opencl,desc.count,desc.windows,desc.heads,desc.units,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sdflow);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sdflow)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sdflow))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sdflow);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sdflow)
+                  ReturnFalse
                  }
             case defNeuronSpikePatchStak:
                sp_patch_stak=new CNeuronSpikePatchStak();
 
                if(!sp_patch_stak)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sp_patch_stak.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_patch_stak);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_patch_stak)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sp_patch_stak))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_patch_stak);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_patch_stak)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpike2DSSMOCL:
@@ -11199,22 +12038,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sp_ssm)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sp_ssm.Init(outputs,0,opencl,desc.window,desc.window_out,desc.units[0],desc.units[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_ssm);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_ssm)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sp_ssm))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_ssm);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_ssm)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeMamba2D:
@@ -11222,22 +12061,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sp_mamba)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sp_mamba.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_mamba);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_mamba)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sp_mamba))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_mamba);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_mamba)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeSTSSM:
@@ -11245,22 +12084,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sp_stssm)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sp_stssm.Init(outputs,0,opencl,desc.count,desc.windows[0],desc.windows[1],desc.windows[2],desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_stssm);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_stssm)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sp_stssm))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_stssm);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_stssm)
+                  ReturnFalse
                  }
                break;
             case defNeuronESTMEncoder:
@@ -11268,22 +12107,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!sp_estm)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!sp_estm.Init(outputs,0,opencl,desc.heads,desc.windows,desc.window,desc.window_out,desc.units,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_estm);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_estm)
+                  ReturnFalse
                  }
 
                if(!temp.Add(sp_estm))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(sp_estm);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(sp_estm)
+                  ReturnFalse
                  }
                break;
             case defNeuronCreateFlow:
@@ -11291,22 +12130,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!cr_flow)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!cr_flow.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(cr_flow);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(cr_flow)
+                  ReturnFalse
                  }
 
                if(!temp.Add(cr_flow))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(cr_flow);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(cr_flow)
+                  ReturnFalse
                  }
                break;
             case defNeuronBiDirectCorrelation:
@@ -11314,22 +12153,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!bi_corr)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!bi_corr.Init(outputs,0,opencl,desc.window,desc.count,desc.variables,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(bi_corr);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(bi_corr)
+                  ReturnFalse
                  }
 
                if(!temp.Add(bi_corr))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(bi_corr);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(bi_corr)
+                  ReturnFalse
                  }
                break;
             case defNeuronSATMA:
@@ -11337,22 +12176,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!satma)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!satma.Init(outputs,0,opencl,desc.window,desc.count,desc.variables,desc.window_out,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(satma);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(satma)
+                  ReturnFalse
                  }
 
                if(!temp.Add(satma))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(satma);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(satma)
+                  ReturnFalse
                  }
                break;
             case defNeuronBAT:
@@ -11360,22 +12199,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!bat)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!bat.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(bat);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(bat)
+                  ReturnFalse
                  }
 
                if(!temp.Add(bat))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(bat);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(bat)
+                  ReturnFalse
                  }
                break;
             case defNeuronBATvADM:
@@ -11383,22 +12222,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!bat)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!bat.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(bat);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(bat)
+                  ReturnFalse
                  }
 
                if(!temp.Add(bat))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(bat);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(bat)
+                  ReturnFalse
                  }
                break;
             case defNeuronCDCSelfCorrector:
@@ -11406,23 +12245,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!selfcorrect)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!selfcorrect.Init(outputs,0,opencl,desc.window,desc.windows,desc.window_out,
                                     desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(selfcorrect);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(selfcorrect)
+                  ReturnFalse
                  }
 
                if(!temp.Add(selfcorrect))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(selfcorrect);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(selfcorrect)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeCDC:
@@ -11430,23 +12269,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!cdc)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!cdc.Init(outputs,0,opencl,desc.window,desc.windows,desc.window_out,
                             desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(cdc);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(cdc)
+                  ReturnFalse
                  }
 
                if(!temp.Add(cdc))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(cdc);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(cdc)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeEEMFLow:
@@ -11454,23 +12293,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!eemflow)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!eemflow.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,
                                 desc.variables,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(eemflow);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(eemflow)
+                  ReturnFalse
                  }
 
                if(!temp.Add(eemflow))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(eemflow);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(eemflow)
+                  ReturnFalse
                  }
                break;
             case defNeuronSpikeDepthWiseConv:
@@ -11478,23 +12317,23 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!dw_conv)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!dw_conv.Init(outputs,0,opencl,desc.window,desc.window_out,desc.layers,desc.step,
                                 desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(dw_conv);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(dw_conv)
+                  ReturnFalse
                  }
 
                if(!temp.Add(dw_conv))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(dw_conv);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(dw_conv)
+                  ReturnFalse
                  }
                break;
             case defNeuronMultiScaleExcitation:
@@ -11502,22 +12341,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!excit)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!excit.Init(outputs,0,opencl,desc.window,desc.count,desc.step,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(excit);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(excit)
+                  ReturnFalse
                  }
 
                if(!temp.Add(excit))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(excit);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(excit)
+                  ReturnFalse
                  }
                break;
             case defNeuronMultiScaleDifference:
@@ -11525,22 +12364,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!ms_diff)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!ms_diff.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,desc.windows,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ms_diff);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ms_diff)
+                  ReturnFalse
                  }
 
                if(!temp.Add(ms_diff))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(ms_diff);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(ms_diff)
+                  ReturnFalse
                  }
                break;
             case defNeuronCorrelationEncoder:
@@ -11548,22 +12387,22 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!corr_enc)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!corr_enc.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(corr_enc);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(corr_enc)
+                  ReturnFalse
                  }
 
                if(!temp.Add(corr_enc))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(corr_enc);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(corr_enc)
+                  ReturnFalse
                  }
                break;
             case defNeuronEDCFlow:
@@ -11571,334 +12410,368 @@ bool CNet::Create(CArrayObj*Description)
 
                if(!edcflow)
                  {
-                  DeleteObj(temp);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  ReturnFalse
                  }
 
                if(!edcflow.Init(outputs,0,opencl,desc.windows[0],desc.units[0],desc.window_out,
                                 desc.windows[1],desc.units[1],desc.heads,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(edcflow);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(edcflow)
+                  ReturnFalse
                  }
 
                if(!temp.Add(edcflow))
                  {
-                  DeleteObj(temp);
-                  DeleteObj(edcflow);
-                  ReturnFalse;
+                  DeleteObj(temp)
+                  DeleteObj(edcflow)
+                  ReturnFalse
                  }
                break;
             case defNeuronCreateICEFlow:
                ice=new CNeuronCreateICEFlow();
 
                if(!ice)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!ice.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(ice);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(ice)
                  }
 
                if(!temp.Add(ice))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(ice);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(ice)
                  }
                break;
             case defNeuronSpikeMFE:
                sp_mfe=new CNeuronSpikeMFE();
 
                if(!sp_mfe)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!sp_mfe.Init(outputs,0,opencl,desc.count,desc.windows,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(sp_mfe);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(sp_mfe)
                  }
 
                if(!temp.Add(sp_mfe))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(sp_mfe);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(sp_mfe)
                  }
                break;
             case defNeuronSpikeMHCrossAttention:
                sp_crosatt=new CNeuronSpikeMHCrossAttention();
 
                if(!sp_crosatt)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!sp_crosatt.Init(outputs,0,opencl,desc.windows[0],desc.window_out,desc.step,
                                    desc.units[0],desc.windows[1],desc.units[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(sp_crosatt);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(sp_crosatt)
                  }
 
                if(!temp.Add(sp_crosatt))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(sp_crosatt);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(sp_crosatt)
                  }
                break;
             case defNeuronSpikeMixFusion:
                mix_fusion=new CNeuronSpikeMixFusion();
 
                if(!mix_fusion)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!mix_fusion.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mix_fusion);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mix_fusion)
                  }
 
                if(!temp.Add(mix_fusion))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mix_fusion);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mix_fusion)
                  }
                break;
             case defNeuronSTFlow:
                stflow=new CNeuronSTFlow();
 
                if(!stflow)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!stflow.Init(outputs,0,opencl,desc.windows[0],desc.units[0],desc.window_out,
                                desc.windows[1],desc.units[1],desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(stflow);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(stflow)
                  }
 
                if(!temp.Add(stflow))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(stflow);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(stflow)
                  }
                break;
             case defNeuronPSSE:
                pse=new CNeuronPSSE();
 
                if(!pse)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!pse.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,
                             desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(pse);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(pse)
                  }
 
                if(!temp.Add(pse))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(pse);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(pse)
                  }
                break;
             case defNeuronSpikeDepthWiseResidual:
                dwr=new CNeuronSpikeDepthWiseResidual();
 
                if(!dwr)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!dwr.Init(outputs,0,opencl,desc.window,desc.window_out,desc.layers,
                             desc.step,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(dwr);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(dwr)
                  }
 
                if(!temp.Add(dwr))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(dwr);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(dwr)
                  }
                break;
             case defNeuronSpikeSuperKernelBlock:
                sk_block=new CNeuronSpikeSuperKernelBlock();
 
                if(!sk_block)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!sk_block.Init(outputs,0,opencl,desc.window,desc.window_out,desc.windows,desc.heads,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(sk_block);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(sk_block)
                  }
 
                if(!temp.Add(sk_block))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(sk_block);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(sk_block)
                  }
                break;
             case defNeuronSpikeGMA:
                gma=new CNeuronSpikeGMA();
 
                if(!gma)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!gma.Init(outputs,0,opencl,desc.window,desc.count,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(gma);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(gma)
                  }
 
                if(!temp.Add(gma))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(gma);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(gma)
                  }
                break;
             case defNeuronETROF:
                etrof=new CNeuronETROF();
 
                if(!etrof)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!etrof.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(etrof);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(etrof)
                  }
 
                if(!temp.Add(etrof))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(etrof);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(etrof)
                  }
                break;
             case defNeuronPSSEFlow:
                pseflow=new CNeuronPSSEFlow();
 
                if(!pseflow)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!pseflow.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(pseflow);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(pseflow)
                  }
 
                if(!temp.Add(pseflow))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(pseflow);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(pseflow)
                  }
                break;
             case defNeuronSpikeUSR:
                usr=new CNeuronSpikeUSR();
 
                if(!usr)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!usr.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(usr);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(usr)
                  }
 
                if(!temp.Add(usr))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(usr);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(usr)
                  }
                break;
             case defNeuronInitialFlow:
                init_flow=new CNeuronInitialFlow();
 
                if(!init_flow)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!init_flow.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,desc.variables,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(init_flow);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(init_flow)
                  }
 
                if(!temp.Add(init_flow))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(init_flow);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(init_flow)
                  }
                break;
             case defNeuronSpikeSMR:
                smr=new CNeuronSpikeSMR();
 
                if(!smr)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!smr.Init(outputs,0,opencl,desc.count,desc.windows[0],desc.windows[1],desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(smr);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(smr)
                  }
 
                if(!temp.Add(smr))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(smr);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(smr)
                  }
                break;
             case defNeuronEVAFlow:
                eva=new CNeuronEVAFlow();
 
                if(!eva)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!eva.Init(outputs,0,opencl,desc.count,desc.window,desc.window_out,desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(eva);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(eva)
                  }
 
                if(!temp.Add(eva))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(eva);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(eva)
                  }
                break;
             case defNeuronResFlowHTR:
                htr=new CNeuronResFlowHTR();
 
                if(!htr)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!htr.Init(outputs,0,opencl,desc.count,desc.windows[0],desc.windows[1],desc.windows[2],desc.windows[3],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(htr);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(htr)
                  }
 
                if(!temp.Add(htr))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(htr);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(htr)
                  }
                break;
             case defNeuronResFlow:
                resflow=new CNeuronResFlow();
 
                if(!resflow)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!resflow.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.variables,
                                 desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(resflow);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(resflow)
                  }
 
                if(!temp.Add(resflow))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(resflow);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(resflow)
                  }
                break;
 
@@ -11907,57 +12780,63 @@ bool CNet::Create(CArrayObj*Description)
                tailaware=new CNeuronConfGateTailAwareMoE();
 
                if(!tailaware)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!tailaware.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,
                                   desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(tailaware);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(tailaware)
                  }
 
                if(!temp.Add(tailaware))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(tailaware);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(tailaware)
                  }
                break;
             case defNeuronResFlowLattice:
                lattice=new CNeuronResFlowLattice();
 
                if(!lattice)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!lattice.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,desc.variables,
                                 desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(lattice);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(lattice)
                  }
 
                if(!temp.Add(lattice))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(lattice);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(lattice)
                  }
                break;
             case defNeuronFieldAwareConv:
                faconv=new CNeuronFieldAwareConv();
 
                if(!faconv)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!faconv.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.count,desc.windows[2],
                                desc.variables,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(faconv);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(faconv)
                  }
 
                if(!temp.Add(faconv))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(faconv);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(faconv)
                  }
                faconv.SetActivationFunction(desc.activation);
                break;
@@ -11965,57 +12844,63 @@ bool CNet::Create(CArrayObj*Description)
                fat=new CNeuronMHFAT();
 
                if(!fat)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!fat.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.step,desc.count,desc.windows[2],
                             desc.layers,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(fat);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(fat)
                  }
 
                if(!temp.Add(fat))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(fat);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(fat)
                  }
                break;
             case defNeuronMHCrossFAT:
                cross_fat=new CNeuronMHCrossFAT();
 
                if(!cross_fat)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!cross_fat.Init(outputs,0,opencl,desc.windows[0],desc.windows[1],desc.step,desc.units[0],
                                   desc.windows[2],desc.units[1],desc.windows[3],desc.layers,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cross_fat);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cross_fat)
                  }
 
                if(!temp.Add(cross_fat))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cross_fat);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cross_fat)
                  }
                break;
             case defNeuronFieldPatternEmbedding:
                faemb=new CNeuronFieldPatternEmbedding();
 
                if(!faemb)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!faemb.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,
                               desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(faemb);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(faemb)
                  }
 
                if(!temp.Add(faemb))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(faemb);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(faemb)
                  }
                faemb.SetActivationFunction(desc.activation);
                break;
@@ -12023,57 +12908,63 @@ bool CNet::Create(CArrayObj*Description)
                autotoken=new CNeuronAutoToken();
 
                if(!autotoken)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!autotoken.Init(outputs,0,opencl,desc.window,desc.window_out,desc.units[0],desc.units[1],
                                   desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(autotoken);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(autotoken)
                  }
 
                if(!temp.Add(autotoken))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(autotoken);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(autotoken)
                  }
                break;
             case defNeuronMultiMixAttention:
                mixattention=new CNeuronMultiMixAttention();
 
                if(!mixattention)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!mixattention.Init(outputs,0,opencl,desc.window,desc.count,desc.step,desc.window_out,
                                      desc.layers,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mixattention);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mixattention)
                  }
 
                if(!temp.Add(mixattention))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mixattention);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mixattention)
                  }
                break;
             case defNeuronSparseMoEConv:
                sparsemoe=new CNeuronSparseMoEConv();
 
                if(!sparsemoe)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!sparsemoe.Init(outputs,0,opencl,desc.window,desc.window_out,desc.count,
                                   desc.layers,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(sparsemoe);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(sparsemoe)
                  }
 
                if(!temp.Add(sparsemoe))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(sparsemoe);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(sparsemoe)
                  }
                sparsemoe.SetActivationFunction(desc.activation);
                break;
@@ -12081,652 +12972,726 @@ bool CNet::Create(CArrayObj*Description)
                mixattenblock=new CNeuronMTmixAttBlock();
 
                if(!mixattenblock)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!mixattenblock.Init(outputs,0,opencl,desc.window,desc.count,desc.step,
                                       desc.window_out,desc.layers,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mixattenblock);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mixattenblock)
                  }
 
                if(!temp.Add(mixattenblock))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mixattenblock);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mixattenblock)
                  }
                break;
             case defCrossMHFlashAttention:
                flash_att=new CCrossMHFlashAttention();
 
                if(!flash_att)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!flash_att.Init(outputs,0,opencl,desc.window,desc.step,(bool)desc.probability,
                                   desc.units[0],desc.units[1],desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(flash_att);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(flash_att)
                  }
 
                if(!temp.Add(flash_att))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(flash_att);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(flash_att)
                  }
                break;
             case defNeuronMixFeedForward:
                mixff=new CNeuronMixFeedForward();
 
                if(!mixff)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!mixff.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,
                               desc.variables,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mixff);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mixff)
                  }
 
                if(!temp.Add(mixff))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mixff);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mixff)
                  }
                break;
             case defNeuronOneTrans:
                onetrans=new CNeuronOneTrans();
 
                if(!onetrans)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!onetrans.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.units[1],desc.step,desc.count,
                                  desc.layers,desc.window_out,desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(onetrans);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(onetrans)
                  }
 
                if(!temp.Add(onetrans))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(onetrans);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(onetrans)
                  }
                break;
             case defNeuronMHTHCrossAttention:
                thcatt=new CNeuronMHTHCrossAttention();
 
                if(!thcatt)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!thcatt.Init(outputs,0,opencl,desc.windows[0],desc.units[0],desc.step,desc.windows[1],desc.units[1],desc.window_out,
                                desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(thcatt);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(thcatt)
                  }
 
                if(!temp.Add(thcatt))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(thcatt);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(thcatt)
                  }
                break;
             case defNeuronSTCA:
                stca=new CNeuronSTCA();
 
                if(!stca)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!stca.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.units[1],desc.step,desc.units[2],desc.count,
                              desc.layers,desc.window_out,desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(stca);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(stca)
                  }
 
                if(!temp.Add(stca))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(stca);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(stca)
                  }
                break;
             case defNeuronWeightGenerator:
                wgen=new CNeuronWeightGenerator();
 
                if(!wgen)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!wgen.Init(outputs,0,opencl,desc.window,desc.window_out,desc.step,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(wgen);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(wgen)
                  }
 
                if(!temp.Add(wgen))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(wgen);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(wgen)
                  }
                break;
             case defNeuronPCGR:
                pcrg=new CNeuronPCGR();
 
                if(!pcrg)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!pcrg.Init(outputs,0,opencl,desc.window,desc.window_out,desc.units[0],desc.units[1],desc.step,
                              desc.units[2],uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(pcrg);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(pcrg)
                  }
 
                if(!temp.Add(pcrg))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(pcrg);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(pcrg)
                  }
                break;
             case defNeuronADS:
                ads=new CNeuronADS();
 
                if(!ads)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!ads.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.units[1],desc.step,desc.units[2],desc.count,
                             desc.layers,desc.window_out,desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(ads);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(ads)
                  }
 
                if(!temp.Add(ads))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(ads);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(ads)
                  }
                break;
             case defNeuronPerTokenFFN:
                pertoken=new CNeuronPerTokenFFN();
 
                if(!pertoken)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!pertoken.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,
                                  desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(pertoken);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(pertoken)
                  }
 
                if(!temp.Add(pertoken))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(pertoken);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(pertoken)
                  }
                break;
             case defNeuronScenariosToken:
                scentoken=new CNeuronScenariosToken();
 
                if(!scentoken)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!scentoken.Init(outputs,0,opencl,desc.window,desc.units[0],desc.window_out,desc.units[1],
                                   desc.window_out,desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scentoken);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scentoken)
                  }
 
                if(!temp.Add(scentoken))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scentoken);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scentoken)
                  }
                break;
             case defNeuronUnifiedTokenizer:
                uniftokens=new CNeuronUnifiedTokenizer();
 
                if(!uniftokens)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!uniftokens.Init(outputs,0,opencl,desc.windows,desc.count,desc.window_out,
                                    desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uniftokens);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uniftokens)
                  }
 
                if(!temp.Add(uniftokens))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uniftokens);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uniftokens)
                  }
                break;
             case defNeuronDomainAwareAttention:
                domainatt=new CNeuronDomainAwareAttention();
 
                if(!domainatt)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!domainatt.Init(outputs,0,opencl,desc.windows[0],desc.units[0],desc.step,
                                   desc.windows[1],desc.units[1],desc.window_out,desc.variables,
                                   uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(domainatt);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(domainatt)
                  }
 
                if(!temp.Add(domainatt))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(domainatt);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(domainatt)
                  }
                break;
             case defNeuronFeatureSelfIteration:
                featureinter=new CNeuronFeatureSelfIteration();
 
                if(!featureinter)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!featureinter.Init(outputs,0,opencl,desc.window,desc.count,desc.step,desc.layers,
                                      desc.window_out,desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(featureinter);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(featureinter)
                  }
 
                if(!temp.Add(featureinter))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(featureinter);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(featureinter)
                  }
                break;
             case defNeuronDomainFused:
                domainfused=new CNeuronDomainFused();
 
                if(!domainfused)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!domainfused.Init(outputs,0,opencl,desc.window,desc.units[0],desc.units[1],
                                     desc.window_out,desc.variables,uint(desc.probability),
                                     desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(domainfused);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(domainfused)
                  }
 
                if(!temp.Add(domainfused))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(domainfused);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(domainfused)
                  }
                break;
             case defNeuronMDL:
                mdl=new CNeuronMDL();
 
                if(!mdl)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!mdl.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,desc.units[1],
                             desc.count,desc.layers,desc.window_out,desc.variables,
                             uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mdl);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mdl)
                  }
 
                if(!temp.Add(mdl))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(mdl);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(mdl)
                  }
                break;
             case defNeuronUniMixerTokenizer:
                umtoken=new CNeuronUniMixerTokenizer();
 
                if(!umtoken)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!umtoken.Init(outputs,0,opencl,desc.windows,desc.count,desc.window_out,desc.step,
                                 desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(umtoken);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(umtoken)
                  }
 
                if(!temp.Add(umtoken))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(umtoken);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(umtoken)
                  }
                break;
             case defNeuronPerTokenSwiGLU:
                ptswiglu=new CNeuronPerTokenSwiGLU();
 
                if(!ptswiglu)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!ptswiglu.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,desc.variables,
                                  uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(ptswiglu);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(ptswiglu)
                  }
 
                if(!temp.Add(ptswiglu))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(ptswiglu);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(ptswiglu)
                  }
                break;
             case defNeuronUniMixer:
                unimix=new CNeuronUniMixer();
 
                if(!unimix)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!unimix.Init(outputs,0,opencl,desc.window,desc.count,desc.step,desc.window_out,desc.variables,
                                uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(unimix);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(unimix)
                  }
 
                if(!temp.Add(unimix))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(unimix);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(unimix)
                  }
                break;
             case defNeuronSiameseNorm:
                siamnorm=new CNeuronSiameseNorm();
 
                if(!siamnorm)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!siamnorm.Init(outputs,0,opencl,desc.window,desc.count,desc.step,desc.window_out,desc.variables,
                                  uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(siamnorm);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(siamnorm)
                  }
 
                if(!temp.Add(siamnorm))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(siamnorm);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(siamnorm)
                  }
                break;
             case defNeuronUniMixerBlock:
                umblock=new CNeuronUniMixerBlock();
 
                if(!umblock)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!umblock.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,desc.units[1],
                                 desc.count,desc.layers,desc.window_out,desc.variables,
                                 uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(umblock);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(umblock)
                  }
 
                if(!temp.Add(umblock))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(umblock);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(umblock)
                  }
                break;
             case defNeuronINFNetScenarios:
                infnscen=new CNeuronINFNetScenarios();
 
                if(!infnscen)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!infnscen.Init(outputs,0,opencl,desc.window,desc.units,desc.window_out,desc.step,
                                  desc.variables,uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(infnscen);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(infnscen)
                  }
 
                if(!temp.Add(infnscen))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(infnscen);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(infnscen)
                  }
                break;
             case defNeuronINFNetHUBSequence:
                hub=new CNeuronINFNetHUBSequence();
 
                if(!hub)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!hub.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,desc.variables,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(hub);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(hub)
                  }
 
                if(!temp.Add(hub))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(hub);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(hub)
                  }
                break;
             case defNeuronINFNetBlock:
                infnblock=new CNeuronINFNetBlock();
 
                if(!infnblock)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!infnblock.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,
                                   desc.units[1],desc.layers,desc.window_out,desc.variables,
                                   uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(infnblock);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(infnblock)
                  }
 
                if(!temp.Add(infnblock))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(infnblock);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(infnblock)
                  }
                break;
             case defNeuronSequenceTokenizer:
                seq_tok=new CNeuronSequenceTokenizer();
 
                if(!seq_tok)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!seq_tok.Init(outputs,0,opencl,desc.window,desc.count,desc.window_out,
                                 desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(seq_tok);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(seq_tok)
                  }
 
                if(!temp.Add(seq_tok))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(seq_tok);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(seq_tok)
                  }
                break;
             case defNeuronDifferenceTokenizer:
                diff_tok=new CNeuronDifferenceTokenizer();
 
                if(!diff_tok)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!diff_tok.Init(outputs,0,opencl,desc.window,desc.window_out,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(diff_tok);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(diff_tok)
                  }
 
                if(!temp.Add(diff_tok))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(diff_tok);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(diff_tok)
                  }
                break;
             case defNeuronReGENTADBackbone:
                regen_backbone=new CNeuronReGENTADBackbone();
 
                if(!regen_backbone)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!regen_backbone.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,
                                        desc.units[1],desc.layers,desc.window_out,desc.variables,
                                        uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(regen_backbone);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(regen_backbone)
                  }
 
                if(!temp.Add(regen_backbone))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(regen_backbone);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(regen_backbone)
                  }
                break;
             case defNeuronReGENTADHead:
                regen_head=new CNeuronReGENTADHead();
 
                if(!regen_head)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!regen_head.Init(outputs,0,opencl,desc.window,desc.units[0],desc.window_out,
                                    desc.units[1],NULL,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(regen_head);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(regen_head)
                  }
 
                if(!temp.Add(regen_head))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(regen_head);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(regen_head)
                  }
                break;
             case defNeuronReGENTAD:
                regentad=new CNeuronReGENTAD();
 
                if(!regentad)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!regentad.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,
                                  desc.units[1],desc.layers,desc.window_out,desc.variables,
                                  uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(regentad);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(regentad)
                  }
 
                if(!temp.Add(regentad))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(regentad);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(regentad)
                  }
                break;
             case defNeuronGDformerBackbone:
                gdformer_backbone=new CNeuronGDformerBackbone();
 
                if(!gdformer_backbone)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!gdformer_backbone.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,
                                           desc.units[1],desc.layers,desc.window_out,desc.variables,
                                           uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(gdformer_backbone);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(gdformer_backbone)
                  }
 
                if(!temp.Add(gdformer_backbone))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(gdformer_backbone);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(gdformer_backbone)
                  }
                break;
             case defNeuronGDformer:
                gdformer=new CNeuronGDformer();
 
                if(!gdformer)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!gdformer.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,
                                  desc.units[1],desc.layers,desc.window_out,desc.variables,
                                  uint(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(gdformer);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(gdformer)
                  }
 
                if(!temp.Add(gdformer))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(gdformer);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(gdformer)
                  }
                break;
             case defNeuronMomADTTM:
 
                if(desc.units.Size()<2)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                momad_ttm=new CNeuronMomADTTM();
 
                if(!momad_ttm)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!momad_ttm.Init(outputs,0,opencl,desc.window,desc.units[0],
                                   desc.units[1],uint(desc.probability),
                                   desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(momad_ttm);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(momad_ttm)
                  }
 
                if(!temp.Add(momad_ttm))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(momad_ttm);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(momad_ttm)
                  }
                break;
             case defNeuronMomADMPI:
 
                if(desc.units.Size()<3)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                momad_mpi=new CNeuronMomADMPI();
 
                if(!momad_mpi)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!momad_mpi.Init(outputs,0,opencl,desc.window,desc.units[0],
                                   desc.units[1],desc.units[2],desc.count,
                                   uint(desc.probability),desc.step,desc.window_out,
                                   desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(momad_mpi);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(momad_mpi)
                  }
 
                if(!temp.Add(momad_mpi))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(momad_mpi);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(momad_mpi)
                  }
                break;
             case defNeuronVLADriverRAGMPI:
 
                if(desc.units.Size()<3)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                vladriver_rag_mpi=new CNeuronVLADriverRAGMPI();
 
                if(!vladriver_rag_mpi)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!vladriver_rag_mpi.Init(outputs,0,opencl,desc.window,desc.units[0],
                                           desc.units[1],desc.units[2],desc.count,
@@ -12734,44 +13699,50 @@ bool CNet::Create(CArrayObj*Description)
                                           desc.layers,desc.variables,
                                           desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(vladriver_rag_mpi);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(vladriver_rag_mpi)
                  }
 
                if(!temp.Add(vladriver_rag_mpi))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(vladriver_rag_mpi);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(vladriver_rag_mpi)
                  }
                break;
             case defNeuronUncAD_MUE:
                uncad_mue=new CNeuronUncAD_MUE();
 
                if(!uncad_mue)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!uncad_mue.Init(outputs,0,opencl,desc.window,desc.window_out,
                                   desc.count,desc.units[0],desc.units[1],
                                   float(desc.probability),desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uncad_mue);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uncad_mue)
                  }
 
                if(!temp.Add(uncad_mue))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uncad_mue);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uncad_mue)
                  }
                break;
             case defNeuronCogDriverData:
 
                if(desc.units.Size()<3)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                cogdriver_data=new CNeuronCogDriverData();
 
                if(!cogdriver_data)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!cogdriver_data.Init(outputs,0,opencl,desc.window,
                                        desc.count,desc.units[0],
@@ -12779,243 +13750,273 @@ bool CNet::Create(CArrayObj*Description)
                                        float(desc.probability),
                                        desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cogdriver_data);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cogdriver_data)
                  }
 
                if(!temp.Add(cogdriver_data))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cogdriver_data);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cogdriver_data)
                  }
                break;
             case defNeuronCogDriverRankTCM:
 
                if(desc.units.Size()<2||desc.variables==0)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                cogdriver_rank=new CNeuronCogDriverRankTCM();
 
                if(!cogdriver_rank)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!cogdriver_rank.Init(outputs,0,opencl,desc.window,
                                        desc.count,desc.variables,desc.units[0],desc.units[1],
                                        desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cogdriver_rank);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cogdriver_rank)
                  }
 
                if(!temp.Add(cogdriver_rank))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cogdriver_rank);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cogdriver_rank)
                  }
                break;
             case defNeuronCogDriverForecastHead:
 
                if(desc.units.Size()<2||desc.variables==0)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                cogdriver_forecast=new CNeuronCogDriverForecastHead();
 
                if(!cogdriver_forecast)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!cogdriver_forecast.Init(outputs,0,opencl,desc.window,
                                            desc.count,desc.variables,desc.units[0],desc.units[1],
                                            desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cogdriver_forecast);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cogdriver_forecast)
                  }
 
                if(!temp.Add(cogdriver_forecast))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cogdriver_forecast);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cogdriver_forecast)
                  }
                break;
             case defNeuronCogDriverForecastToken:
                cogdriver_token=new CNeuronCogDriverForecastToken();
 
                if(!cogdriver_token)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!cogdriver_token.Init(outputs,0,opencl,desc.window,
                                         desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cogdriver_token);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cogdriver_token)
                  }
 
                if(!temp.Add(cogdriver_token))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(cogdriver_token);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(cogdriver_token)
                  }
                break;
             case defNeuronPlanProjectionTraceOCL:
                plan_projection_trace=new CNeuronPlanProjectionTraceOCL();
 
                if(!plan_projection_trace)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!plan_projection_trace.Init(outputs,0,opencl,desc))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(plan_projection_trace);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(plan_projection_trace)
                  }
 
                if(!temp.Add(plan_projection_trace))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(plan_projection_trace);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(plan_projection_trace)
                  }
                break;
             case defNeuronPlanProjectionOCL:
                plan_projection=new CNeuronPlanProjectionOCL();
 
                if(!plan_projection)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!plan_projection.Init(outputs,0,opencl,desc))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(plan_projection);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(plan_projection)
                  }
 
                if(!temp.Add(plan_projection))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(plan_projection);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(plan_projection)
                  }
                break;
             case defNeuronDPCCOCL:
                dpcc=new CNeuronDPCCOCL;
 
                if(!dpcc)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!dpcc.Init(outputs,0,opencl,desc))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(dpcc);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(dpcc)
                  }
 
                if(!temp.Add(dpcc))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(dpcc);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(dpcc)
                  }
                break;
             case defNeuronPlanDenoiserOCL:
                plan_denoiser=new CNeuronPlanDenoiserOCL;
 
                if(!plan_denoiser)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!plan_denoiser.Init(outputs,0,opencl,desc))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(plan_denoiser);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(plan_denoiser)
                  }
 
                if(!temp.Add(plan_denoiser))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(plan_denoiser);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(plan_denoiser)
                  }
                break;
             case defNeuronScenarioDecoderOCL:
                scenario_decoder=new CNeuronScenarioDecoderOCL();
 
                if(!scenario_decoder)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!scenario_decoder.Init(outputs,0,opencl,desc))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_decoder);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_decoder)
                  }
 
                if(!temp.Add(scenario_decoder))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_decoder);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_decoder)
                  }
                break;
             case defNeuronScenarioRolloutOCL:
                scenario_rollout=new CNeuronScenarioRolloutOCL();
 
                if(!scenario_rollout)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!scenario_rollout.Init(outputs,0,opencl,desc))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_rollout);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_rollout)
                  }
 
                if(!temp.Add(scenario_rollout))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_rollout);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_rollout)
                  }
                break;
             case defNeuronScenarioForecastPriceOCL:
 
                if(desc.activation!=None||desc.layers<=0)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
                scenario_forecast_price=new CNeuronScenarioForecastPriceOCL();
 
                if(!scenario_forecast_price)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!scenario_forecast_price.Init(0,0,opencl,desc.count,
                                                 desc.variables,desc.window_out,desc.window,
                                                 desc.optimization,desc.batch,desc.layers))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_forecast_price);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_forecast_price)
                  }
 
                if(!temp.Add(scenario_forecast_price))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_forecast_price);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_forecast_price)
                  }
                break;
             case defNeuronScenarioForecast:
                scenario_forecast=new CNeuronScenarioForecast();
 
                if(!scenario_forecast)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!scenario_forecast.Init(outputs,0,opencl,desc.count,
                                           desc.variables,desc.window_out,desc.window,
                                           desc.optimization,desc.batch,
                                           (desc.layers>0?desc.layers:1)))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_forecast);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_forecast)
                  }
 
                if(!temp.Add(scenario_forecast))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_forecast);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_forecast)
                  }
                break;
             case defNeuronScenarioCrossAttentionPriceOCL:
                scenario_cross_price=new CNeuronScenarioCrossAttentionPriceOCL;
 
                if(!scenario_cross_price)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(desc.variables!=5)
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_cross_price);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_cross_price)
                  }
 
                if(!scenario_cross_price.Init(outputs,0,opencl,desc.count,
@@ -13025,24 +14026,28 @@ bool CNet::Create(CArrayObj*Description)
                                              (desc.step>0?desc.step:1),
                                              uint(desc.probability>0?desc.probability:1)))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_cross_price);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_cross_price)
                  }
 
                if(!temp.Add(scenario_cross_price))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_cross_price);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_cross_price)
                  }
                break;
             case defNeuronScenarioCrossAttention:
                scenario_cross=new CNeuronScenarioCrossAttention();
 
                if(!scenario_cross)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(desc.variables!=3&&desc.variables!=5)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!scenario_cross.Init(outputs,0,opencl,desc.count,
                                        desc.window_out,desc.window,desc.variables==5,
@@ -13051,42 +14056,48 @@ bool CNet::Create(CArrayObj*Description)
                                        (desc.step>0?desc.step:1),
                                        uint(desc.probability>0?desc.probability:1)))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_cross);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_cross)
                  }
 
                if(!temp.Add(scenario_cross))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(scenario_cross);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(scenario_cross)
                  }
                break;
             case defNeuronRAGMemory:
                rag_memory=new CNeuronRAGMemory();
 
                if(!rag_memory)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!rag_memory.Init(outputs,0,opencl,desc))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(rag_memory);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(rag_memory)
                  }
 
                if(!temp.Add(rag_memory))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(rag_memory);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(rag_memory)
                  }
                break;
             case defNeuronD2Skill:
                d2_skill=new CD2Skill();
 
                if(!d2_skill)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(desc.variables!=3)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!d2_skill.Init(outputs,0,opencl,desc.count,
                                  desc.window_out,desc.window,false,
@@ -13095,102 +14106,110 @@ bool CNet::Create(CArrayObj*Description)
                                  (desc.step>0?desc.step:1),
                                  uint(desc.probability>0?desc.probability:1)))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(d2_skill);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(d2_skill)
                  }
 
                if(!temp.Add(d2_skill))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(d2_skill);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(d2_skill)
                  }
                break;
             case defNeuronUncAD_UGP:
                uncad_ugp=new CNeuronUncAD_UGP();
 
                if(!uncad_ugp)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!uncad_ugp.Init(outputs,0,opencl,desc.window,desc.count,
                                   desc.units[0],desc.units[1],desc.step,
                                   desc.window_out,desc.variables,uint(desc.probability),
                                   desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uncad_ugp);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uncad_ugp)
                  }
 
                if(!temp.Add(uncad_ugp))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uncad_ugp);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uncad_ugp)
                  }
                break;
             case defNeuronUncAD_UGPL:
                uncad_ugpl=new CNeuronUncAD_UGPL();
 
                if(!uncad_ugpl)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!uncad_ugpl.Init(outputs,0,opencl,desc.window,desc.count,
                                    desc.units[0],desc.units[1],desc.variables,
                                    desc.step,desc.window_out,desc.optimization,
                                    desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uncad_ugpl);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uncad_ugpl)
                  }
 
                if(!temp.Add(uncad_ugpl))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uncad_ugpl);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uncad_ugpl)
                  }
                break;
             case defNeuronUncAD:
                uncad=new CNeuronUncAD();
 
                if(!uncad)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!uncad.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,
                               desc.units[1],desc.units[2],desc.window_out,desc.variables,
                               uint(desc.probability),desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uncad);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uncad)
                  }
 
                if(!temp.Add(uncad))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(uncad);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(uncad)
                  }
                break;
             case defNeuronMomAD:
                momad=new CNeuronMomAD();
 
                if(!momad)
-                  DeleteObjAndFalse(temp);
+                 {
+                  DeleteObjAndFalse(temp)
+                 }
 
                if(!momad.Init(outputs,0,opencl,desc.windows,desc.units[0],desc.step,
                               desc.units[1],desc.units[2],desc.window_out,desc.variables,
                               uint(desc.probability),desc.count,desc.optimization,desc.batch))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(momad);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(momad)
                  }
 
                if(!temp.Add(momad))
                  {
-                  DeleteObj(temp);
-                  DeleteObjAndFalse(momad);
+                  DeleteObj(temp)
+                  DeleteObjAndFalse(momad)
                  }
                break;
 
             //---
             default:
-               ReturnFalse;
+               ReturnFalse
 
                break;
            }
@@ -13205,9 +14224,9 @@ bool CNet::Create(CArrayObj*Description)
 
                   if(CheckPointer(neuron)==POINTER_INVALID)
                     {
-                     DeleteObj(temp);
-                     DeleteObj(layers);
-                     ReturnFalse;
+                     DeleteObj(temp)
+                     DeleteObj(layers)
+                     ReturnFalse
                     }
                   neuron.Init(outputs,n,desc.optimization);
                   neuron.SetActivationFunction(desc.activation);
@@ -13217,9 +14236,9 @@ bool CNet::Create(CArrayObj*Description)
 
                   if(CheckPointer(neuron_p)==POINTER_INVALID)
                     {
-                     DeleteObj(temp);
-                     DeleteObj(layers);
-                     ReturnFalse;
+                     DeleteObj(temp)
+                     DeleteObj(layers)
+                     ReturnFalse
                     }
 
                   if(CheckPointer(prev)!=POINTER_INVALID)
@@ -13245,9 +14264,9 @@ bool CNet::Create(CArrayObj*Description)
 
                   if(CheckPointer(neuron_p)==POINTER_INVALID)
                     {
-                     DeleteObj(temp);
-                     DeleteObj(layers);
-                     ReturnFalse;
+                     DeleteObj(temp)
+                     DeleteObj(layers)
+                     ReturnFalse
                     }
 
                   if(CheckPointer(prev)!=POINTER_INVALID)
@@ -13273,9 +14292,9 @@ bool CNet::Create(CArrayObj*Description)
 
                   if(CheckPointer(neuron_p)==POINTER_INVALID)
                     {
-                     DeleteObj(temp);
-                     DeleteObj(layers);
-                     ReturnFalse;
+                     DeleteObj(temp)
+                     DeleteObj(layers)
+                     ReturnFalse
                     }
                   output_count=(next!=NULL?next.window:desc.step);
 
@@ -13286,18 +14305,18 @@ bool CNet::Create(CArrayObj*Description)
 
             if(!temp.Add(neuron))
               {
-               DeleteObj(temp);
-               DeleteObj(layers);
-               ReturnFalse;
+               DeleteObj(temp)
+               DeleteObj(layers)
+               ReturnFalse
               }
             neuron=NULL;
            }
 
       if(!layers.Add(temp))
         {
-         DeleteObj(temp);
-         DeleteObj(layers);
-         ReturnFalse;
+         DeleteObj(temp)
+         DeleteObj(layers)
+         ReturnFalse
         }
      }
 
@@ -13310,13 +14329,19 @@ bool CNet::Create(CArrayObj*Description)
 bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferFloat*SecondInput=NULL)
   {
    if(!PreflightForward())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(layers)==POINTER_INVALID||CheckPointer(inputVals)==POINTER_INVALID||layers.Total()<=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CLayer      *previous=NULL;
@@ -13331,7 +14356,9 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
          neuron=current.At(i);
 
          if(CheckPointer(neuron)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          int pos=i;
          int d=0;
@@ -13370,19 +14397,25 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
             value=(float)(inputVals.At(d)+(dim%2==0?sin(value):cos(value)));
 
             if(!inputVals.Update(d,value))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
         }
 
       if(!inputs.Fill(inputVals))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---
       if(!!SecondInput)
         {
          if(SecondInput.GetIndex()<0)
             if(!SecondInput.BufferCreate(opencl))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
         }
      }
 
@@ -13395,7 +14428,9 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
       current=layers.At(l);
 
       if(CheckPointer(current)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---
       if(CheckPointer(opencl)!=POINTER_INVALID)
@@ -13403,7 +14438,9 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
          CNeuronBaseOCL *current_ocl=current.At(0);
 
          if(!current_ocl.FeedForward(previous.At(0),SecondInput))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          continue;
         }
@@ -13420,14 +14457,18 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
          neuron=current.At(n);
 
          if(CheckPointer(neuron)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(previous.At(0).Type()==defNeuron)
            {
             temp=previous;
 
             if(!neuron.feedForward(temp))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             continue;
            }
@@ -13439,7 +14480,9 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
                CLayer *temp_l=new CLayer(total);
 
                if(CheckPointer(temp_l)==POINTER_INVALID)
-                  ReturnFalse;
+                 {
+                  ReturnFalse
+                 }
 
                CNeuronProof *proof=NULL;
 
@@ -13448,7 +14491,9 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
                   proof=previous.At(p);
 
                   if(CheckPointer(proof)==POINTER_INVALID)
-                     ReturnFalse;
+                    {
+                     ReturnFalse
+                    }
 
                   temp_l.AddArray(proof.getOutputLayer());
                  }
@@ -13456,24 +14501,30 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
               }
 
             if(!neuron.feedForward(temp))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(n==total-1)
               {
                CLayer *temp_l=temp;
                temp_l.FreeMode(false);
                temp_l.Shutdown();
-               DeleteObj(temp_l);
+               DeleteObj(temp_l)
               }
             continue;
            }
          temp=previous.At(n);
 
          if(CheckPointer(temp)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!neuron.feedForward(temp))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
 
@@ -13486,15 +14537,21 @@ bool CNet::feedForward(CArrayFloat*inputVals,int window=1,bool tem=true,CBufferF
 bool CNet::backProp(CArrayFloat*targetVals,CBufferFloat*SecondInput=NULL,CBufferFloat*SecondGradient=NULL)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(targetVals)==POINTER_INVALID||CheckPointer(layers)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(opencl)!=POINTER_INVALID)
      {
       if(!backPropOCL(targetVals,SecondInput,SecondGradient,false))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       return(true);
      }
@@ -13503,7 +14560,9 @@ bool CNet::backProp(CArrayFloat*targetVals,CBufferFloat*SecondInput=NULL,CBuffer
    CLayer *outputLayer=layers.At(layers.Total()-1);
 
    if(CheckPointer(outputLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    float error=0.0;
@@ -13574,7 +14633,9 @@ bool CNet::backProp(CArrayFloat*targetVals,CBufferFloat*SecondInput=NULL,CBuffer
          neuron=layer.At(n);
 
          if(CheckPointer(neuron)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(neuron.Type()==defNeuronProof)
             continue;
@@ -13624,15 +14685,21 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
                       )
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(targetVals)==POINTER_INVALID||CheckPointer(layers)==POINTER_INVALID||CheckPointer(opencl)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CLayer *currentLayer=layers.At(layers.Total()-1);
 
    if(CheckPointer(currentLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    float          error=0.0;
@@ -13646,26 +14713,32 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
       vector<float>target,output;
 
       if(neuron.getOutputVal(output)<neuron.Neurons())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(output.HasNan()>0)
         {
          printf("%s - %d -> Output has NaN",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
       targetVals.GetData(target);
 
       if(target.Size()>output.Size())
         {
          if(!target.Resize(output.Size()))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       error=output.Loss(target,LOSS_MSE);
      }
 
 //---
    if(!neuron.calcOutputGradients(targetVals,error))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(neuron.TrainMode())
@@ -13690,7 +14763,9 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
             neuron=currentLayer.At(0);
 
             if(!neuron.CalcHiddenGradients(nextLayer.At(0),SecondInput,SecondGradient,SecondActivation))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
 
          //---
@@ -13700,7 +14775,9 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
 
          if(bWeightsUpdate?!neuron.UpdateInputWeights(prevLayer.At(0),SecondInput):
             !neuron.UpdateInputState(prevLayer.At(0),SecondInput))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          //---
          for(int layerNum=layer_update;layerNum<total;layerNum++)
@@ -13708,13 +14785,17 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
             currentLayer=layers.At(layerNum);
 
             if(CheckPointer(currentLayer)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             //---
             CNeuronBaseOCL *current_ocl=currentLayer.At(0);
 
             if(!current_ocl.FeedForward(prevLayer.At(0),SecondInput))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             prevLayer=currentLayer;
            }
@@ -13733,7 +14814,9 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
       neuron=currentLayer.At(0);
 
       if(!neuron.CalcHiddenGradients(nextLayer.At(0),SecondInput,SecondGradient,SecondActivation))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -13747,7 +14830,9 @@ bool CNet::backPropOCL(CBufferFloat*targetVals,
 
       if(neuron.TrainMode())
          if(!neuron.UpdateInputWeights(prevLayer.At(0),SecondInput))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
      }
 
 //---
@@ -13902,24 +14987,30 @@ void CNet::getResults(CBufferFloat*&resultVals)
 bool CNet::Save(string file_name,float error,float undefine,float forecast,datetime time,bool common=true)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---if(MQLInfoInteger(MQL_OPTIMIZATION) || MQLInfoInteger(MQL_TESTER) || MQLInfoInteger(MQL_FORWARD) || MQLInfoInteger(MQL_OPTIMIZATION))
 //---   return true;
    if(file_name==NULL||!layers)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int handle=FileOpen(file_name,(common?FILE_COMMON:0)|FILE_BIN|FILE_WRITE);
 
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteDouble(handle,error)<=0||FileWriteDouble(handle,undefine)<=0||FileWriteDouble(handle,forecast)<=0||FileWriteLong(handle,(long)time)<=0)
      {
       FileClose(handle);
-      ReturnFalse;
+      ReturnFalse
      }
    bool result=layers.Save(handle);
    FileFlush(handle);
@@ -13934,14 +15025,20 @@ bool CNet::Save(string file_name,float error,float undefine,float forecast,datet
 bool CNet::Save(const int file_handle)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(file_handle==INVALID_HANDLE||!layers)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteDouble(file_handle,(double)recentAverageError)<=0||FileWriteDouble(file_handle,0)<=0||FileWriteDouble(file_handle,0)<=0||FileWriteLong(file_handle,(long)0)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(layers.Save(file_handle));
@@ -14083,7 +15180,9 @@ int CNet::DPCCPolicyTrainingGraphKind(void)
 bool CNet::SaveDPCCPolicyParametersOnly(const int file_handle)
   {
    if(!IsOpenCLTransferReady()||file_handle==INVALID_HANDLE||!DPCCPolicyParametersGraph())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int magic=0x44505057;
    const int version=1;
@@ -14094,7 +15193,9 @@ bool CNet::SaveDPCCPolicyParametersOnly(const int file_handle)
       FileWriteInteger(file_handle,version,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,graph_kind,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,layers_count,INT_VALUE)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<layers_count;i++)
      {
@@ -14103,7 +15204,9 @@ bool CNet::SaveDPCCPolicyParametersOnly(const int file_handle)
       if(CheckPointer(neuron)==POINTER_INVALID||
          FileWriteInteger(file_handle,neuron.Type(),INT_VALUE)!=INT_VALUE||
          !neuron.SaveParametersOnly(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(true);
@@ -14114,7 +15217,9 @@ bool CNet::SaveDPCCPolicyParametersOnly(const int file_handle)
 bool CNet::LoadDPCCPolicyParametersOnly(const int file_handle)
   {
    if(!IsOpenCLTransferReady()||file_handle==INVALID_HANDLE||!DPCCPolicyParametersGraph())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong start=FileTell(file_handle);
 
@@ -14122,11 +15227,13 @@ bool CNet::LoadDPCCPolicyParametersOnly(const int file_handle)
      {
       if(start<=(ulong)LONG_MAX)
          FileSeek(file_handle,(long)start,SEEK_SET);
-      ReturnFalse;
+      ReturnFalse
      }
 
    if(!FileSeek(file_handle,(long)start,SEEK_SET))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(ReadDPCCPolicyParametersOnly(file_handle,true));
   }
@@ -14136,7 +15243,9 @@ bool CNet::LoadDPCCPolicyParametersOnly(const int file_handle)
 bool CNet::ReadDPCCPolicyParametersOnly(const int file_handle,const bool apply)
   {
    if(file_handle==INVALID_HANDLE||!DPCCPolicyParametersGraph())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int graph_kind=(layers.Total()==3?1:2);
 
@@ -14144,7 +15253,9 @@ bool CNet::ReadDPCCPolicyParametersOnly(const int file_handle,const bool apply)
       FileReadInteger(file_handle,INT_VALUE)!=1||
       FileReadInteger(file_handle,INT_VALUE)!=graph_kind||
       FileReadInteger(file_handle,INT_VALUE)!=layers.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<layers.Total();i++)
      {
@@ -14153,7 +15264,9 @@ bool CNet::ReadDPCCPolicyParametersOnly(const int file_handle,const bool apply)
       if(CheckPointer(neuron)==POINTER_INVALID||
          FileReadInteger(file_handle,INT_VALUE)!=neuron.Type()||
          !neuron.LoadParametersOnly(file_handle,apply))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(true);
@@ -14166,13 +15279,17 @@ bool CNet::SaveDPCCPolicyTrainingStateOnly(const int file_handle)
    const int graph_kind=DPCCPolicyTrainingGraphKind();
 
    if(!IsOpenCLTransferReady()||file_handle==INVALID_HANDLE||graph_kind==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,0x44505054,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,1,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,graph_kind,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,layers.Total(),INT_VALUE)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<layers.Total();i++)
      {
@@ -14180,7 +15297,9 @@ bool CNet::SaveDPCCPolicyTrainingStateOnly(const int file_handle)
 
       if(CheckPointer(neuron)==POINTER_INVALID||
          !neuron.SaveDPCCPolicyTrainingStateOnly(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(true);
@@ -14192,17 +15311,21 @@ bool CNet::LoadDPCCPolicyTrainingStateOnly(const int file_handle)
   {
    if(!IsOpenCLTransferReady()||file_handle==INVALID_HANDLE||
       DPCCPolicyTrainingGraphKind()==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong start=FileTell(file_handle);
 
    if(start==ULONG_MAX||start>(ulong)LONG_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!ReadDPCCPolicyTrainingStateOnly(file_handle,false))
      {
       FileSeek(file_handle,(long)start,SEEK_SET);
-      ReturnFalse;
+      ReturnFalse
      }
    const ulong end=FileTell(file_handle);
    const ulong size=FileSize(file_handle);
@@ -14210,16 +15333,18 @@ bool CNet::LoadDPCCPolicyTrainingStateOnly(const int file_handle)
    if(end==ULONG_MAX||size==ULONG_MAX||end!=size)
      {
       FileSeek(file_handle,(long)start,SEEK_SET);
-      ReturnFalse;
+      ReturnFalse
      }
 
    if(!FileSeek(file_handle,(long)start,SEEK_SET))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!ReadDPCCPolicyTrainingStateOnly(file_handle,true))
      {
       FileSeek(file_handle,(long)start,SEEK_SET);
-      ReturnFalse;
+      ReturnFalse
      }
 
    return(true);
@@ -14232,7 +15357,9 @@ bool CNet::ReadDPCCPolicyTrainingStateOnly(const int file_handle,const bool appl
    const int graph_kind=DPCCPolicyTrainingGraphKind();
 
    if(file_handle==INVALID_HANDLE||graph_kind==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
 
@@ -14240,7 +15367,9 @@ bool CNet::ReadDPCCPolicyTrainingStateOnly(const int file_handle,const bool appl
       FileReadInteger(file_handle,INT_VALUE)!=1||
       FileReadInteger(file_handle,INT_VALUE)!=graph_kind||
       FileReadInteger(file_handle,INT_VALUE)!=layers.Total()||GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<layers.Total();i++)
      {
@@ -14248,7 +15377,9 @@ bool CNet::ReadDPCCPolicyTrainingStateOnly(const int file_handle,const bool appl
 
       if(CheckPointer(neuron)==POINTER_INVALID||
          !neuron.LoadDPCCPolicyTrainingStateOnly(file_handle,apply))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(true);
@@ -14262,7 +15393,9 @@ bool CNet::DPCCPolicyTrainingStateFingerprint(ulong&fingerprint)
    const int graph_kind=DPCCPolicyTrainingGraphKind();
 
    if(!IsOpenCLTransferReady()||graph_kind==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(graph_kind>=3)
       fingerprint=(fingerprint^ulong(graph_kind))*ulong(1099511628211);
@@ -14275,7 +15408,9 @@ bool CNet::DPCCPolicyTrainingStateFingerprint(ulong&fingerprint)
 
       if(CheckPointer(neuron)==POINTER_INVALID||
          !neuron.AppendDPCCPolicyTrainingFingerprint(fingerprint))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(fingerprint!=0);
@@ -14286,7 +15421,9 @@ bool CNet::DPCCPolicyTrainingStateFingerprint(ulong&fingerprint)
 bool CNet::ParameterFingerprint(ulong&fingerprint)
   {
    if(!layers||layers.Total()<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    fingerprint=ulong(1469598103934665603);
 
@@ -14296,12 +15433,16 @@ bool CNet::ParameterFingerprint(ulong&fingerprint)
       CNeuronBaseOCL *neuron=(layer?layer.At(0):NULL);
 
       if(!neuron)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       fingerprint=(fingerprint^ulong(i+1))*ulong(1099511628211);
 
       if(!neuron.AppendParameterFingerprint(fingerprint))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    return(fingerprint!=0);
@@ -14312,20 +15453,26 @@ bool CNet::ParameterFingerprint(ulong&fingerprint)
 bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datetime&time,bool common=true)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---if(MQLInfoInteger(MQL_OPTIMIZATION) || MQLInfoInteger(MQL_TESTER) || MQLInfoInteger(MQL_FORWARD) || MQLInfoInteger(MQL_OPTIMIZATION))
 //---   ReturnFalse;
 //---
    if(file_name==NULL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    Print(file_name);
    int handle=FileOpen(file_name,(common?FILE_COMMON:0)|FILE_BIN|FILE_READ|FILE_SHARE_READ);
 
    if(handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    error=(float)FileReadDouble(handle);
@@ -14344,7 +15491,9 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
 
 //---
    if(!opencl&&!OpenCLInit())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- check
 //--- read and check start marker - 0xFFFFFFFFFFFFFFFF
@@ -14356,13 +15505,13 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
       if(FileReadInteger(handle,INT_VALUE)!=layers.Type())
         {
          FileClose(handle);
-         ReturnFalse;
+         ReturnFalse
         }
      }
    else
      {
       FileClose(handle);
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- read array length
@@ -14378,7 +15527,7 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
 
          if(!Layer.Load(handle))
            {
-            DeleteObj(Layer);
+            DeleteObj(Layer)
             break;
            }
 
@@ -14389,7 +15538,7 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
 
             if(!layers.At(l))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
             CNeuronBaseOCL *neuron=((CLayer*)layers.At(l)).At(0);
@@ -14397,13 +15546,13 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
             if(!(neuron.Type()==defNeuronBatchNormOCL||
                  neuron.Type()==defNeuronBatchNormWithNoise))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
 
             if(!revin.Init(revin.getConnections(),0,opencl,revin.Neurons(),l,neuron))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
            }
@@ -14415,7 +15564,7 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
 
             if(!layers.At(l))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
             CNeuronBaseOCL *neuron=((CLayer*)layers.At(l)).At(0);
@@ -14423,20 +15572,20 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
             if(!(neuron.Type()==defNeuronBatchNormOCL)||
                (neuron.Type()==defNeuronBatchNormWithNoise))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
 
             if(!masa.SetNormLayer(l,neuron))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
            }
 
          if(!layers.Add(Layer))
            {
-            DeleteObj(Layer);
+            DeleteObj(Layer)
             break;
            }
         }
@@ -14450,7 +15599,7 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
         {
          layers.Clear();
          FileClose(handle);
-         ReturnFalse;
+         ReturnFalse
         }
      }
 #endif
@@ -14465,10 +15614,14 @@ bool CNet::Load(string file_name,float&error,float&undefine,float&forecast,datet
 bool CNet::Load(const int file_handle)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(file_handle==INVALID_HANDLE||FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
      {
@@ -14490,7 +15643,9 @@ bool CNet::Load(const int file_handle)
    if(CheckPointer(opencl)==POINTER_INVALID)
      {
       if(!OpenCLInit())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- check
@@ -14535,7 +15690,7 @@ bool CNet::Load(const int file_handle)
 
             if(!layers.At(l))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
             CNeuronBaseOCL *neuron=((CLayer*)layers.At(l)).At(0);
@@ -14543,13 +15698,13 @@ bool CNet::Load(const int file_handle)
             if(!(neuron.Type()==defNeuronBatchNormOCL)||
                (neuron.Type()==defNeuronBatchNormWithNoise))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
 
             if(!revin.Init(revin.getConnections(),0,opencl,revin.Neurons(),l,neuron))
               {
-               DeleteObj(Layer);
+               DeleteObj(Layer)
                break;
               }
            }
@@ -14569,10 +15724,14 @@ bool CNet::Load(const int file_handle)
 bool CNet::TrainMode(bool flag)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(layers)==POINTER_INVALID||layers.Total()<=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CLayer *current=NULL;
@@ -14585,7 +15744,9 @@ bool CNet::TrainMode(bool flag)
       current=layers.At(l);
 
       if(CheckPointer(current)==POINTER_INVALID||CheckPointer(current.At(0))==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---
       if(CheckPointer(opencl)!=POINTER_INVALID)
@@ -14604,13 +15765,19 @@ bool CNet::TrainMode(bool flag)
 bool CNeuronProof::Save(const int file_handle)
   {
    if(!CNeuronBase::Save(file_handle)||!OutputLayer.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iWindow,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iStep,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -14621,7 +15788,9 @@ bool CNeuronProof::Save(const int file_handle)
 bool CNeuronProof::Load(const int file_handle)
   {
    if(!CNeuronBase::Load(file_handle)||!OutputLayer.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iWindow=FileReadInteger(file_handle,INT_VALUE);
    iStep=FileReadInteger(file_handle,INT_VALUE);
@@ -14635,10 +15804,14 @@ bool CNeuronProof::Load(const int file_handle)
 bool CNeuronConv::Save(const int file_handle)
   {
    if(!CNeuronProof::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteDouble(file_handle,param)<8)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -14649,7 +15822,9 @@ bool CNeuronConv::Save(const int file_handle)
 bool CNeuronConv::Load(const int file_handle)
   {
    if(!CNeuronProof::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    param=(float)FileReadDouble(file_handle);
 
@@ -14697,8 +15872,9 @@ float CNeuronBase::activationFunctionDerivative(float x)
    return(1);
   }
 //+------------------------------------------------------------------+
-//| Handles the COpenCLMy add buffer from array operation.           |
+//| AddBufferFromArray - Upload array data into an OpenCL buffer     |
 //+------------------------------------------------------------------+
+//--- Handles the COpenCLMy add buffer from array operation.
 template<typename T>
 //+------------------------------------------------------------------+
 //| AddBufferFromArray - Creates and registers a GPU buffer from...  |
@@ -14816,13 +15992,15 @@ bool CLayer::Load(const int file_handle)
      {
       for(int i=0;i<int(m_data.Size());i++)
         {
-         DeleteObj(m_data[i]);
+         DeleteObj(m_data[i])
         }
-      ReturnFalse;
+      ReturnFalse
      }
 
    if(CheckPointer(m_data[0])==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *ocl=NULL;
@@ -14891,14 +16069,18 @@ bool CLayer::SupportsOpenCLChecked(void)const
 bool CLayer::SetOpenCLChecked(COpenCLMy*obj)
   {
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<Total();i++)
      {
       CNeuronBaseOCL *neuron=At(i);
 
       if(!neuron||!neuron.SetOpenCLChecked(obj))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- publish only after every existing member moved.
@@ -14926,7 +16108,7 @@ void CLayer::TrainMode(bool flag)
 //+------------------------------------------------------------------+
 CNet::~CNet(void)
   {
-   DeleteObj(layers);
+   DeleteObj(layers)
 
    if(bOwnOpenCL&&CheckPointer(opencl)!=POINTER_INVALID)
      {
@@ -14964,7 +16146,9 @@ CBufferFloat::~CBufferFloat(void)
 bool CBufferFloat::BufferCreate(COpenCL*opencl)
   {
    if(CheckPointer(opencl)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- empty buffers are valid for parameter-free layers and transient holders.
 //--- do not ask OpenCL to allocate a zero-byte device object.
@@ -15009,7 +16193,7 @@ bool CBufferFloat::BufferCreate(COpenCL*opencl)
          PrintFormat("CBufferFloat::BufferCreate allocation: floats=%d bytes=%I64d error=%d",
                      m_data_total,long(m_data_total)*sizeof(float),GetLastError());
         }
-      ReturnFalse;
+      ReturnFalse
      }
    m_myIndex=index;
    OpenCL=opencl;
@@ -15045,11 +16229,15 @@ bool CBufferFloat::BufferRead(void)
       return(true);
 
    if(CheckPointer(OpenCL)==POINTER_INVALID||m_myIndex<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!OpenCL.BufferRead(m_myIndex,m_data,0,0,m_data_total))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -15063,7 +16251,9 @@ bool CBufferFloat::BufferWrite(void)
       return(true);
 
    if(CheckPointer(OpenCL)==POINTER_INVALID||m_myIndex<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
 #ifdef ALPHAGEN_TEST_DIAGNOSTICS
@@ -15073,7 +16263,9 @@ bool CBufferFloat::BufferWrite(void)
 #else
    if(!OpenCL.BufferWrite(m_myIndex,m_data,0,0,m_data_total))
 #endif
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -15086,7 +16278,9 @@ bool CBufferFloat::BufferInit(uint count,float value)
       BufferFree();
 
    if(m_data_max<(int)count&&!Reserve((int)count-m_data_total))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    m_data_total=(int)fmin(ArrayInitialize(m_data,value),count);
 
@@ -15103,7 +16297,9 @@ template<typename T>
 int CBufferFloat::GetData(T&values[])
   {
    if(!!OpenCL&&!BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(ArrayCopy(values,m_data,0,0,m_data_total));
   }
@@ -15117,18 +16313,23 @@ template<typename T>
 int CBufferFloat::GetData(vector<T>&values)
   {
    if(!!OpenCL&&!BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    values.Assign(m_data);
 
    if(!values.Resize(m_data_total))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return((int)values.Size());
   }
 //+------------------------------------------------------------------+
-//| Returns the data of the CBufferFloat (GetData) (GetData).        |
+//| GetData - Get data                                               |
 //+------------------------------------------------------------------+
+//--- Returns the data of the CBufferFloat (GetData) (GetData).
 template<typename T>
 //+------------------------------------------------------------------+
 //| GetData - Copies the buffer contents to the requested host data. |
@@ -15136,7 +16337,9 @@ template<typename T>
 int CBufferFloat::GetData(matrix<T>&values)
   {
    if(!!OpenCL&&!BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong r=values.Rows();
    ulong c=values.Cols();
@@ -15210,7 +16413,9 @@ bool CBufferFloat::AssignArray(const T&src[])
 bool CBufferFloat::AssignArray(const CArrayFloat*obj)
   {
    if(!obj)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int num=obj.Total();
 
@@ -15296,7 +16501,9 @@ bool CBufferFloat::AssignArray(const vector<float>&src)
    if(!!OpenCL)
      {
       if(!BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- successful
@@ -15363,7 +16570,9 @@ bool CBufferFloat::Save(const int file_handle)
   {
    if(CheckPointer(OpenCL)!=POINTER_INVALID&&m_myIndex>=0)
       if(!BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(CArrayFloat::Save(file_handle));
@@ -15382,7 +16591,9 @@ bool CBufferFloat::Load(const int file_handle)
       const ulong remaining=FileSize(file_handle)-position;
 
       if(remaining<16)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       const long marker=FileReadLong(file_handle);
       const int  type=FileReadInteger(file_handle);
@@ -15390,17 +16601,23 @@ bool CBufferFloat::Load(const int file_handle)
 
       if(!FileSeek(file_handle,(long)position,SEEK_SET)||marker!=-1||type!=Type()||count<0||
          (ulong)count>268435456||(ulong)count*4>remaining-16)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!CArrayFloat::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- cArrayFloat may count a partial scalar before reporting its read error.
    const int read_error=GetLastError();
 
    if(read_error!=0)
-      ReturnFalseEx("float buffer read error "+(string)read_error);
+     {
+      ReturnFalseEx("float buffer read error "+(string)read_error)
+     }
 
    if(m_data_total==0||!OpenCL)
       return(true);
@@ -15414,7 +16631,9 @@ bool CBufferFloat::Load(const int file_handle)
          case FP_NAN:
 
             if(OpenCL.InferenceRuntimeLoadActive())
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             m_data[i]=0;
             break;
@@ -15435,7 +16654,9 @@ bool CBufferFloat::Fill(const float value)
    if(!!OpenCL)
      {
       if(!BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -15447,7 +16668,9 @@ bool CBufferFloat::Fill(const float value)
 bool CBufferFloat::Fill(const CBufferFloat*obj)
   {
    if(!obj)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int total=obj.Total();
@@ -15461,7 +16684,9 @@ bool CBufferFloat::Fill(const CBufferFloat*obj)
    if(!!OpenCL)
      {
       if(!BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -15488,15 +16713,18 @@ bool CBufferFloat::Fill(const matrix<T>&matr)
    if(!!OpenCL)
      {
       if(!BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
    return(true);
   }
 //+------------------------------------------------------------------+
-//| Handles the CBufferFloat fill operation (Fill) (Fill) (Fill).    |
+//| Fill - Check fill                                                |
 //+------------------------------------------------------------------+
+//--- Handles the CBufferFloat fill operation (Fill) (Fill) (Fill).
 template<typename T>
 //+------------------------------------------------------------------+
 //| Fill - Fills the buffer from the supplied matrix or vector.      |
@@ -15515,7 +16743,9 @@ bool CBufferFloat::Fill(const vector<T>&vec)
    if(!!OpenCL)
      {
       if(!BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -15535,7 +16765,9 @@ bool CBufferFloat::Random(const float min_value,const float max_value)
    if(!!OpenCL)
      {
       if(!BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -15564,13 +16796,13 @@ CNeuronBaseOCL::CNeuronBaseOCL(void):alpha(momentum),
 //+------------------------------------------------------------------+
 CNeuronBaseOCL::~CNeuronBaseOCL(void)
   {
-   DeleteObj(Output);
-   DeleteObj(PrevOutput);
-   DeleteObj(Weights);
-   DeleteObj(DeltaWeights);
-   DeleteObj(Gradient);
-   DeleteObj(FirstMomentum);
-   DeleteObj(SecondMomentum);
+   DeleteObj(Output)
+   DeleteObj(PrevOutput)
+   DeleteObj(Weights)
+   DeleteObj(DeltaWeights)
+   DeleteObj(Gradient)
+   DeleteObj(FirstMomentum)
+   DeleteObj(SecondMomentum)
    OpenCL=NULL;
   }
 //+------------------------------------------------------------------+
@@ -15585,7 +16817,9 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
                          )
   {
    if(CheckPointer(open_cl)==POINTER_INVALID||numNeurons<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OpenCL=open_cl;
    optimization=optimization_type;
@@ -15597,14 +16831,20 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
       Output=new CBufferFloat();
 
       if(CheckPointer(Output)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!Output.BufferInit(numNeurons,1.0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!Output.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    prev_output.Init(numNeurons);
 
@@ -15614,14 +16854,20 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
       PrevOutput=new CBufferFloat();
 
       if(CheckPointer(PrevOutput)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!PrevOutput.BufferInit(numNeurons,1.0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!PrevOutput.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(CheckPointer(Gradient)==POINTER_INVALID)
@@ -15629,14 +16875,20 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
       Gradient=new CBufferFloat();
 
       if(CheckPointer(Gradient)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!Gradient.BufferInit(numNeurons,0.0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!Gradient.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(numOutputs>0)
@@ -15646,23 +16898,31 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
          Weights=new CBufferFloat();
 
          if(CheckPointer(Weights)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       int count=(int)((numNeurons+1)*numOutputs);
 
       if(!Weights.Reserve(count))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       float k=(float)(1/sqrt(numNeurons+1));
 
       for(int i=0;i<count;i++)
         {
          if(!Weights.Add((2*GenerateWeight()*k-k)*WeightsMultiplier))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(!Weights.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---
       if(optimization==SGD)
@@ -15672,21 +16932,27 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
             DeltaWeights=new CBufferFloat();
 
             if(CheckPointer(DeltaWeights)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
 
          if(!DeltaWeights.BufferInit(count,0))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!DeltaWeights.BufferCreate(OpenCL))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
-         DeleteObj(FirstMomentum);
-         DeleteObj(SecondMomentum);
+         DeleteObj(FirstMomentum)
+         DeleteObj(SecondMomentum)
         }
       else
         {
-         DeleteObj(DeltaWeights);
+         DeleteObj(DeltaWeights)
 
          //---
          if(CheckPointer(FirstMomentum)==POINTER_INVALID)
@@ -15694,14 +16960,20 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
             FirstMomentum=new CBufferFloat();
 
             if(CheckPointer(FirstMomentum)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
 
          if(!FirstMomentum.BufferInit(count,0))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!FirstMomentum.BufferCreate(OpenCL))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          //---
          if(CheckPointer(SecondMomentum)==POINTER_INVALID)
@@ -15709,28 +16981,36 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
             SecondMomentum=new CBufferFloat();
 
             if(CheckPointer(SecondMomentum)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
 
          if(!SecondMomentum.BufferInit((optimization==ADAM_MINI?numOutputs:count),0))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!SecondMomentum.BufferCreate(OpenCL))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
    else
      {
-      DeleteObj(Weights);
-      DeleteObj(DeltaWeights);
-      DeleteObj(FirstMomentum);
-      DeleteObj(SecondMomentum);
+      DeleteObj(Weights)
+      DeleteObj(DeltaWeights)
+      DeleteObj(FirstMomentum)
+      DeleteObj(SecondMomentum)
      }
 
 //---
    if(OpenCL!=NULL&&OpenCL.IsCollectingSelectiveKernels()&&
       !OpenCL.RegisterSelectiveLayer(Type(),Optimization()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #ifdef NN_OPENCL_DEFERRED_PILOT
    if(numOutputs>0&&OpenCL.IsCollectingKernels()&&
       (Optimization()!=SGD||!OpenCL.RequireDeferredKernel(def_k_FeedForward)||
@@ -15738,7 +17018,9 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
        !OpenCL.RequireDeferredKernel(def_k_CalcHiddenGradient)||
        !OpenCL.RequireDeferredKernel(def_k_UpdateWeightsMomentum)||
        !OpenCL.RequireDeferredKernel(def_k_NormalizeWeights)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 
    return(true);
@@ -15749,7 +17031,9 @@ bool CNeuronBaseOCL::Init(uint numOutputs,
 bool CNeuronBaseOCL::FeedForward(CObject*SourceObject,CBufferFloat*SecondInput=NULL)
   {
    if(CheckPointer(SourceObject)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *temp=SourceObject;
@@ -15762,7 +17046,9 @@ bool CNeuronBaseOCL::FeedForward(CObject*SourceObject,CBufferFloat*SecondInput=N
 bool CNeuronBaseOCL::FeedForwardSecond(CObject*SourceObject,CNeuronBaseOCL*SecondNeuron)
   {
    if(CheckPointer(SourceObject)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *temp=SourceObject;
@@ -15783,7 +17069,9 @@ bool CNeuronBaseOCL::feedForwardChecked(CNeuronBaseOCL*NeuronOCL,
                                         CBufferFloat *numeric_flags)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- resolve dense buffers and reject an empty local reduction.
    CBufferFloat *weights=NeuronOCL.getWeights();
@@ -15792,7 +17080,9 @@ bool CNeuronBaseOCL::feedForwardChecked(CNeuronBaseOCL*NeuronOCL,
    const int    output_count=Output.Total();
 
    if(input_count==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- validate checked-buffer ownership and dense spans before dispatch.
    if(numeric_flags&&(CheckPointer(weights)==POINTER_INVALID||CheckPointer(inputs)==POINTER_INVALID||
@@ -15800,7 +17090,9 @@ bool CNeuronBaseOCL::feedForwardChecked(CNeuronBaseOCL*NeuronOCL,
                         inputs.GetOpenCL()!=OpenCL||Output.GetOpenCL()!=OpenCL||weights.GetIndex()<0||
                         inputs.GetIndex()<0||Output.GetIndex()<0||inputs.Total()<(int)input_count||
                         ulong(output_count)>ulong(weights.Total())/(ulong(input_count)+1)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- configure the dense feed-forward kernel.
    const int kernel=def_k_FeedForward;
@@ -15815,7 +17107,9 @@ bool CNeuronBaseOCL::feedForwardChecked(CNeuronBaseOCL*NeuronOCL,
                         numeric_flags.GetIndex()==NeuronOCL.getWeightsIndex()||
                         numeric_flags.GetIndex()==NeuronOCL.getOutputIndex()||
                         numeric_flags.GetIndex()==Output.GetIndex()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    setBuffer(kernel,def_k_ff_numeric_flags,(numeric_flags?numeric_flags.GetIndex():Output.GetIndex()))
    setArgument(kernel,def_k_ff_flags_enabled,(numeric_flags?1:0))
@@ -15829,7 +17123,9 @@ bool CNeuronBaseOCL::feedForwardChecked(CNeuronBaseOCL*NeuronOCL,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //--- finalize the dense feed-forward dispatch.
    return(true);
@@ -15840,7 +17136,9 @@ bool CNeuronBaseOCL::feedForwardChecked(CNeuronBaseOCL*NeuronOCL,
 bool CNeuronBaseOCL::calcHiddenGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[2]={0};
    uint global_work_size[2];
@@ -15858,7 +17156,9 @@ bool CNeuronBaseOCL::calcHiddenGradients(CNeuronBaseOCL*NeuronOCL)
    kernelExecuteLoc(def_k_CalcHiddenGradient,global_work_offset,global_work_size,local_work_size)
 #ifdef _DEBUG
    if(!Gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -15869,7 +17169,9 @@ bool CNeuronBaseOCL::calcHiddenGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronBaseOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[1]={0};
    uint global_work_size[1];
@@ -15885,7 +17187,9 @@ bool CNeuronBaseOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_CalcHiddenGradient,global_work_offset,global_work_size)
 #ifdef _DEBUG
    if(!NeuronOCL.Gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -15896,7 +17200,9 @@ bool CNeuronBaseOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronBaseOCL::calcOutputGradients(CBufferFloat*target,float&error)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(target)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[1]={0};
    uint global_work_size[1];
@@ -15908,25 +17214,29 @@ bool CNeuronBaseOCL::calcOutputGradients(CBufferFloat*target,float&error)
    if(target.GetOpenCL()!=OpenCL)
      {
       if(!Gradient.Fill(target))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
-      setBuffer(def_k_CalcOutputGradient,def_k_cog_matrix_t,getGradientIndex());
+      setBuffer(def_k_CalcOutputGradient,def_k_cog_matrix_t,getGradientIndex())
      }
    else
      {
-      setBuffer(def_k_CalcOutputGradient,def_k_cog_matrix_t,target.GetIndex());
+      setBuffer(def_k_CalcOutputGradient,def_k_cog_matrix_t,target.GetIndex())
      }
-   setBuffer(def_k_CalcOutputGradient,def_k_cog_matrix_o,getOutputIndex());
-   setBuffer(def_k_CalcOutputGradient,def_k_cog_matrix_ig,getGradientIndex());
-   setArgument(def_k_CalcOutputGradient,def_k_cog_activation,(int)activation);
-   setArgument(def_k_CalcOutputGradient,def_k_cog_error,error);
+   setBuffer(def_k_CalcOutputGradient,def_k_cog_matrix_o,getOutputIndex())
+   setBuffer(def_k_CalcOutputGradient,def_k_cog_matrix_ig,getGradientIndex())
+   setArgument(def_k_CalcOutputGradient,def_k_cog_activation,(int)activation)
+   setArgument(def_k_CalcOutputGradient,def_k_cog_error,error)
    ResetLastError();
 
 //---Comment(com+"\n "+(string)__LINE__+"-"__FUNCTION__);
    kernelExecute(def_k_CalcOutputGradient,global_work_offset,global_work_size)
 #ifdef _DEBUG
    if(!Gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -15937,7 +17247,9 @@ bool CNeuronBaseOCL::calcOutputGradients(CBufferFloat*target,float&error)
 bool CNeuronBaseOCL::calcAlignmentGradient(const CNeuronBaseOCL*neuron,const bool add=false)
   {
    if(!OpenCL||!neuron||neuron.Activation()!=activation)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[1]={0};
    uint global_work_size[1]={Neurons()};
@@ -15954,7 +17266,9 @@ bool CNeuronBaseOCL::calcAlignmentGradient(const CNeuronBaseOCL*neuron,const boo
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef _DEBUG
    if(!neuron.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -15965,7 +17279,9 @@ bool CNeuronBaseOCL::calcAlignmentGradient(const CNeuronBaseOCL*neuron,const boo
 bool CNeuronBaseOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[2]={0,0};
    uint global_work_size[2];
@@ -16055,13 +17371,15 @@ bool CNeuronBaseOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
          t++;
          break;
       default:
-         ReturnFalse;
+         ReturnFalse
 
          break;
      }
 #ifdef  _DEBUG
    if(!NeuronOCL.getWeights().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
      {
@@ -16073,7 +17391,9 @@ bool CNeuronBaseOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
      }
 #ifdef  _DEBUG
    if(!NeuronOCL.getWeights().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -16089,7 +17409,9 @@ bool CNeuronBaseOCL::CalcHiddenGradients(CObject*TargetObject,
   {
 //---
    if(CheckPointer(TargetObject)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *temp=TargetObject;
@@ -16114,7 +17436,9 @@ bool CNeuronBaseOCL::CalcHiddenGradients(CObject*TargetObject,
 bool CNeuronBaseOCL::CalcHiddenGradientsSecond(CObject*TargetObject,CNeuronBaseOCL*SecondNeuron)
   {
    if(CheckPointer(TargetObject)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *temp=TargetObject;
@@ -16139,7 +17463,9 @@ bool CNeuronBaseOCL::UpdateInputWeights(CObject*SourceObject,CBufferFloat*Second
   {
 //---
    if(CheckPointer(SourceObject)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *temp=SourceObject;
@@ -16159,7 +17485,9 @@ bool CNeuronBaseOCL::UpdateInputWeights(CObject*SourceObject,CBufferFloat*Second
 bool CNeuronBaseOCL::UpdateInputWeightsSecond(CObject*SourceObject,CNeuronBaseOCL*SecondNeuron)
   {
    if(CheckPointer(SourceObject)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *temp=SourceObject;
@@ -16192,20 +17520,28 @@ bool CNeuronBaseOCL::AppendParameterBufferFingerprint(CBufferFloat*buffer,
      }
 
    if(buffer.GetIndex()>=0&&!buffer.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int total=buffer.Total();
 
    if(total<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(stride>0&&(skip>stride||total%(int)stride!=0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int fields=(stride>0?total/(int)stride*((int)stride-(int)skip):total-(int)skip);
 
    if(fields<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    fingerprint=(fingerprint^ulong(fields))*ulong(1099511628211);
 
@@ -16232,7 +17568,9 @@ bool CNeuronBaseOCL::AppendParameterFingerprint(ulong&fingerprint)
       !AppendParameterBufferFingerprint(DeltaWeights,fingerprint,2)||
       !AppendParameterBufferFingerprint(FirstMomentum,fingerprint,3)||
       !AppendParameterBufferFingerprint(SecondMomentum,fingerprint,4))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -16242,24 +17580,32 @@ bool CNeuronBaseOCL::AppendParameterFingerprint(ulong&fingerprint)
 bool CNeuronBaseOCL::SaveDPCCParameterBufferOnly(const int file_handle,CBufferFloat*buffer)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int count=(CheckPointer(buffer)==POINTER_INVALID?-1:buffer.Total());
 
    if(count<-1||FileWriteInteger(file_handle,count,INT_VALUE)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(count<=0)
       return(true);
    float values[];
 
    if(buffer.GetData(values)!=count||ArraySize(values)!=count)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<count;i++)
       if(!MathIsValidNumber((double)values[i])||
          FileWriteFloat(file_handle,values[i])!=sizeof(float))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    return(true);
   }
@@ -16269,18 +17615,24 @@ bool CNeuronBaseOCL::SaveDPCCParameterBufferOnly(const int file_handle,CBufferFl
 bool CNeuronBaseOCL::LoadDPCCParameterBufferOnly(const int file_handle,CBufferFloat*buffer,const bool apply)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
    const int count=FileReadInteger(file_handle,INT_VALUE);
 
    if(GetLastError()!=0||count<-1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int expected=(CheckPointer(buffer)==POINTER_INVALID?-1:buffer.Total());
 
    if(count!=expected)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(count==-1||count==0)
       return(true);
@@ -16288,12 +17640,16 @@ bool CNeuronBaseOCL::LoadDPCCParameterBufferOnly(const int file_handle,CBufferFl
    const ulong size=FileSize(file_handle);
 
    if(position==ULONG_MAX||size<position||(ulong)count>(size-position)/(ulong)sizeof(float))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float values[];
 
    if(ArrayResize(values,count)!=count)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
 
@@ -16302,14 +17658,18 @@ bool CNeuronBaseOCL::LoadDPCCParameterBufferOnly(const int file_handle,CBufferFl
       values[i]=FileReadFloat(file_handle);
 
       if(GetLastError()!=0||!MathIsValidNumber((double)values[i]))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!apply)
       return(true);
 
    if(!buffer.AssignArray(values)||!buffer.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -16323,12 +17683,16 @@ bool CNeuronBaseOCL::SaveDPCCBaseParametersOnly(const int file_handle)
    if(file_handle==INVALID_HANDLE||
       (type!=defNeuronBaseOCL&&type!=defNeuronSoftMaxOCL&&
        type!=defNeuronConvOCL&&type!=defNeuronFQF&&type!=defNeuronACSRM))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,type,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,Neurons(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,Activation(),INT_VALUE)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SaveDPCCParameterBufferOnly(file_handle,Weights));
   }
@@ -16342,14 +17706,18 @@ bool CNeuronBaseOCL::LoadDPCCBaseParametersOnly(const int file_handle,const bool
    if(file_handle==INVALID_HANDLE||
       (type!=defNeuronBaseOCL&&type!=defNeuronSoftMaxOCL&&
        type!=defNeuronConvOCL&&type!=defNeuronFQF&&type!=defNeuronACSRM))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
 
    if(FileReadInteger(file_handle,INT_VALUE)!=type||
       FileReadInteger(file_handle,INT_VALUE)!=Neurons()||
       FileReadInteger(file_handle,INT_VALUE)!=Activation()||GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(LoadDPCCParameterBufferOnly(file_handle,Weights,apply));
   }
@@ -16359,7 +17727,9 @@ bool CNeuronBaseOCL::LoadDPCCBaseParametersOnly(const int file_handle,const bool
 bool CNeuronBaseOCL::SaveParametersOnly(const int file_handle)
   {
    if(Type()!=defNeuronBaseOCL&&Type()!=defNeuronSoftMaxOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SaveDPCCBaseParametersOnly(file_handle));
   }
@@ -16369,7 +17739,9 @@ bool CNeuronBaseOCL::SaveParametersOnly(const int file_handle)
 bool CNeuronBaseOCL::LoadParametersOnly(const int file_handle,const bool apply)
   {
    if(Type()!=defNeuronBaseOCL&&Type()!=defNeuronSoftMaxOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(LoadDPCCBaseParametersOnly(file_handle,apply));
   }
@@ -16379,7 +17751,9 @@ bool CNeuronBaseOCL::LoadParametersOnly(const int file_handle,const bool apply)
 bool CNeuronBaseOCL::SaveDPCCPolicyTrainingStateOnly(const int file_handle)
   {
    if(Type()!=defNeuronBaseOCL&&Type()!=defNeuronSoftMaxOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SaveDPCCPolicyTrainingBaseOnly(file_handle));
   }
@@ -16389,7 +17763,9 @@ bool CNeuronBaseOCL::SaveDPCCPolicyTrainingStateOnly(const int file_handle)
 bool CNeuronBaseOCL::LoadDPCCPolicyTrainingStateOnly(const int file_handle,const bool apply)
   {
    if(Type()!=defNeuronBaseOCL&&Type()!=defNeuronSoftMaxOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(LoadDPCCPolicyTrainingBaseOnly(file_handle,apply));
   }
@@ -16404,7 +17780,9 @@ bool CNeuronBaseOCL::SaveDPCCPolicyTrainingBaseOnly(const int file_handle)
        Type()!=defNeuronCrossAttenOCL)||
       optimization!=ADAM||iBatch==0||
       (CheckPointer(DeltaWeights)!=POINTER_INVALID&&DeltaWeights.Total()>0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int weight_count=(CheckPointer(Weights)==POINTER_INVALID?-1:Weights.Total());
    const int first_count=(CheckPointer(FirstMomentum)==POINTER_INVALID?-1:FirstMomentum.Total());
@@ -16413,7 +17791,9 @@ bool CNeuronBaseOCL::SaveDPCCPolicyTrainingBaseOnly(const int file_handle)
    if(weight_count<-1||first_count<-1||second_count<-1||
       (weight_count>0&&(first_count!=weight_count||second_count!=weight_count))||
       (weight_count<=0&&(first_count>0||second_count>0)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,Type(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,Neurons(),INT_VALUE)!=INT_VALUE||
@@ -16421,7 +17801,9 @@ bool CNeuronBaseOCL::SaveDPCCPolicyTrainingBaseOnly(const int file_handle)
       FileWriteInteger(file_handle,(int)optimization,INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)iBatch,INT_VALUE)!=INT_VALUE||
       FileWriteLong(file_handle,(long)t)!=sizeof(long))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SaveDPCCParameterBufferOnly(file_handle,Weights)&&
           SaveDPCCParameterBufferOnly(file_handle,FirstMomentum)&&
@@ -16438,7 +17820,9 @@ bool CNeuronBaseOCL::LoadDPCCPolicyTrainingBaseOnly(const int file_handle,const 
        Type()!=defNeuronCrossAttenOCL)||
       optimization!=ADAM||iBatch==0||
       (CheckPointer(DeltaWeights)!=POINTER_INVALID&&DeltaWeights.Total()>0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
    const int type=FileReadInteger(file_handle,INT_VALUE);
@@ -16448,14 +17832,18 @@ bool CNeuronBaseOCL::LoadDPCCPolicyTrainingBaseOnly(const int file_handle,const 
    const int batch=FileReadInteger(file_handle,INT_VALUE);
 
    if(GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
    const long step=FileReadLong(file_handle);
 
    if(GetLastError()!=0||type!=Type()||neurons!=Neurons()||activation_type!=Activation()||
       optimizer!=(int)optimization||batch!=(int)iBatch||step<0||step>UINT_MAX)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int weight_count=(CheckPointer(Weights)==POINTER_INVALID?-1:Weights.Total());
    const int first_count=(CheckPointer(FirstMomentum)==POINTER_INVALID?-1:FirstMomentum.Total());
@@ -16464,12 +17852,16 @@ bool CNeuronBaseOCL::LoadDPCCPolicyTrainingBaseOnly(const int file_handle,const 
    if(weight_count<-1||first_count<-1||second_count<-1||
       (weight_count>0&&(first_count!=weight_count||second_count!=weight_count))||
       (weight_count<=0&&(first_count>0||second_count>0)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadDPCCParameterBufferOnly(file_handle,Weights,apply)||
       !LoadDPCCParameterBufferOnly(file_handle,FirstMomentum,apply)||
       !LoadDPCCParameterBufferOnly(file_handle,SecondMomentum,apply))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(apply)
       t=(uint)step;
@@ -16483,7 +17875,9 @@ bool CNeuronBaseOCL::AppendDPCCPolicyTrainingBaseFingerprint(ulong&fingerprint)
   {
    if(optimization!=ADAM||iBatch==0||
       (CheckPointer(DeltaWeights)!=POINTER_INVALID&&DeltaWeights.Total()>0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int weight_count=(CheckPointer(Weights)==POINTER_INVALID?-1:Weights.Total());
    const int first_count=(CheckPointer(FirstMomentum)==POINTER_INVALID?-1:FirstMomentum.Total());
@@ -16492,7 +17886,9 @@ bool CNeuronBaseOCL::AppendDPCCPolicyTrainingBaseFingerprint(ulong&fingerprint)
    if(weight_count<-1||first_count<-1||second_count<-1||
       (weight_count>0&&(first_count!=weight_count||second_count!=weight_count))||
       (weight_count<=0&&(first_count>0||second_count>0)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong identity[]={ulong(Type()),ulong(Neurons()),ulong(Activation()),ulong(optimization),
                              ulong(iBatch),ulong(t)
@@ -16511,7 +17907,9 @@ bool CNeuronBaseOCL::AppendDPCCPolicyTrainingBaseFingerprint(ulong&fingerprint)
 bool CNeuronBaseOCL::AppendDPCCPolicyTrainingFingerprint(ulong&fingerprint)
   {
    if(Type()!=defNeuronBaseOCL&&Type()!=defNeuronSoftMaxOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(AppendDPCCPolicyTrainingBaseFingerprint(fingerprint));
   }
@@ -16521,10 +17919,14 @@ bool CNeuronBaseOCL::AppendDPCCPolicyTrainingFingerprint(ulong&fingerprint)
 bool CNeuronBaseOCL::Save(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,Type())<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    dFileWriteUInt(file_handle,activation)
@@ -16539,13 +17941,19 @@ bool CNeuronBaseOCL::Save(const int file_handle)
 
 //---
    if(CheckPointer(Output)==POINTER_INVALID||!Output.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(PrevOutput)==POINTER_INVALID||!PrevOutput.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(Gradient)==POINTER_INVALID||!Gradient.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(CheckPointer(Weights)==POINTER_INVALID)
@@ -16559,20 +17967,28 @@ bool CNeuronBaseOCL::Save(const int file_handle)
 
 //---
    if(CheckPointer(Weights)==POINTER_INVALID||!Weights.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(optimization==SGD)
      {
       if(CheckPointer(DeltaWeights)==POINTER_INVALID||!DeltaWeights.Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
      {
       if(CheckPointer(FirstMomentum)==POINTER_INVALID||!FirstMomentum.Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(CheckPointer(SecondMomentum)==POINTER_INVALID||!SecondMomentum.Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -16584,7 +18000,9 @@ bool CNeuronBaseOCL::Save(const int file_handle)
 bool CNeuronBaseOCL::Load(const int file_handle)
   {
    if(file_handle==INVALID_HANDLE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    activation=(ENUM_ACTIVATION)FileReadInteger(file_handle,INT_VALUE);
@@ -16598,17 +18016,23 @@ bool CNeuronBaseOCL::Load(const int file_handle)
       Output=new CBufferFloat();
 
       if(CheckPointer(Output)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(Output.GetIndex()>=0)
       Output.BufferFree();
 
    if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?Output.LoadInferenceFinite(file_handle,OpenCL):Output.Load(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(Output.Total()>0&&!Output.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    prev_output.Init(Output.Total());
 
@@ -16618,17 +18042,23 @@ bool CNeuronBaseOCL::Load(const int file_handle)
       PrevOutput=new CBufferFloat();
 
       if(CheckPointer(PrevOutput)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(PrevOutput.GetIndex()>=0)
       PrevOutput.BufferFree();
 
    if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?PrevOutput.LoadInferenceFinite(file_handle,OpenCL):PrevOutput.Load(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(PrevOutput.Total()>0&&!PrevOutput.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(CheckPointer(Gradient)==POINTER_INVALID)
@@ -16636,25 +18066,31 @@ bool CNeuronBaseOCL::Load(const int file_handle)
       Gradient=new CBufferFloat();
 
       if(CheckPointer(Gradient)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(Gradient.GetIndex()>=0)
       Gradient.BufferFree();
 
    if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?Gradient.LoadInferenceFinite(file_handle,OpenCL):Gradient.Load(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(Gradient.Total()>0&&!Gradient.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileReadInteger(file_handle)==0)
      {
-      DeleteObj(Weights);
-      DeleteObj(DeltaWeights);
-      DeleteObj(FirstMomentum);
-      DeleteObj(SecondMomentum);
+      DeleteObj(Weights)
+      DeleteObj(DeltaWeights)
+      DeleteObj(FirstMomentum)
+      DeleteObj(SecondMomentum)
 
       return(true);
      }
@@ -16665,17 +18101,23 @@ bool CNeuronBaseOCL::Load(const int file_handle)
       Weights=new CBufferFloat();
 
       if(CheckPointer(Weights)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(Weights.GetIndex()>=0)
       Weights.BufferFree();
 
    if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?Weights.LoadInferenceFinite(file_handle,OpenCL):Weights.Load(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(Weights.Total()>0&&!Weights.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(optimization==SGD)
@@ -16685,17 +18127,23 @@ bool CNeuronBaseOCL::Load(const int file_handle)
          DeltaWeights=new CBufferFloat();
 
          if(CheckPointer(DeltaWeights)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(DeltaWeights.GetIndex()>=0)
          DeltaWeights.BufferFree();
 
       if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?DeltaWeights.LoadInferenceFinite(file_handle,OpenCL):DeltaWeights.Load(file_handle)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(DeltaWeights.Total()>0&&!DeltaWeights.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
      {
@@ -16704,17 +18152,23 @@ bool CNeuronBaseOCL::Load(const int file_handle)
          FirstMomentum=new CBufferFloat();
 
          if(CheckPointer(FirstMomentum)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(FirstMomentum.GetIndex()>=0)
          FirstMomentum.BufferFree();
 
       if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?FirstMomentum.LoadInferenceFinite(file_handle,OpenCL):FirstMomentum.Load(file_handle)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(FirstMomentum.Total()>0&&!FirstMomentum.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---
       if(CheckPointer(SecondMomentum)==POINTER_INVALID)
@@ -16722,23 +18176,31 @@ bool CNeuronBaseOCL::Load(const int file_handle)
          SecondMomentum=new CBufferFloat();
 
          if(CheckPointer(SecondMomentum)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(SecondMomentum.GetIndex()>=0)
          SecondMomentum.BufferFree();
 
       if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?SecondMomentum.LoadInferenceFinite(file_handle,OpenCL):SecondMomentum.Load(file_handle)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(SecondMomentum.Total()>0&&!SecondMomentum.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
    if(OpenCL!=NULL&&OpenCL.IsCollectingSelectiveKernels()&&
       !OpenCL.RegisterSelectiveLayer(Type(),Optimization()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #ifdef NN_OPENCL_DEFERRED_PILOT
    if(OpenCL&&Weights&&Weights.Total()>0&&OpenCL.IsCollectingKernels()&&
       (Optimization()!=SGD||!OpenCL.RequireDeferredKernel(def_k_FeedForward)||
@@ -16746,7 +18208,9 @@ bool CNeuronBaseOCL::Load(const int file_handle)
        !OpenCL.RequireDeferredKernel(def_k_CalcHiddenGradient)||
        !OpenCL.RequireDeferredKernel(def_k_UpdateWeightsMomentum)||
        !OpenCL.RequireDeferredKernel(def_k_NormalizeWeights)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 
    return(true);
@@ -16784,25 +18248,33 @@ bool CNeuronBaseOCL::numOutputs(const uint outputs,ENUM_OPTIMIZATION optimizatio
          Weights=new CBufferFloat();
 
          if(CheckPointer(Weights)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       Weights.BufferFree();
       Weights.Clear();
       int count=(int)((Output.Total()+1)*outputs);
 
       if(!Weights.Reserve(count))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       float k=(float)(1/sqrt(Output.Total()+1));
 
       for(int i=0;i<count;i++)
         {
          if(!Weights.Add((2*GenerateWeight()*k-k)*WeightsMultiplier))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(!Weights.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---
       if(optimization_type==SGD)
@@ -16812,22 +18284,28 @@ bool CNeuronBaseOCL::numOutputs(const uint outputs,ENUM_OPTIMIZATION optimizatio
             DeltaWeights=new CBufferFloat();
 
             if(CheckPointer(DeltaWeights)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
          DeltaWeights.BufferFree();
 
          if(!DeltaWeights.BufferInit(count,0))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!DeltaWeights.BufferCreate(OpenCL))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
-         DeleteObj(FirstMomentum);
-         DeleteObj(SecondMomentum);
+         DeleteObj(FirstMomentum)
+         DeleteObj(SecondMomentum)
         }
       else
         {
-         DeleteObj(DeltaWeights);
+         DeleteObj(DeltaWeights)
 
          //---
          if(CheckPointer(FirstMomentum)==POINTER_INVALID)
@@ -16835,15 +18313,21 @@ bool CNeuronBaseOCL::numOutputs(const uint outputs,ENUM_OPTIMIZATION optimizatio
             FirstMomentum=new CBufferFloat();
 
             if(CheckPointer(FirstMomentum)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
          FirstMomentum.BufferFree();
 
          if(!FirstMomentum.BufferInit(count,0))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!FirstMomentum.BufferCreate(OpenCL))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          //---
          if(CheckPointer(SecondMomentum)==POINTER_INVALID)
@@ -16851,23 +18335,29 @@ bool CNeuronBaseOCL::numOutputs(const uint outputs,ENUM_OPTIMIZATION optimizatio
             SecondMomentum=new CBufferFloat();
 
             if(CheckPointer(SecondMomentum)==POINTER_INVALID)
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
          SecondMomentum.BufferFree();
 
          if(!SecondMomentum.BufferInit(count,0))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          if(!SecondMomentum.BufferCreate(OpenCL))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
      }
    else
      {
-      DeleteObj(Weights);
-      DeleteObj(DeltaWeights);
-      DeleteObj(FirstMomentum);
-      DeleteObj(SecondMomentum);
+      DeleteObj(Weights)
+      DeleteObj(DeltaWeights)
+      DeleteObj(FirstMomentum)
+      DeleteObj(SecondMomentum)
      }
 
 //---
@@ -17018,65 +18508,95 @@ bool CNeuronBaseOCL::OwnsBufferOrDeviceSlot(CBufferFloat*candidate)
 bool CNeuronBaseOCL::SetOpenCLChecked(COpenCLMy*obj)
   {
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- read every allocated buffer still owned by another context.
    if(!!Output&&Output.Total()>0&&Output.GetIndex()>=0&&
       Output.GetOpenCL()!=obj&&!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!PrevOutput&&PrevOutput.Total()>0&&PrevOutput.GetIndex()>=0&&
       PrevOutput.GetOpenCL()!=obj&&!PrevOutput.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!Weights&&Weights.Total()>0&&Weights.GetIndex()>=0&&
       Weights.GetOpenCL()!=obj&&!Weights.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!DeltaWeights&&DeltaWeights.Total()>0&&DeltaWeights.GetIndex()>=0&&
       DeltaWeights.GetOpenCL()!=obj&&!DeltaWeights.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!Gradient&&Gradient.Total()>0&&Gradient.GetIndex()>=0&&
       Gradient.GetOpenCL()!=obj&&!Gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!FirstMomentum&&FirstMomentum.Total()>0&&FirstMomentum.GetIndex()>=0&&
       FirstMomentum.GetOpenCL()!=obj&&!FirstMomentum.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!SecondMomentum&&SecondMomentum.Total()>0&&SecondMomentum.GetIndex()>=0&&
       SecondMomentum.GetOpenCL()!=obj&&!SecondMomentum.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- recreate only buffers not already bound to the target context.
    if(!!Output&&Output.Total()>0&&
       (Output.GetOpenCL()!=obj||Output.GetIndex()<0)&&!Output.BufferCreate(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!PrevOutput&&PrevOutput.Total()>0&&
       (PrevOutput.GetOpenCL()!=obj||PrevOutput.GetIndex()<0)&&!PrevOutput.BufferCreate(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!Weights&&Weights.Total()>0&&
       (Weights.GetOpenCL()!=obj||Weights.GetIndex()<0)&&!Weights.BufferCreate(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!DeltaWeights&&DeltaWeights.Total()>0&&
       (DeltaWeights.GetOpenCL()!=obj||DeltaWeights.GetIndex()<0)&&!DeltaWeights.BufferCreate(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!Gradient&&Gradient.Total()>0&&
       (Gradient.GetOpenCL()!=obj||Gradient.GetIndex()<0)&&!Gradient.BufferCreate(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!FirstMomentum&&FirstMomentum.Total()>0&&
       (FirstMomentum.GetOpenCL()!=obj||FirstMomentum.GetIndex()<0)&&!FirstMomentum.BufferCreate(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!SecondMomentum&&SecondMomentum.Total()>0&&
       (SecondMomentum.GetOpenCL()!=obj||SecondMomentum.GetIndex()<0)&&!SecondMomentum.BufferCreate(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- publish the target context after every required buffer exists.
    OpenCL=obj;
@@ -17096,10 +18616,14 @@ bool CNeuronBaseOCL::SetGradient(CBufferFloat*buffer,bool delete_prev=true)
    if(!!Gradient)
      {
       if(Output.Total()>buffer.Total())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(delete_prev)
-         DeleteObj(Gradient);
+        {
+         DeleteObj(Gradient)
+        }
      }
    Gradient=buffer;
 
@@ -17118,10 +18642,14 @@ bool CNeuronBaseOCL::SetOutput(CBufferFloat*buffer,bool delete_prev=true)
    if(!!Output)
      {
       if(Output.Total()>buffer.Total())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(delete_prev)
-         DeleteObj(Output);
+        {
+         DeleteObj(Output)
+        }
      }
    Output=buffer;
 
@@ -17142,7 +18670,9 @@ bool CNeuronProofOCL::Init(uint numOutputs,
                           )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,units_count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iWindow=window;
@@ -17164,22 +18694,26 @@ CNeuronProofOCL::~CNeuronProofOCL(void)
 bool CNeuronProofOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[1]={0};
    uint global_work_size[1];
    global_work_size[0]=Output.Total();
-   setBuffer(def_k_FeedForwardProof,def_k_ffp_matrix_i,NeuronOCL.getOutputIndex());
-   setBuffer(def_k_FeedForwardProof,def_k_ffp_matrix_o,Output.GetIndex());
-   setArgument(def_k_FeedForwardProof,def_k_ffp_inputs,NeuronOCL.Neurons());
-   setArgument(def_k_FeedForwardProof,def_k_ffp_window,(int)iWindow);
-   setArgument(def_k_FeedForwardProof,def_k_ffp_step,(int)iStep);
+   setBuffer(def_k_FeedForwardProof,def_k_ffp_matrix_i,NeuronOCL.getOutputIndex())
+   setBuffer(def_k_FeedForwardProof,def_k_ffp_matrix_o,Output.GetIndex())
+   setArgument(def_k_FeedForwardProof,def_k_ffp_inputs,NeuronOCL.Neurons())
+   setArgument(def_k_FeedForwardProof,def_k_ffp_window,(int)iWindow)
+   setArgument(def_k_FeedForwardProof,def_k_ffp_step,(int)iStep)
 
 //---Comment(com+"\n "+(string)__LINE__+"-"__FUNCTION__);
    kernelExecute(def_k_FeedForwardProof,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!NeuronOCL.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -17190,24 +18724,28 @@ bool CNeuronProofOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronProofOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[1]={0};
    uint global_work_size[1];
    global_work_size[0]=NeuronOCL.Neurons();
-   setBuffer(def_k_CalcInputGradientProof,def_k_cigp_matrix_i,NeuronOCL.getOutputIndex());
-   setBuffer(def_k_CalcInputGradientProof,def_k_cigp_matrix_o,Output.GetIndex());
-   setBuffer(def_k_CalcInputGradientProof,def_k_cigp_matrix_g,Gradient.GetIndex());
-   setBuffer(def_k_CalcInputGradientProof,def_k_cigp_matrix_ig,NeuronOCL.getGradientIndex());
-   setArgument(def_k_CalcInputGradientProof,def_k_cigp_outputs,Output.Total());
-   setArgument(def_k_CalcInputGradientProof,def_k_cigp_window,(int)iWindow);
-   setArgument(def_k_CalcInputGradientProof,def_k_cigp_step,(int)iStep);
+   setBuffer(def_k_CalcInputGradientProof,def_k_cigp_matrix_i,NeuronOCL.getOutputIndex())
+   setBuffer(def_k_CalcInputGradientProof,def_k_cigp_matrix_o,Output.GetIndex())
+   setBuffer(def_k_CalcInputGradientProof,def_k_cigp_matrix_g,Gradient.GetIndex())
+   setBuffer(def_k_CalcInputGradientProof,def_k_cigp_matrix_ig,NeuronOCL.getGradientIndex())
+   setArgument(def_k_CalcInputGradientProof,def_k_cigp_outputs,Output.Total())
+   setArgument(def_k_CalcInputGradientProof,def_k_cigp_window,(int)iWindow)
+   setArgument(def_k_CalcInputGradientProof,def_k_cigp_step,(int)iStep)
 
 //---Comment(com+"\n "+(string)__LINE__+"-"__FUNCTION__);
    kernelExecute(def_k_CalcInputGradientProof,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!NeuronOCL.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -17232,10 +18770,10 @@ CLayerDescription*CNeuronProofOCL::GetLayerInfo(void)
 //+------------------------------------------------------------------+
 CNeuronConvOCL::~CNeuronConvOCL(void)
   {
-   DeleteObj(WeightsConv);
-   DeleteObj(DeltaWeightsConv);
-   DeleteObj(FirstMomentumConv);
-   DeleteObj(SecondMomentumConv);
+   DeleteObj(WeightsConv)
+   DeleteObj(DeltaWeightsConv)
+   DeleteObj(FirstMomentumConv)
+   DeleteObj(SecondMomentumConv)
   }
 //+------------------------------------------------------------------+
 //| Init - Initializes the CNeuronConvOCL layer and allocates its... |
@@ -17269,10 +18807,14 @@ bool CNeuronConvOCL::Init(uint numOutputs,
                          )
   {
    if((optimization==LS&&batch<=0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronProofOCL::Init(numOutputs,myIndex,open_cl,window_in,step,units_count*window_out*variables,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iWindowOut=window_out;
@@ -17284,23 +18826,31 @@ bool CNeuronConvOCL::Init(uint numOutputs,
       WeightsConv=new CBufferFloat();
 
       if(CheckPointer(WeightsConv)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    int count=(int)((iWindow+1)*iWindowOut*iVariables);
 
    if(!WeightsConv.Reserve(count))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float k=(float)(1/sqrt(iWindow+1));
 
    for(int i=0;i<count;i++)
      {
       if(!WeightsConv.Add((GenerateWeight()*2*k-k)*WeightsMultiplier))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!WeightsConv.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(optimization==SGD)
@@ -17310,14 +18860,20 @@ bool CNeuronConvOCL::Init(uint numOutputs,
          DeltaWeightsConv=new CBufferFloat();
 
          if(CheckPointer(DeltaWeightsConv)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(!DeltaWeightsConv.BufferInit(count,0.0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!DeltaWeightsConv.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
      {
@@ -17326,14 +18882,20 @@ bool CNeuronConvOCL::Init(uint numOutputs,
          FirstMomentumConv=new CBufferFloat();
 
          if(CheckPointer(FirstMomentumConv)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(!FirstMomentumConv.BufferInit(count,0.0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!FirstMomentumConv.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---
       if(CheckPointer(SecondMomentumConv)==POINTER_INVALID)
@@ -17341,14 +18903,20 @@ bool CNeuronConvOCL::Init(uint numOutputs,
          SecondMomentumConv=new CBufferFloat();
 
          if(CheckPointer(SecondMomentumConv)==POINTER_INVALID)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
 
       if(!SecondMomentumConv.BufferInit(count,0.0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!SecondMomentumConv.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -17360,26 +18928,30 @@ bool CNeuronConvOCL::Init(uint numOutputs,
 bool CNeuronConvOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={Output.Total()/(iWindowOut*iVariables),
                                 iWindowOut,iVariables
                               };
-   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_w,WeightsConv.GetIndex());
-   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_i,NeuronOCL.getOutputIndex());
-   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_o,Output.GetIndex());
-   setArgument(def_k_FeedForwardConv,def_k_ffc_inputs,NeuronOCL.Neurons()/iVariables);
-   setArgument(def_k_FeedForwardConv,def_k_ffc_step,(int)iStep);
-   setArgument(def_k_FeedForwardConv,def_k_ffc_window_in,(int)iWindow);
-   setArgument(def_k_FeedForwardConv,def_k_ffс_window_out,(int)iWindowOut);
-   setArgument(def_k_FeedForwardConv,def_k_ffc_activation,(int)activation);
+   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_w,WeightsConv.GetIndex())
+   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_i,NeuronOCL.getOutputIndex())
+   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_o,Output.GetIndex())
+   setArgument(def_k_FeedForwardConv,def_k_ffc_inputs,NeuronOCL.Neurons()/iVariables)
+   setArgument(def_k_FeedForwardConv,def_k_ffc_step,(int)iStep)
+   setArgument(def_k_FeedForwardConv,def_k_ffc_window_in,(int)iWindow)
+   setArgument(def_k_FeedForwardConv,def_k_ffс_window_out,(int)iWindowOut)
+   setArgument(def_k_FeedForwardConv,def_k_ffc_activation,(int)activation)
 
 //---Comment(com+"\n "+(string)__LINE__+"-"__FUNCTION__);
    kernelExecute(def_k_FeedForwardConv,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---float delta = MathAbs((temp - prev_output)).Sum();
 //---prev_output = temp;
@@ -17395,28 +18967,34 @@ bool CNeuronConvOCL::FeedForwardBuffer(CBufferFloat*source)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(source)==POINTER_INVALID||
       source.GetIndex()<0||iWindowOut==0||iVariables==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint units=Output.Total()/(iWindowOut*iVariables);
    const uint expected=(units==0?0:((units-1)*iStep+iWindow)*iVariables);
 
    if(units==0||source.Total()!=(int)expected)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={units,iWindowOut,iVariables};
-   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_w,WeightsConv.GetIndex());
-   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_i,source.GetIndex());
-   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_o,Output.GetIndex());
-   setArgument(def_k_FeedForwardConv,def_k_ffc_inputs,source.Total()/(int)iVariables);
-   setArgument(def_k_FeedForwardConv,def_k_ffc_step,(int)iStep);
-   setArgument(def_k_FeedForwardConv,def_k_ffc_window_in,(int)iWindow);
-   setArgument(def_k_FeedForwardConv,def_k_ffс_window_out,(int)iWindowOut);
-   setArgument(def_k_FeedForwardConv,def_k_ffc_activation,(int)activation);
+   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_w,WeightsConv.GetIndex())
+   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_i,source.GetIndex())
+   setBuffer(def_k_FeedForwardConv,def_k_ffc_matrix_o,Output.GetIndex())
+   setArgument(def_k_FeedForwardConv,def_k_ffc_inputs,source.Total()/(int)iVariables)
+   setArgument(def_k_FeedForwardConv,def_k_ffc_step,(int)iStep)
+   setArgument(def_k_FeedForwardConv,def_k_ffc_window_in,(int)iWindow)
+   setArgument(def_k_FeedForwardConv,def_k_ffс_window_out,(int)iWindowOut)
+   setArgument(def_k_FeedForwardConv,def_k_ffc_activation,(int)activation)
    kernelExecute(def_k_FeedForwardConv,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
    return(true);
   }
@@ -17426,28 +19004,32 @@ bool CNeuronConvOCL::FeedForwardBuffer(CBufferFloat*source)
 bool CNeuronConvOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[2]={0,0};
    uint global_work_size[2];
    global_work_size[0]=NeuronOCL.Neurons()/iVariables;
    global_work_size[1]=iVariables;
-   setBuffer(def_k_CalcHiddenGradientConv,def_k_chgc_matrix_w,WeightsConv.GetIndex());
-   setBuffer(def_k_CalcHiddenGradientConv,def_k_chgc_matrix_g,Gradient.GetIndex());
-   setBuffer(def_k_CalcHiddenGradientConv,def_k_chgc_matrix_o,NeuronOCL.getOutputIndex());
-   setBuffer(def_k_CalcHiddenGradientConv,def_k_chgc_matrix_ig,NeuronOCL.getGradientIndex());
-   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_outputs,Neurons()/iVariables);
-   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_step,(int)iStep);
-   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_window_in,(int)iWindow);
-   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_window_out,(int)iWindowOut);
-   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_activation,(int)NeuronOCL.Activation());
-   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_shift_out,(int)0);
+   setBuffer(def_k_CalcHiddenGradientConv,def_k_chgc_matrix_w,WeightsConv.GetIndex())
+   setBuffer(def_k_CalcHiddenGradientConv,def_k_chgc_matrix_g,Gradient.GetIndex())
+   setBuffer(def_k_CalcHiddenGradientConv,def_k_chgc_matrix_o,NeuronOCL.getOutputIndex())
+   setBuffer(def_k_CalcHiddenGradientConv,def_k_chgc_matrix_ig,NeuronOCL.getGradientIndex())
+   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_outputs,Neurons()/iVariables)
+   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_step,(int)iStep)
+   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_window_in,(int)iWindow)
+   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_window_out,(int)iWindowOut)
+   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_activation,(int)NeuronOCL.Activation())
+   setArgument(def_k_CalcHiddenGradientConv,def_k_chgc_shift_out,(int)0)
 
 //---Comment(com+"\n "+(string)__LINE__+"-"__FUNCTION__);
    kernelExecute(def_k_CalcHiddenGradientConv,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!NeuronOCL.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -17458,7 +19040,9 @@ bool CNeuronConvOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronConvOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint  global_work_offset[1]={0};
    uint  global_work_size[1]={WeightsConv.Total()};
@@ -17470,16 +19054,16 @@ bool CNeuronConvOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
    switch(optimization)
      {
       case SGD:
-         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_w,WeightsConv.GetIndex());
-         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_g,getGradientIndex());
-         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_i,NeuronOCL.getOutputIndex());
-         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_dw,DeltaWeightsConv.GetIndex());
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_inputs,NeuronOCL.Neurons()/iVariables);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_learning_rates,lr);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_momentum,alpha);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_window_in,(int)iWindow);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_window_out,(int)iWindowOut);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_step,(int)iStep);
+         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_w,WeightsConv.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_g,getGradientIndex())
+         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_i,NeuronOCL.getOutputIndex())
+         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_dw,DeltaWeightsConv.GetIndex())
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_inputs,NeuronOCL.Neurons()/iVariables)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_learning_rates,lr)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_momentum,alpha)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_window_in,(int)iWindow)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_window_out,(int)iWindowOut)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_step,(int)iStep)
          ResetLastError();
 
          //---Comment(com+"\n "+(string)__LINE__+"-"__FUNCTION__);
@@ -17547,13 +19131,15 @@ bool CNeuronConvOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
          t++;
          break;
       default:
-         ReturnFalse;
+         ReturnFalse
 
          break;
      }
 #ifdef  _DEBUG
    if(!WeightsConv.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
    return(true);
   }
@@ -17564,13 +19150,17 @@ bool CNeuronConvOCL::UpdateInputWeightsBuffer(CBufferFloat*source)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(source)==POINTER_INVALID||
       source.GetIndex()<0||iWindowOut==0||iVariables==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const uint units=Output.Total()/(iWindowOut*iVariables);
    const uint expected=(units==0?0:((units-1)*iStep+iWindow)*iVariables);
 
    if(units==0||source.Total()!=(int)expected)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      global_work_offset[1]={0};
    uint      global_work_size[1]={WeightsConv.Total()};
@@ -17583,16 +19173,16 @@ bool CNeuronConvOCL::UpdateInputWeightsBuffer(CBufferFloat*source)
    switch(optimization)
      {
       case SGD:
-         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_w,WeightsConv.GetIndex());
-         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_g,getGradientIndex());
-         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_i,source.GetIndex());
-         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_dw,DeltaWeightsConv.GetIndex());
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_inputs,inputs);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_learning_rates,lr);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_momentum,alpha);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_window_in,(int)iWindow);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_window_out,(int)iWindowOut);
-         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_step,(int)iStep);
+         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_w,WeightsConv.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_g,getGradientIndex())
+         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_i,source.GetIndex())
+         setBuffer(def_k_UpdateWeightsConvMomentum,def_k_uwcm_matrix_dw,DeltaWeightsConv.GetIndex())
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_inputs,inputs)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_learning_rates,lr)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_momentum,alpha)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_window_in,(int)iWindow)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_window_out,(int)iWindowOut)
+         setArgument(def_k_UpdateWeightsConvMomentum,def_k_uwcm_step,(int)iStep)
          ResetLastError();
          kernelExecute(def_k_UpdateWeightsConvMomentum,global_work_offset,global_work_size)
          break;
@@ -17652,11 +19242,13 @@ bool CNeuronConvOCL::UpdateInputWeightsBuffer(CBufferFloat*source)
          t++;
          break;
       default:
-         ReturnFalse;
+         ReturnFalse
      }
 #ifdef  _DEBUG
    if(!WeightsConv.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
    return(true);
   }
@@ -17745,52 +19337,72 @@ bool CNeuronConvOCL::SetOpenCLChecked(COpenCLMy*obj)
   {
 //--- reject invalid targets and incomplete trees before any mutation.
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalseEx("checked context target or convolution tree");
+     {
+      ReturnFalseEx("checked context target or convolution tree")
+     }
 
 //--- read every valid foreign convolution owner before any recreation.
    if(!!WeightsConv&&WeightsConv.Total()>0&&WeightsConv.GetIndex()>=0&&
       WeightsConv.GetOpenCL()!=obj&&!WeightsConv.BufferRead())
-      ReturnFalseEx("convolution weights read");
+     {
+      ReturnFalseEx("convolution weights read")
+     }
 
    if(!!DeltaWeightsConv&&DeltaWeightsConv.Total()>0&&
       DeltaWeightsConv.GetIndex()>=0&&DeltaWeightsConv.GetOpenCL()!=obj&&
       !DeltaWeightsConv.BufferRead())
-      ReturnFalseEx("convolution delta weights read");
+     {
+      ReturnFalseEx("convolution delta weights read")
+     }
 
    if(!!FirstMomentumConv&&FirstMomentumConv.Total()>0&&
       FirstMomentumConv.GetIndex()>=0&&FirstMomentumConv.GetOpenCL()!=obj&&
       !FirstMomentumConv.BufferRead())
-      ReturnFalseEx("convolution first momentum read");
+     {
+      ReturnFalseEx("convolution first momentum read")
+     }
 
    if(!!SecondMomentumConv&&SecondMomentumConv.Total()>0&&
       SecondMomentumConv.GetIndex()>=0&&SecondMomentumConv.GetOpenCL()!=obj&&
       !SecondMomentumConv.BufferRead())
-      ReturnFalseEx("convolution second momentum read");
+     {
+      ReturnFalseEx("convolution second momentum read")
+     }
 
 //--- recreate each valid convolution owner only when target binding is absent.
    if(!!WeightsConv&&WeightsConv.Total()>0&&
       (WeightsConv.GetOpenCL()!=obj||WeightsConv.GetIndex()<0)&&
       !WeightsConv.BufferCreate(obj))
-      ReturnFalseEx("convolution weights create");
+     {
+      ReturnFalseEx("convolution weights create")
+     }
 
    if(!!DeltaWeightsConv&&DeltaWeightsConv.Total()>0&&
       (DeltaWeightsConv.GetOpenCL()!=obj||DeltaWeightsConv.GetIndex()<0)&&
       !DeltaWeightsConv.BufferCreate(obj))
-      ReturnFalseEx("convolution delta weights create");
+     {
+      ReturnFalseEx("convolution delta weights create")
+     }
 
    if(!!FirstMomentumConv&&FirstMomentumConv.Total()>0&&
       (FirstMomentumConv.GetOpenCL()!=obj||FirstMomentumConv.GetIndex()<0)&&
       !FirstMomentumConv.BufferCreate(obj))
-      ReturnFalseEx("convolution first momentum create");
+     {
+      ReturnFalseEx("convolution first momentum create")
+     }
 
    if(!!SecondMomentumConv&&SecondMomentumConv.Total()>0&&
       (SecondMomentumConv.GetOpenCL()!=obj||SecondMomentumConv.GetIndex()<0)&&
       !SecondMomentumConv.BufferCreate(obj))
-      ReturnFalseEx("convolution second momentum create");
+     {
+      ReturnFalseEx("convolution second momentum create")
+     }
 
 //--- publish inherited Proof and Base owners after every derived owner moved.
    if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
-      ReturnFalseEx("inherited base context");
+     {
+      ReturnFalseEx("inherited base context")
+     }
 
 //--- finalize the checked convolution transfer.
    return(true);
@@ -17818,7 +19430,9 @@ void CBufferFloat::BufferToCSV(const string file_name)
 bool CNeuronConvOCL::Load(const int file_handle)
   {
    if(!CNeuronProofOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(CheckPointer(WeightsConv)==POINTER_INVALID)
@@ -17828,10 +19442,14 @@ bool CNeuronConvOCL::Load(const int file_handle)
       WeightsConv.BufferFree();
 
    if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?WeightsConv.LoadInferenceFinite(file_handle,OpenCL):WeightsConv.Load(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!WeightsConv.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(optimization==SGD)
@@ -17843,10 +19461,14 @@ bool CNeuronConvOCL::Load(const int file_handle)
          DeltaWeightsConv.BufferFree();
 
       if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?DeltaWeightsConv.LoadInferenceFinite(file_handle,OpenCL):DeltaWeightsConv.Load(file_handle)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!DeltaWeightsConv.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
      {
@@ -17857,10 +19479,14 @@ bool CNeuronConvOCL::Load(const int file_handle)
          FirstMomentumConv.BufferFree();
 
       if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?FirstMomentumConv.LoadInferenceFinite(file_handle,OpenCL):FirstMomentumConv.Load(file_handle)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!FirstMomentumConv.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---
       if(CheckPointer(SecondMomentumConv)==POINTER_INVALID)
@@ -17870,10 +19496,14 @@ bool CNeuronConvOCL::Load(const int file_handle)
          SecondMomentumConv.BufferFree();
 
       if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?SecondMomentumConv.LoadInferenceFinite(file_handle,OpenCL):SecondMomentumConv.Load(file_handle)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!SecondMomentumConv.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    iWindowOut=FileReadInteger(file_handle);
    iVariables=FileReadInteger(file_handle);
@@ -17887,26 +19517,40 @@ bool CNeuronConvOCL::Load(const int file_handle)
 bool CNeuronConvOCL::Save(const int file_handle)
   {
    if(!CNeuronProofOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(CheckPointer(WeightsConv)==POINTER_INVALID||!WeightsConv.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(optimization==SGD&&(CheckPointer(DeltaWeightsConv)==POINTER_INVALID||!DeltaWeightsConv.Save(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(optimization!=SGD&&(CheckPointer(FirstMomentumConv)==POINTER_INVALID||!FirstMomentumConv.Save(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(optimization!=SGD&&(CheckPointer(SecondMomentumConv)==POINTER_INVALID||!SecondMomentumConv.Save(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iWindowOut,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iVariables,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -17918,14 +19562,18 @@ bool CNeuronConvOCL::SaveParametersOnly(const int file_handle)
   {
    if(Type()!=defNeuronConvOCL||CheckPointer(WeightsConv)==POINTER_INVALID||
       WeightsConv.Total()<=0||!SaveDPCCBaseParametersOnly(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,(int)GetWindow(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)GetInputStride(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)GetFilters(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)GetVariables(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)GetUnits(),INT_VALUE)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SaveDPCCParameterBufferOnly(file_handle,WeightsConv));
   }
@@ -17936,7 +19584,9 @@ bool CNeuronConvOCL::LoadParametersOnly(const int file_handle,const bool apply)
   {
    if(Type()!=defNeuronConvOCL||CheckPointer(WeightsConv)==POINTER_INVALID||
       WeightsConv.Total()<=0||!LoadDPCCBaseParametersOnly(file_handle,apply))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
 
@@ -17945,7 +19595,9 @@ bool CNeuronConvOCL::LoadParametersOnly(const int file_handle,const bool apply)
       FileReadInteger(file_handle,INT_VALUE)!=(int)GetFilters()||
       FileReadInteger(file_handle,INT_VALUE)!=(int)GetVariables()||
       FileReadInteger(file_handle,INT_VALUE)!=(int)GetUnits()||GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(LoadDPCCParameterBufferOnly(file_handle,WeightsConv,apply));
   }
@@ -17960,14 +19612,18 @@ bool CNeuronConvOCL::SaveDPCCPolicyTrainingStateOnly(const int file_handle)
       FirstMomentumConv.Total()!=WeightsConv.Total()||SecondMomentumConv.Total()!=WeightsConv.Total()||
       (CheckPointer(DeltaWeightsConv)!=POINTER_INVALID&&DeltaWeightsConv.Total()>0)||
       !SaveDPCCPolicyTrainingBaseOnly(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,(int)GetWindow(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)GetInputStride(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)GetFilters(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)GetVariables(),INT_VALUE)!=INT_VALUE||
       FileWriteInteger(file_handle,(int)GetUnits(),INT_VALUE)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(SaveDPCCParameterBufferOnly(file_handle,WeightsConv)&&
           SaveDPCCParameterBufferOnly(file_handle,FirstMomentumConv)&&
@@ -17984,7 +19640,9 @@ bool CNeuronConvOCL::LoadDPCCPolicyTrainingStateOnly(const int file_handle,const
       FirstMomentumConv.Total()!=WeightsConv.Total()||SecondMomentumConv.Total()!=WeightsConv.Total()||
       (CheckPointer(DeltaWeightsConv)!=POINTER_INVALID&&DeltaWeightsConv.Total()>0)||
       !LoadDPCCPolicyTrainingBaseOnly(file_handle,apply))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ResetLastError();
 
@@ -17993,7 +19651,9 @@ bool CNeuronConvOCL::LoadDPCCPolicyTrainingStateOnly(const int file_handle,const
       FileReadInteger(file_handle,INT_VALUE)!=(int)GetFilters()||
       FileReadInteger(file_handle,INT_VALUE)!=(int)GetVariables()||
       FileReadInteger(file_handle,INT_VALUE)!=(int)GetUnits()||GetLastError()!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(LoadDPCCParameterBufferOnly(file_handle,WeightsConv,apply)&&
           LoadDPCCParameterBufferOnly(file_handle,FirstMomentumConv,apply)&&
@@ -18010,7 +19670,9 @@ bool CNeuronConvOCL::AppendDPCCPolicyTrainingFingerprint(ulong&fingerprint)
       FirstMomentumConv.Total()!=WeightsConv.Total()||SecondMomentumConv.Total()!=WeightsConv.Total()||
       (CheckPointer(DeltaWeightsConv)!=POINTER_INVALID&&DeltaWeightsConv.Total()>0)||
       !AppendDPCCPolicyTrainingBaseFingerprint(fingerprint))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const ulong geometry[]={ulong(GetWindow()),ulong(GetInputStride()),ulong(GetFilters()),
                              ulong(GetVariables()),ulong(GetUnits())
@@ -18033,7 +19695,9 @@ bool CNeuronConvOCL::AppendParameterFingerprint(ulong&fingerprint)
       !AppendParameterBufferFingerprint(DeltaWeightsConv,fingerprint,12)||
       !AppendParameterBufferFingerprint(FirstMomentumConv,fingerprint,13)||
       !AppendParameterBufferFingerprint(SecondMomentumConv,fingerprint,14))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -18043,13 +19707,19 @@ bool CNeuronConvOCL::AppendParameterFingerprint(ulong&fingerprint)
 bool CNeuronProofOCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iWindow,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iStep,INT_VALUE)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -18060,7 +19730,9 @@ bool CNeuronProofOCL::Save(const int file_handle)
 bool CNeuronProofOCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iWindow=FileReadInteger(file_handle);
    iStep=FileReadInteger(file_handle);
@@ -18095,19 +19767,29 @@ bool CNeuronBaseOCL::SumAndNormalize(CBufferFloat*tensor1,CBufferFloat*tensor2,
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(tensor1)==POINTER_INVALID||CheckPointer(tensor2)==POINTER_INVALID
       ||CheckPointer(out)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(dimension<=0||shift_in1<0||shift_in2<0||shift_out<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor1.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor2.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- derive the legacy row count before validating checked metadata.
    uint global_work_offset[1]={0};
@@ -18120,7 +19802,7 @@ bool CNeuronBaseOCL::SumAndNormalize(CBufferFloat*tensor1,CBufferFloat*tensor2,
       PrintFormat("Tensor 2 total = %d -> shift = %d",tensor2.Total(),shift_in2);
       PrintFormat("Output total = %d -> shift = %d",out.Total(),shift_out);
       PrintFormat("size=%d -> dimension=%d",size,dimension);
-      ReturnFalse;
+      ReturnFalse
      }
    const int rows=size/dimension;
    const int output_count=rows*dimension;
@@ -18137,7 +19819,9 @@ bool CNeuronBaseOCL::SumAndNormalize(CBufferFloat*tensor1,CBufferFloat*tensor2,
                         ulong(out.Total())||
                         numeric_flags.GetIndex()==tensor1.GetIndex()||
                         numeric_flags.GetIndex()==tensor2.GetIndex()||numeric_flags.GetIndex()==out.GetIndex()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- bind the matrix-sum buffers and row shifts.
    const int kernel=def_k_MatrixSum;
@@ -18156,7 +19840,9 @@ bool CNeuronBaseOCL::SumAndNormalize(CBufferFloat*tensor1,CBufferFloat*tensor2,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //--- preserve the optional legacy normalization stage.
    if(!normilize)
@@ -18170,10 +19856,14 @@ bool CNeuronBaseOCL::SumAndNormalize(CBufferFloat*tensor1,CBufferFloat*tensor2,
 bool CNeuronBaseOCL::Normalize(CBufferFloat*tensor,int dimension)
   {
    if(!OpenCL||!tensor)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor.GetIndex()<0||dimension<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint      global_work_offset[1]={0};
@@ -18184,7 +19874,9 @@ bool CNeuronBaseOCL::Normalize(CBufferFloat*tensor,int dimension)
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!tensor.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18198,16 +19890,24 @@ bool CNeuronBaseOCL::Different(CBufferFloat*tensor1,CBufferFloat*tensor2,
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(tensor1)==POINTER_INVALID||CheckPointer(tensor2)==POINTER_INVALID
       ||CheckPointer(out)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor1.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor2.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int size=MathMin(
@@ -18215,7 +19915,9 @@ bool CNeuronBaseOCL::Different(CBufferFloat*tensor1,CBufferFloat*tensor2,
                     out.Total()/(shift_out+dimension));
 
    if(size<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      global_work_offset[2]={0};
    uint      global_work_size[2]={size,dimension};
@@ -18232,7 +19934,9 @@ bool CNeuronBaseOCL::Different(CBufferFloat*tensor1,CBufferFloat*tensor2,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18246,16 +19950,24 @@ bool CNeuronBaseOCL::DifferentGrad(CBufferFloat*tensor1,CBufferFloat*tensor2,
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(tensor1)==POINTER_INVALID||CheckPointer(tensor2)==POINTER_INVALID
       ||CheckPointer(out)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor1.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor2.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int size=MathMin(
@@ -18263,7 +19975,9 @@ bool CNeuronBaseOCL::DifferentGrad(CBufferFloat*tensor1,CBufferFloat*tensor2,
                     out.Total()/(shift_out+dimension));
 
    if(size<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      global_work_offset[2]={0};
    uint      global_work_size[2]={size,dimension};
@@ -18280,7 +19994,9 @@ bool CNeuronBaseOCL::DifferentGrad(CBufferFloat*tensor1,CBufferFloat*tensor2,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18294,19 +20010,27 @@ bool CNeuronBaseOCL::IdentSum(CBufferFloat*tensor,CBufferFloat*out,
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(tensor)==POINTER_INVALID||
       CheckPointer(out)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int size=MathMin(tensor.Total()/(shift_in+dimension),out.Total()/(shift_out+dimension));
 
    if(size<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      global_work_offset[2]={0};
    uint      global_work_size[2]={size,dimension};
@@ -18321,7 +20045,9 @@ bool CNeuronBaseOCL::IdentSum(CBufferFloat*tensor,CBufferFloat*out,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18335,19 +20061,27 @@ bool CNeuronBaseOCL::IdentDifferent(CBufferFloat*tensor,CBufferFloat*out,
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(tensor)==POINTER_INVALID||
       CheckPointer(out)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int size=MathMin(tensor.Total()/(shift_in+dimension),out.Total()/(shift_out+dimension));
 
    if(size<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      global_work_offset[2]={0};
    uint      global_work_size[2]={size,dimension};
@@ -18362,7 +20096,9 @@ bool CNeuronBaseOCL::IdentDifferent(CBufferFloat*tensor,CBufferFloat*out,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18376,19 +20112,27 @@ bool CNeuronBaseOCL::IdentDifferentGrad(CBufferFloat*tensor,CBufferFloat*out,
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(tensor)==POINTER_INVALID||
       CheckPointer(out)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tensor.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int size=MathMin(tensor.Total()/(shift_in+dimension),out.Total()/(shift_out+dimension));
 
    if(size<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      global_work_offset[2]={0};
    uint      global_work_size[2]={size,dimension};
@@ -18403,7 +20147,9 @@ bool CNeuronBaseOCL::IdentDifferentGrad(CBufferFloat*tensor,CBufferFloat*out,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18430,10 +20176,14 @@ bool CNeuronBaseOCL::SumVecMatrix(CBufferFloat*vector_in,CBufferFloat*matrix_in,
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(vector_in)==POINTER_INVALID||
       CheckPointer(matrix_in)==POINTER_INVALID||CheckPointer(out)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(variables<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong slice=ulong(dimension)*variables;
 
@@ -18441,15 +20191,21 @@ bool CNeuronBaseOCL::SumVecMatrix(CBufferFloat*vector_in,CBufferFloat*matrix_in,
       shift_in1>INT_MAX||shift_in2>INT_MAX||shift_out>INT_MAX||vector_in.GetIndex()<0||
       vector_in.Total()<0||
       shift_in1>(uint)vector_in.Total()||slice>ulong(vector_in.Total()-shift_in1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(matrix_in.GetIndex()<0||matrix_in.Total()<0||shift_in2>(uint)matrix_in.Total()||
       slice>ulong(matrix_in.Total()-shift_in2))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0||out.Total()<0||shift_out>(uint)out.Total()||
       slice>ulong(out.Total()-shift_out))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- derive the checked row span without narrowing slice metadata.
    ulong available=MathMin(ulong(matrix_in.Total()-shift_in2)/slice,
@@ -18458,7 +20214,9 @@ bool CNeuronBaseOCL::SumVecMatrix(CBufferFloat*vector_in,CBufferFloat*matrix_in,
 
    if(requested_rows<1||requested_rows>available||requested_rows>INT_MAX||
       requested_rows>INT_MAX/slice)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    const int   size=(int)requested_rows;
    const ulong output_total=requested_rows*slice;
@@ -18469,7 +20227,9 @@ bool CNeuronBaseOCL::SumVecMatrix(CBufferFloat*vector_in,CBufferFloat*matrix_in,
                         numeric_flags.GetIndex()<0||
                         numeric_flags.Total()<output_count||numeric_flags.GetIndex()==vector_in.GetIndex()||
                         numeric_flags.GetIndex()==matrix_in.GetIndex()||numeric_flags.GetIndex()==out.GetIndex()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      global_work_offset[3]={0};
    uint      global_work_size[3]={size,dimension,variables};
@@ -18488,7 +20248,9 @@ bool CNeuronBaseOCL::SumVecMatrix(CBufferFloat*vector_in,CBufferFloat*matrix_in,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //--- finalize the vector-plus-matrix dispatch.
    return(true);
@@ -18504,22 +20266,32 @@ bool CNeuronBaseOCL::SumVecMatrixGrad(CBufferFloat*vector_in,CBufferFloat*matrix
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(vector_in)==POINTER_INVALID||
       CheckPointer(matrix_in)==POINTER_INVALID||CheckPointer(out)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(variables<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong slice=ulong(dimension)*variables;
 
    if(slice==0||vector_in.GetIndex()<0||
       vector_in.Total()<int(ulong(shift_in1)+slice))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(matrix_in.GetIndex()<0||matrix_in.Total()<int(ulong(shift_in2)+slice))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0||out.Total()<int(ulong(shift_out)+slice))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int available=MathMin((matrix_in.Total()-int(shift_in2))/int(slice),
@@ -18527,7 +20299,9 @@ bool CNeuronBaseOCL::SumVecMatrixGrad(CBufferFloat*vector_in,CBufferFloat*matrix
    int size=(rows==0?available:int(rows));
 
    if(size<1||size>available)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint      global_work_offset[3]={0};
    uint      global_work_size[3]={size,dimension,variables};
@@ -18544,7 +20318,9 @@ bool CNeuronBaseOCL::SumVecMatrixGrad(CBufferFloat*vector_in,CBufferFloat*matrix
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18557,19 +20333,29 @@ bool CNeuronBaseOCL::ConcatVecMatrix(CBufferFloat*vector_in,CBufferFloat*matrix_
                                      uint         rows,uint cols,uint variables,bool multvarsecond)
   {
    if(!OpenCL||!vector_in||!matrix_in||!out)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(variables<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(vector_in.GetIndex()<0||vector_in.Total()<int(dimension_v*variables))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(matrix_in.GetIndex()<0||matrix_in.Total()<int(cols*rows*(multvarsecond?variables:1)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0||out.Total()<int((dimension_v+cols)*rows*variables))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint      global_work_offset[3]={0};
@@ -18586,7 +20372,9 @@ bool CNeuronBaseOCL::ConcatVecMatrix(CBufferFloat*vector_in,CBufferFloat*matrix_
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18599,19 +20387,29 @@ bool CNeuronBaseOCL::ConcatVecMatrixGrad(CBufferFloat*vector_in,CBufferFloat*mat
                                          uint         rows,uint cols,uint variables,bool multvarsecond)
   {
    if(!OpenCL||!vector_in||!matrix_in||!out)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(variables<1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(vector_in.GetIndex()<0||vector_in.Total()<int(dimension_v*variables))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(matrix_in.GetIndex()<0||matrix_in.Total()<int(cols*rows*(multvarsecond?variables:1)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(out.GetIndex()<0||out.Total()<int((dimension_v+cols)*rows*variables))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[3]={0};
@@ -18634,7 +20432,9 @@ bool CNeuronBaseOCL::ConcatVecMatrixGrad(CBufferFloat*vector_in,CBufferFloat*mat
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18664,12 +20464,16 @@ bool CNeuronBaseOCL::MatMul(const CBufferFloat*matr1,const CBufferFloat*matr2,
    if(!OpenCL||!matr1||!matr2||!result||rows1<1||cols1<1||cols2<1||variables<1||
       matr1.GetOpenCL()!=OpenCL||matr2.GetOpenCL()!=OpenCL||result.GetOpenCL()!=OpenCL||
       matr1.GetIndex()<0||matr2.GetIndex()<0||result.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong output_total=ulong(rows1)*cols2;
 
    if(output_total>INT_MAX/ulong(variables))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    output_total*=variables;
    const int output_count=int(output_total);
@@ -18683,7 +20487,9 @@ bool CNeuronBaseOCL::MatMul(const CBufferFloat*matr1,const CBufferFloat*matr2,
       if(offset_matr1>INT_MAX||offset_matr2>INT_MAX||offset_result>INT_MAX||
          offset_matr1>matr1_total||offset_matr2>matr2_total||offset_result>result_total||
          ulong(rows1)>(matr1_total-offset_matr1)/cols1)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       const ulong matr1_span=ulong(rows1)*cols1;
       const ulong matr2_span=ulong(cols1)*cols2;
@@ -18695,7 +20501,9 @@ bool CNeuronBaseOCL::MatMul(const CBufferFloat*matr1,const CBufferFloat*matr2,
          numeric_flags.GetIndex()<0||numeric_flags.Total()<output_count||
          numeric_flags.GetIndex()==matr1.GetIndex()||numeric_flags.GetIndex()==matr2.GetIndex()||
          numeric_flags.GetIndex()==result.GetIndex())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- bind matrices, dimensions, and optional raw-buffer offsets.
@@ -18716,7 +20524,9 @@ bool CNeuronBaseOCL::MatMul(const CBufferFloat*matr1,const CBufferFloat*matr2,
    kernelExecute(def_k_MatMult,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!result.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18751,7 +20561,9 @@ bool CNeuronBaseOCL::ReduceNumericFlags(CBufferFloat*numeric_flags,
 
 //--- read only the reduction scalar and classify the completed device result.
    if(!numeric_scalar.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
    const float total=numeric_scalar[0];
    rejected=(!MathIsValidNumber(total)||total>0.0f);
 
@@ -18771,7 +20583,9 @@ bool CNeuronBaseOCL::MatMulGrad(const CBufferFloat*matr1,CBufferFloat*matr1_gr,
   {
 //--- validate OpenCL ownership before configuring the gradient kernel.
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- bind matrices, gradients, dimensions, and optional raw-buffer offsets.
    uint global_work_offset[3]={0,0,0};
@@ -18793,7 +20607,9 @@ bool CNeuronBaseOCL::MatMulGrad(const CBufferFloat*matr1,CBufferFloat*matr1_gr,
    kernelExecute(def_k_MatMultGrad,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!matr1_gr.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18816,12 +20632,16 @@ bool CNeuronBaseOCL::CalcDistance(const CBufferFloat*data,CBufferFloat*distance,
   {
 //--- validate grouped distance inputs before launching the kernel.
    if(!OpenCL||!data||!distance||dimension==0||samples==0||groups==0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    ulong output_total=ulong(samples)*samples;
 
    if(output_total>INT_MAX/ulong(groups))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    output_total*=groups;
    const int output_count=int(output_total);
@@ -18833,7 +20653,9 @@ bool CNeuronBaseOCL::CalcDistance(const CBufferFloat*data,CBufferFloat*distance,
                                   ulong(groups)*samples>ulong(data.Total())/dimension||
                                   output_total>ulong(distance.Total())||
                                   numeric_flags.GetIndex()==data.GetIndex()||numeric_flags.GetIndex()==distance.GetIndex())))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- configure the grouped [samples,samples] distance layout.
    uint global_work_offset[3]={0,0,0};
@@ -18852,7 +20674,9 @@ bool CNeuronBaseOCL::CalcDistance(const CBufferFloat*data,CBufferFloat*distance,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!distance.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //--- distance calculation completed successfully.
    return(true);
@@ -18870,7 +20694,9 @@ bool CNeuronBaseOCL::DiagMatMul(const CBufferFloat*diag,
                                )
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={rows,cols,variables};
@@ -18885,7 +20711,9 @@ bool CNeuronBaseOCL::DiagMatMul(const CBufferFloat*diag,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!result.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18904,7 +20732,9 @@ bool CNeuronBaseOCL::DiagMatMulGrad(const CBufferFloat*diag,
                                    )
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={rows,cols,variables};
@@ -18920,7 +20750,9 @@ bool CNeuronBaseOCL::DiagMatMulGrad(const CBufferFloat*diag,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!matr_gr.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18938,7 +20770,9 @@ bool CNeuronBaseOCL::SparseMatMul(const CBufferFloat*sparse_indexs,
                                   const int          full_cols)
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={sparse_rows,sparse_cols,full_cols};
@@ -18954,7 +20788,9 @@ bool CNeuronBaseOCL::SparseMatMul(const CBufferFloat*sparse_indexs,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!result.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -18974,7 +20810,9 @@ bool CNeuronBaseOCL::SparseMatMulGrad(const CBufferFloat*sparse_indexs,
                                       const int          full_cols)
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={(uint)MathMax(sparse_rows,full_rows),
@@ -18998,7 +20836,9 @@ bool CNeuronBaseOCL::SparseMatMulGrad(const CBufferFloat*sparse_indexs,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!full_gr.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19017,7 +20857,9 @@ bool CNeuronBaseOCL::SparseConcatenate(const CBufferFloat*sparse_indexs,
 
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={sparse_rows,sparse_cols,full_cols};
@@ -19033,7 +20875,9 @@ bool CNeuronBaseOCL::SparseConcatenate(const CBufferFloat*sparse_indexs,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!result.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19053,7 +20897,9 @@ bool CNeuronBaseOCL::SparseConcatenateGrad(const CBufferFloat*sparse_indexs,
                                            const int          full_cols)
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={(uint)MathMax(sparse_rows,full_rows),
@@ -19077,7 +20923,9 @@ bool CNeuronBaseOCL::SparseConcatenateGrad(const CBufferFloat*sparse_indexs,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!full_gr.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19091,17 +20939,23 @@ bool CNeuronBaseOCL::ScalarToVector(CBufferFloat*scalar,
                                     int          dimension)
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!scalar||!vector_in||!vector_out)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int total=scalar.Total()*dimension;
 
    if(vector_in.Total()<total||
       vector_out.Total()<total)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[]={0,0};
@@ -19117,7 +20971,9 @@ bool CNeuronBaseOCL::ScalarToVector(CBufferFloat*scalar,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!vector_out.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19133,12 +20989,16 @@ bool CNeuronBaseOCL::ScalarToVectorGrad(CBufferFloat*scalar,
                                         int          dimension)
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!scalar||!vector_in||!vector_out_gr||
       !scalar_gr||!vector_in_gr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int total=scalar.Total()*dimension;
 
@@ -19146,7 +21006,9 @@ bool CNeuronBaseOCL::ScalarToVectorGrad(CBufferFloat*scalar,
       vector_in_gr.Total()<total||
       vector_out_gr.Total()<total||
       scalar.Total()>scalar_gr.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[]={0,0};
@@ -19168,7 +21030,9 @@ bool CNeuronBaseOCL::ScalarToVectorGrad(CBufferFloat*scalar,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!vector_in_gr.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19202,7 +21066,7 @@ void CNeuronDropoutOCL::CNeuronDropoutOCL(void):OutProbability((float)0.1),
 //+------------------------------------------------------------------+
 void CNeuronDropoutOCL::~CNeuronDropoutOCL(void)
   {
-   DeleteObj(DropOutMultiplier);
+   DeleteObj(DropOutMultiplier)
   }
 //+------------------------------------------------------------------+
 //| Init - Initializes the CNeuronDropoutOCL layer and allocates...  |
@@ -19217,7 +21081,9 @@ bool CNeuronDropoutOCL::Init(uint numOutputs,
                             )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,numNeurons,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OutProbability=out_prob;
    OutNumber=(int)(numNeurons*out_prob);
@@ -19227,7 +21093,9 @@ bool CNeuronDropoutOCL::Init(uint numOutputs,
       DropOutMultiplier=new CBufferFloat();
 
    if(!DropOutMultiplier.BufferInit(numNeurons+1,dInitValue))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -19238,7 +21106,9 @@ bool CNeuronDropoutOCL::Init(uint numOutputs,
 bool CNeuronDropoutOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    activation=(ENUM_ACTIVATION)NeuronOCL.Activation();
@@ -19252,7 +21122,9 @@ bool CNeuronDropoutOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
       DropOutMultiplier=new CBufferFloat();
 
    if(!DropOutMultiplier.BufferInit(NeuronOCL.Neurons(),dInitValue))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<OutNumber;i++)
      {
@@ -19266,12 +21138,16 @@ bool CNeuronDropoutOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
         }
 
       if(!DropOutMultiplier.Update(RND(Neurons()),0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
    if(!DropOutMultiplier.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(ElementMult(NeuronOCL.getOutput(),DropOutMultiplier,Output));
   }
@@ -19291,7 +21167,9 @@ bool CNeuronBaseOCL::ElementMult(const CBufferFloat*input1,const CBufferFloat*in
    kernelExecute(def_k_Dropout,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19320,7 +21198,9 @@ bool CNeuronBaseOCL::GateElementMult(const CBufferFloat*input1,const CBufferFloa
                          numeric_flags.GetIndex()==input1.GetIndex()||
                          numeric_flags.GetIndex()==input2.GetIndex()||numeric_flags.GetIndex()==gate.GetIndex()||
                          numeric_flags.GetIndex()==output.GetIndex())))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- dispatch one gate result for every output element.
    uint global_work_offset[1]={0};
@@ -19336,7 +21216,9 @@ bool CNeuronBaseOCL::GateElementMult(const CBufferFloat*input1,const CBufferFloa
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //--- finalize the gate multiplication dispatch.
    return(true);
@@ -19372,7 +21254,9 @@ bool CNeuronBaseOCL::GateElementMultGrad(const CBufferFloat*input1,
    kernelExecute(def_k_GateElementMulGrad,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!input1_gr.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19383,7 +21267,9 @@ bool CNeuronBaseOCL::GateElementMultGrad(const CBufferFloat*input1,
 bool CNeuronDropoutOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!bTrain)
@@ -19391,11 +21277,15 @@ bool CNeuronDropoutOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 
 //---
    if(CheckPointer(DropOutMultiplier)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!DropOutMultiplier.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(ElementMult(Gradient,DropOutMultiplier,NeuronOCL.getGradient()));
@@ -19406,11 +21296,15 @@ bool CNeuronDropoutOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronDropoutOCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteDouble(file_handle,OutProbability)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -19421,13 +21315,17 @@ bool CNeuronDropoutOCL::Save(const int file_handle)
 bool CNeuronDropoutOCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    OutProbability=(float)FileReadDouble(file_handle);
 
    if(OpenCL&&OpenCL.InferenceRuntimeLoadActive()&&(!MathIsValidNumber((double)OutProbability)||OutProbability<0||OutProbability>=1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    OutNumber=(int)(Neurons()*OutProbability);
    dInitValue=1/(1-OutProbability);
@@ -19436,7 +21334,9 @@ bool CNeuronDropoutOCL::Load(const int file_handle)
       DropOutMultiplier=new CBufferFloat();
 
    if(!DropOutMultiplier.BufferInit(Neurons()+1,dInitValue))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -19473,25 +21373,33 @@ bool CNeuronDropoutOCL::SetOpenCLChecked(COpenCLMy*obj)
 //--- validate target and derived ownership before mutation.
    if(CheckPointer(obj)==POINTER_INVALID||
       !SupportsOpenCLChecked())
-      ReturnFalseEx("checked context target or multiplier");
+     {
+      ReturnFalseEx("checked context target or multiplier")
+     }
 
 //--- read the foreign multiplier before its target context changes.
    if(DropOutMultiplier.Total()>0&&
       DropOutMultiplier.GetIndex()>=0&&
       DropOutMultiplier.GetOpenCL()!=obj&&
       !DropOutMultiplier.BufferRead())
-      ReturnFalseEx("dropout multiplier read");
+     {
+      ReturnFalseEx("dropout multiplier read")
+     }
 
 //--- create the multiplier only when it is foreign or host-only.
    if(DropOutMultiplier.Total()>0&&
       (DropOutMultiplier.GetOpenCL()!=obj||
        DropOutMultiplier.GetIndex()<0)&&
       !DropOutMultiplier.BufferCreate(obj))
-      ReturnFalseEx("dropout multiplier create");
+     {
+      ReturnFalseEx("dropout multiplier create")
+     }
 
 //--- transfer inherited base owners after the multiplier.
    if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
-      ReturnFalseEx("base context transfer");
+     {
+      ReturnFalseEx("base context transfer")
+     }
 
 //--- finalize the checked dropout transfer.
    return(true);
@@ -19511,7 +21419,7 @@ CNeuronBatchNormOCL::~CNeuronBatchNormOCL(void)
   {
    if(CheckPointer(PrevLayer)!=POINTER_INVALID)
       PrevLayer=NULL;
-   DeleteObj(BatchOptions);
+   DeleteObj(BatchOptions)
   }
 //+------------------------------------------------------------------+
 //| Init - Initializes the CNeuronBatchNormOCL layer and allocates...|
@@ -19538,7 +21446,9 @@ bool CNeuronBatchNormOCL::Init(uint numOutputs,
                               )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,numNeurons,optimization_type,batchSize))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    activation=None;
    iBatchSize=(int)batchSize;
@@ -19550,10 +21460,14 @@ bool CNeuronBatchNormOCL::Init(uint numOutputs,
    int count=(int)numNeurons*(optimization_type==SGD?7:9);
 
    if(!BatchOptions.BufferInit(count,0.0f))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!BatchOptions.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iBatchCount=1;
 
@@ -19566,7 +21480,9 @@ bool CNeuronBatchNormOCL::Init(uint numOutputs,
 bool CNeuronBatchNormOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    PrevLayer=NeuronOCL;
@@ -19585,14 +21501,20 @@ bool CNeuronBatchNormOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
       BatchOptions=new CBufferFloat();
 
       if(!BatchOptions.BufferInit(count,0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!BatchOptions.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(BatchOptions.GetIndex()<0&&!BatchOptions.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -19610,7 +21532,9 @@ bool CNeuronBatchNormOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_BatchFeedForward,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
    if(bTrain)
       iBatchCount++;
@@ -19624,7 +21548,9 @@ bool CNeuronBatchNormOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronBatchNormOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(iBatchSize<=1)
@@ -19632,7 +21558,9 @@ bool CNeuronBatchNormOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 
 //---
    if(CheckPointer(BatchOptions)==POINTER_INVALID||BatchOptions.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -19649,7 +21577,9 @@ bool CNeuronBatchNormOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_CalcHiddenGradientBatch,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!NeuronOCL.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19660,7 +21590,9 @@ bool CNeuronBatchNormOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronBatchNormOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(iBatchSize<=1)
@@ -19668,7 +21600,9 @@ bool CNeuronBatchNormOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 
 //---
    if(CheckPointer(BatchOptions)==POINTER_INVALID||BatchOptions.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(iBatchCount<100*iBatchSize)
       return(true);
@@ -19699,7 +21633,9 @@ bool CNeuronBatchNormOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
      }
 #ifdef  _DEBUG
    if(!BatchOptions.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -19710,11 +21646,15 @@ bool CNeuronBatchNormOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronBatchNormOCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteInteger(file_handle,iBatchSize,INT_VALUE)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(BatchOptions.Save(file_handle));
   }
@@ -19726,7 +21666,9 @@ bool CNeuronBatchNormOCL::AppendParameterFingerprint(ulong&fingerprint)
    if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint)||
       !AppendParameterBufferFingerprint(BatchOptions,fingerprint,21,3,
                                         (optimization==SGD?7:9)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -19736,7 +21678,9 @@ bool CNeuronBatchNormOCL::AppendParameterFingerprint(ulong&fingerprint)
 bool CNeuronBatchNormOCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iBatchSize=FileReadInteger(file_handle,INT_VALUE);
@@ -19746,17 +21690,23 @@ bool CNeuronBatchNormOCL::Load(const int file_handle)
       BatchOptions=new CBufferFloat();
 
       if(CheckPointer(BatchOptions)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(BatchOptions.GetIndex()>=0)
       BatchOptions.BufferFree();
 
    if(!(OpenCL&&OpenCL.InferenceRuntimeLoadActive()?BatchOptions.LoadInferenceFinite(file_handle,OpenCL):BatchOptions.Load(file_handle)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!OpenCL&&!BatchOptions.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iBatchCount=iBatchSize;
 
@@ -19807,23 +21757,31 @@ bool CNeuronBatchNormOCL::SetOpenCLChecked(COpenCLMy*obj)
 //--- validate target and derived ownership before mutation.
    if(CheckPointer(obj)==POINTER_INVALID||
       !SupportsOpenCLChecked())
-      ReturnFalseEx("checked context target or batch options");
+     {
+      ReturnFalseEx("checked context target or batch options")
+     }
 
 //--- read the foreign options before their target context changes.
    if(BatchOptions.Total()>0&&BatchOptions.GetIndex()>=0&&
       BatchOptions.GetOpenCL()!=obj&&!BatchOptions.BufferRead())
-      ReturnFalseEx("batch options read");
+     {
+      ReturnFalseEx("batch options read")
+     }
 
 //--- create the options only when they are foreign or host-only.
    if(BatchOptions.Total()>0&&
       (BatchOptions.GetOpenCL()!=obj||
        BatchOptions.GetIndex()<0)&&
       !BatchOptions.BufferCreate(obj))
-      ReturnFalseEx("batch options create");
+     {
+      ReturnFalseEx("batch options create")
+     }
 
 //--- transfer inherited base owners after the options.
    if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
-      ReturnFalseEx("base context transfer");
+     {
+      ReturnFalseEx("base context transfer")
+     }
 
 //--- finalize the checked batch-normalization transfer.
    return(true);
@@ -19834,12 +21792,16 @@ bool CNeuronBatchNormOCL::SetOpenCLChecked(COpenCLMy*obj)
 bool CNet::GetLayerOutput(uint layer,CBufferFloat*&result)
   {
    if(!layers||layers.Total()<=(int)layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CLayer *Layer=layers.At(layer);
 
    if(!Layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!result)
@@ -19847,14 +21809,18 @@ bool CNet::GetLayerOutput(uint layer,CBufferFloat*&result)
       result=new CBufferFloat();
 
       if(!result)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
    CNeuronBaseOCL *temp=Layer.At(0);
 
    if(!temp||temp.getOutputVal(result)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -19867,24 +21833,30 @@ bool CNet::GetLayerOutputDevice(uint layer,CBufferFloat*&result)
    result=NULL;
 
    if(!layers||layers.Total()<=(int)layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CLayer *Layer=layers.At(layer);
 
    if(!Layer||Layer.Total()<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *temp=Layer.At(0);
 
    if(!temp)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    result=temp.getOutput();
 
    if(!result||result.GetIndex()==INVALID_HANDLE||result.GetOpenCL()!=opencl)
      {
       result=NULL;
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- the returned pointer stays owned by the layer/net.
@@ -19954,13 +21926,19 @@ bool CNet::PreflightForward(void)const
 bool CNet::FeedForwardLayer(CNeuronBaseOCL*source_layer)
   {
    if(!PreflightForward())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!source_layer||!layers||layers.Total()<=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *previous=source_layer;
 
@@ -19970,7 +21948,9 @@ bool CNet::FeedForwardLayer(CNeuronBaseOCL*source_layer)
       CNeuronBaseOCL *current=(layer?layer[0]:NULL);
 
       if(!current||!current.FeedForward(previous))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       previous=current;
      }
@@ -19983,19 +21963,25 @@ bool CNet::FeedForwardLayer(CNeuronBaseOCL*source_layer)
 bool CNet::GetLayerOutput(uint layer,vector<float>&result)
   {
    if(!layers||layers.Total()<=(int)layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CLayer *Layer=layers.At(layer);
 
    if(!Layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
 //---
    CNeuronBaseOCL *temp=Layer.At(0);
 
    if(!temp||temp.getOutputVal(result)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -20116,7 +22102,9 @@ bool CNet::SetOpenCLChecked(COpenCLMy*obj)
   {
    if(CheckPointer(obj)==POINTER_INVALID||(pendingOpenCL&&pendingOpenCL!=obj)||
       !SupportsOpenCLChecked())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- keep a failed target pending until it is retried or destroyed.
    pendingOpenCL=obj;
@@ -20126,7 +22114,9 @@ bool CNet::SetOpenCLChecked(COpenCLMy*obj)
       CLayer *layer=layers.At(i);
 
       if(!layer||!layer.SetOpenCLChecked(obj))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //--- publish only after every child accepted the target context.
@@ -20162,7 +22152,9 @@ bool CNeuronSoftMaxOCL::SupportsOpenCLChecked(void)const
 bool CNeuronSoftMaxOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[2]={0,0};
    uint size=Output.Total()/iHeads;
@@ -20173,7 +22165,9 @@ bool CNeuronSoftMaxOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecuteLoc(def_k_SoftMax_FeedForward,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -20184,19 +22178,23 @@ bool CNeuronSoftMaxOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronSoftMaxOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[2]={0,0};
    uint size=Output.Total()/iHeads;
    uint global_work_size[2]={size,iHeads};
    uint local_work_size[2]={size,1};
-   setBuffer(def_k_SoftMax_HiddenGradient,def_k_softmaxhg_input_gr,NeuronOCL.getGradientIndex());
-   setBuffer(def_k_SoftMax_HiddenGradient,def_k_softmaxhg_output_gr,getGradientIndex());
-   setBuffer(def_k_SoftMax_HiddenGradient,def_k_softmaxhg_outputs,getOutputIndex());
+   setBuffer(def_k_SoftMax_HiddenGradient,def_k_softmaxhg_input_gr,NeuronOCL.getGradientIndex())
+   setBuffer(def_k_SoftMax_HiddenGradient,def_k_softmaxhg_output_gr,getGradientIndex())
+   setBuffer(def_k_SoftMax_HiddenGradient,def_k_softmaxhg_outputs,getOutputIndex())
    kernelExecuteLoc(def_k_SoftMax_HiddenGradient,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!NeuronOCL.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -20207,14 +22205,20 @@ bool CNeuronSoftMaxOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronSoftMaxOCL::calcOutputGradients(CBufferFloat*Target,float&error)
   {
    if(!OpenCL||!Target)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(Output.Total()!=Target.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    error=0;
 
@@ -20227,19 +22231,23 @@ bool CNeuronSoftMaxOCL::calcOutputGradients(CBufferFloat*Target,float&error)
    error/=(float)iHeads;
 
    if(!Gradient.BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
    uint global_work_size[1];
    global_work_size[0]=Output.Total();
-   setBuffer(def_k_SoftMax_OutputGradient,def_k_softmaxog_targets,getGradientIndex());
-   setBuffer(def_k_SoftMax_OutputGradient,def_k_softmaxog_output_gr,getGradientIndex());
-   setBuffer(def_k_SoftMax_OutputGradient,def_k_softmaxog_outputs,getOutputIndex());
+   setBuffer(def_k_SoftMax_OutputGradient,def_k_softmaxog_targets,getGradientIndex())
+   setBuffer(def_k_SoftMax_OutputGradient,def_k_softmaxog_output_gr,getGradientIndex())
+   setBuffer(def_k_SoftMax_OutputGradient,def_k_softmaxog_outputs,getOutputIndex())
    kernelExecute(def_k_SoftMax_OutputGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -20265,10 +22273,14 @@ CLayerDescription*CNeuronSoftMaxOCL::GetLayerInfo(void)
 bool CNeuronSoftMaxOCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iHeads)<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -20279,7 +22291,9 @@ bool CNeuronSoftMaxOCL::Save(const int file_handle)
 bool CNeuronSoftMaxOCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iHeads=(uint)FileReadInteger(file_handle);
 
@@ -20297,7 +22311,7 @@ void CNet::getResults(vector<float>&resultVals)
    CBufferFloat *temp;
    getResults(temp);
    temp.GetData(resultVals);
-   DeleteObj(temp);
+   DeleteObj(temp)
    return;
   }
 //+------------------------------------------------------------------+
@@ -20311,16 +22325,16 @@ void CNet::getResults(float&resultVals[])
    if(temp.Total()==0)
      {
       ArrayResize(resultVals,0);
-      DeleteObj(temp);
+      DeleteObj(temp)
       return;
      }
 
    if(!temp.GetData(resultVals))
      {
-      DeleteObj(temp);
+      DeleteObj(temp)
       return;
      }
-   DeleteObj(temp);
+   DeleteObj(temp)
    return;
   }
 //+------------------------------------------------------------------+
@@ -20329,13 +22343,19 @@ void CNet::getResults(float&resultVals[])
 bool CNet::WeightsUpdate(CNet*net,float tau)
   {
    if(!IsOpenCLTransferReady()||!net||!net.IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!layers||!net||!net.layers||layers.Total()!=net.layers.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tau<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(tau>1)
       return(true);
@@ -20346,7 +22366,9 @@ bool CNet::WeightsUpdate(CNet*net,float tau)
       CLayer *layer=layers.At(l);
 
       if(!layer||!layer.WeightsUpdate(net.layers.At(l),tau))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -20359,7 +22381,9 @@ bool CLayer::WeightsUpdate(CLayer*source,float tau)
   {
    if(!source||Type()!=source.Type()||
       m_data_total!=source.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(int i=0;i<m_data_total;i++)
@@ -20371,7 +22395,9 @@ bool CLayer::WeightsUpdate(CLayer*source,float tau)
 
       //---
       if(!temp||!temp.WeightsUpdate(source.At(i),tau))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -20388,7 +22414,9 @@ bool CLayer::ClearStates(void)
 
       if(!temp||
          !temp.Clear())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -20404,16 +22432,22 @@ bool CNeuronBaseOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
 
 //---
    if(!OpenCL||!source)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(Type()!=source.Type())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!Weights||Weights.Total()==0)
       return(true);
 
    if(!source.Weights||Weights.Total()!=source.Weights.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -20425,7 +22459,9 @@ bool CNeuronBaseOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
    kernelExecute(def_k_SoftUpdate,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Weights.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -20440,16 +22476,22 @@ bool CNeuronBaseOCL::WeightsUpdateAdam(CNeuronBaseOCL*source,float tau)
 
 //---
    if(!OpenCL||!source)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(Type()!=source.Type())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!Weights||Weights.Total()==0)
       return(true);
 
    if(!source.Weights||Weights.Total()!=source.Weights.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -20465,7 +22507,9 @@ bool CNeuronBaseOCL::WeightsUpdateAdam(CNeuronBaseOCL*source,float tau)
    kernelExecute(def_k_SoftUpdateAdam,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Weights.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -20476,12 +22520,16 @@ bool CNeuronBaseOCL::WeightsUpdateAdam(CNeuronBaseOCL*source,float tau)
 bool CNeuronBaseOCL::SwapBuffers(CBufferFloat*&buffer1,CBufferFloat*&buffer2,bool check_size=true)
   {
    if(!buffer1||!buffer2)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(check_size)
      {
       if(buffer1.Total()!=buffer2.Total())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -20498,13 +22546,17 @@ bool CNeuronBaseOCL::SwapBuffers(CBufferFloat*&buffer1,CBufferFloat*&buffer2,boo
 bool CNeuronConvOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronConvOCL *temp=source;
 
    if(WeightsConv.Total()!=temp.WeightsConv.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -20531,7 +22583,9 @@ bool CNeuronConvOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
      }
 #ifdef  _DEBUG
    if(!WeightsConv.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -20542,13 +22596,17 @@ bool CNeuronConvOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
 bool CNeuronBatchNormOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBatchNormOCL *temp=source;
 
    if(BatchOptions.Total()!=temp.BatchOptions.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -20560,7 +22618,9 @@ bool CNeuronBatchNormOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
    kernelExecute(def_k_SoftUpdate,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!BatchOptions.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -20571,21 +22631,29 @@ bool CNeuronBatchNormOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
 bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int secondLayer=-1)
   {
    if(!PreflightForward())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!IsOpenCLTransferReady()||!inputNet||!inputNet.IsOpenCLTransferReady()||
       (secondNet&&!secondNet.IsOpenCLTransferReady()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!inputNet||!opencl)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(inputLayer<0)
      {
       inputLayer=inputNet.layers.Total()+inputLayer;
 
       if(inputLayer<0)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -20606,8 +22674,8 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int s
            {
             if(!second.BufferCreate(opencl))
               {
-               DeleteObj(second);
-               ReturnFalse;
+               DeleteObj(second)
+               ReturnFalse
               }
             del_second=true;
            }
@@ -20618,7 +22686,7 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int s
            {
             PrintFormat("CNet::feedForward second stream: requested_layer=%d available_layers=%d",
                         secondLayer,secondNet.layers.Total());
-            ReturnFalse;
+            ReturnFalse
            }
          CLayer         *layer=secondNet.layers.At(secondLayer);
          CNeuronBaseOCL *neuron=layer.At(0);
@@ -20635,15 +22703,19 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int s
       if(!inputNet.GetLayerOutput(inputLayer,inputs))
         {
          if(del_second)
-            DeleteObj(second);
-         DeleteObj(inputs);
-         ReturnFalse;
+           {
+            DeleteObj(second)
+           }
+         DeleteObj(inputs)
+         ReturnFalse
         }
       bool result=feedForward(inputs,1,false,second);
 
       if(del_second)
-         DeleteObj(second);
-      DeleteObj(inputs);
+        {
+         DeleteObj(second)
+        }
+      DeleteObj(inputs)
 
       return(result);
      }
@@ -20654,8 +22726,10 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int s
    if(!layer)
      {
       if(del_second)
-         DeleteObj(second);
-      ReturnFalse;
+        {
+         DeleteObj(second)
+        }
+      ReturnFalse
      }
    CNeuronBaseOCL *neuron=layer.At(0);
    layer=layers.At(0);
@@ -20663,8 +22737,10 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int s
    if(!layer)
      {
       if(del_second)
-         DeleteObj(second);
-      ReturnFalse;
+        {
+         DeleteObj(second)
+        }
+      ReturnFalse
      }
 
    if(layer.At(0)!=neuron)
@@ -20676,8 +22752,10 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int s
          if(!layer.Update(0,neuron))
            {
             if(del_second)
-               DeleteObj(second);
-            ReturnFalse;
+              {
+               DeleteObj(second)
+              }
+            ReturnFalse
            }
          else
             layer.FreeMode(false);
@@ -20702,14 +22780,18 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int s
       if(secondNeuron?!neuron.FeedForwardSecond(layer.At(0),secondNeuron):!neuron.FeedForward(layer.At(0),second))
         {
          if(del_second)
-            DeleteObj(second);
-         ReturnFalse;
+           {
+            DeleteObj(second)
+           }
+         ReturnFalse
         }
      }
 
 //---
    if(del_second)
-      DeleteObj(second);
+     {
+      DeleteObj(second)
+     }
 
    return(true);
   }
@@ -20719,20 +22801,28 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CNet*secondNet=NULL,int s
 bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CBufferFloat*SecondInput=NULL)
   {
    if(!PreflightForward())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!IsOpenCLTransferReady()||!inputNet||!inputNet.IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!inputNet||!opencl)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(inputLayer<0)
      {
       inputLayer=inputNet.layers.Total()+inputLayer;
 
       if(inputLayer<0)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -20740,7 +22830,9 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CBufferFloat*SecondInput=
      {
       if(SecondInput.GetIndex()<0)
          if(!SecondInput.BufferCreate(opencl))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
      }
 
 //---
@@ -20749,7 +22841,9 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CBufferFloat*SecondInput=
       CBufferFloat *inputs;
 
       if(!inputNet.GetLayerOutput(inputLayer,inputs))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       bool result=feedForward(inputs,1,false,SecondInput);
 
@@ -20760,13 +22854,17 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CBufferFloat*SecondInput=
    CLayer *layer=inputNet.layers.At(inputLayer);
 
    if(!layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *neuron=layer.At(0);
    layer=layers.At(0);
 
    if(!layer)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(layer.At(0)!=neuron)
      {
@@ -20788,7 +22886,9 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CBufferFloat*SecondInput=
       layer=layers.At(l-1);
 
       if(!neuron.FeedForward(layer.At(0),SecondInput))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       //---neuron.getOutput().BufferRead();
      }
@@ -20802,7 +22902,9 @@ bool CNet::feedForward(CNet*inputNet,int inputLayer=-1,CBufferFloat*SecondInput=
 bool CNet::backProp(CArrayFloat*targetVals,CNet*secondNet=NULL,int secondLayer=-1)
   {
    if(!IsOpenCLTransferReady()||(secondNet&&!secondNet.IsOpenCLTransferReady()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!secondNet||!secondNet.layers)
       return(backPropOCL(targetVals));
@@ -20817,7 +22919,9 @@ bool CNet::backProp(CArrayFloat*targetVals,CNet*secondNet=NULL,int secondLayer=-
       CBufferFloat *second;
 
       if(!secondNet.GetLayerOutput(secondLayer,second))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!second)
          return(backPropOCL(targetVals));
@@ -20830,11 +22934,11 @@ bool CNet::backProp(CArrayFloat*targetVals,CNet*secondNet=NULL,int secondLayer=-
 
       if(!second.BufferCreate(opencl)||!gradient.BufferCreate(opencl))
         {
-         DeleteObj(second);
-         ReturnFalse;
+         DeleteObj(second)
+         ReturnFalse
         }
       bool result=backPropOCL(targetVals,second,GetPointer(gradient),false,(ENUM_ACTIVATION)neuron.Activation());
-      DeleteObj(second);
+      DeleteObj(second)
 
       if(result)
         {
@@ -20859,16 +22963,20 @@ bool CNet::backProp(CArrayFloat*targetVals,CNet*secondNet=NULL,int secondLayer=-
       vector<float>target,output;
 
       if(neuron.getOutputVal(output)<neuron.Neurons())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(output.HasNan()>0)
         {
          printf("%s - %d -> Output has NaN",__FUNCTION__,__LINE__);
-         ReturnFalse;
+         ReturnFalse
         }
 
       if(!target.Resize(targetVals.Total()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(int n=0;n<targetVals.Total();n++)
          target[n]=targetVals.At(n);
@@ -20876,13 +22984,17 @@ bool CNet::backProp(CArrayFloat*targetVals,CNet*secondNet=NULL,int secondLayer=-
       if(target.Size()>output.Size())
         {
          if(!target.Resize(output.Size()))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
         }
       error=output.Loss(target,LOSS_MSE);
      }
 
    if(!neuron.calcOutputGradients(targetVals,error))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(neuron.TrainMode())
@@ -20906,23 +23018,31 @@ bool CNet::backPropGradient(CBufferFloat*SecondInput=NULL,
                            )
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(layers)==POINTER_INVALID||CheckPointer(opencl)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(LastLayer<0)
      {
       LastLayer=layers.Total()+LastLayer;
 
       if(LastLayer<0)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    CLayer         *currentLayer=layers.At(LastLayer);
    CNeuronBaseOCL *neuron=NULL;
 
    if(CheckPointer(currentLayer)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- calc Hidden Gradients
    for(int layerNum=LastLayer-1;layerNum>=0&&!IsStopped();layerNum--)
@@ -20931,17 +23051,21 @@ bool CNet::backPropGradient(CBufferFloat*SecondInput=NULL,
       currentLayer=layers.At(layerNum);
 
       if(CheckPointer(currentLayer)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       neuron=currentLayer.At(0);
 
       if(!neuron||!nextLayer.At(0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!neuron.CalcHiddenGradients(nextLayer.At(0),SecondInput,SecondGradient))
         {
          PrintFormat("CNet backprop CalcHiddenGradients failed layer=%d neuron=%d",layerNum,neuron.Type());
-         ReturnFalse;
+         ReturnFalse
         }
      }
 
@@ -20955,13 +23079,15 @@ bool CNet::backPropGradient(CBufferFloat*SecondInput=NULL,
       neuron=currentLayer.At(0);
 
       if(!neuron||!prevLayer.At(0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(bWeightsUpdate?!neuron.UpdateInputWeights(prevLayer.At(0),SecondInput):
          !neuron.UpdateInputState(prevLayer.At(0),SecondInput))
         {
          PrintFormat("CNet backprop UpdateInputWeights failed layer=%d neuron=%d",layerNum,neuron.Type());
-         ReturnFalse;
+         ReturnFalse
         }
      }
 
@@ -21051,18 +23177,24 @@ bool CNet::backPropGradient(CBufferFloat*SecondInput=NULL,
 bool CNet::backPropGradient(CNet*secondNet,int secondLayer=-1,int LastLayer=-1,bool load_weights=true)
   {
    if(!IsOpenCLTransferReady()||!secondNet||!secondNet.IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(layers)==POINTER_INVALID||CheckPointer(opencl)==POINTER_INVALID||
       !secondNet)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(LastLayer<0)
      {
       LastLayer=layers.Total()+LastLayer;
 
       if(LastLayer<0)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(secondLayer<0)
@@ -21071,12 +23203,16 @@ bool CNet::backPropGradient(CNet*secondNet,int secondLayer=-1,int LastLayer=-1,b
    CNeuronBaseOCL *neuron=NULL;
 
    if(!currentLayer||!secondNet.layers.At(secondLayer))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *secondNeuron=((CArrayObj*)secondNet.layers.At(secondLayer)).At(0);
 
    if(!secondNeuron)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- calc Hidden Gradients
    for(int layerNum=LastLayer-1;layerNum>=0&&!IsStopped();layerNum--)
@@ -21085,12 +23221,16 @@ bool CNet::backPropGradient(CNet*secondNet,int secondLayer=-1,int LastLayer=-1,b
       currentLayer=layers.At(layerNum);
 
       if(CheckPointer(currentLayer)==POINTER_INVALID)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       neuron=currentLayer.At(0);
 
       if(!neuron||!neuron.CalcHiddenGradientsSecond(nextLayer.At(0),secondNeuron))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -21104,7 +23244,9 @@ bool CNet::backPropGradient(CNet*secondNet,int secondLayer=-1,int LastLayer=-1,b
 
       if(bWeightsUpdate?!neuron.UpdateInputWeightsSecond(prevLayer.At(0),secondNeuron):
          !neuron.UpdateInputStateSecond(prevLayer.At(0),secondNeuron))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -21193,20 +23335,28 @@ bool CNet::backPropGradient(CNet*secondNet,int secondLayer=-1,int LastLayer=-1,b
 bool CNet::AlphasGradient(CNet*PolicyNet)
   {
    if(!IsOpenCLTransferReady()||!PolicyNet||!PolicyNet.IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!PolicyNet||!PolicyNet.layers)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int total=PolicyNet.layers.Total();
 
    if(total<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CLayer *layer=PolicyNet.layers.At(total-1);
 
    if(!layer||!layer.At(0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(layer.At(0).Type()!=defNeuronSoftActorCritic)
       return(true);
@@ -21215,12 +23365,16 @@ bool CNet::AlphasGradient(CNet*PolicyNet)
    CNeuronSoftActorCritic *neuron=layer.At(0);
 
    if(!layers)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    total=layers.Total();
 
    if(total<=0||!layers.At(total-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    layer=layers.At(total-1);
 
@@ -21234,17 +23388,23 @@ bool CNet::GetLogProbs(vectorf&log_probs)
   {
 //---
    if(!layers)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int total=layers.Total();
 
    if(total<=0||!layers.At(total-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CLayer *layer=layers.At(total-1);
 
    if(!layer.At(0)||layer.At(0).Type()!=defNeuronSoftActorCritic)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronSoftActorCritic *neuron=layer.At(0);
@@ -21258,20 +23418,28 @@ bool CNet::GetLogProbs(vectorf&log_probs)
 bool CNet::CalcLogProbs(CBufferFloat*buffer)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!layers)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int total=layers.Total();
 
    if(total<=0||!layers.At(total-1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CLayer *layer=layers.At(total-1);
 
    if(!layer.At(0)||layer.At(0).Type()!=defNeuronSoftActorCritic)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronSoftActorCritic *neuron=layer.At(0);
@@ -21285,22 +23453,32 @@ bool CNet::CalcLogProbs(CBufferFloat*buffer)
 bool CNet::SetResult(float&result[])
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!layers||layers.Total()<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronBaseOCL *output=((CLayer*)layers.At(layers.Total()-1)).At(0);
 
    if(!output)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!output.getOutput().AssignArray(result)||!output.getOutput().BufferWrite())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(output.Type()==defNeuronSoftActorCritic&&!output.ReCalcLogProbs())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -21377,14 +23555,20 @@ bool CNeuronEmbeddingOCL::Init(uint numOutputs,
                               )
   {
    if(CheckPointer(open_cl)==POINTER_INVALID||window_out<=0||windows.Size()<=0||stack_size<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(OpenCL!=open_cl)
-      DeleteObj(OpenCL);
+     {
+      DeleteObj(OpenCL)
+     }
    uint numNeurons=window_out*windows.Size()*stack_size;
 
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,numNeurons,ADAM,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint weights=0;
@@ -21396,41 +23580,59 @@ bool CNeuronEmbeddingOCL::Init(uint numOutputs,
       weights+=(windows[i]+1)*window_out;
 
    if(!WeightsEmbedding.Reserve(weights))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float k=1.0f/sqrt((float)weights/(float)window_out);
 
    for(uint i=0;i<weights;i++)
       if(!WeightsEmbedding.Add(k*(2*GenerateWeight()-1.0f)*WeightsMultiplier))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!WeightsEmbedding.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!FirstMomentumEmbed.BufferInit(weights,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!FirstMomentumEmbed.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!SecondMomentumEmbed.BufferInit(weights,0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SecondMomentumEmbed.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    i_WindowsBuffer=OpenCL.AddBuffer(sizeof(int)*a_Windows.Size(),CL_MEM_READ_WRITE);
 
    if(i_WindowsBuffer<0||!OpenCL.BufferWrite(i_WindowsBuffer,a_Windows,0,0,a_Windows.Size()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    i_STDBuffer=OpenCL.AddBuffer(sizeof(float)*a_Windows.Size(),CL_MEM_READ_WRITE);
 
    if(i_STDBuffer<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -21441,7 +23643,9 @@ bool CNeuronEmbeddingOCL::Init(uint numOutputs,
 bool CNeuronEmbeddingOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    bool res=true;
@@ -21449,7 +23653,9 @@ bool CNeuronEmbeddingOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    ArrayResize(check_w,a_Windows.Size());
 
    if(!OpenCL.BufferRead(i_WindowsBuffer,check_w,0,0,a_Windows.Size()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;(i<a_Windows.Size()&&res);i++)
       res=check_w[i]==a_Windows[i];
@@ -21457,7 +23663,9 @@ bool CNeuronEmbeddingOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    if(!res)
      {
       if(!OpenCL.BufferWrite(i_WindowsBuffer,a_Windows,0,0,a_Windows.Size()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -21475,7 +23683,9 @@ bool CNeuronEmbeddingOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecuteLoc(def_k_Embedding,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -21486,7 +23696,9 @@ bool CNeuronEmbeddingOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronEmbeddingOCL::Clear(void)
   {
    if(!Output.BufferInit(Output.Total(),0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!OpenCL)
       return(true);
@@ -21500,7 +23712,9 @@ bool CNeuronEmbeddingOCL::Clear(void)
 bool CNeuronEmbeddingOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    setBuffer(def_k_EmbeddingHiddenGradient,def_k_ehg_inputs_gradient,NeuronOCL.getGradientIndex())
@@ -21516,7 +23730,9 @@ bool CNeuronEmbeddingOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_EmbeddingHiddenGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!NeuronOCL.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -21527,7 +23743,9 @@ bool CNeuronEmbeddingOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronEmbeddingOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    setBuffer(def_k_EmbeddingUpdateWeightsAdam,def_k_euw_inputs,NeuronOCL.getOutputIndex())
@@ -21548,7 +23766,9 @@ bool CNeuronEmbeddingOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_EmbeddingUpdateWeightsAdam,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!WeightsEmbedding.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -21559,13 +23779,17 @@ bool CNeuronEmbeddingOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronEmbeddingOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronEmbeddingOCL *temp=source;
 
    if(WeightsEmbedding.Total()!=temp.WeightsEmbedding.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -21592,7 +23816,9 @@ bool CNeuronEmbeddingOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
      }
 #ifdef  _DEBUG
    if(!WeightsEmbedding.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -21603,31 +23829,47 @@ bool CNeuronEmbeddingOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
 bool CNeuronEmbeddingOCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!WeightsEmbedding.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!FirstMomentumEmbed.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SecondMomentumEmbed.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteInteger(file_handle,(int)a_Windows.Size())!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteArray(file_handle,a_Windows,0,(int)a_Windows.Size())!=a_Windows.Size())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteInteger(file_handle,i_WindowOut)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,i_StackSize)!=INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -21638,24 +23880,34 @@ bool CNeuronEmbeddingOCL::Save(const int file_handle)
 bool CNeuronEmbeddingOCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!WeightsEmbedding.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!FirstMomentumEmbed.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SecondMomentumEmbed.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int size=FileReadInteger(file_handle);
    ArrayResize(a_Windows,size);
 
    if(FileReadArray(file_handle,a_Windows,0,size)!=size)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    i_WindowOut=FileReadInteger(file_handle);
@@ -21672,7 +23924,9 @@ bool CNeuronEmbeddingOCL::Load(const int file_handle)
 
    if(i_WindowsBuffer>=0)
       if(!OpenCL.BufferWrite(i_WindowsBuffer,a_Windows,0,0,size))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(i_STDBuffer!=INVALID_HANDLE)
       OpenCL.BufferFree(i_STDBuffer);
@@ -21687,7 +23941,9 @@ bool CNeuronEmbeddingOCL::Load(const int file_handle)
 bool CNet::Clear(void)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!opencl)
       return(true);
@@ -21700,7 +23956,9 @@ bool CNet::Clear(void)
       CLayer *layer=layers.At(i);
 
       if(!layer)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       for(int n=0;n<layer.Total();n++)
         {
@@ -21709,7 +23967,7 @@ bool CNet::Clear(void)
          if(!neuron)
            {
             PrintFormat("%s: layer=%d neuron=%d is NULL",__FUNCTION__,i,n);
-            ReturnFalse;
+            ReturnFalse
            }
 
          if(!neuron.Clear())
@@ -21720,7 +23978,7 @@ bool CNet::Clear(void)
                         __FUNCTION__,i,n,neuron.Type(),(output?output.Total():-1),
                         (output?output.GetIndex():-1),(gradient?gradient.Total():-1),
                         (gradient?gradient.GetIndex():-1));
-            ReturnFalse;
+            ReturnFalse
            }
         }
      }
@@ -21739,13 +23997,19 @@ bool CNet::feedForward(CArrayFloat*inputVals,
                       )
   {
    if(!PreflightForward())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!IsOpenCLTransferReady()||(secondNet&&!secondNet.IsOpenCLTransferReady()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(CheckPointer(layers)==POINTER_INVALID||CheckPointer(inputVals)==POINTER_INVALID||layers.Total()<=1)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CBufferFloat   *SecondInput=NULL;
@@ -21765,8 +24029,8 @@ bool CNet::feedForward(CArrayFloat*inputVals,
            {
             if(!SecondInput.BufferCreate(opencl))
               {
-               DeleteObj(SecondInput);
-               ReturnFalse;
+               DeleteObj(SecondInput)
+               ReturnFalse
               }
             del_second=true;
            }
@@ -21774,7 +24038,9 @@ bool CNet::feedForward(CArrayFloat*inputVals,
       else
         {
          if(secondNet.layers.Total()<=secondLayer)
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          CLayer         *layer=secondNet.layers.At(secondLayer);
          CNeuronBaseOCL *neuron=layer.At(0);
@@ -21848,8 +24114,10 @@ bool CNet::feedForward(CArrayFloat*inputVals,
       if(!result||!inputs.Fill(inputVals))
         {
          if(del_second)
-            DeleteObj(SecondInput);
-         ReturnFalse;
+           {
+            DeleteObj(SecondInput)
+           }
+         ReturnFalse
         }
      }
 
@@ -21951,7 +24219,7 @@ bool CNet::feedForward(CArrayFloat*inputVals,
                CLayer *temp_l=temp;
                temp_l.FreeMode(false);
                temp_l.Shutdown();
-               DeleteObj(temp_l);
+               DeleteObj(temp_l)
               }
             continue;
            }
@@ -21973,7 +24241,9 @@ bool CNet::feedForward(CArrayFloat*inputVals,
 
 //---
    if(del_second)
-      DeleteObj(SecondInput);
+     {
+      DeleteObj(SecondInput)
+     }
 
 //---
    return(result);
@@ -21987,7 +24257,9 @@ bool CNeuronPositionEncoder::Init(uint numOutputs,uint myIndex,
                                  )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,count*window,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    matrix<float>pe=matrix<float>::Zeros(count,window);
@@ -22004,7 +24276,9 @@ bool CNeuronPositionEncoder::Init(uint numOutputs,uint myIndex,
      }
 
    if(!PositionEncoder.AssignArray(pe))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(PositionEncoder.BufferCreate(open_cl));
@@ -22015,12 +24289,16 @@ bool CNeuronPositionEncoder::Init(uint numOutputs,uint myIndex,
 bool CNeuronPositionEncoder::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!Gradient||Gradient!=NeuronOCL.getGradient())
      {
       if(!!Gradient)
-         DeleteObj(Gradient);
+        {
+         DeleteObj(Gradient)
+        }
       Gradient=NeuronOCL.getGradient();
      }
 
@@ -22039,7 +24317,9 @@ bool CNeuronPositionEncoder::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_MatrixSum,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -22050,7 +24330,9 @@ bool CNeuronPositionEncoder::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPositionEncoder::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(PositionEncoder.Save(file_handle));
@@ -22061,16 +24343,22 @@ bool CNeuronPositionEncoder::Save(const int file_handle)
 bool CNeuronPositionEncoder::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    PositionEncoder.BufferFree();
 
    if(!PositionEncoder.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!PositionEncoder.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -22105,7 +24393,9 @@ bool CNeuronTransposeOCL::Init(uint numOutputs,uint myIndex,
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,count*window,
                             optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iWindow=window;
@@ -22120,7 +24410,9 @@ bool CNeuronTransposeOCL::Init(uint numOutputs,uint myIndex,
 bool CNeuronTransposeOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetActivationFunction((ENUM_ACTIVATION)NeuronOCL.Activation());
 
@@ -22132,7 +24424,9 @@ bool CNeuronTransposeOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_Transpose,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -22143,7 +24437,9 @@ bool CNeuronTransposeOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronTransposeOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[2]={0,0};
@@ -22153,7 +24449,9 @@ bool CNeuronTransposeOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_Transpose,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -22164,14 +24462,14 @@ bool CNeuronTransposeOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronTransposeOCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
-   if(FileWriteInteger(file_handle,(int)iCount)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iCount)
 
-   if(FileWriteInteger(file_handle,(int)iWindow)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iWindow)
 
 //---
    return(true);
@@ -22182,7 +24480,9 @@ bool CNeuronTransposeOCL::Save(const int file_handle)
 bool CNeuronTransposeOCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iCount=(uint)FileReadInteger(file_handle);
@@ -22217,7 +24517,9 @@ bool CNeuronBaseOCL::ElementMultGrad(const CBufferFloat*input1,
    kernelExecute(def_k_CGConv_HiddenGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!input2_gr.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -22228,17 +24530,23 @@ bool CNeuronBaseOCL::ElementMultGrad(const CBufferFloat*input1,
 bool CNeuronBaseOCL::LoadInsideLayer(int file_handle,CNeuronBaseOCL*neuron)
   {
    if(!neuron)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    int type=FileReadInteger(file_handle);
 
    if(type!=neuron.Type())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    neuron.AttachOpenCL(OpenCL);
 
    if(!neuron.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    neuron.SetOpenCL(OpenCL);
 
@@ -22253,37 +24561,53 @@ bool CResidualConv::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                          ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,window_out*count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cConvs[0].Init(0,0,OpenCL,window,window,window_out,count,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNorm[0].Init(0,1,OpenCL,window_out*count,iBatch,optimization))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cNorm[0].SetActivationFunction(GELU);
 
    if(!cConvs[1].Init(0,2,OpenCL,window_out,window_out,window_out,count,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNorm[1].Init(0,3,OpenCL,window_out*count,iBatch,optimization))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cNorm[1].SetActivationFunction(None);
 
 //---
    if(!cConvs[2].Init(0,4,OpenCL,window,window,window_out,count,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNorm[2].Init(0,5,OpenCL,window_out*count,iBatch,optimization))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cNorm[2].SetActivationFunction(None);
 
 //---
    if(!cTemp.Init(0,6,OpenCL,window*count,optimization,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    cNorm[1].SetGradient(getGradient());
@@ -22305,16 +24629,24 @@ bool CResidualConv::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
 //---
    if(!cConvs[0].FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNorm[0].FeedForward(GetPointer(cConvs[0])))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConvs[1].FeedForward(GetPointer(cNorm[0])))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNorm[1].FeedForward(GetPointer(cConvs[1])))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(cTemp.getOutput()!=NeuronOCL.getOutput())
@@ -22322,14 +24654,20 @@ bool CResidualConv::feedForward(CNeuronBaseOCL*NeuronOCL)
 
 //---
    if(!cConvs[2].FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNorm[2].FeedForward(GetPointer(cConvs[2])))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!SumAndNormalize(cNorm[1].getOutput(),cNorm[2].getOutput(),Output,iWindowOut,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -22340,24 +24678,36 @@ bool CResidualConv::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CResidualConv::calcInputGradients(CNeuronBaseOCL*prevLayer)
   {
    if(!cConvs[2].CalcHiddenGradients(cNorm[2].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTemp.CalcHiddenGradients(cConvs[2].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cConvs[1].CalcHiddenGradients(cNorm[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNorm[0].CalcHiddenGradients(cConvs[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!prevLayer.CalcHiddenGradients(cNorm[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!SumAndNormalize(prevLayer.getGradient(),cTemp.getGradient(),prevLayer.getGradient(),iWindowOut,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -22370,17 +24720,25 @@ bool CResidualConv::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
    for(int i=2;i>=0;i--)
      {
       if(!cNorm[i].UpdateInputWeights(cConvs[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!cConvs[0].UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConvs[1].UpdateInputWeights(cNorm[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cConvs[2].UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -22391,17 +24749,23 @@ bool CResidualConv::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CResidualConv::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CResidualConv *temp=source;
 
    for(uint i=0;i<cNorm.Size();i--)
       if(!cNorm[i].WeightsUpdate(temp.cNorm[i].AsObject(),tau))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    for(uint i=0;i<cConvs.Size();i--)
       if(!cConvs[i].WeightsUpdate(temp.cConvs[i].AsObject(),tau))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -22447,22 +24811,32 @@ void CResidualConv::TrainMode(bool flag)
 bool CResidualConv::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<3;i++)
      {
       if(!cConvs[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cNorm[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!cTemp.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iWindowOut)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -22473,19 +24847,27 @@ bool CResidualConv::Save(const int file_handle)
 bool CResidualConv::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<3;i++)
      {
       if(!LoadInsideLayer(file_handle,GetPointer(cConvs[i])))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!LoadInsideLayer(file_handle,GetPointer(cNorm[i])))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!LoadInsideLayer(file_handle,GetPointer(cTemp)))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iWindowOut=FileReadInteger(file_handle);
 
@@ -22509,7 +24891,9 @@ bool CNeuronBaseOCL::CopyBufferRaw(CBufferFloat*source,CBufferFloat*destination,
       source.Total()!=(int)total||destination.Total()!=(int)total||
       source.GetIndex()<0||destination.GetIndex()<0||
       source.GetOpenCL()!=OpenCL||destination.GetOpenCL()!=OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(source==destination)
       return(true);
@@ -22604,7 +24988,9 @@ bool CNeuronBaseOCL::Concat(int input1,
    vector<float>temp=vector<float>::Zeros(s);
 
    if(!OpenCL.BufferToVector(output,temp))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -22666,7 +25052,9 @@ bool CNeuronBaseOCL::DeConcat(CBufferFloat*input1,
    kernelExecute(def_k_DeconcatenateMatrix,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -23140,7 +25528,9 @@ bool CNeuronRevINDenormOCL::Init(uint numOutputs,
    if(NormLayer>=0)
      {
       if(!normLayer)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       switch(normLayer.Type())
         {
@@ -23148,24 +25538,30 @@ bool CNeuronRevINDenormOCL::Init(uint numOutputs,
          case defNeuronBatchNormWithNoise:
             break;
          default:
-            ReturnFalse;
+            ReturnFalse
         }
 
       if(BatchOptions!=normLayer.BatchOptions)
-         DeleteObj(BatchOptions);
+        {
+         DeleteObj(BatchOptions)
+        }
 
       if(!CNeuronBatchNormOCL::Init(numOutputs,myIndex,open_cl,numNeurons,normLayer.iBatchSize,normLayer.Optimization()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(BatchOptions!=normLayer.BatchOptions)
         {
-         DeleteObj(BatchOptions);
+         DeleteObj(BatchOptions)
          BatchOptions=normLayer.BatchOptions;
         }
      }
    else
       if(!CNeuronBatchNormOCL::Init(numOutputs,myIndex,open_cl,numNeurons,0,ADAM))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    iBatchNormLayer=NormLayer;
 
@@ -23181,7 +25577,9 @@ bool CNeuronRevINDenormOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
       return(false);
 
    if(!OpenCL||!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    PrevLayer=NeuronOCL;
@@ -23209,7 +25607,9 @@ bool CNeuronRevINDenormOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_RevInFeedForward,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -23223,7 +25623,9 @@ bool CNeuronRevINDenormOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
       return(false);
 
    if(!OpenCL||!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(iBatchSize<=1)
@@ -23243,7 +25645,9 @@ bool CNeuronRevINDenormOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_RevInHiddenGraddient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -23257,7 +25661,9 @@ bool CNeuronRevINDenormOCL::Save(const int file_handle)
       return(false);
 
    if(!CNeuronBatchNormOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileWriteUInt(file_handle,iBatchNormLayer)
 
@@ -23273,7 +25679,9 @@ bool CNeuronRevINDenormOCL::Load(const int file_handle)
       return(false);
 
    if(!CNeuronBatchNormOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iBatchNormLayer=FileReadInteger(file_handle,INT_VALUE);
 
@@ -23286,23 +25694,27 @@ bool CNeuronRevINDenormOCL::Load(const int file_handle)
 bool CNet::OpenCLInit(void)
   {
    if(!IsOpenCLTransferReady())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!opencl)
      {
       opencl=new COpenCLMy(GetPointer(this));
 
       if(!opencl)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       bOwnOpenCL=true;
      }
 
    if(!opencl.Initialize(cl_program+"\n"+ag_contract+"\n"+ag_program+"\n"+ag_pool_program,true))
      {
-      DeleteObj(opencl);
+      DeleteObj(opencl)
       bOwnOpenCL=false;
-      ReturnFalse;
+      ReturnFalse
      }
 
 //--- create kernels
@@ -23359,7 +25771,9 @@ bool CNet::OpenCLInit(void)
     if(source>=0)opencl.BufferFree(source);
     if(destination>=0)opencl.BufferFree(destination);
     if(!complete||!read||probe_output[0]!=13579.0f)
-       ReturnFalse;
+      {
+       ReturnFalse
+      }
    }
 #endif
    CreateKernel(def_k_AGPoolTransaction,"AGPoolTransaction")
@@ -23790,10 +26204,14 @@ bool CNeuronLearnabledPE::Init(uint numOutputs,
                               )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,numNeurons,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cInputs.Init(numNeurons,0,OpenCL,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *inp=cInputs.getOutput();
    inp.BufferInit(1,1);
@@ -23802,7 +26220,9 @@ bool CNeuronLearnabledPE::Init(uint numOutputs,
 
 //---
    if(!cPositionEncoder.Init(0,1,OpenCL,numNeurons,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cPositionEncoder.SetActivationFunction(SIGMOID);
    SetActivationFunction(None);
@@ -23816,7 +26236,9 @@ bool CNeuronLearnabledPE::Init(uint numOutputs,
 bool CNeuronBaseOCL::Activation(CBufferFloat*inputs,CBufferFloat*outputs,int activat)
   {
    if(!OpenCL||!inputs||!outputs)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -23830,7 +26252,9 @@ bool CNeuronBaseOCL::Activation(CBufferFloat*inputs,CBufferFloat*outputs,int act
    kernelExecute(def_k_Activation,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!outputs.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -23841,7 +26265,9 @@ bool CNeuronBaseOCL::Activation(CBufferFloat*inputs,CBufferFloat*outputs,int act
 bool CNeuronBaseOCL::DeActivation(CBufferFloat*inputs,CBufferFloat*inputs_gr,CBufferFloat*output_gr,int activat)
   {
    if(!OpenCL||!inputs||!inputs_gr||!output_gr)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[1]={0};
@@ -23856,7 +26282,9 @@ bool CNeuronBaseOCL::DeActivation(CBufferFloat*inputs,CBufferFloat*inputs_gr,CBu
    kernelExecute(def_k_DeActivation,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!inputs_gr.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -23868,13 +26296,19 @@ bool CNeuronBaseOCL::NLLGrad(const CBufferFloat*log_b,CBufferFloat*grad_in,
                              const CBufferFloat *grad_out,CBufferFloat*grad_log_b)
   {
    if(!OpenCL||!log_b||!grad_in||!grad_out||!grad_log_b)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(log_b.GetIndex()<0||grad_in.GetIndex()<0||grad_out.GetIndex()<0||grad_log_b.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(log_b.Total()!=grad_in.Total()||log_b.Total()!=grad_out.Total()||log_b.Total()!=grad_log_b.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint      global_work_offset[1]={0};
@@ -23890,7 +26324,9 @@ bool CNeuronBaseOCL::NLLGrad(const CBufferFloat*log_b,CBufferFloat*grad_in,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!grad_in.BufferRead()||!grad_log_b.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -23906,19 +26342,29 @@ bool CNeuronBaseOCL::SparseSoftmaxHausdorff(const CBufferFloat*plan,
                                             const int          top_k)
   {
    if(!OpenCL||!plan||!decis||!output||!top_index)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(plan.GetIndex()<0||decis.GetIndex()<0||output.GetIndex()<0||top_index.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(dimension<=0||top_k<=0||top_k>dimension||dimension>64)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(dimension>(int)OpenCL.GetMaxLocalSize(0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(plan.Total()<=0||decis.Total()<=0||plan.Total()%dimension!=0||decis.Total()%dimension!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    const int count_plan=plan.Total()/dimension;
@@ -23926,7 +26372,9 @@ bool CNeuronBaseOCL::SparseSoftmaxHausdorff(const CBufferFloat*plan,
    const int pairs=count_plan*count_decis;
 
    if(output.Total()!=pairs||top_index.Total()!=pairs*top_k)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    const int kernel=def_k_SparseSoftmaxHausdorff;
@@ -23945,7 +26393,9 @@ bool CNeuronBaseOCL::SparseSoftmaxHausdorff(const CBufferFloat*plan,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!output.BufferRead()||!top_index.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -23963,20 +26413,30 @@ bool CNeuronBaseOCL::SparseSoftmaxHausdorffGrad(const CBufferFloat*plan,
                                                 const int          top_k)
   {
    if(!OpenCL||!plan||!grad_plan||!decis||!grad_decis||!grad_out||!top_index)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(plan.GetIndex()<0||grad_plan.GetIndex()<0||decis.GetIndex()<0||grad_decis.GetIndex()<0||
       grad_out.GetIndex()<0||top_index.GetIndex()<0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(dimension<=0||top_k<=0||top_k>dimension||dimension>64)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(plan.Total()<=0||decis.Total()<=0||plan.Total()%dimension!=0||decis.Total()%dimension!=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(grad_plan.Total()!=plan.Total()||grad_decis.Total()!=decis.Total())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    const int count_plan=plan.Total()/dimension;
@@ -23984,7 +26444,9 @@ bool CNeuronBaseOCL::SparseSoftmaxHausdorffGrad(const CBufferFloat*plan,
    const int pairs=count_plan*count_decis;
 
    if(grad_out.Total()!=pairs||top_index.Total()!=pairs*top_k)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    const int kernel=def_k_SparseSoftmaxHausdorffGrad;
@@ -24006,7 +26468,9 @@ bool CNeuronBaseOCL::SparseSoftmaxHausdorffGrad(const CBufferFloat*plan,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!grad_plan.BufferRead()||!grad_decis.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24017,10 +26481,14 @@ bool CNeuronBaseOCL::SparseSoftmaxHausdorffGrad(const CBufferFloat*plan,
 bool CNeuronLearnabledPE::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cPositionEncoder.FeedForward(cInputs.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(NeuronOCL.getOutput(),cPositionEncoder.getOutput(),Output,1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24031,13 +26499,19 @@ bool CNeuronLearnabledPE::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronLearnabledPE::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!DeActivation(cPositionEncoder.getOutput(),cPositionEncoder.getGradient(),Gradient,cPositionEncoder.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!DeActivation(NeuronOCL.getOutput(),NeuronOCL.getGradient(),Gradient,NeuronOCL.Activation()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24055,7 +26529,9 @@ bool CNeuronLearnabledPE::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronLearnabledPE::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!source||source.Type()!=Type())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronLearnabledPE *Source=source;
 
@@ -24086,19 +26562,27 @@ bool CNeuronLearnabledPE::SetOpenCLChecked(COpenCLMy*obj)
   {
 //--- validate target and complete nested ownership before mutation.
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalseEx("checked context target or positional tree");
+     {
+      ReturnFalseEx("checked context target or positional tree")
+     }
 
 //--- transfer input ownership before the positional encoder.
    if(!cInputs.SetOpenCLChecked(obj))
-      ReturnFalseEx("input context");
+     {
+      ReturnFalseEx("input context")
+     }
 
 //--- transfer positional encoding ownership after the input succeeds.
    if(!cPositionEncoder.SetOpenCLChecked(obj))
-      ReturnFalseEx("positional encoder context");
+     {
+      ReturnFalseEx("positional encoder context")
+     }
 
 //--- publish inherited owners after both nested transfers succeeded.
    if(!CNeuronBaseOCL::SetOpenCLChecked(obj))
-      ReturnFalseEx("inherited base context");
+     {
+      ReturnFalseEx("inherited base context")
+     }
 
 //--- finalize the checked LearnabledPE transfer.
    return(true);
@@ -24109,13 +26593,19 @@ bool CNeuronLearnabledPE::SetOpenCLChecked(COpenCLMy*obj)
 bool CNeuronLearnabledPE::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cInputs.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPositionEncoder.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24127,7 +26617,9 @@ bool CNeuronLearnabledPE::AppendParameterFingerprint(ulong&fingerprint)
   {
    if(!CNeuronBaseOCL::AppendParameterFingerprint(fingerprint)||
       !cPositionEncoder.AppendParameterFingerprint(fingerprint))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(true);
   }
@@ -24137,13 +26629,19 @@ bool CNeuronLearnabledPE::AppendParameterFingerprint(ulong&fingerprint)
 bool CNeuronLearnabledPE::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cInputs.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cPositionEncoder.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24158,7 +26656,9 @@ bool CNeuronPatching::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                           )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,window_out*count*variables,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iWindowIn=MathMax(window_in,1);
@@ -24171,27 +26671,37 @@ bool CNeuronPatching::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
    int total=int((window_in+1)*window_out*variables);
 
    if(!cPatchWeights.Reserve(total))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float k=float(1/sqrt(total));
 
    for(int i=0;i<total;i++)
      {
       if(!cPatchWeights.Add((2*GenerateWeight()*k-k)*WeightsMultiplier))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!cPatchWeights.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cPatchFirstMomentum.BufferInit(total,0)||
       !cPatchFirstMomentum.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPatchSecondMomentum.BufferInit(total,0)||
       !cPatchSecondMomentum.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24202,7 +26712,9 @@ bool CNeuronPatching::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronPatching::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[3]={0,0,0};
@@ -24220,7 +26732,9 @@ bool CNeuronPatching::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_PatchCreate,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24231,7 +26745,9 @@ bool CNeuronPatching::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPatching::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[2]={0,0};
@@ -24251,7 +26767,9 @@ bool CNeuronPatching::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_PatchHiddenGradient,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Gradient.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24262,7 +26780,9 @@ bool CNeuronPatching::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPatching::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL||!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[3]={0,0,0};
@@ -24283,7 +26803,9 @@ bool CNeuronPatching::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(def_k_PatchUpdateWeightsAdam,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!cPatchSecondMomentum.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24294,33 +26816,36 @@ bool CNeuronPatching::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPatching::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
-   if(FileWriteInteger(file_handle,(int)iWindowIn)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iWindowIn)
 
-   if(FileWriteInteger(file_handle,(int)iWindowOut)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iWindowOut)
 
-   if(FileWriteInteger(file_handle,(int)iStep)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iStep)
 
-   if(FileWriteInteger(file_handle,(int)iCount)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iCount)
 
-   if(FileWriteInteger(file_handle,(int)iVariables)<INT_VALUE)
-      ReturnFalse;
+   dFileWriteUInt(file_handle,iVariables)
 
 //---
    if(!cPatchWeights.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPatchFirstMomentum.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPatchSecondMomentum.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24331,7 +26856,9 @@ bool CNeuronPatching::Save(const int file_handle)
 bool CNeuronPatching::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iWindowIn=(uint)FileReadInteger(file_handle);
@@ -24342,13 +26869,19 @@ bool CNeuronPatching::Load(const int file_handle)
 
 //---
    if(!cPatchWeights.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPatchFirstMomentum.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cPatchSecondMomentum.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24378,7 +26911,9 @@ bool CNeuronLegendreWavelets::Init(uint numOutputs,
                                   )
   {
    if(!CNeuronConvOCL::Init(numOutputs,myIndex,open_cl,window,step,filters,units_count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    WeightsConv.BufferInit(WeightsConv.Total(),0);
@@ -24406,7 +26941,9 @@ bool CNeuronLegendreWavelets::Init(uint numOutputs,
            }
 
          if(!WeightsConv.Update(shift,value))
-            ReturnFalse;
+           {
+            ReturnFalse
+           }
 
          shift+=iWindow+1;
         }
@@ -24414,7 +26951,9 @@ bool CNeuronLegendreWavelets::Init(uint numOutputs,
 
    if(!!OpenCL)
       if(!WeightsConv.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -24426,7 +26965,9 @@ bool CNeuronBaseOCL::DiversityLoss(CNeuronBaseOCL*neuron,const int units,
                                    const int dimension,const bool add=false)
   {
    if(!OpenCL||!neuron)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[]={0,0};
@@ -24444,7 +26985,9 @@ bool CNeuronBaseOCL::DiversityLoss(CNeuronBaseOCL*neuron,const int units,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!neuron.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24459,7 +27002,9 @@ bool CNeuronBatchNormWithNoise::feedForward(CNeuronBaseOCL*NeuronOCL)
 
 //---
    if(!OpenCL||!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    PrevLayer=NeuronOCL;
@@ -24475,7 +27020,9 @@ bool CNeuronBatchNormWithNoise::feedForward(CNeuronBaseOCL*NeuronOCL)
    double random[];
 
    if(!MathRandomNormal(0,1,Neurons(),random))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(cNoise.Total()!=Neurons()||
       cNoise.GetOpenCL()!=OpenCL)
@@ -24483,18 +27030,26 @@ bool CNeuronBatchNormWithNoise::feedForward(CNeuronBaseOCL*NeuronOCL)
       cNoise.BufferFree();
 
       if(!cNoise.AssignArray(random))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cNoise.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
      {
       if(!cNoise.AssignArray(random))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cNoise.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -24520,7 +27075,9 @@ bool CNeuronBatchNormWithNoise::feedForward(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
    iBatchCount++;
 
@@ -24553,7 +27110,9 @@ bool CNeuronBaseSAMOCL::Init(uint numOutputs,
                             )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,numNeurons,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    fRho=fabs(rho);
 
@@ -24563,7 +27122,9 @@ bool CNeuronBaseSAMOCL::Init(uint numOutputs,
 //---
    if(!cWeightsSAM.BufferInit(Weights.Total(),0)||
       !cWeightsSAM.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24574,7 +27135,9 @@ bool CNeuronBaseSAMOCL::Init(uint numOutputs,
 bool CNeuronBaseSAMOCL::calcEpsilonWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint      global_work_offset[2]={0,0};
@@ -24593,7 +27156,9 @@ bool CNeuronBaseSAMOCL::calcEpsilonWeights(CNeuronBaseOCL*NeuronOCL)
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!NeuronOCL.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24604,7 +27169,9 @@ bool CNeuronBaseSAMOCL::calcEpsilonWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronBaseSAMOCL::feedForwardSAM(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[1]={0};
    uint global_work_size[1]={Output.Total()};
@@ -24623,7 +27190,9 @@ bool CNeuronBaseSAMOCL::feedForwardSAM(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24634,7 +27203,9 @@ bool CNeuronBaseSAMOCL::feedForwardSAM(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronBaseSAMOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(NeuronOCL.getWeightsSAMIndex()<0||
       fRho==0)
@@ -24643,18 +27214,26 @@ bool CNeuronBaseSAMOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 
 //---
    if(!SumAndNormalize(Gradient,Output,Gradient,1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!calcEpsilonWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!feedForwardSAM(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float error=1;
 
    if(!calcOutputGradients(Gradient,error))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronBaseOCL::updateInputWeights(NeuronOCL));
@@ -24673,7 +27252,9 @@ bool CNeuronBaseSAMOCL::calcHiddenGradients(CNeuronBaseOCL*NeuronOCL)
 
    if(!DeActivation(Output,temp,Gradient,activation)||
       !CNeuronBaseOCL::calcHiddenGradients(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    Gradient=temp;
 
@@ -24696,10 +27277,14 @@ void CNeuronBaseSAMOCL::SetOpenCL(COpenCLMy*obj)
 bool CNeuronBaseSAMOCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteFloat(file_handle,fRho)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24710,7 +27295,9 @@ bool CNeuronBaseSAMOCL::Save(const int file_handle)
 bool CNeuronBaseSAMOCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileReadUFloat(file_handle,fRho)
 
@@ -24720,7 +27307,9 @@ bool CNeuronBaseSAMOCL::Load(const int file_handle)
 
    if(!cWeightsSAM.BufferInit(Weights.Total(),0)||
       !cWeightsSAM.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24759,7 +27348,9 @@ bool CNeuronConvSAMOCL::Init(uint numOutputs,
                             )
   {
    if(!CNeuronConvOCL::Init(numOutputs,myIndex,open_cl,window_in,step,window_out,units_count,variables,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    fRho=fabs(rho);
 
@@ -24771,7 +27362,9 @@ bool CNeuronConvSAMOCL::Init(uint numOutputs,
 
    if(!cWeightsSAMConv.BufferInit(WeightsConv.Total(),0)||
       !cWeightsSAMConv.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    cWeightsSAM.BufferFree();
@@ -24781,7 +27374,9 @@ bool CNeuronConvSAMOCL::Init(uint numOutputs,
 
    if(!cWeightsSAM.BufferInit(Weights.Total(),0)||
       !cWeightsSAM.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24792,7 +27387,9 @@ bool CNeuronConvSAMOCL::Init(uint numOutputs,
 bool CNeuronConvSAMOCL::calcEpsilonWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!OpenCL||!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint      global_work_offset[3]={0,0,0};
@@ -24813,7 +27410,9 @@ bool CNeuronConvSAMOCL::calcEpsilonWeights(CNeuronBaseOCL*NeuronOCL)
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!cWeightsSAMConv.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24824,7 +27423,9 @@ bool CNeuronConvSAMOCL::calcEpsilonWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronConvSAMOCL::feedForwardSAM(CNeuronBaseOCL*NeuronOCL)
   {
    if(CheckPointer(OpenCL)==POINTER_INVALID||CheckPointer(NeuronOCL)==POINTER_INVALID)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint global_work_offset[3]={0,0,0};
    uint global_work_size[3]={Output.Total()/(iWindowOut*iVariables),
@@ -24846,7 +27447,9 @@ bool CNeuronConvSAMOCL::feedForwardSAM(CNeuronBaseOCL*NeuronOCL)
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!Output.BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -24861,18 +27464,26 @@ bool CNeuronConvSAMOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 
 //---
    if(!SumAndNormalize(Gradient,Output,Gradient,iWindowOut,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!calcEpsilonWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!feedForwardSAM(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float error=1;
 
    if(!calcOutputGradients(Gradient,error))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronConvOCL::updateInputWeights(NeuronOCL));
@@ -24891,7 +27502,9 @@ bool CNeuronConvSAMOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 
    if(!DeActivation(Output,temp,Gradient,activation)||
       !CNeuronConvOCL::calcInputGradients(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    Gradient=temp;
 
@@ -24915,10 +27528,14 @@ void CNeuronConvSAMOCL::SetOpenCL(COpenCLMy*obj)
 bool CNeuronConvSAMOCL::Save(const int file_handle)
   {
    if(!CNeuronConvOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteFloat(file_handle,fRho)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24929,7 +27546,9 @@ bool CNeuronConvSAMOCL::Save(const int file_handle)
 bool CNeuronConvSAMOCL::Load(const int file_handle)
   {
    if(!CNeuronConvOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    dFileReadUFloat(file_handle,fRho)
 
@@ -24945,7 +27564,9 @@ bool CNeuronConvSAMOCL::Load(const int file_handle)
 //---
    if(!cWeightsSAMConv.BufferInit(WeightsConv.Total(),0)||
       !cWeightsSAMConv.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!Weights)
@@ -24953,7 +27574,9 @@ bool CNeuronConvSAMOCL::Load(const int file_handle)
 
    if(!cWeightsSAM.BufferInit(Weights.Total(),0)||
       !cWeightsSAM.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24964,19 +27587,27 @@ bool CNeuronConvSAMOCL::Load(const int file_handle)
 bool CBufferFloat::BufferInitLike(CBufferFloat*master)
   {
    if(!master)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!OpenCL&&m_myIndex>=0)
      {
       if(!BufferFree())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!BufferInit(master.Total(),0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!BufferCreate(master.GetOpenCL()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -24991,7 +27622,9 @@ bool CNeuronConvSAMOCL::InitBufferLike(CBufferFloat*&buffer,CBufferFloat*master)
       buffer=new CBufferFloat();
 
       if(!buffer)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -25008,7 +27641,7 @@ void CNeuronConvSAMOCL::ReplaceBuffer(CBufferFloat*&buffer,CBufferFloat*master)
    if(!!buffer)
      {
       buffer.BufferFree();
-      DeleteObj(buffer);
+      DeleteObj(buffer)
      }
 
 //---
@@ -25022,7 +27655,9 @@ bool CNeuronConvSAMOCL::InitPS(CNeuronConvSAMOCL*master)
    if(!master||
       master.Type()!=Type()
      )
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    alpha=master.alpha;
@@ -25040,14 +27675,20 @@ bool CNeuronConvSAMOCL::InitPS(CNeuronConvSAMOCL*master)
 
 //---
    if(!InitBufferLike(Output,master.Output))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!!master.getPrevOutput())
       if(!InitBufferLike(PrevOutput,master.getPrevOutput()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!InitBufferLike(Gradient,master.Gradient))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    ReplaceBuffer(Weights,master.Weights);
@@ -25067,7 +27708,9 @@ bool CNeuronConvSAMOCL::InitPS(CNeuronConvSAMOCL*master)
       CBufferFloat *buf=GetPointer(cWeightsSAM);
 
       if(!InitBufferLike(buf,GetPointer(master.cWeightsSAM)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
      {
@@ -25081,7 +27724,9 @@ bool CNeuronConvSAMOCL::InitPS(CNeuronConvSAMOCL*master)
       CBufferFloat *buf=GetPointer(cWeightsSAMConv);
 
       if(!InitBufferLike(buf,GetPointer(master.cWeightsSAMConv)))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
      {
@@ -25105,25 +27750,35 @@ bool CNeuronPSBlock::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
   {
    if(!CNeuronConvSAMOCL::Init(numOutputs,myIndex,open_cl,window,window,window_out,
                                units_count,variables,rho,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!acConvolution[0].Init(0,0,OpenCL,iWindow,iWindow,iWindowOut,units_count,
                              iVariables,fRho,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    acConvolution[0].SetActivationFunction(GELU);
 
    if(!acConvolution[1].Init(0,1,OpenCL,iWindowOut,iWindowOut,iWindow,units_count,
                              iVariables,fRho,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    acConvolution[1].SetActivationFunction(None);
 
    if(!cResidual.Init(0,2,OpenCL,acConvolution[1].Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidual.SetGradient(acConvolution[1].getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cResidual.SetActivationFunction(None);
 
@@ -25139,17 +27794,25 @@ bool CNeuronPSBlock::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronPSBlock::InitPS(CNeuronPSBlock*master)
   {
    if(!CNeuronConvSAMOCL::InitPS((CNeuronConvSAMOCL*)master))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(int i=0;i<2;i++)
       if(!acConvolution[i].InitPS(master.acConvolution[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!cResidual.Init(0,2,OpenCL,acConvolution[1].Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidual.SetGradient(acConvolution[1].getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cResidual.SetActivationFunction(None);
 
@@ -25162,16 +27825,24 @@ bool CNeuronPSBlock::InitPS(CNeuronPSBlock*master)
 bool CNeuronPSBlock::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!acConvolution[0].FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!acConvolution[1].FeedForward(acConvolution[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(NeuronOCL.getOutput(),acConvolution[1].getOutput(),cResidual.getOutput(),iWindow,true,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!CNeuronConvSAMOCL::feedForward(cResidual.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25182,28 +27853,40 @@ bool CNeuronPSBlock::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPSBlock::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronConvSAMOCL::calcInputGradients(cResidual.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!acConvolution[0].CalcHiddenGradients(acConvolution[1].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(acConvolution[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(NeuronOCL.Activation()==None)
      {
       if(!SumAndNormalize(NeuronOCL.getGradient(),cResidual.getGradient(),NeuronOCL.getGradient(),iWindow,false,0,0,0,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
      {
       if(!DeActivation(NeuronOCL.getOutput(),cResidual.getGradient(),cResidual.getPrevOutput(),NeuronOCL.Activation())||
          !SumAndNormalize(NeuronOCL.getGradient(),cResidual.getPrevOutput(),NeuronOCL.getGradient(),iWindow,false,0,0,0,1))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -25215,13 +27898,19 @@ bool CNeuronPSBlock::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPSBlock::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!CNeuronConvSAMOCL::updateInputWeights(cResidual.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!acConvolution[1].UpdateInputWeights(acConvolution[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!acConvolution[0].UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25232,12 +27921,16 @@ bool CNeuronPSBlock::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronPSBlock::Save(const int file_handle)
   {
    if(!CNeuronConvSAMOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(int i=0;i<2;i++)
       if(!acConvolution[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -25248,19 +27941,27 @@ bool CNeuronPSBlock::Save(const int file_handle)
 bool CNeuronPSBlock::Load(const int file_handle)
   {
    if(!CNeuronConvSAMOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(int i=0;i<2;i++)
       if(!LoadInsideLayer(file_handle,acConvolution[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    if(!cResidual.Init(0,2,OpenCL,acConvolution[1].Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidual.SetGradient(acConvolution[1].getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cResidual.SetActivationFunction(None);
 
@@ -25294,7 +27995,9 @@ bool CNeuronLegendreWaveletsHL::Init(uint numOutputs,
                                     )
   {
    if(!CNeuronConvOCL::Init(numOutputs,myIndex,open_cl,window,step,2*filters,units_count,variables,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    WeightsConv.BufferInit(WeightsConv.Total(),0);
@@ -25327,10 +28030,14 @@ bool CNeuronLegendreWaveletsHL::Init(uint numOutputs,
             uint shift_var=2*shift_hight*v;
 
             if(!WeightsConv.Update(shift+shift_var,value))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
 
             if(!WeightsConv.Update(shift+shift_var+shift_hight,MathPow(-1.0f,float(i))*value))
-               ReturnFalse;
+              {
+               ReturnFalse
+              }
            }
          shift+=iWindow+1;
         }
@@ -25339,16 +28046,20 @@ bool CNeuronLegendreWaveletsHL::Init(uint numOutputs,
    if(!!OpenCL)
      {
       if(!WeightsConv.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       uint global_work_size[]={iWindowOut*iVariables};
       uint global_work_offset[]={0};
-      setBuffer(def_k_NormalizeWeights,def_k_norm_buffer,WeightsConv.GetIndex());
-      setArgument(def_k_NormalizeWeights,def_k_norm_dimension,(int)iWindow+1);
+      setBuffer(def_k_NormalizeWeights,def_k_norm_buffer,WeightsConv.GetIndex())
+      setArgument(def_k_NormalizeWeights,def_k_norm_dimension,(int)iWindow+1)
       kernelExecute(def_k_NormalizeWeights,global_work_offset,global_work_size)
 #ifdef  _DEBUG
       if(!WeightsConv.BufferRead())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 #endif
      }
 
@@ -25366,24 +28077,32 @@ bool CNeuronResNeXtBottleneck::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
    int units_out=((int)units_count-(int)window+(int)step-1)/(int)step+1;
 
    if(!CNeuronConvOCL::Init(numOutputs,myIndex,open_cl,group_size*groups,group_size*groups,chanels_out,units_out,1,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection In
    uint index=0;
 
    if(!cProjectionIn.Init(0,index,OpenCL,chanels_in,chanels_in,group_size*groups,units_count,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cNormalizeIn.Init(0,index,OpenCL,cProjectionIn.Neurons(),iBatch,optimization))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cNormalizeIn.SetActivationFunction(LReLU);
    index++;
 
    if(!cTransposeIn.Init(0,index,OpenCL,units_count,groups,group_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cTransposeIn.SetActivationFunction((ENUM_ACTIVATION)cNormalizeIn.Activation());
 
@@ -25391,12 +28110,16 @@ bool CNeuronResNeXtBottleneck::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
    index++;
 
    if(!cFeatureExtraction.Init(0,index,OpenCL,group_size*window,group_size*step,group_size,units_out,groups,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cNormalizeFeature.Init(0,index,OpenCL,cFeatureExtraction.Neurons(),iBatch,optimization))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cNormalizeFeature.SetActivationFunction(LReLU);
 
@@ -25404,7 +28127,9 @@ bool CNeuronResNeXtBottleneck::Init(uint numOutputs,uint myIndex,COpenCLMy*open_
    index++;
 
    if(!cTransposeOut.Init(0,index,OpenCL,groups,units_out,group_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cTransposeOut.SetActivationFunction((ENUM_ACTIVATION)cNormalizeFeature.Activation());
 
@@ -25418,24 +28143,36 @@ bool CNeuronResNeXtBottleneck::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
 //--- projection In
    if(!cProjectionIn.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizeIn.FeedForward(cProjectionIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeIn.FeedForward(cNormalizeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- feature Extraction
    if(!cFeatureExtraction.FeedForward(cTransposeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizeFeature.FeedForward(cFeatureExtraction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection Out
    if(!cTransposeOut.FeedForward(cNormalizeFeature.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(CNeuronConvOCL::feedForward(cTransposeOut.AsObject()));
   }
@@ -25445,32 +28182,48 @@ bool CNeuronResNeXtBottleneck::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronResNeXtBottleneck::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection Out
    if(!CNeuronConvOCL::calcInputGradients(cTransposeOut.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- feature Extraction\
    if(!cNormalizeFeature.CalcHiddenGradients(cTransposeOut.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cFeatureExtraction.CalcHiddenGradients(cNormalizeFeature.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection In
    if(!cTransposeIn.CalcHiddenGradients(cFeatureExtraction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizeIn.CalcHiddenGradients(cTransposeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cProjectionIn.CalcHiddenGradients(cNormalizeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- inputs
    if(!NeuronOCL.CalcHiddenGradients(cProjectionIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- result
    return(true);
@@ -25482,21 +28235,31 @@ bool CNeuronResNeXtBottleneck::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
 //--- projection Out
    if(!CNeuronConvOCL::updateInputWeights(cTransposeOut.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- feature Extraction
    if(!cNormalizeFeature.UpdateInputWeights(cFeatureExtraction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cFeatureExtraction.UpdateInputWeights(cTransposeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection In
    if(!cNormalizeIn.UpdateInputWeights(cProjectionIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cProjectionIn.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- result
    return(true);
@@ -25507,25 +28270,39 @@ bool CNeuronResNeXtBottleneck::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronResNeXtBottleneck::Save(const int file_handle)
   {
    if(!CNeuronConvOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cProjectionIn.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizeIn.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeIn.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cFeatureExtraction.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizeFeature.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeOut.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25536,25 +28313,39 @@ bool CNeuronResNeXtBottleneck::Save(const int file_handle)
 bool CNeuronResNeXtBottleneck::Load(const int file_handle)
   {
    if(!CNeuronConvOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cProjectionIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cNormalizeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTransposeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cFeatureExtraction.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cNormalizeFeature.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTransposeOut.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25582,28 +28373,38 @@ bool CNeuronResNeXtResidual::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl
   {
    if(!CNeuronConvOCL::Init(numOutputs,myIndex,open_cl,chanels_in,chanels_in,chanels_out,
                             units_out,1,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    int index=0;
 
    if(!cTransposeIn.Init(0,index,OpenCL,units_in,chanels_in,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cProjectionTime.Init(0,index,OpenCL,units_in,units_in,units_out,chanels_in,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cNormalizeTime.Init(0,index,OpenCL,cProjectionTime.Neurons(),iBatch,optimization))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cTransposeOut.Init(0,index,OpenCL,chanels_in,units_out,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25615,17 +28416,25 @@ bool CNeuronResNeXtResidual::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
 //--- projection Timeline
    if(!cTransposeIn.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cProjectionTime.FeedForward(cTransposeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizeTime.FeedForward(cProjectionTime.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection Chanels
    if(!cTransposeOut.FeedForward(cNormalizeTime.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    return(CNeuronConvOCL::feedForward(cTransposeOut.AsObject()));
   }
@@ -25635,21 +28444,31 @@ bool CNeuronResNeXtResidual::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronResNeXtResidual::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection Chanels
    if(!CNeuronConvOCL::calcInputGradients(cTransposeOut.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection Timeline
    if(!cNormalizeTime.CalcHiddenGradients(cTransposeOut.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cProjectionTime.CalcHiddenGradients(cNormalizeTime.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeIn.CalcHiddenGradients(cProjectionTime.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- inputs
    return(NeuronOCL.CalcHiddenGradients(cTransposeIn.AsObject()));
@@ -25661,14 +28480,20 @@ bool CNeuronResNeXtResidual::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
 //--- projection Chanels
    if(!CNeuronConvOCL::updateInputWeights(cTransposeOut.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- projection Timeline
    if(!cNormalizeTime.UpdateInputWeights(cProjectionTime.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cProjectionTime.UpdateInputWeights(cTransposeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- result
    return(true);
@@ -25679,20 +28504,30 @@ bool CNeuronResNeXtResidual::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronResNeXtResidual::Save(const int file_handle)
   {
    if(!CNeuronConvOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cTransposeIn.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cProjectionTime.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cNormalizeTime.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cTransposeOut.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- result
    return(true);
@@ -25703,20 +28538,30 @@ bool CNeuronResNeXtResidual::Save(const int file_handle)
 bool CNeuronResNeXtResidual::Load(const int file_handle)
   {
    if(!CNeuronConvOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!LoadInsideLayer(file_handle,cTransposeIn.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cProjectionTime.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cNormalizeTime.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cTransposeOut.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- result
    return(true);
@@ -25745,7 +28590,9 @@ bool CNeuronResNeXtBlock::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
    int units_out=((int)units_count-(int)window+(int)step-1)/(int)step+1;
 
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,units_out*chanels_out,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    iChanelsOut=chanels_out;
@@ -25755,19 +28602,27 @@ bool CNeuronResNeXtBlock::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 
    if(!cBottleneck.Init(0,index,OpenCL,chanels_in,chanels_out,window,step,units_count,
                         group_size,groups,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    index++;
 
    if(!cResidual.Init(0,index,OpenCL,chanels_in,chanels_out,units_count,units_out,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cResidual.SetGradient(cBottleneck.getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SetGradient(cBottleneck.getGradient(),true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25778,13 +28633,19 @@ bool CNeuronResNeXtBlock::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CNeuronResNeXtBlock::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cBottleneck.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidual.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(cBottleneck.getOutput(),cResidual.getOutput(),Output,iChanelsOut,true,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- result
    return(true);
@@ -25795,10 +28656,14 @@ bool CNeuronResNeXtBlock::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronResNeXtBlock::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.CalcHiddenGradients(cBottleneck.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CBufferFloat *temp=NeuronOCL.getGradient();
@@ -25807,21 +28672,31 @@ bool CNeuronResNeXtBlock::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
       cBuffer.Total()!=temp.Total())
      {
       if(!cBuffer.BufferInitLike(temp))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
    if(!NeuronOCL.SetGradient(GetPointer(cBuffer),false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!NeuronOCL.CalcHiddenGradients(cResidual.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!SumAndNormalize(temp,NeuronOCL.getGradient(),temp,1,false,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!NeuronOCL.SetGradient(temp,false))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25832,10 +28707,14 @@ bool CNeuronResNeXtBlock::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronResNeXtBlock::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cBottleneck.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidual.UpdateInputWeights(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25846,18 +28725,26 @@ bool CNeuronResNeXtBlock::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronResNeXtBlock::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(FileWriteInteger(file_handle,int(iChanelsOut))<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cBottleneck.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cResidual.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25868,17 +28755,23 @@ bool CNeuronResNeXtBlock::Save(const int file_handle)
 bool CNeuronResNeXtBlock::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    dFileReadUInt(file_handle,iChanelsOut)
 
 //---
    if(!LoadInsideLayer(file_handle,cBottleneck.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cResidual.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -25900,7 +28793,9 @@ void CNeuronResNeXtBlock::SetOpenCL(COpenCLMy*obj)
 bool CNeuronTopKGates::TopKgates(void)
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint window=cProjection.GetFilters()/2;
    uint units=cProjection.GetUnits();
@@ -25921,7 +28816,9 @@ bool CNeuronTopKGates::TopKgates(void)
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef  _DEBUG
    if(!cGates.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -25932,7 +28829,9 @@ bool CNeuronTopKGates::TopKgates(void)
 bool CNeuronTopKGates::TopKgatesGradient(void)
   {
    if(!OpenCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    uint window=cProjection.GetFilters()/2;
    uint units=cProjection.GetUnits();
@@ -25953,7 +28852,9 @@ bool CNeuronTopKGates::TopKgatesGradient(void)
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef  _DEBUG
    if(!cGates.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -25973,21 +28874,29 @@ bool CNeuronTopKGates::Init(uint numOutputs,
                            )
   {
    if(!CNeuronSoftMaxOCL::Init(numOutputs,myIndex,open_cl,gates*units_count,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetHeads(units_count);
 
    if(!cProjection.Init(0,0,OpenCL,window,window,2*gates,units_count,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cProjection.SetActivationFunction(None);
 
    if(!cbNoise.BufferInit(Neurons(),0)||
       !cbNoise.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cGates.Init(0,1,OpenCL,Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cGates.SetActivationFunction(None);
 
@@ -26000,7 +28909,9 @@ bool CNeuronTopKGates::Init(uint numOutputs,
 bool CNeuronTopKGates::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cProjection.FeedForward(NeuronOCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(bTrain)
@@ -26008,21 +28919,31 @@ bool CNeuronTopKGates::feedForward(CNeuronBaseOCL*NeuronOCL)
       double random[];
 
       if(!MathRandomNormal(0,1,Neurons(),random))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cbNoise.AssignArray(random))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cbNoise.BufferWrite())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    else
       if(!cbNoise.Fill(0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    if(!TopKgates())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(CNeuronSoftMaxOCL::feedForward(cGates.AsObject()));
@@ -26033,15 +28954,21 @@ bool CNeuronTopKGates::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronTopKGates::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!CNeuronSoftMaxOCL::calcInputGradients(cGates.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!TopKgatesGradient())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(NeuronOCL.CalcHiddenGradients(cProjection.AsObject()));
@@ -26059,13 +28986,19 @@ bool CNeuronTopKGates::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronTopKGates::Save(const int file_handle)
   {
    if(!CNeuronSoftMaxOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cProjection.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileWriteInteger(file_handle,iK)<INT_VALUE)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26076,23 +29009,33 @@ bool CNeuronTopKGates::Save(const int file_handle)
 bool CNeuronTopKGates::Load(const int file_handle)
   {
    if(!CNeuronSoftMaxOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cProjection.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(FileIsEnding(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    iK=FileReadInteger(file_handle);
 
 //---
    if(!cbNoise.BufferInit(Neurons(),0)||
       !cbNoise.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cGates.Init(0,1,OpenCL,Neurons(),optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cGates.SetActivationFunction(None);
 
@@ -26117,14 +29060,18 @@ bool CNeuronSwiGLUOCL::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                             uint variables,ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,units_count*window_out*variables,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    SetActivationFunction(None);
 
    for(uint i=0;i<caProjections.Size();i++)
      {
       if(!caProjections[i].Init(0,i,OpenCL,window,step,window_out,units_count,variables,optimization,iBatch))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
    caProjections[0].SetActivationFunction(GELU);
    caProjections[1].SetActivationFunction(None);
@@ -26139,10 +29086,14 @@ bool CNeuronSwiGLUOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    for(uint i=0;i<caProjections.Size();i++)
       if(!caProjections[i].FeedForward(NeuronOCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    if(!ElementMult(caProjections[0].getOutput(),caProjections[1].getOutput(),Output))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26153,18 +29104,24 @@ bool CNeuronSwiGLUOCL::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronSwiGLUOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!ElementMultGrad(caProjections[0].getOutput(),caProjections[0].getGradient(),
                        caProjections[1].getOutput(),caProjections[1].getGradient(),
                        Gradient,caProjections[0].Activation(),caProjections[1].Activation()
                       ))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!NeuronOCL.CalcHiddenGradients(caProjections[0].AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *temp=NeuronOCL.getGradient();
 
@@ -26173,7 +29130,9 @@ bool CNeuronSwiGLUOCL::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
       !SumAndNormalize(temp,NeuronOCL.getGradient(),temp,1,false,0,0,0,1)||
       !NeuronOCL.SetGradient(temp,false)
      )
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26185,7 +29144,9 @@ bool CNeuronSwiGLUOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    for(uint i=0;i<caProjections.Size();i++)
       if(!caProjections[i].UpdateInputWeights(NeuronOCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -26196,14 +29157,18 @@ bool CNeuronSwiGLUOCL::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronSwiGLUOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CNeuronSwiGLUOCL *Source=source;
 
    for(uint i=0;i<caProjections.Size();i++)
       if(!caProjections[i].WeightsUpdate(Source.caProjections[i].AsObject(),tau))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -26214,11 +29179,15 @@ bool CNeuronSwiGLUOCL::WeightsUpdate(CNeuronBaseOCL*source,float tau)
 bool CNeuronSwiGLUOCL::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caProjections.Size();i++)
       if(!caProjections[i].Save(file_handle))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -26229,11 +29198,15 @@ bool CNeuronSwiGLUOCL::Save(const int file_handle)
 bool CNeuronSwiGLUOCL::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    for(uint i=0;i<caProjections.Size();i++)
       if(!LoadInsideLayer(file_handle,caProjections[i].AsObject()))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(true);
@@ -26260,15 +29233,21 @@ bool CParams::Init(uint numOutputs,
                   )
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,numNeurons,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cOne.Init(numNeurons,0,OpenCL,1,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cOne.SetActivationFunction(None);
 
    if(!cOne.getOutput().Fill(1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26344,10 +29323,14 @@ bool CParams::UpdateInputWeights(void)
 bool CParams::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cOne.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26358,10 +29341,14 @@ bool CParams::Save(const int file_handle)
 bool CParams::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cOne.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26387,11 +29374,15 @@ bool CParams::SupportsOpenCLChecked(void)const
 bool CParams::SetOpenCLChecked(COpenCLMy*obj)
   {
    if(CheckPointer(obj)==POINTER_INVALID||!SupportsOpenCLChecked())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- transfer the nested owner before the inherited context is published.
    if(!cOne.SetOpenCLChecked(obj))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- finalize by transferring inherited base owners last.
    return(CNeuronBaseOCL::SetOpenCLChecked(obj));
@@ -26402,12 +29393,16 @@ bool CParams::SetOpenCLChecked(COpenCLMy*obj)
 bool CParams::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CParams *Source=source;
 
    if(!cOne.WeightsUpdate(Source.cOne.AsObject(),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26427,28 +29422,40 @@ bool CParams::AppendParameterFingerprint(ulong&fingerprint)
 bool CParams::Identity(const int rows,const int cols)
   {
    if(rows*cols!=Neurons())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    matrix<float>ident=matrix<float>::Identity(rows,cols);
 
    if(!ident.Reshape(rows*cols,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!ident.Resize(rows*cols,2))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!ident.Col(vector<float>::Zeros(rows*cols),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CBufferFloat *w=cOne.getWeights();
 
    if(!w||!w.AssignArray(ident))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    w.BufferFree();
 
    if(!w.BufferCreate(OpenCL))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(FeedForward());
@@ -26461,7 +29468,9 @@ bool CCircleParams::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                          ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,numNeurons,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    cOnes.Clear();
@@ -26472,20 +29481,24 @@ bool CCircleParams::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
       cCurrent=new CNeuronBaseOCL();
 
       if(!cCurrent)
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       if(!cCurrent.Init(Neurons(),i,OpenCL,1,optimization,iBatch)||
          !cOnes.Add(cCurrent))
         {
-         DeleteObj(cCurrent);
-         ReturnFalse;
+         DeleteObj(cCurrent)
+         ReturnFalse
         }
       cCurrent.SetActivationFunction(None);
      }
 
 //---
    if(!SetPosition(0))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26496,18 +29509,26 @@ bool CCircleParams::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
 bool CCircleParams::Identity(const int rows,const int cols)
   {
    if(rows*cols!=Neurons())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    matrix<float>ident=matrix<float>::Identity(rows,cols);
 
    if(!ident.Reshape(rows*cols,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!ident.Resize(rows*cols,2))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!ident.Col(vector<float>::Zeros(rows*cols),1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CBufferFloat *w=NULL;
@@ -26515,17 +29536,23 @@ bool CCircleParams::Identity(const int rows,const int cols)
    for(int i=0;i<cOnes.Total();i++)
      {
       if(!cOnes[i])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       w=cOnes[i].getWeights();
 
       if(!w||!w.AssignArray(ident))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       w.BufferFree();
 
       if(!w.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -26544,17 +29571,23 @@ bool CCircleParams::Zeros(void)
    for(int i=0;i<cOnes.Total();i++)
      {
       if(!cOnes[i])
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       w=cOnes[i].getWeights();
 
       if(!w||!w.AssignArray(zeros))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       w.BufferFree();
 
       if(!w.BufferCreate(OpenCL))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
      }
 
 //---
@@ -26568,7 +29601,9 @@ bool CCircleParams::SetPosition(int position)
    cCurrent=cOnes[position];
 
    if(!cCurrent)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26580,7 +29615,9 @@ bool CCircleParams::FeedForward(void)
   {
    if(!cCurrent)
       if(!SetPosition(0))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    return(CNeuronBaseOCL::feedForward(cCurrent));
@@ -26598,13 +29635,17 @@ bool CCircleParams::UpdateInputWeights(void)
 bool CCircleParams::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    CCircleParams *Source=source;
 
    if(!cOnes.WeightsUpdate(Source.cOnes.AsObject(),tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -26615,7 +29656,9 @@ bool CCircleParams::WeightsUpdate(CNeuronBaseOCL*source,float tau)
 bool CCircleParams::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(cOnes.Save(file_handle));
@@ -26626,7 +29669,9 @@ bool CCircleParams::Save(const int file_handle)
 bool CCircleParams::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(cOnes.Load(file_handle));
@@ -26661,7 +29706,9 @@ bool CNeuronBaseOCL::DilatedCorrelation(CNeuronBaseOCL*feature,
   {
    if(!OpenCL||!feature||!correlations||
       units<=0||dimension<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint corrs=correlations.Neurons()/units;
@@ -26679,7 +29726,9 @@ bool CNeuronBaseOCL::DilatedCorrelation(CNeuronBaseOCL*feature,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef _DEBUG
    if(!correlations.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -26695,7 +29744,9 @@ bool CNeuronBaseOCL::DilatedCorrelationGrad(CNeuronBaseOCL*feature,
   {
    if(!OpenCL||!feature||!correlations||
       units<=0||dimension<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint corrs=correlations.Neurons()/units;
@@ -26714,7 +29765,9 @@ bool CNeuronBaseOCL::DilatedCorrelationGrad(CNeuronBaseOCL*feature,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef _DEBUG
    if(!feature.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -26730,7 +29783,9 @@ bool CNeuronBaseOCL::DilatedDifference(CNeuronBaseOCL*feature,
   {
    if(!OpenCL||!feature||!difference||
       units<=0||dimension<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint shifts=difference.Neurons()/feature.Neurons();
@@ -26746,7 +29801,9 @@ bool CNeuronBaseOCL::DilatedDifference(CNeuronBaseOCL*feature,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef _DEBUG
    if(!difference.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -26762,7 +29819,9 @@ bool CNeuronBaseOCL::DilatedDifferenceGrad(CNeuronBaseOCL*feature,
   {
    if(!OpenCL||!feature||!difference||
       units<=0||dimension<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint shifts=difference.Neurons()/feature.Neurons();
@@ -26781,7 +29840,9 @@ bool CNeuronBaseOCL::DilatedDifferenceGrad(CNeuronBaseOCL*feature,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef _DEBUG
    if(!feature.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -26828,7 +29889,9 @@ bool CNeuronBaseOCL::PerturbedMatrix(CNeuronBaseOCL*inputs,
   {
    if(!OpenCL||!inputs||!perturb||!outputs||
       units<=0||dimension<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[2]={0};
@@ -26841,7 +29904,9 @@ bool CNeuronBaseOCL::PerturbedMatrix(CNeuronBaseOCL*inputs,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef _DEBUG
    if(!outputs.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -26857,7 +29922,9 @@ bool CNeuronBaseOCL::PerturbedMatrixGrad(CNeuronBaseOCL*inputs,
   {
    if(!OpenCL||!inputs||!perturb||!outputs||
       units<=0||dimension<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[2]={0};
@@ -26871,7 +29938,9 @@ bool CNeuronBaseOCL::PerturbedMatrixGrad(CNeuronBaseOCL*inputs,
 #ifdef _DEBUG
    if(!inputs.getGradient().BufferRead()||
       !perturb.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -26887,7 +29956,9 @@ bool CNeuronBaseOCL::LinearUpsample(CNeuronBaseOCL*data,
   {
    if(!OpenCL||!data||!upsample||
       units<=0||upsampl_mult<=0||variables<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[3]={0};
@@ -26898,7 +29969,9 @@ bool CNeuronBaseOCL::LinearUpsample(CNeuronBaseOCL*data,
    kernelExecute(kernel,global_work_offset,global_work_size)
 #ifdef _DEBUG
    if(!upsample.getOutput().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -26914,7 +29987,9 @@ bool CNeuronBaseOCL::LinearUpsampleGrad(CNeuronBaseOCL*data,
   {
    if(!OpenCL||!data||!upsample||
       units<=0||upsampl_mult<=0||variables<=0)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint global_work_offset[3]={0};
@@ -26927,7 +30002,9 @@ bool CNeuronBaseOCL::LinearUpsampleGrad(CNeuronBaseOCL*data,
    kernelExecuteLoc(kernel,global_work_offset,global_work_size,local_work_size)
 #ifdef _DEBUG
    if(!data.getGradient().BufferRead())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 #endif
 //---
    return(true);
@@ -26941,25 +30018,33 @@ bool CFieldAwareParams::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                              ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,params_to_field*fields,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint index=0;
 
    if(!cCandidates.Init(0,index,OpenCL,params_to_field*candidates,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cCandidates.SetActivationFunction(None);
    index++;
 
    if(!cFieldEmbeddings.Init(0,index,OpenCL,fields*embed_size,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cFieldEmbeddings.SetActivationFunction(SIGMOID);
 
    if(fields<=embed_size)
       if(!cFieldEmbeddings.Identity(fields,embed_size))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    index++;
    cScore.Clear();
@@ -26969,7 +30054,9 @@ bool CFieldAwareParams::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
    if(!conv||
       !conv.Init(0,index,OpenCL,embed_size,embed_size,4*candidates,fields,1,optimization,iBatch)||
       !cScore.Add(conv))
-      DeleteObjAndFalse(conv);
+     {
+      DeleteObjAndFalse(conv)
+     }
    conv.SetActivationFunction(SoftPlus);
    index++;
    conv=new CNeuronConvOCL();
@@ -26977,7 +30064,9 @@ bool CFieldAwareParams::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
    if(!conv||
       !conv.Init(0,index,OpenCL,4*candidates,4*candidates,candidates,fields,1,optimization,iBatch)||
       !cScore.Add(conv))
-      DeleteObjAndFalse(conv);
+     {
+      DeleteObjAndFalse(conv)
+     }
    conv.SetActivationFunction(SoftPlus);
    index++;
    CNeuronSparseSoftMax *softmax=new CNeuronSparseSoftMax();
@@ -26985,7 +30074,9 @@ bool CFieldAwareParams::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
    if(!softmax||
       !softmax.Init(0,index,OpenCL,fields,candidates,topK,optimization,iBatch)||
       !cScore.Add(softmax))
-      DeleteObjAndFalse(softmax);
+     {
+      DeleteObjAndFalse(softmax)
+     }
    iFields=fields;
 
 //---
@@ -27001,10 +30092,14 @@ bool CFieldAwareParams::FeedForward(void)
 
 //---
    if(!cCandidates.FeedForward())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cFieldEmbeddings.FeedForward())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *prev=cFieldEmbeddings.AsObject();
    CNeuronBaseOCL *curr=NULL;
@@ -27015,13 +30110,17 @@ bool CFieldAwareParams::FeedForward(void)
 
       if(!curr||
          !curr.FeedForward(prev))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       prev=curr;
      }
 
    if(prev.Type()!=defNeuronSparseSoftMax)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronSparseSoftMax *softmax=prev;
    uint                 topK=softmax.DimensionOut();
@@ -27030,9 +30129,11 @@ bool CFieldAwareParams::FeedForward(void)
 
    if(!SparseMatMul(softmax.GetIndexes(),softmax.getOutput(),cCandidates.getOutput(),
                     Output,iFields,topK,candidates,params_to_field))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
-   dActivation(this);
+   dActivation(this)
 
 //---
    return(true);
@@ -27047,7 +30148,9 @@ bool CFieldAwareParams::UpdateInputWeights(void)
    CNeuronBaseOCL *curr=NULL;
 
    if(!next||next.Type()!=defNeuronSparseSoftMax)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronSparseSoftMax *softmax=next;
    uint                 topK=softmax.DimensionOut();
@@ -27057,9 +30160,11 @@ bool CFieldAwareParams::UpdateInputWeights(void)
    if(!SparseMatMulGrad(softmax.GetIndexes(),softmax.getOutput(),softmax.getGradient(),
                         cCandidates.getOutput(),cCandidates.getGradient(),
                         Gradient,iFields,topK,candidates,params_to_field))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
-   Deactivation(cCandidates);
+   Deactivation(cCandidates)
 
    for(int i=cScore.Total()-2;i>=0;i--)
      {
@@ -27067,18 +30172,24 @@ bool CFieldAwareParams::UpdateInputWeights(void)
 
       if(!curr||
          !curr.CalcHiddenGradients(next))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       next=curr;
      }
 
    if(!cFieldEmbeddings.CalcHiddenGradients(next))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- candidates
    if(!SumAndNormalize(cCandidates.getOutput(),cCandidates.getGradient(),cCandidates.getGradient(),
                        params_to_field,true,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- update weights
    float error=1;
@@ -27086,10 +30197,14 @@ bool CFieldAwareParams::UpdateInputWeights(void)
    if(!cCandidates.calcOutputGradients(cCandidates.getGradient(),error)||
       !DiversityLoss(cCandidates.AsObject(),candidates,params_to_field,true)||
       !cCandidates.UpdateInputWeights())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cFieldEmbeddings.UpdateInputWeights())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    curr=cFieldEmbeddings.AsObject();
 
@@ -27099,7 +30214,9 @@ bool CFieldAwareParams::UpdateInputWeights(void)
 
       if(!next||
          !next.UpdateInputWeights(curr))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       curr=next;
      }
@@ -27113,16 +30230,24 @@ bool CFieldAwareParams::UpdateInputWeights(void)
 bool CFieldAwareParams::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCandidates.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cFieldEmbeddings.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScore.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -27133,20 +30258,30 @@ bool CFieldAwareParams::Save(const int file_handle)
 bool CFieldAwareParams::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cCandidates.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cFieldEmbeddings.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScore.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cScore[-1]||cScore[-1].Type()!=defNeuronSparseSoftMax)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronSparseSoftMax *softmax=cScore[-1];
    iFields=softmax.Heads();
@@ -27160,12 +30295,14 @@ bool CFieldAwareParams::Load(const int file_handle)
 bool CFieldAwareParams::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CFieldAwareParams *Source=source;
-   dWeightsUpdate(cCandidates,Source,tau);
-   dWeightsUpdate(cFieldEmbeddings,Source,tau);
-   dWeightsUpdate(cScore,Source,tau);
+   dWeightsUpdate(cCandidates,Source,tau)
+   dWeightsUpdate(cFieldEmbeddings,Source,tau)
+   dWeightsUpdate(cScore,Source,tau)
 
 //---
    return(true);
@@ -27199,10 +30336,14 @@ bool CNeuronFieldAwareConv::Init(uint numOutputs,uint myIndex,COpenCLMy*open_cl,
                                  ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,window_out*fields,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cParams.Init(0,0,OpenCL,window_in*window_out,fields,embed_size,candidates,topK,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cParams.SetActivationFunction(None);
 
@@ -27216,7 +30357,9 @@ bool CNeuronFieldAwareConv::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(bTrain)
       if(!cParams.FeedForward())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
 //---
    uint fields=cParams.GetFields();
@@ -27224,12 +30367,16 @@ bool CNeuronFieldAwareConv::feedForward(CNeuronBaseOCL*NeuronOCL)
    uint window_in=cParams.Neurons()/(fields*window_out);
 
    if(!NeuronOCL||NeuronOCL.Neurons()<int(window_in*fields))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!MatMul(NeuronOCL.getOutput(),cParams.getOutput(),Output,1,window_in,window_out,fields,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
-   dActivation(this);
+   dActivation(this)
 
 //---
    return(true);
@@ -27240,7 +30387,9 @@ bool CNeuronFieldAwareConv::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFieldAwareConv::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint fields=cParams.GetFields();
@@ -27248,15 +30397,19 @@ bool CNeuronFieldAwareConv::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    uint window_in=cParams.Neurons()/(fields*window_out);
 
    if(NeuronOCL.Neurons()<int(window_in*fields))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!MatMulGrad(NeuronOCL.getOutput(),NeuronOCL.getGradient(),
                   cParams.getOutput(),cParams.getGradient(),
                   Gradient,1,window_in,window_out,fields,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
-   Deactivation(NeuronOCL);
-   Deactivation(cParams);
+   Deactivation(NeuronOCL)
+   Deactivation(cParams)
 
 //---
    return(true);
@@ -27267,7 +30420,9 @@ bool CNeuronFieldAwareConv::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFieldAwareConv::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cParams.UpdateInputWeights())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -27278,10 +30433,14 @@ bool CNeuronFieldAwareConv::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFieldAwareConv::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cParams.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -27292,10 +30451,14 @@ bool CNeuronFieldAwareConv::Save(const int file_handle)
 bool CNeuronFieldAwareConv::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cParams.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -27306,10 +30469,12 @@ bool CNeuronFieldAwareConv::Load(const int file_handle)
 bool CNeuronFieldAwareConv::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronFieldAwareConv *Source=source;
-   dWeightsUpdate(cParams,Source,tau);
+   dWeightsUpdate(cParams,Source,tau)
 
 //---
    return(true);
@@ -27339,13 +30504,17 @@ bool CNeuronFieldPatternEmbedding::Init(uint numOutputs,uint myIndex,COpenCLMy*o
                                         ENUM_OPTIMIZATION optimization_type,uint batch)
   {
    if(!CNeuronBaseOCL::Init(numOutputs,myIndex,open_cl,embed_size*fields,optimization_type,batch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    uint index=0;
 
    if(!cCandidates.Init(0,index,OpenCL,embed_size*candidates,optimization,iBatch))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    cCandidates.SetActivationFunction(None);
    index++;
@@ -27356,7 +30525,9 @@ bool CNeuronFieldPatternEmbedding::Init(uint numOutputs,uint myIndex,COpenCLMy*o
    if(!conv||
       !conv.Init(0,index,OpenCL,window,window,2*candidates,fields,1,optimization,iBatch)||
       !cScore.Add(conv))
-      DeleteObjAndFalse(conv);
+     {
+      DeleteObjAndFalse(conv)
+     }
    conv.SetActivationFunction(SoftPlus);
    index++;
    conv=new CNeuronConvOCL();
@@ -27364,7 +30535,9 @@ bool CNeuronFieldPatternEmbedding::Init(uint numOutputs,uint myIndex,COpenCLMy*o
    if(!conv||
       !conv.Init(0,index,OpenCL,2*candidates,2*candidates,candidates,fields,1,optimization,iBatch)||
       !cScore.Add(conv))
-      DeleteObjAndFalse(conv);
+     {
+      DeleteObjAndFalse(conv)
+     }
    conv.SetActivationFunction(SoftPlus);
    index++;
    CNeuronSparseSoftMax *softmax=new CNeuronSparseSoftMax();
@@ -27372,7 +30545,9 @@ bool CNeuronFieldPatternEmbedding::Init(uint numOutputs,uint myIndex,COpenCLMy*o
    if(!softmax||
       !softmax.Init(0,index,OpenCL,fields,candidates,topK,optimization,iBatch)||
       !cScore.Add(softmax))
-      DeleteObjAndFalse(softmax);
+     {
+      DeleteObjAndFalse(softmax)
+     }
    iFields=fields;
 
 //---
@@ -27385,7 +30560,9 @@ bool CNeuronFieldPatternEmbedding::feedForward(CNeuronBaseOCL*NeuronOCL)
   {
    if(bTrain)
       if(!cCandidates.FeedForward())
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
    CNeuronBaseOCL *prev=NeuronOCL;
    CNeuronBaseOCL *curr=NULL;
@@ -27396,13 +30573,17 @@ bool CNeuronFieldPatternEmbedding::feedForward(CNeuronBaseOCL*NeuronOCL)
 
       if(!curr||
          !curr.FeedForward(prev))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       prev=curr;
      }
 
    if(prev.Type()!=defNeuronSparseSoftMax)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronSparseSoftMax *softmax=prev;
    uint                 topK=softmax.DimensionOut();
@@ -27411,9 +30592,11 @@ bool CNeuronFieldPatternEmbedding::feedForward(CNeuronBaseOCL*NeuronOCL)
 
    if(!SparseMatMul(softmax.GetIndexes(),softmax.getOutput(),cCandidates.getOutput(),
                     Output,iFields,topK,candidates,params_to_field))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
-   dActivation(this);
+   dActivation(this)
 
 //---
    return(true);
@@ -27424,13 +30607,17 @@ bool CNeuronFieldPatternEmbedding::feedForward(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFieldPatternEmbedding::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
   {
    if(!NeuronOCL)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *next=cScore[-1];
    CNeuronBaseOCL *curr=NULL;
 
    if(!next||next.Type()!=defNeuronSparseSoftMax)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronSparseSoftMax *softmax=next;
    uint                 topK=softmax.DimensionOut();
@@ -27440,18 +30627,24 @@ bool CNeuronFieldPatternEmbedding::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
    if(!SparseMatMulGrad(softmax.GetIndexes(),softmax.getOutput(),softmax.getGradient(),
                         cCandidates.getOutput(),cCandidates.getGradient(),
                         Gradient,iFields,topK,candidates,params_to_field))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //--- candidates
    if(!SumAndNormalize(cCandidates.getOutput(),cCandidates.getGradient(),cCandidates.getGradient(),
                        params_to_field,true,0,0,0,1))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    float error=1;
 
    if(!cCandidates.calcOutputGradients(cCandidates.getGradient(),error)||
       !DiversityLoss(cCandidates.AsObject(),candidates,params_to_field,true))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    for(int i=cScore.Total()-2;i>=0;i--)
@@ -27460,13 +30653,17 @@ bool CNeuronFieldPatternEmbedding::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 
       if(!curr||
          !curr.CalcHiddenGradients(next))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       next=curr;
      }
 
    if(!NeuronOCL.CalcHiddenGradients(next))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -27477,7 +30674,9 @@ bool CNeuronFieldPatternEmbedding::calcInputGradients(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFieldPatternEmbedding::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
   {
    if(!cCandidates.UpdateInputWeights())
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronBaseOCL *prev=NeuronOCL;
    CNeuronBaseOCL *curr=NULL;
@@ -27488,7 +30687,9 @@ bool CNeuronFieldPatternEmbedding::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 
       if(!curr||
          !curr.UpdateInputWeights(prev))
-         ReturnFalse;
+        {
+         ReturnFalse
+        }
 
       prev=curr;
      }
@@ -27502,13 +30703,19 @@ bool CNeuronFieldPatternEmbedding::updateInputWeights(CNeuronBaseOCL*NeuronOCL)
 bool CNeuronFieldPatternEmbedding::Save(const int file_handle)
   {
    if(!CNeuronBaseOCL::Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cCandidates.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScore.Save(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    return(true);
@@ -27519,17 +30726,25 @@ bool CNeuronFieldPatternEmbedding::Save(const int file_handle)
 bool CNeuronFieldPatternEmbedding::Load(const int file_handle)
   {
    if(!CNeuronBaseOCL::Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!LoadInsideLayer(file_handle,cCandidates.AsObject()))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    if(!cScore.Load(file_handle))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
 //---
    if(!cScore[-1]||cScore[-1].Type()!=defNeuronSparseSoftMax)
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronSparseSoftMax *softmax=cScore[-1];
    iFields=softmax.Heads();
@@ -27543,11 +30758,13 @@ bool CNeuronFieldPatternEmbedding::Load(const int file_handle)
 bool CNeuronFieldPatternEmbedding::WeightsUpdate(CNeuronBaseOCL*source,float tau)
   {
    if(!CNeuronBaseOCL::WeightsUpdate(source,tau))
-      ReturnFalse;
+     {
+      ReturnFalse
+     }
 
    CNeuronFieldPatternEmbedding *Source=source;
-   dWeightsUpdate(cCandidates,Source,tau);
-   dWeightsUpdate(cScore,Source,tau);
+   dWeightsUpdate(cCandidates,Source,tau)
+   dWeightsUpdate(cScore,Source,tau)
 
 //---
    return(true);
@@ -27701,9 +30918,9 @@ bool NNQDense(COpenCLMy*context,CBufferFloat*weights,CBufferFloat*source,CBuffer
    return(NNQLaunch(context,def_k_DPCCQRowsDense,buffers,values,reals,global));
   }
 //+------------------------------------------------------------------+
-//| Snapshot owns device values and the original host cache          |
-//| separately.                                                      |
+//| SLayerReadState - Initialize the object state                    |
 //+------------------------------------------------------------------+
+//--- Snapshot owns device values and the original host cache separately.
 SLayerReadState::SLayerReadState(void):m_context(NULL),m_cursor(0),m_owner(0),m_state(0)
   {
   }
@@ -27894,8 +31111,9 @@ CBufferFloat*SLayerReadState::Saved(CBufferFloat*buffer)const
    return(NULL);
   }
 //+------------------------------------------------------------------+
-//| Reuse owned temporary tensors for each complete Q evaluation.    |
+//| SLayerRowsWorkspace - Initialize the object state                |
 //+------------------------------------------------------------------+
+//--- Reuse owned temporary tensors for each complete Q evaluation.
 SLayerRowsWorkspace::SLayerRowsWorkspace(void):m_context(NULL),m_cursor(0),m_rows(0),m_owner(0),m_state(0)
   {
   }
@@ -28067,7 +31285,9 @@ bool CNeuronMultiWindowsConvOCL::ForwardRowsReadOnly(CBufferFloat*source,const u
                    };
 
    for(uint i=0;i<6;i++)
+     {
       setArgument(kernel,i+5,values[i])
+     }
    uint offset[]={0,0};
    uint global[]={(uint)Neurons(),rows};
 

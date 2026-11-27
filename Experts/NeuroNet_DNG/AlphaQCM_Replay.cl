@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                               AlphaQCM_Replay.cl |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 
 // Philox4x32-10 from Salmon et al., Parallel Random Numbers: As Easy

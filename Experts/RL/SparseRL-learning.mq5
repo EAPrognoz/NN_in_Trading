@@ -272,7 +272,8 @@ bool CreateDescriptions(CArrayObj *Description,CArrayObj *Forward,CArrayObj *Inv
       return(false);
 
    descr.type=defNeuronBaseOCL;
-   int prev_count=descr.count=(int)(HistoryBars * 12+9);
+   uint prev_count=HistoryBars * 12+9;
+   descr.count=prev_count;
    descr.window=0;
    descr.activation=None;
    descr.optimization=ADAM;

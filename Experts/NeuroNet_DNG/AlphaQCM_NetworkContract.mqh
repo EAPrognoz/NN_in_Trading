@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                     AlphaQCM_NetworkContract.mqh |
 //|                                                     NeuroNet_DNG |
+//|                           https://www.mql5.com/ru/articles/26115 |
 //+------------------------------------------------------------------+
 #ifndef ALPHAQCM_NETWORK_CONTRACT_MQH
 #define ALPHAQCM_NETWORK_CONTRACT_MQH
@@ -30,6 +31,9 @@
 #define def_k_AQCZeroGradient 590
 #define def_k_AQCStageBatch 591
 
+//+------------------------------------------------------------------+
+//| AlphaQCMNetworkKernelName - Map a kernel ID to its OpenCL name   |
+//+------------------------------------------------------------------+
 string AlphaQCMNetworkKernelName(const int id)
   {
    switch(id)
